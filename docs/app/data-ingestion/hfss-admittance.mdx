@@ -1,0 +1,65 @@
+---
+aliases:
+ - "Ingest HFSS Data"
+ - "Import HFSS simulation data"
+tags:
+ - diataxis/how-to
+ - audience/user
+ - sot/true
+ - topic/data-ingestion
+status: stable
+owner: team
+audience: user
+scope: "How to import Admittance CSV files exported from HFSS into TraceStore"
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
+sidebar:
+ label: HFSS Admittance
+ order: 20
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Ingesting HFSS Admittance Data
+
+Use the Application Interface to import HFSS Admittance data.
+The Python Backend validates metadata and writes official numeric arrays into TraceStore.
+
+## Prepare The Export
+
+From HFSS, export Plot Data for the Admittance trace you need, for example Im(Y11) over frequency.
+Keep the raw files in a local import directory.
+
+```text
+data/import/hfss/<design_name>/
+```
+
+## Import
+
+1. Open the Electron App.
+2. Go to `Data Ingestion`.
+3. Select the dataset and design scope.
+4. Add the HFSS `.csv` files.
+5. Submit the import.
+
+The backend records dataset/design metadata and publishes traces into TraceStore.
+
+## Validate
+
+Open `Raw Data` and confirm:
+
+- the dataset is present
+- the design scope is correct
+- the trace family and representation are correct
+- axis units match the HFSS export
+- preview slices render as expected
+
+## Notes
+
+<Aside type="caution" title="No active CLI">
+
+Do not document or add new HFSS ingestion through `sc` commands.
+Developer-only conversion helpers belong under `scripts/maintenance/` when needed.
+
+</Aside>

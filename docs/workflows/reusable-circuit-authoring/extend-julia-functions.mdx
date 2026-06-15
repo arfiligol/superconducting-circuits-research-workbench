@@ -1,0 +1,101 @@
+---
+aliases:
+ - "Extend Julia Functions"
+ - "Extending Julia functions"
+tags:
+ - diataxis/how-to
+ - status/stable
+ - topic/extend
+ - topic/contributing
+ - topic/julia
+status: stable
+owner: docs-team
+audience: contributor
+scope: "Contributor Guide: Extending Julia Core, Visualizer, and Analysis Bridge research helpers"
+version: v0.2.0
+last_updated: 2026-05-28
+updated_by: codex
+sidebar:
+ label: Extend Julia Functions
+ order: 30
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Extend Julia Research Functions
+
+When adding new simulation or analysis capabilities, first put reusable research logic into Julia Core, Visualizer or Analysis Bridge. Notebook only retains experimental assembly, parameter selection and display.
+
+## Architecture
+
+```text
+Pluto Notebook
+   |
+   | direct research execution
+   v
+Julia Core -----> Visualizer
+   |
+   +-----> Analysis Bridge -----> Python Analysis Core
+```
+
+## Step 1: Add Julia Core logic
+
+Add reusable circuit construction, sweep, or analysis code under:
+
+```text
+core/julia/SuperconductingCircuitsCore/
+```
+
+Keep this layer independent from UI state, file layout assumptions, and notebook-only globals.
+It should be callable from Pluto and from package tests.
+
+## Step 2: Add visualization or bridge logic only when needed
+
+Add plot construction helpers under:
+
+```text
+core/julia/SuperconductingCircuitsVisualizer/
+```
+
+Add Python analysis bridges under:
+
+```text
+core/julia/SuperconductingCircuitsAnalysisBridge/
+```
+
+Do not make Julia Core depend on plotting libraries or PythonCall.
+
+## Step 3: Keep result shapes plain
+
+Reusable helpers should return arrays, named tuples, structs, or simple result objects that notebooks can inspect and tests can compare. Avoid returning display-only objects from Core.
+
+## Step 4: Add tests
+
+Start with direct unit coverage for Julia Core behavior. Add Visualizer or Analysis Bridge tests only when those packages changed.
+
+```bash
+julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
+```
+
+## Notes
+
+<Aside type="caution" title="No Python JuliaCall runtime">
+
+Notebook kernels may call Julia directly because they are explicit research execution environments.
+
+</Aside>
+
+<Aside type="caution" title="No CLI entrypoint">
+
+Do not register new `sc-*` product commands.
+Developer-only helpers belong under `scripts/dev/`, `scripts/test/`, `scripts/build/`, or `scripts/maintenance/`.
+
+</Aside>
+
+## Related
+
+- [Julia Core Reference](../../reference/julia-core/index.mdx)
+- [Julia Visualizer Reference](../../reference/julia-visualizer/index.mdx)
+- [Python Core](../../reference/core/python-core.mdx)

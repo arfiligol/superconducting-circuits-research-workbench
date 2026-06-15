@@ -2,8 +2,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 from typing import Protocol
 
-from sc_core.execution import TaskResultHandle
-
+from app_backend.domain.runtime_contracts.execution import TaskResultHandle
 from app_backend.domain.storage import MetadataRecordRef, ResultHandleRef, TracePayloadRef
 from app_backend.domain.tasks import (
     TaskCreateDraft,

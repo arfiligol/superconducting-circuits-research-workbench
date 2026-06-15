@@ -318,13 +318,15 @@ def _build_circuit_definition_record(
 
 
 def _load_circuit_domain() -> tuple[object, object, object, object, type[Exception]]:
-    from core.simulation.domain.circuit import (
+    from app_backend.domain.legacy_circuit_definition_netlist.circuit import (
         expand_circuit_definition,
         format_circuit_definition,
         format_expanded_circuit_definition,
         parse_circuit_definition_source,
     )
-    from core.simulation.domain.validators import CircuitValidationError
+    from app_backend.domain.legacy_circuit_definition_netlist.validators import (
+        CircuitValidationError,
+    )
 
     return (
         parse_circuit_definition_source,

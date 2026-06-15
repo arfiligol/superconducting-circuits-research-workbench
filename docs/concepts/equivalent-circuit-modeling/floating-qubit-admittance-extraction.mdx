@@ -1,0 +1,191 @@
+---
+aliases:
+ - "Extract the Real Part Admittance seen from the Floating Qubit"
+ - "Floating Qubit Real Part Admittance Extraction"
+tags:
+ - diataxis/reference
+ - audience/team
+ - topic/physics
+ - topic/simulation
+ - status/draft
+status: draft
+owner: docs-team
+audience: team
+scope: Floating qubit's differential driving-point admittance extraction process (PTC -> CT -> Kron)
+version: v0.4.0
+last_updated: 2026-03-13
+updated_by: team
+sidebar:
+ label: Floating Qubit Admittance Extraction
+ order: 110
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Extract the Real Part Admittance seen by Floating Qubit
+
+<Aside type="note" title="Research notes (at work)">
+
+This page documents the current process for research notebooks that are reproducible and consistent with the formal Reference contract.
+The topic is to extract the `Re(Y_in)` of the floating qubit differential port as the preamble for subsequent `T1` analysis.
+
+</Aside>
+
+## Target (aligned with contract)
+
+For the floating qubit, extract the driving-point admittance of the differential port:
+
+`Y_in,dm(omega)`
+
+And it is possible to explicitly control whether `50 Ohm` loading of other ports (such as Port 3) is preserved.
+
+---
+
+## Contract source (required reading)
+
+This page completely adopts the following file definitions and does not invent new semantics on its own:
+
+- [Schur Complement and Kron Reduction (Concept)](./schur-complement-kron-reduction/)
+- [Physics Symbol Glossary (symbol comparison)](./symbol-glossary/)
+
+The core computing contracts used on this page:
+
+1. Use the `Y` domain as the only transformation subject
+2. `Coordinate Transformation`:`Y_m = A^{-T} Y A^{-1}`
+3. `Kron Reduction`:Schur complement
+4. Read the target pattern `Y_in` last
+
+---
+
+## Strict process: PTC -> CT -> Kron
+
+### Step 0: Raw multi-port admittance
+
+solver is given:
+
+`I = Y_raw(omega) V`
+
+Example of three ports:
+
+- Port 1:Pad 1
+- Port 2:Pad 2
+- Port 3:XY / drive line
+
+### Step 1:Port Termination Compensation (subtract only solver-artificial termination)
+
+To retain the physical loading of Port 3, but remove the solver port definition resistance of Port 1/2:
+
+```text
+Y_ptc = Y_raw - diag(1/50, 1/50, 0)
+```
+
+<Aside type="caution" title="physical semantics">
+
+This step is "correcting the port definition", not a physical mode conversion.
+If this step is skipped, the artificial 50 Ohm of Port 1/2 will be brought into the subsequent dm mode.
+
+</Aside>
+
+### Step 2: Post Processing Input must select `PTC Y`
+
+If Post Processing starts from `Raw Y`, `dm` after CT will be mixed into the artificial dissipation channel.
+
+### Step 3:Coordinate Transformation (port basis -> physical mode basis)
+
+cm/dm definition:
+
+- `V_cm = alpha V1 + beta V2`
+- `V_dm = V1 - V2`
+- Constraint: `alpha + beta = 1`
+
+Auto weight (Electrical Centroid):
+
+- `w1 = Σ C(node1 <-> 0)`
+- `w2 = Σ C(node2 <-> 0)`
+- `alpha = w1 / (w1 + w2)`
+- `beta = w2 / (w1 + w2)`
+
+<Aside type="note" title="Formal rules for Auto alpha/beta">
+
+The Auto weight extraction rules are based on `Circuit Simulation Reference`, which is only quoted on this page and will not be repeatedly defined.
+
+</Aside>
+
+### Step 4: Kron Reduction (only keep `dm`)
+
+Under the `(cm, dm, 3)` basis, use Schur complement to eliminate non-observable degrees of freedom (usually `cm` and `3`):
+
+```text
+Y_red = Y_bb - Y_bi * Y_ii^{-1} * Y_ib
+```
+
+If `b = {dm}`, the output is:
+
+`Y_in,dm = Y_red(dm,dm)`
+
+---
+
+## Why the order cannot be exchanged
+
+1. `CT` before `PTC`: artificial `50 Ohm` will be mixed into dm, and `Re(Y_dm)` will be contaminated.
+2. `Kron` before `CT`: What is deleted is the original port, not the physical mode, which destroys the meaning of qubit mode.
+3. Do not do `Kron`: get multi-port representation, not driving-point admittance.
+
+Therefore this process adopts:
+
+`PTC -> CT -> Kron`
+
+---
+
+## UI implementation comparison (reproducible)
+
+### Case A: Contains 50 Ohm loading of Port 3
+
+1. `Port Termination Compensation` only selects Port 1 and Port 2
+2. `Post Processing`’s `Input Y Source` selects `PTC Y`
+3. Added `Coordinate Transformation` (1,2 -> cm/dm)
+4. Add `Kron Reduction` (keep only `dm`)
+5. Read `Real(Y)` of `Y_dm_dm` in `Post-Processed Result View`
+
+### Case B: Observation is closer to intrinsic (remove all target port shunts)
+
+1. `Port Termination Compensation` selects all target ports
+2. `Input Y Source = PTC Y`
+3. Do the same CT + Kron, and then get `Re(Y_dm_dm)`
+
+<Aside type="caution" title="Raw S / PTC Boundary (Reference Contract)">
+
+`S` of `Simulation Results` is still solver-native raw `S`.
+PTC in Raw View only works on `Y/Z` family (see Reference contract).
+
+</Aside>
+
+---
+
+## Compare with HFSS (current contract)
+
+`HFSS Comparable` of `Post Processing Results` usually needs to meet the following requirements at the same time:
+
+1. PTC enabled
+2. `Input Y Source = PTC Y`
+3. pipeline has at least one active `Coordinate Transformation`
+
+refer to:
+
+- [Schur Complement and Kron Reduction (Concept)](./schur-complement-kron-reduction/)
+- [Physics Symbol Glossary (symbol comparison)](./symbol-glossary/)
+
+---
+
+## Current restrictions (2026-03-05)
+
+1. Differential normalization (`v_dm` scaling convention) has not been locked as a unique rule
+2. The HFSS aligned `Zref` / port reference has not yet formed a final contract
+3. The UI does not yet provide a direct `Y_in` calculator (input keep/drop/load conditions)
+
+## List of improvements to be made
+
+- [ ] Explicitly lock differential normalization (e.g. `v_dm` scaling convention)
+- [ ] Explicitly lock `Zref`/port reference rules for HFSS alignment
+- [ ] UI provides direct `Y_in` tool (can enter retain/eliminate port and load conditions)
+- [ ] String `Re(Y_in)` -> `T1` into Characterization reusable analysis process

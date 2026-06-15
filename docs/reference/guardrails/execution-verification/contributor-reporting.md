@@ -1,12 +1,12 @@
 ---
 aliases:
-  - "Work Summary Formats"
-  - "Contributor Reporting"
-  - "Agent Handoff Formats"
-  - "交付回報格式"
+ - "Work Summary Formats"
+ - "Contributor Reporting"
+ - "Agent Handoff Formats"
+ - "Delivery return format"
 tags:
-  - audience/team
-  - sot/true
+ - audience/team
+ - sot/true
 status: stable
 owner: docs-team
 audience: team
@@ -67,9 +67,9 @@ Use one of these instead:
 
 ## Related
 
-- [Codex Subagent Coordination](./multi-agent-collaboration.md)
-- [Branch & Worktree Flow](./branch-and-worktree-flow.md)
-- [Commit Standards](./commit-standards.md)
+- [Codex Subagent Coordination](multi-agent-collaboration.mdx)
+- [Branch & Worktree Flow](branch-and-worktree-flow.mdx)
+- [Commit Standards](commit-standards.mdx)
 
 ## Agent Rule { #agent-rule }
 
@@ -78,10 +78,10 @@ Use one of these instead:
 - Ordinary work does not require committed plan artifacts, committed lane reports, or review merge reports.
 - Do not create new active `Plans/` artifacts.
 - Use concise final summaries with:
-    - changed surfaces
-    - validation commands/results
-    - residual risks or skipped checks
-    - concrete follow-up when needed
+  - changed surfaces
+  - validation commands/results
+  - residual risks or skipped checks
+  - concrete follow-up when needed
 - For broad work, use Summary / Validation / Risks / Notes in the final response or PR body.
 - Long-term decisions must be promoted to `docs/reference/**`.
 ```

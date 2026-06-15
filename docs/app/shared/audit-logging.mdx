@@ -1,0 +1,112 @@
+---
+aliases:
+ - Audit Logging
+ - Audit Trail
+ - Audit log
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
+status: draft
+owner: docs-team
+audience: team
+scope: persisted audit trail, separate audit store, query/redaction/retention contract
+version: v0.5.1
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Audit Logging
+
+This page defines the persisted audit logging contract for multi-user apps.
+
+<Aside type="note" title="App governance surface">
+
+Audit logging is part of App collaboration/governance and is not a replacement for general runtime logging.
+
+</Aside>
+
+<Aside type="caution" title="Separate Audit Store">
+
+Audit logs must not share the same database as the app operational database.
+
+</Aside>
+
+## Boundary With Other Observability Layers
+
+| Layer | What it answers | What it must not replace |
+|---|---|---|
+| Audit logging | Who did what governance actions on which resources | task timeline, product telemetry | workflow
+| Workflow observability |Which runtime stages does request/task/execution runtime/result go through?| actor-centric governance trail |
+| Product telemetry | Which flows are commonly used, which ones are slow, and which ones deserve optimization | audit trail, single-task debug record |
+
+<Aside type="note" title="Shared identifiers are allowed">
+
+`correlation_id` can appear in both the audit row and workflow timeline.
+This does not mean that audit logging can replace workflow observability.
+
+</Aside>
+
+## Required Record Fields
+
+| Field | Meaning |
+|---|---|
+| `audit_id` | Unique identification of audit row |
+| `occurred_at` | Event time |
+| `actor_user_id` | Performer |
+| `session_id` | Corresponding session |
+| `correlation_id` | Associate the same workflow / request |
+| `workspace_id` | Corresponding workspace |
+| `action_kind` | Stable machine-readable action |
+| `resource_kind` |`task`, `dataset`, `definition`, `user`, `workspace` and similar values|
+| `resource_id` | Operation resource identification |
+| `outcome` | `accepted`, `rejected`, `completed`, `failed` |
+| `payload` | redaction-safe structured payload |
+
+## Minimum Audited Actions
+
+| Action family | Required examples |
+|---|---|
+| Authentication | login success, login failure, logout |
+| Workspace membership | invite created, invite sent, invite delivery failed, invite accepted, invite revoked, member removed, owner transferred |
+| Session context | active workspace switched, active workspace switch rejected, active dataset switched, active dataset switch rejected |
+| Resource lifecycle | imported, published, archived, restored, deleted, exported |
+| Task governance | submitted, cancelled, terminated, retried |
+| Admin bootstrap | bootstrap attempted, bootstrap succeeded, bootstrap rejected |
+
+## Query And Retention Rules
+
+| Rule | Meaning |
+|---|---|
+| Separate store | Audit store is separated from app operational DB |
+| Append-only | General workflow cannot update existing audit row |
+| Workspace-aware query | query supports at least filtering by `workspace_id`, `actor_user_id`, `action_kind` |
+| Retention baseline | Default retention of at least 365 days |
+| Redaction-safe payload |Do not save secret-bearing raw payload|
+
+## Storage Baseline
+
+| Rule | Meaning |
+|---|---|
+| Separate physical store | Audit store and app operational DB must be deployed separately |
+| SQL-first baseline | First version adopts append-only SQL audit store; NoSQL can be expanded later |
+| Write path isolation | When app workflow writes audit, page consumer must not be required to directly touch audit DB |
+| Governance-oriented query | Audit query API and app operational query are considered separately and do not mix with general page list endpoint |
+
+<Aside type="caution" title="Audit logging is not UI event history">
+
+audit log is not an alias for task events, nor is it an alias for page analytics.
+It answers who did what governance-significant action on which resource in what workspace.
+
+</Aside>
+
+## Related
+
+* [Observability Model](observability-model.mdx)
+* [Authentication & Authorization](authentication-and-authorization.mdx)
+* [Task Runtime & Processors](task-runtime-and-processors.md)
+* [Backend / Tasks & Execution](../backend/tasks-execution.md)
+* [Backend / Audit Logs](../backend/audit-logs.mdx)

@@ -1,0 +1,84 @@
+---
+aliases:
+ - Product App
+ - Application Docs
+ - App Documentation
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
+status: stable
+owner: docs-team
+audience: team
+scope: Product App documentation entry for application contracts, frontend/backend/shared surfaces, and Python Notebook prototyping boundaries.
+version: v1.0.0
+last_updated: 2026-06-12
+updated_by: codex
+title: Product App
+description: Productized application contracts for the future workbench, kept separate from the notebook-first research path.
+sidebar:
+ label: Overview
+ order: 10
+---
+
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+Product App files describe the product workbench: Frontend, Backend, Desktop shell, task lifecycle, ResultView and shared app semantics. It is not the main thread of Start Here; research and prototypes start with Pluto Notebook.
+
+<Aside type="note" title="Notebook-first boundary">
+Pluto Notebook is a straightforward study of cockpit. Python Notebook is the outpost verification surface of Product App, used to check the interaction between data, Backend API, task/result contract and future App needs; Python Analysis Core is a reusable analysis library, which may be called by Pluto through Analysis Bridge.
+</Aside>
+
+<CardGrid>
+ <LinkCard
+  title="Application Interface"
+  href="./application-interface/"
+description="Identify the main surfaces, task execution models, and inactive surfaces of the production app."
+ />
+ <LinkCard
+  title="Application Authoring Map"
+  href="./application-authoring/"
+description="Reading order and build order before implementing App or Python Notebook product surfaces."
+ />
+ <LinkCard
+  title="Prototype To Product"
+  href="./prototype-to-product/"
+description="Converging from notebook prototype to product contracts, runtime surfaces, and App implementation."
+ />
+ <LinkCard
+  title="Architecture"
+  href="./architecture/"
+description="Product App architecture, pipeline, storage, runtime supervision and design decisions."
+ />
+ <LinkCard
+  title="Architecture Contracts"
+  href="./architecture/contracts/"
+description="Cross-layer owner boundaries, Runner compute plane, publication manifest, and simulation interface contracts."
+ />
+ <LinkCard
+  title="Data Contracts"
+  href="./data-contracts/"
+description="Analysis result, dataset record, raw data layout, query/indexing and archived data payload semantics."
+ />
+ <LinkCard
+  title="Shared Contracts"
+  href="./shared/"
+description="runtime modes, identity, auth, task runtime, observability and audit semantics."
+ />
+ <LinkCard
+  title="Backend"
+  href="./backend/"
+description="Python Backend of task lifecycle, TraceStore publication, ResultView and app-facing authority."
+ />
+ <LinkCard
+  title="Frontend"
+  href="./frontend/"
+description="Next.js / Electron application page contracts, workbench surfaces, shell, and result browsing."
+ />
+ <LinkCard
+  title="Archive"
+  href="./archive/"
+description="Keep the old App-specific workflow and design notes as reference and not as the current mainline teaching."
+ />
+</CardGrid>

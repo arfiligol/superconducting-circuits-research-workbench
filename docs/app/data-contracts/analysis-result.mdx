@@ -1,0 +1,200 @@
+---
+aliases:
+ - Analysis Result Schema
+ - Analysis Artifact Schema
+ - Analysis result format
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/data-format
+status: stable
+owner: docs-team
+audience: team
+scope: Characterization analysis run, artifact-first result view, design-scope re-parenting, derived parameter and tagged metric persistence contract
+version: v1.1.0
+last_updated: 2026-04-30
+updated_by: codex
+title: Analysis Result
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Analysis Result
+
+This page defines the persisted result contract of Characterization and other trace-consuming analysis.
+
+<Aside type="note" title="Artifact-first result view">
+
+The frontend result view should depend on `artifact_manifest` and `artifact payload`.
+Page must not directly parse scalar rows to assemble its own result view rules.
+
+</Aside>
+
+<Aside type="caution" title="Run is not enough">
+
+Completion of the analysis run does not necessarily mean that there are results available for display.
+`AnalysisRunRecord.status=completed` and `artifact_manifest` must be judged separately.
+
+</Aside>
+
+## Canonical Objects
+
+| Object | Meaning |
+| --- | --- |
+| `AnalysisRunRecord` | persisted identity of a trace-consuming analysis run |
+| `ResultArtifactRecord` | result view switchable table / plot / text / summary artifact |
+| `DerivedParameterRecord` | Named physical quantities and tagged metrics basic information extracted from run |
+
+## AnalysisRunRecord
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `id` | required | run identity |
+| `dataset_id` | required | parent dataset |
+| `design_id` | required | parent design scope |
+| `workspace_id` | required | owning workspace |
+| `owner_user_id` | required | owner identity |
+| `visibility_scope` | required | inherited `local` / `private` / `workspace` |
+| `lifecycle_state` | required | `active`, `archived`, `deleted` |
+| `analysis_id` | required | registry analysis id |
+| `status` | required | `queued`, `running`, `completed`, `failed`, `cancelled`, `terminated` |
+| `input_trace_ids` | required | explicit selected trace ids |
+| `input_batch_ids` | optional | source batch refs |
+| `input_collection_payload` | optional | backend-derived characterization input collection snapshot |
+| `input_result_refs` | optional | upstream analysis result refs for pipeline-style downstream analyses |
+| `config_payload` | required | analysis configuration snapshot |
+| `artifact_manifest` | optional | result artifact summary |
+| `created_at` | required | creation time |
+| `completed_at` | optional | terminal time |
+
+<Aside type="caution" title="Trace-first authority">
+
+Analysis availability and re-entry must be driven by `input_trace_ids` and compatible traces.
+The dataset profile only provides hints, not the only gate.
+
+</Aside>
+
+## ResultArtifactRecord
+
+`ResultArtifactRecord` is the official switching unit of Result View.
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | required | artifact identity |
+| `analysis_run_id` | required | parent run |
+| `dataset_id` | required | parent dataset |
+| `design_id` | required | parent design scope |
+| `category` | required |`resonance`, `fit_table`, `plot`, `summary` and similar values|
+| `view_kind` | required | `table`, `plot`, `text`, `json` |
+| `title` | required | display title |
+| `trace_mode_group` | optional | `base`, `sideband`, `all` |
+| `query_spec` | optional | artifact payload query baseline |
+| `payload_ref` | required | payload locator or handle |
+
+### Artifact manifest minimum fields
+
+```json
+[
+ {
+  "artifact_id": "artifact_mode_vs_lq",
+  "category": "resonance",
+  "view_kind": "table",
+  "title": "Mode vs L_q",
+  "trace_mode_group": "base"
+ }
+]
+```
+
+## DerivedParameterRecord
+
+`DerivedParameterRecord` is the canonical scalar layer of the analysis output.
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `id` | required | parameter identity |
+| `dataset_id` | required | parent dataset |
+| `design_id` | required | parent design scope |
+| `analysis_run_id` | required | source run |
+| `name` | required | parameter name |
+| `value` | required | scalar value |
+| `unit` | optional | unit |
+| `extra.trace_mode_group` | optional | `base`, `sideband`, `all` |
+| `extra.method` | optional | source method / fit model |
+| `extra.lineage` | optional | redaction-safe provenance payload |
+
+<Aside type="caution" title="Tagged metrics resolve from derived parameters">
+
+Dashboard's `Tagged Core Metrics` must be read through the backend resolution contract.
+Derived parameter rows cannot be spliced ​​directly from the UI or CLI.
+
+</Aside>
+
+## Provenance Rules
+
+| Rule | Meaning |
+| --- | --- |
+| Dataset and design are both required | result must be traceable to both dataset and dataset-local design scope |
+| Result inherits task visibility | result / artifact must not be more public than source task |
+| Run history is persisted | After refresh, it must be able to be reconstructed only by persisted rows |
+| No implicit rerun | artifact payload query must not trigger analysis rerun |
+| Merge re-parenting | DesignScope merge can be performed by backend re-parent run / artifact / derived-parameter rows to target `design_id`; run/artifact identities do not change due to re-parenting |
+
+## Design Scope Lifecycle Rules
+
+| Concern | Rule |
+| --- | --- |
+| Active target | new analysis runs must bind an active `DesignScope` in the active dataset |
+| Archived source scope | archived scopes may remain visible in run history, but are not normal new-run targets |
+| Merge behavior |backend-owned merge re-parents `AnalysisRunRecord`, `ResultArtifactRecord` and `DerivedParameterRecord` from source design scope to target design scope|
+| Source redirect | stale links using source `design_id` should resolve through the DesignScope redirect contract before result history is queried |
+| Artifact payload | result payload locators remain backend-owned; merge must not require frontend to parse or rewrite payload refs |
+
+## Result View Contract
+
+| Concern | Required behavior |
+| --- | --- |
+| Category filter | Based on `artifact.category` driver |
+| Table / Plot toggle | Depends on `artifact.view_kind` and payload capability |
+| Trace Mode Filter | Driven by `trace_mode_group` instead of inferred by the front end |
+| Empty completed run | Explicit empty diagnostics must be returned and blanks must not be displayed silently |
+
+## JSON Example
+
+<Aside type="note" title="Analysis run with artifact manifest">
+
+```json
+{
+ "id": "run_20",
+ "dataset_id": "ds_xy_001",
+ "design_id": "design_flux_scan_a",
+ "workspace_id": "ws_lab_a",
+ "owner_user_id": "user_12",
+ "visibility_scope": "workspace",
+ "lifecycle_state": "active",
+ "analysis_id": "admittance_extraction",
+ "status": "completed",
+ "input_trace_ids": ["trace_101"],
+ "config_payload": {
+  "selected_trace_ids": ["trace_101"],
+  "selected_trace_mode_group": "base"
+ },
+ "artifact_manifest": [
+  {
+   "artifact_id": "artifact_mode_vs_lq",
+   "category": "resonance",
+   "view_kind": "table",
+   "title": "Mode vs L_q",
+   "trace_mode_group": "base"
+  }
+ ]
+}
+```
+
+</Aside>
+
+## Related
+
+- [Dataset / Design / Trace Schema](dataset-record.mdx)
+- [Characterization](../../app/frontend/removed-workflows/characterization.md)
+- [Characterization Results](../../app/backend/characterization-results.mdx)

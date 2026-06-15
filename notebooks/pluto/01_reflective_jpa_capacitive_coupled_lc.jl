@@ -51,7 +51,7 @@ md"""
 """
 
 # ╔═╡ b4b5301b-0394-57ad-9fb4-64eee1b5d8d4
-LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "pluto-01-reflective-jpa-capacitive-coupled-lc.svg"))
+LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "circuit_draw", "pluto_examples", "reflective_jpa_capacitive_coupled_lc", "diagram.light.svg"))
 
 # ╔═╡ cfc3ab1e-2a99-5f78-8e17-08c85a98065d
 md"""

@@ -1,0 +1,72 @@
+---
+aliases:
+ - Data Formats Reference
+ - Data format reference
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/data-format
+status: stable
+owner: docs-team
+audience: team
+scope: dataset-first persisted research model, dataset-local DesignScope lifecycle, trace storage and analysis artifact contract
+version: v3.1.0
+last_updated: 2026-04-30
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Data Formats
+
+This chapter is the SoT of the persisted research model, with the main axes:
+
+- `DatasetRecord` is the top-level container of collaboration and session context
+- `DesignScope` is a dataset-local lifecycle-managed analytical scope
+- `TraceRecord` is the standard trace unit that can be analyzed
+- `TraceBatchRecord` is the setup / provenance / lineage boundary
+- `TraceStore` (Zarr) holds large ND numeric payload
+- `AnalysisRunRecord` + `ResultArtifactRecord` define the artifact-first result view
+
+<Aside type="caution" title="Dataset-first baseline">
+
+- `active_dataset` binds `DatasetRecord`, not design.
+- For `Raw Data Browser` and `Characterization`, dataset-local `design_id` is selected.
+- Data Ingestion and Simulation publication must explicitly select the existing `DesignScope` or create-new target.
+- Characterization inputs are always compatible S/Y/Z matrix traces.
+- `layout_simulation` / `circuit_simulation` / `measurement` are just from different sources.
+- metadata DB and numeric TraceStore must be separated.
+- canonical trace can be 1D / 2D / ND; sweep point is not the only canonical record unit.
+
+</Aside>
+
+## Page Map
+
+| Topic | Description |
+|---|---|
+| [Dataset / Design / Trace Schema](dataset-record.mdx) |`DatasetRecord`, `DesignScope` lifecycle / merge, `TraceRecord`, `TraceBatchRecord`, `TraceStoreRef`|
+| [Circuit Netlist](circuit-netlist.mdx) | Circuit Definition source / expanded contract |
+| [Raw Data Layout](raw-data-layout.mdx) | raw source and dataset/design ingest boundaries |
+| [Analysis Result](analysis-result.mdx) | `AnalysisRunRecord` / `ResultArtifactRecord` / `DerivedParameterRecord` |
+| [Query Indexing Strategy](query-indexing-strategy.mdx) | metadata DB query and TraceStore slice-read performance strategy |
+
+## Quick Lookup
+
+| What do you want to confirm? | Which page to read first |
+|---|---|
+| What exactly does `active_dataset` point to? | [Dataset / Design / Trace Schema](dataset-record.mdx) |
+| What is the relationship between `design_id` and dataset? | [Dataset / Design / Trace Schema](dataset-record.mdx) |
+| What to do with deep link after DesignScope rename / merge / archive? | [Dataset / Design / Trace Schema](dataset-record.mdx) |
+| Is the sweep trace deposited as ND or one amount per point? | [Dataset / Design / Trace Schema](dataset-record.mdx) |
+| Where do the large trace values ​​exist? | [Dataset / Design / Trace Schema](dataset-record.mdx) + [Data Storage](../../app/architecture/platform-architecture/data-storage.md) |
+| How do local and S3/MinIO backend coexist? | [Dataset / Design / Trace Schema](dataset-record.mdx) + [Data Storage](../../app/architecture/platform-architecture/data-storage.md) |
+| What role does Circuit Definition play in this architecture? | [Circuit Netlist](circuit-netlist.mdx) |
+| What exactly does Characterization result view rely on? | [Analysis Result](analysis-result.mdx) |
+| Query / indexing Should I optimize DB or TraceStore first? | [Query Indexing Strategy](query-indexing-strategy.mdx) |
+
+## Related
+
+- [Data Storage](../../app/architecture/platform-architecture/data-storage.md)
+- [Project Overview Guardrail](../guardrails/project-basics/project-overview.mdx)
+- [Data Handling Guardrail](../guardrails/code-quality/data-handling.mdx)

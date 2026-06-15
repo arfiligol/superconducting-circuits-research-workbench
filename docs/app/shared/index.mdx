@@ -1,0 +1,114 @@
+---
+aliases:
+ - App Shared Reference
+ - Shared App Model
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
+status: draft
+owner: docs-team
+audience: team
+scope: App sharing model, covering runtime modes, workspace, resource scope, auth, runtime, observability and audit
+version: v0.4.0
+last_updated: 2026-03-25
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Shared App Model
+
+This area includes the App-level shared model that Frontend and Backend both depend on.
+
+<Aside type="note" title="What belongs here">
+
+If a document is also responding to shell context, workspace collaboration, task execution visibility, runtime governance, or audit trail,
+But it does not belong to a single frontend page or a single backend surface, so it should be placed here.
+
+</Aside>
+
+<Aside type="caution" title="Not Core, Not CLI">
+
+This zone is neither `Core` nor `CLI`.
+These pages mainly define the shared semantics of multi-user apps and service-backed workflows.
+
+</Aside>
+
+<Aside type="note" title="Same app across local and online modes">
+
+This area is also responsible for the mode model shared between `Local Mode` and `Online Mode` for the same App.
+If a contract needs to answer "whether local bypass auth" or "whether online requires collaboration", it usually belongs here.
+
+</Aside>
+
+## Grouping Principle
+
+This area gives priority to grouping by **responsibility type** instead of splitting trees according to `Local Mode` / `Online Mode`.
+
+The reason is:
+
+- Most shared contracts apply to both `local` and `online`
+- The difference is usually applicability or authority semantics, not that the owner has really changed his mind
+- If you directly split it into a mode-based folder / nav, it will be easy to have two duplicate SoTs.
+
+<Aside type="note" title="Mode is an applicability dimension">
+
+`Local Mode` / `Online Mode` should give priority to expressing applicability and difference semantics in the contract on each page.
+Shared index and nav give priority to answering "What responsibilities does this contract manage?"
+
+</Aside>
+
+## Page Map
+
+<Tabs>
+<TabItem label="Foundations / Cross-Mode">
+
+
+| Page | Core focus |
+|---|---|
+| [Runtime Modes](runtime-modes.mdx) | `Local Mode` / `Online Mode`, desktop runtime profile overlay, mode switch and isolation rules of the same App |
+| [Mode Feature Matrix](mode-feature-matrix.md) | The support matrix of each shared surface / workflows under `Local Mode` and `Online Mode` |
+| [Response & Error Contract](response-and-error-contract.mdx) |success / error envelope, common error families, frontend display contract|
+
+</TabItem>
+
+<TabItem label="Identity / Access / Collaboration">
+
+
+| Page | Core focus |
+|---|---|
+| [Identity & Workspace Model](identity-workspace-model.mdx) | Minimal model for user, session, active workspace, active dataset |
+| [Resource Ownership & Visibility](resource-ownership-and-visibility.mdx) |dataset / schema / task / result of workspace ownership and sharing rules|
+| [Authentication & Authorization](authentication-and-authorization.mdx) |workspace membership, capabilities, task execution permissions|
+| [Outbound Email Delivery](outbound-email-delivery.mdx) |workspace invitation of SMTP baseline and mail delivery contract|
+
+</TabItem>
+
+<TabItem label="Execution Runtime">
+
+
+| Page | Core focus |
+|---|---|
+| [Task Runtime & Processors](task-runtime-and-processors.md) |Runner / processor status, task state machine, cancel / terminate, local runtime topology|
+
+</TabItem>
+
+<TabItem label="Governance / Observability">
+
+
+| Page | Core focus |
+|---|---|
+| [Observability Model](observability-model.mdx) |audit logging, workflow observability, product telemetry of shared taxonomy|
+| [Audit Logging](audit-logging.mdx) |actor-centric audit trail and separate audit store|
+
+</TabItem>
+
+</Tabs>
+
+## Related
+
+* [Frontend Reference](../frontend/index.md)
+* [Backend Reference](../backend/index.md)
+* [Architecture Reference](../architecture/contracts/index.md)

@@ -1,0 +1,143 @@
+---
+aliases:
+ - App Observability Model
+ - Workflow Observability Model
+ - observability model
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
+status: draft
+owner: docs-team
+audience: team
+scope: Shared taxonomy, responsibility boundaries and correlation vocabulary of audit logging, workflow observability and product telemetry.
+version: v0.2.0
+last_updated: 2026-03-27
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Observability Model
+
+This page defines the formal layering and shared vocabulary of app-level observability.
+
+<Aside type="note" title="Three layers, not one log stream">
+
+This page deals with observability taxonomy.
+If you want the actor-centric governance trail, see [Audit Logging](audit-logging.mdx).
+If you want the development layer `logging` module usage, please see [Logging Standards](../../reference/guardrails/code-quality/logging.mdx).
+
+</Aside>
+
+<Aside type="caution" title="Do not collapse audit, workflow, and telemetry">
+
+Audit logging, workflow observability and product telemetry can share a small number of correlation fields.
+But they must not converge to the same authority, the same query surface or the same retention policy.
+
+</Aside>
+
+## Coverage
+
+| Layer | This page defines |
+|---|---|
+| Audit logging | governance-facing action taxonomy boundary |
+| Workflow observability | request / task / runner / publication / result timeline boundary |
+| Product telemetry | aggregate usage / performance measurement boundary |
+| Shared vocabulary | correlation / debug / actor / session linkage fields |
+
+## Observability Taxonomy
+
+| Layer | Primary question | Canonical owner | Primary consumers | Must not be confused with |
+|---|---|---|---|---|
+| Audit Logging | Who did what actions of governance significance | app/shared + backend audit surface | admin, workspace governance, support | workflow timeline, page analytics |
+| Workflow Observability |Which runtime stages does an action/request/task go through?| backend runtime + desktop shell adapter + task surfaces |operator, developer, support| actor governance trail |
+| Product Telemetry | Which flow is commonly used, which one is slow, which path deserves optimization | app telemetry pipeline | product engineering, performance analysis | audit trail, single-task debug record |
+
+## Shared Correlation Vocabulary
+
+| Field | Meaning |
+|---|---|
+| `correlation_id` | Associate the same string of request / task / result / audit action |
+| `debug_ref` | support-safe debug lookup reference |
+| `task_id` |task / runner / result handoff of public execution identity|
+| `session_id` | mode-aware session linkage |
+| `workspace_id` | workspace-scoped governance / visibility boundary |
+| `actor_user_id` |remote governance and actor-centric lookup|
+| `runtime_mode` | `local` or `online`; not replaced by the desktop profile term |
+
+## Runner Runtime Liveness Vocabulary
+
+| State | Meaning |
+|---|---|
+| `idle` | Runner alive and available, but task is not currently executing |
+| `running` | Runner alive and currently executing a task |
+| `draining` | Runner alive, but is being cleared or finished and no longer accepts new work |
+| `degraded` | Runner alive, but health / liveness evidence / runtime status has clear exceptions |
+| `offline` | Runner absent, unreachable, shut down, or determined to be effectively unavailable by backend |
+
+<Aside type="caution" title="Do not collapse Runner liveness into task status">
+
+task `running` is execution lifecycle.
+Runner `running` is Runner availability / execution occupancy.
+Runner `idle` stands for live-and-available and may not be reduced to `offline` by shell, task summary, or support tooling.
+
+</Aside>
+
+## Task / Runner / Execution Semantics
+
+| Surface | Canonical question |
+|---|---|
+| task lifecycle | In what state is the execution of this task now? |
+| Runner liveness | Is this Runner available now and is it executing work? |
+| task execution read model | Which tasks are currently visible globally, and what are their quick summary / actions? |
+
+## Mode Applicability
+
+| Layer | Local mode | Online mode |
+|---|---|---|
+| Audit logging | reduced / optional; only true if local governance surface is explicitly enabled | required for multi-user governance |
+| Workflow observability | required | required |
+| Product telemetry | allowed, controlled by local privacy / developer settings | allowed, controlled by product telemetry policy |
+
+## Desktop Shell Responsibilities
+
+| Concern | Contract |
+|---|---|
+| Local-managed processes | desktop shell can aggregate runtime health and logs of frontend, Python Backend and Julia Runner |
+| Remote-server profile | desktop shell must not be started locally for observability. heavy runtime |
+| Authority boundary | desktop shell can do log aggregation / health display, but it cannot replace backend persisted task truth |
+| Correlation propagation | Under local-managed profile, the desktop shell should help pass user action / runtime context to frontend, backend and runner |
+
+## Storage And Access Separation
+
+| Layer | Storage / access baseline |
+|---|---|
+| Audit logging | separate audit store + governance query surface |
+| Workflow observability | runtime/event timeline store or equivalent query surface; can be reconstructed from persisted task + dispatch metadata + runtime events |
+| Product telemetry | aggregate telemetry pipeline; raw governance payload must not be used directly as telemetry store |
+
+## Minimum Consumer Surfaces
+
+| Consumer surface | Reads from |
+|---|---|
+| Audit Logs page | audit logging surface |
+| Task / runtime developer tooling | workflow observability surface |
+| Product performance analysis | telemetry aggregates |
+
+<Aside type="tip" title="Shared identifiers are allowed">
+
+For example, `correlation_id` can appear in the audit row, request log, and task timeline at the same time.
+But this does not mean that the three are the same authority.
+
+</Aside>
+
+## Related
+
+- [Runtime Modes](runtime-modes.mdx)
+- [Task Runtime & Processors](task-runtime-and-processors.md)
+- [Audit Logging](audit-logging.mdx)
+- [Backend / Audit Logs](../backend/audit-logs.mdx)
+- [Backend / Tasks & Execution](../backend/tasks-execution.md)
+- [Logging Standards](../../reference/guardrails/code-quality/logging.mdx)

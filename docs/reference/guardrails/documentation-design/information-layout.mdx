@@ -1,0 +1,177 @@
+---
+aliases:
+ - "Documentation Information Layout"
+ - "Document information arrangement"
+ - "Macro Style"
+ - "Information Layout"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/documentation
+status: stable
+owner: docs-team
+audience: team
+scope: "Macro Style / Information Layout: Document information layering, visual rhythm, and layout specifications for overview/index pages"
+version: v0.5.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Macro Style / Information Layout
+
+This document defines the macro layer of `Documentation Style` and handles the information arrangement rules of the document page. The goal is not to make the page more colorful, but to put the information at the correct visual level to prevent readers from seeing a wall of text or misjudging the page structure as soon as they open it.
+
+<Aside type="note" title="Corresponding Micro Style">
+
+This page is responsible for page rhythm, container division of labor, and overview/index presentation.
+For mood, paragraph writing and element syntax, return to [Micro Style / Writing & Visual Elements](style.mdx).
+
+</Aside>
+
+---
+
+## Core Principles
+
+| Principles | Description |
+|------|------|
+| Only answer one question in one section | Each paragraph or subsection should only deal with one topic, and avoid talking about purpose, process, exceptions, and acceptance in the same block. |
+| Layer first, then density | Cut the page into clear levels first, and then decide whether to use tables, tabs or asides. Don’t pile up information first and then go back and add styles. |
+| Containers must have semantics | Tables, tabs, asides, and foldable blocks must all correspond to clear purposes, not just to make the picture look richer. |
+| Scan first, then read carefully | The page should allow readers to grasp the skeleton through titles, short introductions, and tables before deciding whether to expand on minor details. |
+| Sidebar and main text have different division of labor | Sidebar is responsible for site navigation; the main text is responsible for page explanation. Do not copy the sidebar structure unchanged into the body. |
+| Groups are not pages | IA groups such as `Workspace`, `Definition`, `Simulation Workbench` must be clearly marked as groups and cannot be written like independent pages without links. |
+| Hidden pages are not allowed | Each editable docs page must be found in the Starlight sidebar; it cannot be reached by just an in-page link or direct URL. |
+
+<Aside type="tip" title="Judgment criteria">
+
+If a piece of content is moved into different visual containers, it is easier for readers to judge "whether it is a specification, a comparison, a reminder, or a minor detail", which means the layout direction is correct.
+
+</Aside>
+
+---
+
+## Page rhythm
+
+It is recommended to establish the following reading rhythm first, and then adjust it according to the content:
+
+1. Page positioning: title + 1 to 2 sentences of introduction.
+2. The first level of skeleton: Use subsections to clearly separate different problems.
+3. Structured facts: Use tables, lists or tabs to present stable information.
+4. Add emphasis: Add asides or foldable details only where necessary.
+5. Closing block: put Related, acceptance conditions or Agent Rule.
+
+<Aside type="note" title="Default reading path">
+
+Readers should be able to grasp 60% to 70% of the page by just looking at the title, introduction, and table headings, and then decide whether to read the text in depth.
+
+</Aside>
+
+---
+
+## Container selection
+
+| Containers | What is suitable for storage | What is not suitable for storage |
+|------|------------|--------------|
+| Body paragraphs | Normal description, introduction, short conclusion | Long list of specifications, parallel comparisons, repeated reminders |
+| Tables | Stable specifications, field definitions, classification comparisons | Long explanations, story-like backgrounds |
+| Tabs | Variations at the same level, parallel classification, situation switching | Sequential processes |
+| Asides | Reminders, suggestions, risks, verifications that require semantic emphasis | General instructions, standard opening of each section |
+| `<details>` | Minor details, advanced supplements, edge situations, long source code | Core definition of the main process or warning / danger semantics |
+| Page Map / Link List | Really existing sub-page entries | Group labels, page names that do not yet exist |
+
+<Aside type="caution" title="Avoid container abuse">
+
+Don’t treat tables as a catch-all format, and don’t shove entire pages aside just to break down walls of text. The more containers there are, the more important it is to ensure that each container is doing a different job.
+
+</Aside>
+
+---
+
+## Overview and Index page rules
+
+The Overview / Index page is most likely to copy the sidebar structure into the text, causing readers to mistakenly think that the group itself is also a one-page document. This type of page should be prioritized as a "page map" rather than a "navigation tree copy".
+
+In the Astro + Starlight docs, first-level page maps should serve reader intent:
+
+- `Start Here`: The shortest notebook-first path for new readers, only the two-step onboarding of first Pluto notebook and reusable circuit design.
+- `Workflows`: People who want to complete research tasks; the first-level workflow groups are Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
+- `Concepts`: People who want the workflow knowledge base: pure physics foundations, reusable circuit authoring model, S/Y/Z and equivalent-circuit modeling, quantum modeling, dynamics/pulse concepts, and GDSFactory-compatible artifact boundaries.
+- `Product App`: People who want to see productized workbench, app-specific Python Notebook prototyping, Architecture Contracts, Data Contracts, frontend, backend, desktop, shared contracts.
+- `Reference`: For people looking for research-core stable contracts, including external result, equivalent circuit, quantum model, and notebook role boundaries; not production runtime, data search, backend/frontend/desktop, Schema Editor or ResultView contracts.
+- `Contribute & Govern`: People who want to contribute, review or execute the agent workflow.
+
+<Tabs>
+<TabItem label="should do">
+
+
+- First use a short introduction to explain what is included in this area.
+- Organize IA with group titles, but only list actual existing file pages under each group.
+- If the group name itself is not a page, explicitly mark it as just a group.
+- Add a short focus sentence after each link to let readers know what to look for on that page.
+
+</TabItem>
+
+<TabItem label="avoid doing">
+
+
+- Reproduce a tree almost identical to sidebar in the main text.
+- Make group labels look like pages with missing links.
+- Three sets of repeated structures `Sections`, `Topics`, and `Page Map` appear at the same time.
+- Use long columns to list the pages in the entire area, but do not explain the responsibilities of each page.
+
+</TabItem>
+
+</Tabs>
+
+<Aside type="tip" title="The correct status of the Overview page">
+
+Readers should be able to distinguish:
+1. What are the groups?
+2. Which pages actually exist.
+3. What is roughly what each page is responsible for.
+
+</Aside>
+
+---
+
+## Common anti-patterns
+
+| Anti-Pattern | Problem | Suggested Fix |
+|--------|------|----------|
+| Text wall | Readers cannot quickly grasp the theme and level of the page | Break it into smaller sections first, and then decide which information is suitable for tables or tabs |
+| Decorative asides | Many boxes, but no clear semantic differences | Only keep reminders that really need to be emphasized, and move general instructions back to the text |
+| The group pretends to be a page | Readers will mistakenly think that it is a missing page or broken link | The group title is only used as an IA label, and the link only lists the actual file |
+| Copy and paste the navigation tree | The sidebar is repeated with the main text, the screen density is high but the amount of information has not increased | The main text is rewritten into a page map or summary of responsibilities |
+| There are too many things mixed into one section | It talks about positioning, process, boundaries, and exceptions at the same time, making it difficult to scan | Split the content into different sections, each answering a single question |
+
+---
+
+## Related
+
+- [Documentation Style](style.mdx)
+- [Documentation Standards](standards.mdx)
+- [Page Reference Specs](page-reference-specs.mdx)
+
+---
+
+## Agent Rule
+```markdown
+## Macro Style / Information Layout
+- Only answer one main question in each section; establish information layering first, then increase content density
+- Text, tables, tabs, asides, and folded blocks must have clear semantics and cannot be used for decoration.
+- The page should support scanning first and then detailed reading: the title, introduction, and table title should convey the main skeleton first
+- Sidebar is a navigation; the text is not a copy of the sidebar
+- Every editable docs page must be overridden by sidebar explicit `slug` or `autogenerate.directory`; hidden pages are prohibited
+- Top-level docs maps should be reader/task-first, not Diataxis-first.
+- Start Here should be a two-step student/research path: first Pluto notebook, then reusable circuit design. Product App belongs in its own top-level group, not the onboarding mainline.
+- Workflows should expose four route-first groups: Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
+- Concepts should be a curated workflow knowledge base with compact References sections; use primary sources, official docs, and high-authority superconducting-circuit literature first.
+- Product App should be a top-level reader lane for app contracts and app-specific Python Notebook prototyping boundaries.
+- Start Here, Workflows, Concepts, and non-app Reference are strict research-core lanes; do not place Product App, Backend, Frontend, Desktop, Electron, Schema Editor, ResultView, TraceStore, FastAPI, WebUI, Data Search/Data Management, or Product Async workflow procedures there.
+- Product architecture, Backend publication, UI/schema-editor decisions, data contracts/search/management, old App workflows, and product async material belong under `docs/app/**`; obsolete App-specific tutorials belong under `docs/app/archive/**`.
+- The Overview / Index page only lists real existing page links; IA groups must be clearly marked as groups and cannot be written like independent pages
+- Avoid text walls, container abuse, groups pretending to be pages, and duplicate `Sections/Topics/Page Map`
+```

@@ -2,8 +2,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 
-from sc_core.tasking import ProcessorHeartbeat
-
+from app_backend.domain.runtime_contracts.tasking import ProcessorHeartbeat
 from app_backend.domain.tasks import WorkerLaneSummary
 from app_backend.infrastructure.app_state_repository import AppStateRepository
 from app_backend.infrastructure.audit_store import (
@@ -46,7 +45,6 @@ from app_backend.services.result_trace_publication_service import (
     ResultTracePublicationService,
 )
 from app_backend.services.runner_result_publisher import RunnerResultPublisher
-from app_backend.services.schemdraw_render_service import SchemdrawRenderService
 from app_backend.services.session_mutation_service import SessionMutationService
 from app_backend.services.session_projection_service import SessionProjectionService
 from app_backend.services.session_service import SessionService
@@ -254,14 +252,6 @@ def get_circuit_definition_service() -> CircuitDefinitionService:
 
 
 @lru_cache(maxsize=1)
-def get_schemdraw_render_service() -> SchemdrawRenderService:
-    return SchemdrawRenderService(
-        definition_repository=get_circuit_definition_persistence_repository(),
-        session_repository=get_app_state_repository(),
-    )
-
-
-@lru_cache(maxsize=1)
 def get_session_service() -> SessionService:
     repository = get_app_state_repository()
     dataset_repository = get_catalog_repository()
@@ -450,7 +440,6 @@ def reset_runtime_state() -> None:
     get_authorization_service.cache_clear()
     get_session_token_transport.cache_clear()
     get_circuit_definition_service.cache_clear()
-    get_schemdraw_render_service.cache_clear()
     get_session_service.cache_clear()
     get_workspace_collaboration_service.cache_clear()
     get_audit_log_service.cache_clear()

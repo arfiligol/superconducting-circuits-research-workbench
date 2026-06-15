@@ -1,0 +1,179 @@
+---
+aliases:
+ - "Documentation Standards"
+ - "Document specification"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/documentation
+status: stable
+owner: docs-team
+audience: team
+scope: "reader/task-first IA, Diataxis metadata classification boundaries, Frontmatter/Tags specifications and file core rules"
+version: v0.3.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Documentation Standards
+
+This document defines the core rules and structural specifications for writing this project document (reader/task-first IA + Diataxis metadata + Metadata + core constraints).
+
+---
+
+## Reader/Task-First IA
+
+Astro + Starlight `/docs/`’s first-level navigation centers on the reader’s mission:
+
+| Group | Source path | Role |
+| --- | --- | --- |
+| Docs Home | `docs/index.mdx` | Full site entrance and reader path |
+| Start Here | `docs/start/` | Shortest onboarding path |
+| Workflows | `docs/workflows/` | Do tasks, run processes, and operate tools |
+| Concepts | `docs/concepts/` | Understanding models, physics, architecture and design decisions |
+| Reference | `docs/reference/` | Stable contracts, table lookup, API landing, guardrails |
+| Contribute & Govern | `docs/contribute/` + governance reference | Contribution process, agent skills, guardrails, contributors |
+
+Diataxis is written as discipline and frontmatter metadata, not `/docs/` first-level navigation.
+
+## Diataxis Metadata
+
+### Classification boundaries
+
+<Tabs>
+<TabItem label="Tutorials">
+
+
+<Aside type="tip" title="Applicable situations">
+
+Let new entrants "follow and succeed."
+
+</Aside>
+
+- ✅ Clear prerequisites, step-by-step operations, and verifiable results
+- ❌ Complete specifications, decision-making background, design dialectics
+
+</TabItem>
+
+<TabItem label="How-to">
+
+
+<Aside type="tip" title="Applicable situations">
+
+Solve a specific problem or complete a single task.
+
+</Aside>
+
+- ✅ Clear steps and shortest path
+- ❌ Teaching style presentation, specification enumeration, decision-making reasons
+
+</TabItem>
+
+<TabItem label="Reference">
+
+
+<Aside type="note" title="Applicable situations">
+
+Provide "specifications and facts" that can be cited.
+
+</Aside>
+
+- ✅ The items are clearly listed, complete and searchable
+- ❌ Background motivation, teaching steps, usage situation stories
+
+</TabItem>
+
+<TabItem label="Explanation">
+
+
+<Aside type="note" title="Applicable situations">
+
+Explain "why it is designed this way."
+
+</Aside>
+
+- ✅ Concept clarification, design choices, principles and reasons
+- ❌ Operating steps, complete specifications, imperative instructions
+
+</TabItem>
+
+</Tabs>
+
+---
+
+## Frontmatter specifications
+
+This project file generally uses the following YAML Frontmatter (aligned with the existing style of the current `docs/`):
+
+| Property | Required | Format |
+|----------|----------|--------|
+| `aliases` | ✅ | String array |
+| `tags` | ✅ | String array (needs to comply with Tag Taxonomy) |
+| `status` | ✅ | `draft` / `incubating` / `stable` / `deprecated` |
+| `owner` | ✅ | `team` or `team/person` |
+| `audience` | ✅ | `team` / `contributor` / `user` |
+| `scope` | ✅ | Summary Document Coverage |
+| `version` | ✅ | `vX.Y.Z` |
+| `last_updated` | ✅ | `YYYY-MM-DD` |
+| `updated_by` | ✅ | `team` or `team/person` |
+
+<Aside type="caution" title="Name verification rules">
+
+The names mentioned in `owner` and `updated_by` must exist in the [Contributor Directory](../../contributors.mdx). When adding new contributors, please update the directory before citing.
+
+</Aside>
+
+---
+
+## Tag Taxonomy
+
+Tags are in `namespace/value` format.
+
+| Prefix | Purpose | Example |
+|------|------|------|
+| `diataxis/*` | Diataxis Classification | `diataxis/reference` |
+| `audience/*` | Target Audience | `audience/team` |
+| `sot/*` | Is it an authoritative source | `sot/true` |
+| `topic/*` | Hashtag | `topic/documentation` |
+
+---
+
+## Core Rules
+
+<Aside type="caution" title="Violations will reduce file consistency (and may make CI docs checks more difficult to maintain)">
+
+</Aside>
+
+| Rules | Description |
+|------|------|
+| Diataxis classification | Content must conform to the corresponding classification boundaries (to avoid confusion) |
+| Link format | Internal links use standard Markdown (relative paths) |
+| Proper nouns | Preserve official names, package identifiers, physics notation, file paths, citations, and established technical terms |
+| SoT mark | Authoritative document mark `sot/true` |
+| Disable fuzzy time | Disable "future", "subsequent", "upcoming", etc.; please write a clear date (for example: `2026-01-30`) |
+
+---
+
+## Reference specification
+
+- [Documentation Style](style.mdx)
+- [Documentation Maintenance](maintenance.mdx)
+
+---
+
+## Agent Rule
+```markdown
+## Documentation Standards
+- **Docs IA**: `/docs/` uses reader/task-first navigation: Docs Home, Start Here, Workflows, Concepts, Reference, Contribute & Govern.
+- **Diataxis**: Tutorials / How-to / Reference / Explanation remains writing discipline and `diataxis/*` metadata; it is not the first-level sidebar structure.
+- **Placement**: onboarding goes to `docs/start/`; task execution goes to `docs/workflows/`; mental models go to `docs/concepts/`; stable contracts and lookup surfaces go to `docs/reference/`; contribution and governance entrypoints go to `docs/contribute/` plus relevant `docs/reference/**` pages.
+- **Frontmatter**: aliases, tags, status, owner, audience, scope, version, last_updated, updated_by
+- **Language**: editable docs source is English-only; do not add CJK text outside generated/staging output.
+- **owner/updated_by**: `team` or `team/person`; the name must be in the contributors registry
+- **Tags**: `diataxis/*`, `audience/*`, `sot/*`, `topic/*`
+- **SoT**: Authoritative document mark `sot/true`
+- **No vague time**: Disable "future/subsequent/upcoming", etc., please write a clear date
+```

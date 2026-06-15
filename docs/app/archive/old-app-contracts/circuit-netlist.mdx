@@ -1,0 +1,260 @@
+---
+aliases:
+ - "Circuit Netlist Schema"
+ - "Circuit Netlist Specifications"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/simulation
+status: stable
+owner: docs-team
+audience: team
+scope: "CircuitDefinition Netlist specification: components-first, topology, optional parameters"
+version: v1.5.0
+last_updated: 2026-03-14
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Circuit Netlist Schema
+
+<Aside type="caution" title="Legacy App contract">
+
+This page is archived App-specific Schema Editor / CircuitDefinition reference. For current research authoring, use Julia Core component libraries, reusable plan builders, and `CircuitPlan`.
+
+</Aside>
+
+`CircuitDefinition` is the netlist format shared by the UI Schema Editor and the simulation process.
+This project adopts the **components-first** model: `components` is the main author interface, and `parameters` is the optional advanced block.
+
+<Aside type="note" title="Single Pipeline">
+
+Schema preview, expanded preview and simulation configuration must use the same source-to-expanded netlist pipeline.
+The cross-page sharing semantics of netlist are defined by this page and do not create a parallel SoT in Architecture.
+
+</Aside>
+
+## Structure
+
+- `name: str`
+- `components: list[ComponentSpec]`
+- `topology: list[(element_name, node1, node2, component_name_or_port_index)]`
+- `parameters: list[ParameterSpec]` (optional)
+
+Among them `ComponentSpec`:
+
+| Key | Type | Required | Description |
+|---|---|---|---|
+| `name` | `str` | ✅ | component unique name |
+| `unit` | `str` | ✅ | Unit string |
+| `default` | `float` | Choose one of two | Fixed value component |
+| `value_ref` | `str` | Choose one of the two | Parameter reference component |
+
+`default` / `value_ref` must choose one, cannot exist at the same time, and cannot be missing at the same time.
+
+`ParameterSpec` (required only if `value_ref` is required):
+
+| Key | Type | Required | Description |
+|---|---|---|---|
+| `name` | `str` | ✅ | Parameter name (for `value_ref` to point to) |
+| `default` | `float` | ✅ | Parameter default values ​​|
+| `unit` | `str` | ✅ | Unit string |
+
+---
+
+## Core Rules (Normative)
+
+1. `components` and `topology` are required; `parameters` can be omitted.
+2. Each `components[*]` must contain `name`, `unit`, and must choose one of `default` / `value_ref`.
+3. If the component uses `value_ref`, `parameters` must have the same name as `name`, and `unit` must be consistent.
+4. The Port component (`P*`) uses an integer port index (e.g. `1`) in column 4 of the topology.
+5. Non-Port and non-`K*` rows must reference the existing component name in column 4 of the topology.
+6. The 2/3 column of `K*` mutual coupling row must be inductor element name (not node).
+7. Column 4 of the `K*` mutual coupling row must reference an existing coupling component name.
+8. The node token only accepts numeric strings, and the ground token only accepts `"0"`.
+
+---
+
+## Topology Item Format
+
+`(element_name, node1, node2, component_name_or_port_index)`
+
+| Position | Type | Description |
+|---|---|---|
+| `element_name` | `str` | Component name (use prefix to infer symbol) |
+| `node1` | `str` | Endpoint Node 1 |
+| `node2` | `str` | Endpoint Node 2 |
+| `component_name_or_port_index` | `int \| str` | Use integers for Port; use component names for the rest (e.g. `C1`, `Lj1`) |
+
+---
+
+## Component and Unit rules
+
+| Component | Name Prefix | Allowed Units | Example | Notes |
+|---|---|---|---|---|
+| Port | `P*` | `-` | `("P1", "1", "0", 1)` | Port index uses an integer |
+| Resistor | `R*` | `Ohm`, `kOhm`, `MOhm` | `("R1", "1", "0", "R1")` | It is recommended that each Port has a shunt resistor (common `50 Ohm`) |
+| Inductor | `L*` | `H`, `mH`, `uH`, `nH`, `pH` | `("L1", "1", "2", "L1")` |`Lj*` Also written as Josephson Junction|
+| Capacitor | `C*` | `F`, `mF`, `uF`, `nF`, `pF`, `fF` | `("C1", "1", "2", "C1")` | Use `value_ref` for shared parameters, not topology to directly reference parameters |
+| Josephson Junction | `Lj*` | `H`, `mH`, `uH`, `nH`, `pH` | `("Lj1", "2", "0", "Lj1")` |Preview will be displayed with junction symbol|
+| Mutual Coupling | `K*` | Project convention (common `H`) | `("K1", "L1", "L2", "K1")` | Column 2/3 is the inductor element name; column 4 is the coupling component name |
+
+<Aside type="note" title="Case rules">
+
+Unit parsing currently supports case insensitivity (for example, `ohm` / `Ohm` can be used), but it is recommended to use the canonical writing method in the table for documents and examples.
+
+</Aside>
+
+<Aside type="note" title="Ground node">
+
+The ground token only has the string `0`. `gnd` / `GND` are not supported.
+
+</Aside>
+
+---
+
+## Minimal Runnable Example (components-only, no parameters)
+
+```python
+{
+  "name": "SmokeStableSeriesLC",
+  "components": [
+    {"name": "R1", "default": 50.0, "unit": "Ohm"},
+    {"name": "C1", "default": 100.0, "unit": "fF"},
+    {"name": "Lj1", "default": 1000.0, "unit": "pH"},
+    {"name": "C2", "default": 1000.0, "unit": "fF"}
+  ],
+  "topology": [
+    ("P1", "1", "0", 1),
+    ("R1", "1", "0", "R1"),
+    ("C1", "1", "2", "C1"),
+    ("Lj1", "2", "0", "Lj1"),
+    ("C2", "2", "0", "C2")
+  ]
+}
+```
+
+## Advanced Example (components + parameters)
+
+```python
+{
+  "name": "SweepableSeriesLC",
+  "parameters": [
+    {"name": "Lj", "default": 1000.0, "unit": "pH"},
+    {"name": "Cj", "default": 1000.0, "unit": "fF"}
+  ],
+  "components": [
+    {"name": "R1", "default": 50.0, "unit": "Ohm"},
+    {"name": "C1", "default": 100.0, "unit": "fF"},
+    {"name": "Lj1", "value_ref": "Lj", "unit": "pH"},
+    {"name": "C2", "value_ref": "Cj", "unit": "fF"}
+  ],
+  "topology": [
+    ("P1", "1", "0", 1),
+    ("R1", "1", "0", "R1"),
+    ("C1", "1", "2", "C1"),
+    ("Lj1", "2", "0", "Lj1"),
+    ("C2", "2", "0", "C2")
+  ]
+}
+```
+
+---
+
+## Sweep Rules
+
+- Netlist sweep target from `components[*].value_ref` (after deduplication).
+- Sweep will overwrite the execution value corresponding to `value_ref` without changing the topology structure.
+- Components not overridden by Sweep still use `default` (or its parameter default).
+
+<Aside type="note" title="Bias/source sweep boundary">
+
+Source/bias (e.g. `sources[1].current_amp`) belongs to the `Simulation Setup` contract,
+Does not belong to the netlist data format. This document only specifies the sweep semantics of the netlist parameter layer.
+
+</Aside>
+
+---
+
+## Live Preview Binding Rule
+
+When Live Preview displays a value, it must first parse the component using topology column 4, and then parse its actual value:
+
+1. If component is `default`, directly display `default`
+2. If component is `value_ref`, display `parameters[name=value_ref].default`
+
+For example:
+
+- `("C2", "2", "0", "C2")` If `C2` uses `value_ref="Cj"`, the default of `Cj` should be displayed
+- Column 4 of topology should not be directly regarded as parameter key
+
+---
+
+## Common error comparison
+
+| Message fragment | Possible reasons | Suggestions |
+|---|---|---|
+| `Circuit Definition must define 'components'.` | Missing `components` block | Added `components` |
+| `Component 'X' must define exactly one of 'default' or 'value_ref'.` | component `default/value_ref` is present or missing at the same time | Choose one of the two |
+| `Component 'X' references undefined parameter 'Y'.` | `value_ref` has no corresponding parameter | Add `parameters[name=Y]` |
+| `Topology row 'X' references undefined component 'Y'.` | The topology column 4 reference does not exist component | Change to the existing component name |
+| `Topology row 'X' must reference a component name.` | Non-Port row column 4 is not a string | Change to component name string |
+| `Ports without resistors detected` | Port has no impedance definition | Add the corresponding `R*` component (common `R50`) |
+| `SingularException` | Topological connection or parameter combination causes matrix singularity | Check node connectivity, component values ​​and units |
+
+## Runtime Contract Snapshot
+
+### Input
+
+- Source-form netlist (Schema Editor storage content)
+- Optional Simulation Setup override (e.g. sweep)
+
+### Output
+
+- Expanded/validated netlist (only execution view, no write back to DB)
+- Clear validation failure (can be mapped to fields and rules)
+
+### Invariants
+
+1. The ground token only allows the string `0`
+2. `P*` column 4 must be an integer port index
+3. For non-`P*` / `K*`, column 4 must be the component name
+4. Column 2/3 of `K*` must be the inductor element name, and column 4 is the coupling component reference.
+
+### Failure Modes
+
+- undefined component reference
+- undefined parameter reference (from `value_ref`)
+- invalid node token / invalid ground token
+- `K*` row reference does not exist inductor/component
+- Topology creates singular matrices (numerical layer)
+
+## Consumer Map
+
+| Consumer | Why it depends on this contract |
+| --- | --- |
+| [Circuit Definitions](../../app/backend/circuit-definitions.mdx) | persisted source / validation / preview authority |
+| [Schema Editor](../../app/frontend/definition/schema-editor.mdx) |source editing, auto-format, hint table, persisted preview|
+| [Julia Runner Compute Plane](../../architecture/contracts/julia-runner-compute-plane.md) |canonical definition selection, task payload binding, staging result publication|
+
+## Code Reference Map
+
+| Concern | Reference |
+| --- | --- |
+| Parser / validator | [`legacy_circuit_definition_netlist/circuit.py`](../../../app/backend/app_backend/domain/legacy_circuit_definition_netlist/circuit.py) |
+
+## Runtime Parity Checklist
+
+Before releasing at least confirm:
+
+1. Data Format specifications are consistent with parser rules (`P*` / `K*` / ground token)
+2. Schema Editor Expanded Preview and Runner task payload use the same expansion pipeline
+3. DB only saves source-form, not expanded-form.
+4. The error message can correspond to the specification entry on this page and does not rely on the implicit old compatibility path.
+
+## Related
+
+- [Julia Runner Compute Plane](../../architecture/contracts/julia-runner-compute-plane.md)
+- [Data Formats Overview](index.mdx)

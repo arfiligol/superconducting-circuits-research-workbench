@@ -282,8 +282,8 @@ class CharacterizationTaggingResultPayload:
 
 @lru_cache(maxsize=1)
 def _core_symbols() -> dict[str, Any]:
-    from core.shared.persistence import get_unit_of_work
-    from core.shared.persistence.models import AnalysisRunRecord
+    from app_backend.infrastructure.local_store import get_unit_of_work
+    from app_backend.infrastructure.local_store.models import AnalysisRunRecord
 
     return {
         "AnalysisRunRecord": AnalysisRunRecord,

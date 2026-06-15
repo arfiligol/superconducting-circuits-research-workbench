@@ -1,0 +1,93 @@
+---
+aliases:
+ - Design Patterns
+ - design pattern
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/code-quality
+status: stable
+owner: docs-team
+audience: contributor
+scope: Service boundaries, dependency directions and shared logic specifications of rewrite branch.
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Design Patterns
+
+The design pattern of this project focuses on placing shared rules in a stable position, rather than allowing each entry layer to grow its own logic.
+
+<Aside type="note" title="Use this page for boundary and ownership decisions">
+
+This page answers where workflow logic, dependency injection, canonical definition and API layer responsibility should be placed. It does not replace the folder structure or backend architecture, but complements the owner pattern.
+
+</Aside>
+
+## Pattern Map
+
+| pattern | answered questions |
+| --- | --- |
+| Dependency Direction | Which layer can have workflow |
+| Dependency Injection | How service / repository / adapter should be assembled |
+| Compute Boundary | How Python Backend and Julia Runner divide their labor |
+| API Layer Responsibility | What an API handler can and cannot do |
+
+## Core Rules
+
+### Dependency Direction
+
+- React component cannot undertake business process orchestration
+- FastAPI router cannot directly undertake the complete workflow
+- scripts cannot copy backend service or Runner logic
+- Python Backend cannot execute heavy simulation / analysis compute
+-Julia Runner cannot write formal metadata DB
+- Sharing rules should be focused on app backend service, Julia Core, Julia Runner or explicit contract package
+
+### Dependency Injection
+
+- Service dependencies are injected via constructor or explicit factory
+- It is forbidden to use new repository / client / adapter within the function
+- framework-specific assembly is placed in the composition root
+
+### Compute Boundary
+
+- Python Backend owns task lifecycle, metadata, publication, provenance, TraceStore registration, and data APIs
+- Julia Runner owns simulation, sweep, post-processing, analysis, fitting, derived parameter extraction, and staging package generation
+- Application-triggered simulation and analysis must be asynchronous
+- Notebook direct execution is allowed only because the notebook kernel is an explicit research execution environment
+
+### API Layer Responsibility
+
+- request parsing
+- auth / permission checks
+- service call
+- response mapping
+
+Should not contain:
+
+- Long process business judgment
+- persistence details
+- Duplicate conversion logic across multiple modules
+
+<Aside type="caution" title="Do not let entry layers fork the workflow">
+
+If component, router, notebook helper, runner or script each secretly grows a similar but not identical process, they will eventually drift. The focus of this page is to avoid this kind of locally reasonable and globally out-of-control design.
+
+</Aside>
+
+## Agent Rule
+```markdown
+## Design Patterns
+- Keep shared workflow logic in app backend services, Julia Core, Julia Runner, or explicit contract packages, not in React components, FastAPI routers, notebooks, or scripts.
+- Use dependency injection or explicit factories for services, repositories, and adapters.
+- Python Backend is the control/data plane and must not execute heavy simulation or analysis compute in process.
+- Julia Runner is the compute plane and must not write formal metadata DB records.
+- Application-triggered simulation and analysis must be asynchronous.
+- API handlers should do I/O, auth, validation, service invocation, and response mapping only.
+- Scripts are dev/build/test/maintenance helpers only and must not become user-facing workflow contracts.
+```

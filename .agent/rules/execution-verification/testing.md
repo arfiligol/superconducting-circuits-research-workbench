@@ -1,33 +1,40 @@
 ## Testing Commands
 - **Foundation workspace check**:
-    - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
-    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`
-    - `npm run test --prefix app/frontend`
-    - `npm run lint --prefix app/desktop`
-    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+  - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
+  - `npm run test --prefix app/frontend`
+  - `npm run lint --prefix app/desktop`
+  - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - **Backend/core tests**:
-    - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
-    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`
-    - `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`
-    - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
-    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+  - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
+  - `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- `SuperconductingCircuitsAnalysisBridge` tests are repo-local and require root `uv sync --all-packages`; the test bootstrap selects root `.venv` unless `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` overrides it.
 - **Frontend unit tests**: `npm run test --prefix app/frontend`
 - **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
 - For user-visible frontend changes, use Playwright-based smoke verification and screenshot or equivalent visual evidence when practical.
 - **Public site checks**:
-    - `npm run check --prefix site`
-    - `npm run build --prefix site`
-    - `./scripts/build/build_public_site.sh`
+  - `npm run check --prefix site`
+  - `npm run build --prefix site`
+  - `./scripts/build/build_public_site.sh`
 - **Desktop foundation checks**:
-    - `npm run lint --prefix app/desktop`
-    - `npm run build --prefix app/desktop`
+  - `npm run lint --prefix app/desktop`
+  - `npm run build --prefix app/desktop`
 - **Docs checks**:
-    - `uv run python scripts/check_docs_nav_routes.py --check-source`
-    - `./scripts/prepare_docs_locales.sh`
-    - `uv run --group dev zensical build -f zensical.toml`
-    - `./scripts/build_docs_sites.sh`
-    - `uv run python scripts/check_docs_nav_routes.py --check-built`
+  - `uv run python scripts/check_docs_nav_routes.py --check-source`
+  - `uv run python scripts/check_docs_app_quarantine.py`
+  - `npm run check --prefix site`
+  - `npm run build --prefix site`
+  - `./scripts/build_docs_sites.sh`
+  - `uv run python scripts/check_docs_nav_routes.py --check-built`
+- **API reference checks**:
+  - `uv run sphinx-build -W --keep-going -b html docs/api-reference/python/source build/api-reference/python/html`
+  - `julia --project=docs/api-reference/julia docs/api-reference/julia/make.jl`
+  - `./scripts/build/build_api_docs.sh`
+  - `uv run python scripts/build/check_api_reference_links.py` after `./scripts/build/build_public_site.sh`
 - Add tests for critical workflows instead of relying on manual verification only.
 - Use canonical directory routes for docs route checks instead of source `.md` paths.

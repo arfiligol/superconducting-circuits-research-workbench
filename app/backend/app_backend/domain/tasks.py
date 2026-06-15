@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, cast
 
-from sc_core.execution import (
+from app_backend.domain.datasets import (
+    CharacterizationInputCollectionPayload,
+    CharacterizationInputResultRef,
+    InputCollectionAxis,
+    InputCollectionTraceSummary,
+    TraceCollectionProjection,
+)
+from app_backend.domain.runtime_contracts.execution import (
     TaskExecutionHistoryContext,
     TaskExecutionHistoryEvent,
     TaskExecutionHistoryEventType,
@@ -17,26 +24,18 @@ from sc_core.execution import (
     build_task_lifecycle_history_event,
     build_task_submission_history_event,
 )
-from sc_core.storage import TraceResultLinkage
-from sc_core.tasking import (
+from app_backend.domain.runtime_contracts.storage import TraceResultLinkage
+from app_backend.domain.runtime_contracts.tasking import (
     TaskDispatchStatus as _TaskDispatchStatus,
 )
-from sc_core.tasking import (
+from app_backend.domain.runtime_contracts.tasking import (
     TaskExecutionMode,
     TaskSubmissionSource,
     WorkerTaskName,
     build_task_dispatch_record,
 )
-from sc_core.tasking import (
+from app_backend.domain.runtime_contracts.tasking import (
     task_submission_source_for as _task_submission_source_for,
-)
-
-from app_backend.domain.datasets import (
-    CharacterizationInputCollectionPayload,
-    CharacterizationInputResultRef,
-    InputCollectionAxis,
-    InputCollectionTraceSummary,
-    TraceCollectionProjection,
 )
 from app_backend.domain.storage import MetadataRecordRef, ResultHandleRef, TracePayloadRef
 
@@ -627,6 +626,9 @@ class TaskReconcile:
     reason: str | None = None
 
 
+DEFAULT_TASK_RECONCILE = TaskReconcile(required=False, reason=None)
+
+
 @dataclass(frozen=True)
 class TaskDispatchReceipt:
     queue_name: str
@@ -821,7 +823,7 @@ class TaskDetail(TaskSummary):
     control_state: TaskControlState = "none"
     retry_of_task_id: int | None = None
     dispatch: TaskDispatch | None = None
-    reconcile: TaskReconcile = TaskReconcile(required=False, reason=None)
+    reconcile: TaskReconcile = field(default=DEFAULT_TASK_RECONCILE)
     events: tuple[TaskEvent, ...] = ()
 
 

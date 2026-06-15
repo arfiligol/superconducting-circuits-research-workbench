@@ -1,0 +1,83 @@
+---
+aliases:
+ - Script Authoring
+ - Scripts specification
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/code-quality
+status: stable
+owner: docs-team
+audience: contributor
+scope: The placement location, responsibility boundaries and file specifications of dev/build/test/maintenance scripts.
+version: v2.2.0
+last_updated: 2026-06-11
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Script Authoring
+
+The User-facing command-line workflow has been removed from this project's active product surface.
+`scripts/` only retains dev/build/test/maintenance helpers and no longer hosts user workflow contracts.
+
+<Aside type="note" title="Use this page for helper boundary decisions">
+
+This page answers where helper scripts should be placed, what the script itself is responsible for, and how far legacy commands/scripts should only be retained.
+
+</Aside>
+
+## Placement Map
+
+| If you want to do | Where to put |
+| --- | --- |
+| dev server / local runtime helper | `scripts/dev/` |
+| build helper | `scripts/build/` |
+| test / verification helper | `scripts/test/` |
+| maintenance / migration helper | `scripts/maintenance/` |
+| Formal user workflow | Application, Notebook, Backend API, or Julia Runner task; not script |
+| Real business logic | app backend service, Julia Core, Julia Runner, or framework-neutral contract package |
+
+## Placement
+
+- No new active product command package, Typer command or user-facing command docs
+- dev-only wrapper entrypoint can only be used to transfer to `scripts/dev/`, `scripts/build/`, `scripts/test/` or `scripts/maintenance/` helper, and cannot carry product workflow contract
+- No new legacy root script workflow is added
+- helper script must be placed in `scripts/dev/`, `scripts/build/`, `scripts/test/` or `scripts/maintenance/`
+- If you still need to keep the old entrance during migration, it can only be used as an inert archive or short-term removal bridge.
+
+## Structure
+
+- shell helpers should be small, composable, and explicit about required working directory
+- scripts may orchestrate existing commands but must not own domain workflow logic
+- script names use `kebab-case` or existing repo naming conventions when already established
+- scripts must fail fast on unrecoverable setup/runtime errors
+
+<Aside type="caution" title="Do not duplicate workflow logic">
+
+Script can assemble the development, construction or testing process, but it cannot copy the entire business process inside the API handler, backend service, Julia Runner or notebook.
+
+</Aside>
+
+## Rules
+
+- User-facing command-line product surface cannot be added
+- Cannot expand dev-only wrapper command into product workflow CLI
+- Scripts cannot be written as a formal workflow contract
+- Do not copy the entire internal logic of the API handler to scripts
+- scripts must have explicit exit behavior
+- scripts can only serve dev/build/test/maintenance
+
+## Agent Rule
+```markdown
+## Script Authoring
+- User-facing command-line workflow is no longer an active product surface.
+- Do not add new Typer commands, product command package entrypoints, or user-facing command docs.
+- Dev-only wrapper entrypoints may only dispatch to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/` helpers.
+- Keep only `scripts/` helpers for dev/build/test/maintenance.
+- Put helpers under `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
+- Scripts may orchestrate commands but must not own business workflow logic.
+- Real workflow logic must live in app backend services, Julia Core, Julia Runner, or explicit contract packages.
+```

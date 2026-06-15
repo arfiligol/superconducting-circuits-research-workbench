@@ -1,0 +1,127 @@
+---
+aliases:
+ - Component Guidelines
+ - Component Specifications
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/ui-ux
+status: stable
+owner: docs-team
+audience: contributor
+scope: frontend component selection, form, dialog and data table specifications.
+version: v2.4.0
+last_updated: 2026-03-18
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Component Guidelines
+
+The goal of the component specification is to make the frontend consistent in data-intensive and interaction-intensive situations.
+
+<Aside type="note" title="How to read this page">
+
+First decide whether the component belongs to primitive, feature-local or app-wide layout, and then look at the interaction and data browser rules. The focus of this page is component boundary, not the complete design system token table.
+
+</Aside>
+
+## Component Sources
+
+| Type | Source |
+| --- | --- |
+| Basic UI primitives |`@/components/ui/*` (shadcn/ui)|
+| feature-specific UI | `frontend/src/features/<feature>/components/*` |
+| app-wide layout | `frontend/src/components/layout/*` |
+
+## Visible Surface Rule
+
+- All user-visible interactive UI must be rendered with `@/components/ui/*` or feature-local wrapper
+- Do not use browser default styles `button`, `input`, `select`, `textarea`, `dialog` directly as the final product UI
+- If platform native control is unavoidable, it must be wrapped with your own trigger / label / helper text / error state / surrounding layout
+- The exception must be of type platform bridge, for example:
+- `input[type=file]` trigger file selection
+- picker surface provided by browser/OS
+- Security permission prompt that cannot be fully self-drawn
+
+<Aside type="caution" title="Native controls are implementation detail, not product surface">
+
+Native controls can be bridging mechanisms, but they should not directly become the final interaction style seen by users.
+If native control has to be used, the product must still provide consistent frames, labels, status prompts, error messages, and operation entrances.
+
+</Aside>
+
+## Interaction Rules
+
+- Give priority to using `@/components/ui`'s Button, Input, Select, Dialog, Tabs, Table and other packages
+- Use of `alert()`, `confirm()`, `prompt()` is prohibited
+- The form must be matched with Label, validation, and error state
+- Destructive action must have a confirmation process
+- All clickable icons must provide explicit hover state; at least cursor feedback and visible hover style changes
+- data-dense table must support sorting, filtering, pagination or explicit virtualization strategy
+
+<Aside type="caution" title="Confirmation rule">
+
+Destructive action cannot degenerate into browser-native `confirm()`. Product interactions must retain consistent semantics, style, and error handling surfaces.
+
+</Aside>
+
+## Data Browser Contract
+
+- The list loads summary rows first
+- Detailed payload is only captured when row selection or detail panel
+- Don’t re-catch large payloads just because you cut the page
+
+## Copy Density Contract
+
+- Components and cards should be self-explanatory with priority on title, status, metadata and action hierarchy
+- helper text only appears when risk is high, ambiguity is high, or the form input requires additional clarification
+- empty / loading / error state should be short and direct, and should not become a long explanation wall
+- Shell, sidebar, header and login entry should especially avoid redundant text.
+
+## Anti-overbuild Contract
+
+- The page should not add unnecessary cards, summary and buttons just because "there is a lot of information and it is relatively complete"
+- duplicated shell context does not belong to feature page component inventory, for example:
+ - `Runtime Mode`
+ - `Active Workspace`
+ - `Active Dataset`
+ - `Submit Authority`
+ - global queue / worker summary
+- Cross-page navigation buttons must be moderated; if they are not a single clear next step, they should not become a permanent component
+- Authority explanation, DTO authoring helper, handoff preview cards should be removed or downgraded if they are not necessary to complete the task of this page.
+
+<Aside type="caution" title="Single-task surfaces beat &#x27;complete-looking&#x27; surfaces">
+
+The first principle of frontend page correctness is to allow users to quickly complete the main task of this page.
+Don't bring in other page responsibilities, shell context, or infrastructure explanation just to look complete.
+
+</Aside>
+
+<Aside type="tip" title="Use copy as support, not scaffolding">
+
+If a surface requires a lot of text to be understood, adjust the component hierarchy, grouping and layout first.
+Only when these are insufficient, add streamlined auxiliary copy.
+
+</Aside>
+
+## Agent Rule
+```markdown
+## Component Guidelines
+- Prefer components from `@/components/ui/` for interactive primitives.
+- Put feature-specific UI in `frontend/src/features/<feature>/components/`.
+- Do not expose browser-default styled controls as the final product UI.
+- If a platform-native control is unavoidable, wrap it with app-owned trigger, labels, helper text, and error handling.
+- Do not use `alert()`, `confirm()`, or `prompt()` for product interactions.
+- Destructive actions require an explicit confirmation flow.
+- Forms need labels, validation, and visible error states.
+- Clickable icons must provide a clear hover state, including pointer feedback and visible hover styling.
+- Data-dense tables must support sorting, filtering, and pagination or a clear virtualization strategy.
+- Load summary rows first; fetch heavy detail payload only on explicit detail interaction.
+- Prefer hierarchy, metadata, and status over long helper copy in dense product UI.
+- Keep error, empty, and recovery copy concise; do not turn product surfaces into diagnostics walls.
+- Keep page bodies focused on one primary task; do not add duplicated shell context cards, authority summaries, or cross-page CTA walls unless they are strictly required.
+- Treat helper components, handoff cards, and debug-heavy surfaces as secondary; remove them when they start competing with the page's main workflow.
+```

@@ -1,0 +1,207 @@
+---
+aliases:
+ - "Physics Concepts Guardrail"
+ - "Physics Concepts Physics Specifications"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/documentation
+ - topic/physics
+status: stable
+owner: docs-team
+audience: team
+scope: "Knowledge structure, hierarchical rules and writing specifications of Concepts/Physics"
+version: v1.1.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Physics Concepts
+
+This document defines the knowledge structure and writing specifications of `docs/concepts/physics/`.
+
+---
+
+## Teaching positioning (must be established at the same time)
+
+1. **Backbone**
+- From basic physics all the way to the engineering context of superconducting quantum circuits.
+- Target readers: Physics students who have studied the four major mechanics (including review requirements).
+2. **Reusable nodes**
+- Each article can be cited individually by Tutorial / How-to / Reference.
+- Readers do not need to read the entire set before entering a specific topic.
+
+<Aside type="caution" title="Diataxis boundary">
+
+Physics Concepts only answers "why/how to understand" and does not provide imperative operation steps (that is Workflows).
+
+</Aside>
+
+---
+
+## Knowledge Architecture (A–J Roadmap)
+
+Content coverage of `concepts/physics/` is based on the following blocks A–I. Each block represents a knowledge area; tool usage (the operation surface of the G block) and measurement engineering (the operation surface of the H block) belong to Workflows/Reference and are not included in Physics Concepts.
+
+| Block | Domain | Node Type |
+|------|------|----------|
+| **A** | Foundations: The Four Pillars | Principle |
+| **B** | Electromagnetics to Circuits | Model |
+| **C** | Superconductivity & Dissipation | Principle / Model |
+| **D** | Josephson Physics & Nonlinearity | Device / Model |
+| **E** | Quantum Circuits Formalism | Model / Method |
+| **F** | Core Building Blocks | Device |
+| **G** | Design & Simulation (Principle) | Model / Method |
+| **H** | Cryogenic RF Engineering (Principle) | Principle / Model |
+| **I** | Experiments & Protocols (principle) | Model / Method |
+
+> **J. End-to-End Workflows** belongs to `docs/workflows/`, not Physics Concepts.
+
+### Overview page
+
+`concepts/physics/index.md` must contain a complete A–I roadmap overview, listing all blocks and subtopics. Subtopics with existing content are presented as hyperlinks; those that have not yet been created are marked with plain text.
+
+---
+
+## Three-layer hierarchical rules
+
+```
+concepts/physics/
+├── index.md              ← Overview (A–I overview)
+├── foundations/ ← L1:A block
+│  ├── index.md            ← L1 Landing
+│ ├── lagrangian-mechanics.md ← L2:A1 Theme
+│ └── electromagnetic-energy.md ← L2:A2 Topic
+├── superconductivity/ ← L1: C block
+│  ├── index.md
+│ ├── basics.md ← L2:C1
+│ ├── loss-channels/ ← L2->L3 (split when C3 is too large)
+│  │  ├── index.md
+│  │  ├── dielectric.md       ← L3
+│  │  └── quasiparticles.md     ← L3
+│  └── ...
+```
+
+### rule
+
+1. **L1 (Sidebar top-level subdirectory)** = A–I’s major categories (Foundations, EM-to-Circuits, Superconductivity...)
+- Each L1 is a subdirectory containing a `index.md` Landing Page
+- **Only when there is at least one L2 page under the L1, the L1 directory and Nav project will be created**
+2. **L2 (pages in subdirectories)** = specific topics under each major category (A1, A2, C1, C2, C3...)
+- Default is one document per topic
+3. **L3 (Selective Segmentation)** = Split into subdirectories only when the L2 page has too much content (recommended > 3000 words)
+- The L3 directory needs to contain its own `index.md`
+- Not recommended to exceed three layers
+
+---
+
+## Content boundaries
+
+### Physics included
+
+-Principles of physics (why)
+- Mathematical models and derivation (how it works)
+- Engineering mapping: mapping physical quantities to circuit design quantities (component values, observable quantities)
+- Limitations and approximations
+
+### Physics is not included (belongs to other reader/task-first areas)
+
+| Content | Attribution |
+|------|------|
+| CLI steps | Workflows |
+| Software tool usage guide (HFSS, Python, Julia) | Workflows |
+| CLI parameter specifications | Reference |
+| End-to-end workflow | Workflows |
+
+---
+
+## Node type (Frontmatter)
+
+The frontmatter of each Physics page should contain `node_type`:
+
+```yaml
+tags:
+- node_type/principle # Basic principles (not dependent on specific devices or tools)
+- node_type/model # Computable models (equations, approximations, boundary conditions)
+- node_type/method # Derivation method / numerical method
+- node_type/device #Device and component description
+```
+
+Depends on direction:
+
+- **Principle** does not depend on Tool or Device
+- **Model** can depend on Principle and does not depend on a specific Device
+- **Device** must indicate the dependent Model (for example: SQUID depends on D1+D2+B5)
+- **Method** can depend on Model + Principle
+
+---
+
+## Opening driver (question sentence or historical context)
+
+The opening of each Physics article should allow the reader to immediately understand "what this article is about and why it is important." The following two opening methods are available:
+
+1. **Physics Question Sentence**: Start with a specific physical cause and effect question (for example: "Why is magnetic flux quantized?"). Suitable for concept derivation pages.
+2. **History/Community Context**: Explain "what happened at what time, so I studied XXX", and then develop the results. It is suitable for device development, experimental breakthroughs, or cross-field integration pages.
+
+> Regardless of the method, the opening should not focus on "how to use the tool" or "how to do the process". The project content is only used as a reflection of the physical concept and should not overshadow the project.
+
+---
+
+## Writing skeleton per page
+
+1. **Opening (question or context)**: Use a physics question sentence or historical context to define the core theme of this page.
+2. **Pre-requisite knowledge comparison** (suggestion): List relevant pre-requisite concepts (not limited to all four major mechanics, write down those that correspond).
+3. **Physics Core**: Minimum necessary equations and assumptions; all symbols need to be defined and the units need to be consistent.
+4. **Engineering Mapping** (recommended): Map physical quantities to circuit and system design quantities. If the pure Principle page is still far away from the project, it can be omitted.
+5. **Limitations and Approximations**: Clearly write down the applicable scope and failure conditions of the model.
+6. **Cross-document navigation**: Provide 1–3 extended links based on content relevance.
+
+---
+
+## Academic Citations and Reliability
+
+All paragraphs involving core physical derivation, approximate models, or engineering fitting formulas must be accompanied by a reference.
+
+- Format: `## References` block needs to be created at the bottom of the file. It is recommended to use **APA format**.
+- Link writing method: If there is a DOI or arXiv link, it should be attached in Markdown format.
+
+---
+
+## Symbol Glossary
+
+To ensure symbol consistency across pages, symbol management is divided into two layers:
+
+1. **Symbol definitions on each page**: The symbols used for the first time in each article must be defined on that page (either in a row or in a table).
+2. **Global symbol table**: Maintain a cross-page symbol table in `concepts/physics/index.md` (Overview), summarizing the main symbols, units and definitions used on all pages. If the total table is too long, it can be independently used as `concepts/physics/symbol-glossary.md`.
+
+> When the notation conventions of different pages conflict (e.g. $\omega$ represents angular frequencies on one page and specific modal frequencies on another page), the applicable scope needs to be clearly marked in the summary table.
+
+---
+
+## Can enter the specification midway
+
+Each Physics Concept should provide:
+
+- **You can start here**: A list of prerequisites suitable for direct reading
+- **To make up for the background, please read first**: 1–3 backlinks
+- **If you only want to do tasks**: Orientation corresponds to Workflows
+
+---
+
+## Agent Rule
+```markdown
+## Physics Concepts
+- **Architecture**: `docs/concepts/physics/` follows the A-J knowledge map (A=Foundations, B=EM-to-Circuits, C=Superconductivity, D=Josephson, E=Quantum-Circuits, F=Building-Blocks, G/H/I=principles-only)
+- **Hierarchy**: L1 = domain directories (A-I groups), L2 = topic pages, L3 = optional sub-pages when L2 > 3000 words
+- **L1 creation rule**: only create an L1 directory + nav entry when it has at least one L2 page
+- **Content boundary**: Physics explains WHY/HOW-IT-WORKS only. Tool usage, CLI steps, and workflows go to Workflows or Reference.
+- **Node types**: each page declares node_type in tags (principle/model/method/device). Dependencies flow: Principle -> Model -> Device/Method
+- **Positioning**: must be both a full learning backbone and reusable concept nodes
+- **Opener**: each page starts from either a physics question OR a historical/community narrative — never a tool-operation question
+- **Per-page contract**: question, prerequisites mapping, physics core, engineering mapping, limits/approximations, cross-links
+- **Citations**: physics models and derivations MUST include APA references at bottom
+- **Overview**: `index.md` links existing content only; do not add placeholder topics as product commitments
+```

@@ -1,0 +1,91 @@
+---
+aliases:
+ - Python Core Reference
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/core-reference
+status: stable
+owner: docs-team
+audience: team
+scope: Python core analysis package, external-result analysis responsibilities, and renderer-side Schemdraw visual library.
+version: v0.8.0
+last_updated: 2026-06-14
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Python Core
+
+This page documents active Python-owned core surfaces: `superconducting_circuits_analysis`'s analysis package, and `schemdraw_circuit_library`'s renderer-side reusable circuit visual components. External FEM-result normalization, equivalent-circuit fitting, and scikit-rf-compatible matrix work belong on the Python side when they become reusable.
+
+<Aside type="note" title="Owned Surfaces">
+
+`core/python/analysis/superconducting_circuits_analysis/` owns installable Python analysis algorithms.
+`core/python/circuit_libraries/schemdraw_circuit_library/` owns reusable Schemdraw visual components.
+
+</Aside>
+
+<Aside type="caution" title="Do Not Move Ownership">
+
+HTTP schema, ORM / repository implementation, interactive editor preview behavior, runtime process concerns, task runtime contracts must not be written in the owner scope of `Python Core`.
+These belong to the product runtime, adapter or infrastructure layer.
+
+</Aside>
+
+## Owned Package Families
+
+<Tabs>
+<TabItem label="Analysis">
+
+
+| Surface | Focus | Responsibility |
+|---|---|---|
+| `superconducting_circuits_analysis.application.analysis` | fitting, mode extraction, matrix-oriented analysis helpers | S-parameter notch/transmission/vector fitting, Y11 and SQUID-oriented fitting, and admittance mode extraction contracts |
+| `superconducting_circuits_analysis.domain` | analysis value objects and schemas | trace records, fitting result semantics, and JSON-friendly analysis result shapes |
+| future Python quantum package | scqubits/QuTiP-facing helpers after notebook prototypes stabilize | superconducting-qubit modeling and quantum dynamics adapters outside product runtime packages and Julia Core |
+
+S-parameter fitting APIs accept explicit frequency arrays in Hz plus real and imaginary
+trace arrays. They return plain result dictionaries with fitted parameters, metrics,
+and fit/model traces so Julia Analysis Bridge and Python notebooks can consume them
+without depending on notebook-local CSV files or application DTOs.
+
+</TabItem>
+
+<TabItem label="Schemdraw">
+
+
+| Surface | Focus | Responsibility |
+|---|---|---|
+| `schemdraw_circuit_library.components.lumped` | lumped visual component families | ElementCompound-based resonators and related lumped reusable visuals |
+| `schemdraw_circuit_library.components.transmission_lines` | transmission-line visual component families | pi sections, ladder visuals, and reducible chain drawings |
+| `schemdraw_circuit_library.components.couplers` | coupling visual component families | renderer-side coupling motifs and reusable coupler components |
+| `schemdraw_circuit_library.theme` | visual theme source of truth | light/dark stroke and text color selection without topology changes |
+| `schemdraw_circuit_library.rendering` | render helpers | light/dark SVG/PNG variant rendering from one composition function |
+
+Schemdraw components consume renderer-neutral data and Julia Core export hints.
+They do not define circuit semantics, solver behavior, or reusable component topology.
+Stable reusable components are exported through the package root; internal family modules
+may hold work-in-progress visual families until their API is stable.
+
+</TabItem>
+
+</Tabs>
+
+## Consumer Pairing
+
+| Consumer | Main dependencies |
+|---|---|
+| Pluto Analysis Bridge | `superconducting_circuits_analysis` |
+| Docs schematic renderer | `schemdraw_circuit_library` |
+| Python notebooks | `superconducting_circuits_analysis` for reusable fitting/matrix logic; local notebook code for one-off inspection |
+| External FEM result workflow | Python Analysis Core for reusable normalization and fitting; Python notebooks for first-pass inspection |
+| Future quantum modeling | Python notebooks first, then a separate Python quantum package if the API stabilizes |
+
+## Related
+
+- [Core Reference](index.md)
+- [Julia Wrapper](julia-wrapper.md)
+- [Research Contracts](../research-contracts/index.md)

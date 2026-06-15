@@ -1,0 +1,108 @@
+---
+aliases:
+ - "Error Handling"
+ - "error model"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/code-quality
+status: stable
+owner: docs-team
+audience: team
+scope: "Define unified error classification and handling specifications for API, frontend, Julia Runner, Notebook and recovery flow"
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Error Handling
+
+The error handling of this project must be commonly understood by frontend, backend, Julia Runner, and Notebook, rather than each layer inventing a separate set of messages.
+
+<Aside type="caution" title="Code, not message text">
+
+The external surface must work according to the stable `error_code` / `category`.
+frontend, notebook, and recovery flows must not rely on message text matching.
+
+</Aside>
+
+## Required Error Categories
+
+| Category | Meaning |
+| --- | --- |
+| `auth_required` | Missing valid identity or session |
+| `permission_denied` | The identity exists, but the operation is not allowed |
+| `validation_error` | Input, payload or contract is illegal |
+| `not_found` | The target resource does not exist or cannot be resolved |
+| `conflict` | Resource version, state, or lifecycle conflict |
+| `task_not_ready` | The dependent task/artifact has not yet reached a readable state |
+| `task_execution_failed` | execution has finished but ended with failure |
+| `persistence_error` |metadata store / relational store problem|
+| `trace_store_error` | Numeric trace / artifact store issue |
+| `internal_error` | Uncategorized internal error |
+
+## Public Error Envelope
+
+All public-facing contracts must be able to map to at least this set of fields:
+
+| Field | Description |
+| --- | --- |
+| `error_code` | stable machine-readable code |
+| `category` | High-level classification, such as `validation_error` |
+| `message` | user-safe message |
+| `retryable` | `true/false` |
+| `details` | Optional structured detail; must not leak adapter internals |
+| `debug_ref` | log correlation id or task id; optional |
+
+## Surface Mapping
+
+| Surface | Rule |
+| --- | --- |
+| backend API | Return stable HTTP status + error envelope |
+| Julia Runner | complete/fail/progress payload and logs must map to public categories |
+| Notebook | inspection/task submission helpers must preserve `error_code` or equivalent machine-readable signal |
+| frontend | Use `error_code` and `retryable` to drive the UI instead of relying on message text |
+
+## Retryability Rules
+
+| type | default retryable |
+| --- | --- |
+| `validation_error` | No |
+| `auth_required` | No |
+| `permission_denied` | No |
+| `not_found` | No |
+| `conflict` | Depends on situation; needs to be clearly marked |
+| `task_not_ready` | Yes |
+| `task_execution_failed` | Depends on execution detail; needs to be marked |
+| `persistence_error` | Depends on the storage layer; needs to be marked |
+| `trace_store_error` | Depends on the storage layer; needs to be marked |
+| `internal_error` | No, unless explicitly marked for retry |
+
+<Aside type="tip" title="Retryability is part of the contract">
+
+`retryable` is not logging supplementary information, but a consumer decision signal.
+Whenever a surface allows retry/resume/reattach, it must be marked explicitly.
+
+</Aside>
+
+## Recovery-specific Rules
+
+| Rule | Meaning |
+| --- | --- |
+| task submit failure, result attach failure, recovery attach failure must have independent `error_code` | cannot be collapsed into generic runtime failure |
+| Reconnect/recovery failure cannot be collapsed into generic `internal_error` | recovery path needs to be diagnosable |
+| `debug_ref` gives priority to reusing `task_id`, request id or trace/result ref | Make logs, queue and UI cross-traced |
+
+## Agent Rule
+```markdown
+## Error Handling
+- Use stable error categories/codes, not only free-form messages.
+- Separate user-safe messages from debug/internal details.
+- Mark execution/storage/task errors as retryable or non-retryable.
+- Do not leak raw adapter internals (paths, SQL fragments, raw exceptions) into public UI/API/Notebook contracts.
+- Frontend logic must key off stable error codes, not message text matching.
+- Task submission, execution, result attach, and recovery attach failures must have explicit error categories.
+```

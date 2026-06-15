@@ -1,0 +1,320 @@
+---
+title: "Runtime Modes"
+aliases:
+ - "App Runtime Modes"
+ - "Local Mode and Online Mode"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
+status: stable
+owner: docs-team
+audience: team
+scope: Local Mode / Online Mode, frontend/backend mode pairing and mode-switch isolation contract of the same App
+version: v1.0.0
+last_updated: 2026-03-27
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Runtime Modes
+
+This page defines two formal runtime modes for the same App: `Local Mode` and `Online Mode`.
+They are not two different sets of products, but two modes of operation of the same frontend + backend system.
+
+<Aside type="note" title="Single App, Two Runtime Modes">
+
+The formal product model is not to make two apps.
+Users should switch modes in the same App: when switching to `Local Mode`, enter the workspace directly; when switching to `Online Mode`, enter the login process as needed.
+
+</Aside>
+
+<Aside type="caution" title="Mode Switch Must Rebind Shell Context">
+
+Mode switch is not just about changing a label.
+It must reconnect session, workspace, dataset, task visibility and user summary to avoid mixing local / online content.
+
+</Aside>
+
+## Mode Pairing
+
+| Layer | Local-side name | Online-side name | Meaning |
+|---|---|---|---|
+| Frontend | `Local Mode` | `Client Mode` | Two connection modes for the same frontend app |
+| Backend | `Local Mode` | `Server Mode` | Two operating modes of the same set of backend surfaces |
+| Product pairing | frontend local to backend local | frontend client to backend server | No arbitrary mashup matrix |
+
+## Runtime Mode Contract
+
+| Mode | Required meaning |
+|---|---|
+| `local` | managed local app runtime; the frontend is connected to the local Python Backend, and the Backend coordinates the Julia Runner; the data and task runtime are all local; no Authentication / Authorization is required; the shell context is fixed at `Local Space` |
+| `online` | frontend connects to the remote server; requires Authentication / Authorization; supports workspace collaboration |
+
+## Desktop Runtime Profile Overlay
+
+| Desktop runtime profile | Paired app mode | Required meaning |
+|---|---|---|
+| `local_managed` | `local` | desktop shell manages the local frontend, Python Backend and Julia Runner; the shell itself is not the solver host |
+| `remote_server` | `online` | desktop shell only connects to the remote server target; the local heavy runtime cannot be started as an implicit dependency |
+
+<Aside type="note" title="Profile and mode are different terms">
+
+`local_managed` / `remote_server` are only used for desktop packaging and runtime orchestration.
+The official app mode vocabulary is still `local` / `online`.
+
+</Aside>
+
+<Aside type="caution" title="No product local preview mode">
+
+The product baseline of Local Mode is frontend + Python Backend + Julia Runner.
+UI-only shell preview may exist for developer debugging, but it is not a product runtime mode and must not be documented as Local Mode behavior.
+
+</Aside>
+
+## Shared Product Rules
+
+| Rule | Meaning |
+|---|---|
+| Same shell vocabulary | Header, Sidebar, workflow pages Try to maintain the same set of UI shells instead of making two sets of product appearances |
+| Same backend surface family | local and online preferentially share the same set of backend authority surfaces; the differences are mainly in auth, collaboration and connection target |
+| Mode-aware session | frontend does not piece together local / online state by itself; session envelope is still owned by backend authority |
+| No mixed context | Any mode switch must clear session / task / dataset caches that are no longer valid |
+
+## Local Mode Baseline
+
+| Concern | Required behavior |
+|---|---|
+| Auth | No need to sign in; auth entry should not block the main process |
+| Authorization | Multi-user authorization gate is not enabled; local capability summary is returned by backend |
+| User identity |Use implicit local user / local operator summary|
+| Workspace model | Use a single implicit workspace `Local Space` to maintain a context shape compatible with the app shell |
+| Visibility model | persisted resource uses `local` scope, regardless of `private` / `workspace` |
+| Data | Mainly local datasets, results, tasks, and artifacts |
+| Task Execution | Shows local runtime tasks and does not assume shared workspace visibility semantics |
+| Runtime stack | desktop supervisor starts or reconnects to local frontend, Python Backend, and Julia Runner |
+| Collaboration | invitation, membership, shared task governance Not applicable |
+
+## Online Mode Baseline
+
+| Concern | Required behavior |
+|---|---|
+| Auth |requires sign in / session continuity|
+| Authorization |enable workspace role, capabilities, allowed actions|
+| User identity |use authenticated user summary|
+| Workspace model | multi-workspace membership + single active workspace |
+| Data | Subject to remote server authority |
+| Task Execution | Display shared tasks visible in active workspace |
+| Collaboration | Invite, join, leave, and membership management take effect |
+
+## Session Shape Across Modes
+
+| Concern | Local mode | Online mode |
+|---|---|---|
+| `runtime_mode` | `local` | `online` |
+| `auth.state` | `local_bypass` or equivalent local state | `authenticated`, `anonymous`, `degraded` |
+| `user` | implicit local operator | authenticated user |
+| `workspace` | implicit `Local Space` | active workspace membership |
+| `capabilities` | local-full or local-safe capability summary | backend materialized permission summary |
+| `active_dataset` | local dataset context | remote dataset context |
+
+<Aside type="tip" title="Same shape, different authority semantics">
+
+Local mode and online mode should try to share the same session envelope shape.
+This way the frontend can keep the same shell; the real difference is the authority semantics behind each field.
+
+</Aside>
+
+## Mode Switch Contract
+
+| Step | Required behavior |
+|---|---|
+| 1. User selects mode | You can select `Local Mode` or `Online Mode` from the app-level mode switcher |
+| 2. App freezes unsafe context | If there are currently unsaved page changes, attached task or destructive context, ask for confirmation first |
+| 3. Session is invalidated | The session envelope, capability cache, task cache, attached task refs and remote auth continuity of the old mode are all invalid |
+| 4. New connection target is bound | local mode points to the local backend; online mode points to the validated active server target |
+| 5. New session is established | local mode returns directly to local session; when switching to online mode, always rebuild online session and re-enter auth entry |
+| 6. Shell context is rebuilt | active workspace, dataset, task visibility and user summary are recalculated with new mode |
+
+<Aside type="caution" title="Mode switch does not preserve remote login">
+
+When the user switches from `Online Mode` to `Local Mode`, and then switches back to `Online Mode`, the previous remote login status should not be automatically restored.
+The design goal of `mode switch` is context isolation, not session continuity.
+
+</Aside>
+
+## Mode Switch Entry Points
+
+| Entry point | Required behavior |
+|---|---|
+| Header `Global Context` | Formal primary entry; can switch mode, see target summary, process unsafe-context confirm |
+| Header `Account` drawer | `Connect to Online` / `Switch to Local` entry can be provided, but the actual authority still uses the same session mutation |
+| `Auth Entry` page | When online auth required or target validation failure occurs, switching back to `Local Mode` is allowed, and server target is also allowed to be re-specified |
+
+<Aside type="tip" title="Multiple entry points, one mutation authority">
+
+Users can enter mode switch from multiple UI surfaces.
+But the real authority always only has the same backend `switch_runtime_mode(...)` mutation, and does not allow each surface to perform a set of local state switches.
+
+</Aside>
+
+## Online Server Target Contract
+
+| Concern | Required behavior |
+|---|---|
+| Owner | `server target` is an app-level connection target and does not belong to workspace, dataset or account preference |
+| Cardinality | There is only one active online target at the same time; a small number of remembered targets can be retained as recent history |
+| Storage | target settings and recent history are stored in app-local connection config and are not written into remote workspace state |
+| Editing | Users can edit or select target before switching to `Online Mode` |
+| Validation | A reachability / health / version-compatibility check must be done before entering online mode |
+| Failure handling | When target verification fails, the mode switch should be rejected and the current active mode should be retained, and the semi-switching state cannot be entered |
+| Auth relation | Auth entry is entered only after target verification is successful; target config itself is not equal to authenticated session |
+
+## Desktop Startup Preference Contract
+
+| Field | Meaning |
+|---|---|
+| `startup_behavior` |`restore_last_mode`, `always_local`, `always_online`, `ask_on_launch`|
+| `last_runtime_mode` | The latest successfully created `local` / `online` mode |
+| `last_online_target` | The latest successfully used online target summary |
+
+| Rule | Required behavior |
+|---|---|
+| Local app config only | startup preference and remembered target are stored in app-local connection config and are not written into remote workspace state |
+| Restoring mode is allowed | desktop shell can automatically enter the last mode at startup according to `startup_behavior` |
+| Restore does not imply auth reuse | Returning to `online` mode does not mean unconditionally restoring the previous authenticated session |
+| Remote validation first | To restore `online` mode, target reachability / compatibility must be verified first and then create a new online session shell |
+| Managed local restore | When restoring `local` mode, desktop supervisor starts or reconnects to local frontend, Python Backend, and Julia Runner |
+
+## Server Target Summary Shape
+
+| Field | Meaning |
+|---|---|
+| `origin` | canonical remote origin |
+| `label` | target display label |
+| `is_active` | Is it the current active online target |
+| `validation_status` |`validated`, `target_validation_failed`, `target_unreachable`, `target_incompatible`, `online_target_rejected`|
+| `last_checked_at` | The latest validation timestamp; if not verified, it can be `null` |
+
+## Connection Failure UX Baseline
+
+| Situation | Required behavior |
+|---|---|
+| target validation running | Show clear connecting / validating spinner state, do not get stuck silently |
+| target validation failed | Keep the original active mode and do not establish a half-completed online session |
+| failed-surface actions | The user must be able to `Retry`, retarget `IP:Port` / target, or switch back to `Local Mode` |
+| presentation | failure state should give priority to concise connection status, and then provide recoverable actions |
+| debug detail | If you need to display technical detail, control the density according to the `Developer Mode` rule |
+
+## Desktop Startup Restore Rules
+
+| Situation | Required behavior |
+|---|---|
+| `startup_behavior = restore_last_mode` and last mode = `local` | The shell can directly return to `Local Mode`, and the local runtime will be started by the desktop supervisor |
+| `startup_behavior = restore_last_mode` and last mode = `online` | The shell first restores the target summary, and then performs target validation; only after successful verification, the online session shell is created |
+| remembered online target invalid | Keep the shell interactive, allowing Retry, change target, or switch back to `Local Mode` |
+| `startup_behavior = ask_on_launch` | After the shell is started, the user is asked to select `Local Mode` or `Online Mode` |
+
+When restoring Local Mode, the desktop supervisor starts or reconnects to the local frontend, Python Backend, and Julia Runner. If a component fails, the shell must show recoverable runtime status rather than silently entering a partial Local Mode.
+
+<Aside type="tip" title="Connection target is parallel to Local Space">
+
+`Local Space` solves the workspace shape of local mode.
+online `server target` solves the problem of which server client mode should connect to; both are runtime-mode contexts, but not the same resource.
+
+</Aside>
+
+## Runtime Mode Switch Result Vocabulary
+
+<Aside type="note" title="Do not collapse `outcome` and `auth_transition`">
+
+The live backend contract will return `outcome` and `auth_transition` at the same time.
+`outcome` describes what kind of session shell the mode switch itself has established.
+`auth_transition` describes the state auth continuity falls into after switching.
+
+</Aside>
+
+### `outcome`
+
+| Value | Meaning |
+|---|---|
+| `entered_local` | local session has been established, enter local app shell directly |
+| `entered_online_auth_required` | The online target is ready, but currently an auth entry is required to establish an authenticated online session |
+
+### `auth_transition`
+
+| Value | Meaning |
+|---|---|
+| `entered_local_bypass` | local mode `local_bypass` session has been established |
+| `online_auth_required` | Online target verification is successful, but there is currently no authenticated online session that can be used. You must log in first |
+| `online_session_dropped` | The online target has been created, but the old online auth continuity has expired and you need to log in again |
+
+### Target validation status
+
+| Value | Meaning |
+|---|---|
+| `validated` | target ready for online mode |
+| `target_validation_failed` | target responded, but failed required validation |
+| `target_unreachable` | target could not be reached |
+| `target_incompatible` | target reached, but version / contract compatibility failed |
+| `online_target_rejected` | target validation rejected the switch without a narrower status |
+
+## Isolation Rules
+
+| Concern | Required behavior |
+|---|---|
+| Session cache | local / online must not share the same session cache |
+| Active dataset | After switching mode, the dataset identity of the old mode must not be used |
+| Attached task | Must be detached after changing mode, unless the same persisted task can still be re-resolved in the new mode |
+| Task rows | local task rows and online task rows must not be displayed mixedly |
+| Error messaging | debug / auth / capability errors must correspond to the current active mode, and residual messages of another mode must not be displayed |
+
+## Task Continuity Rules
+
+| Situation | Required behavior |
+|---|---|
+| switch from online to local | remote tasks continue to be executed on the server side; app only unblocks the current online task / attached-task context |
+| switch from local to online | local tasks are not moved to the server; online mode re-establishes its own task context |
+| return to online mode | Re-fetch the remote task summary; let the user reattach if necessary |
+| closing Electron shell only in local mode | If Python Backend and Julia Runner are still there, tasks can continue to be converged by the runner lifecycle; you can re-observe after reopening the shell |
+| stopping the whole local runtime stack | If the frontend, Python Backend and Julia Runner are stopped together, local tasks may terminate or enter the reconcile-required state |
+| app close in online mode | remote tasks continue to be managed by the server runtime; re-open the app and obtain the status through task recovery |
+
+<Aside type="note" title="Runner runtime summary uses liveness vocabulary">
+
+If runner summary is displayed on local/online task surfaces, runner liveness should be separated from task lifecycle.
+`idle` represents runner alive and available; it cannot be misread as `offline` by mode-aware shell semantics.
+
+</Aside>
+
+## Data Transition Rules
+
+| Rule | Meaning |
+|---|---|
+| Mode switch is context switch only | Switch `Local / Online` is not a data bridging event |
+| Import / Upload exists in both modes | Both modes can do import / upload / download |
+| Publish is online-only | `publish to workspace` / shared visibility only belongs to `Online Mode` |
+| No implicit dataset carry-over | local dataset / schema / result does not automatically become online resource due to mode switch |
+| Bridge stays explicit | If you want to bring local data online, you must use explicit import / upload; to bring out the reverse, use export / download |
+
+## Consumer Expectations
+
+| Consumer | What it should do |
+|---|---|
+| Header | Displays the current runtime mode and provides mode-aware account / global context entry |
+| Auth Entry | It only becomes the primary entry when `online` requires auth, receives `online_auth_required` / `online_session_dropped`, or target verification fails; local mode should be directly bypassable, and you can switch back to local or change the target |
+| Session & Workspace |provide mode-aware session envelope and mode-switch mutation|
+| Authentication & Authorization | Only valid for `online`; local mode uses bypass contract |
+| Task Management |local mode displays local tasks; online mode displays workspace-visible tasks|
+| Mode Feature Matrix | Clearly list whether each concern is `full`, `reduced` or `online-only` under `local` / `online` |
+
+## Related
+
+* [Identity & Workspace Model](identity-workspace-model.mdx)
+* [Mode Feature Matrix](mode-feature-matrix.md)
+* [Authentication & Authorization](authentication-and-authorization.mdx)
+* [Frontend / Header](../frontend/shared-shell/header.mdx)
+* [Frontend / Auth Entry](../frontend/shared-shell/auth-entry.mdx)
+* [Backend / Session & Workspace](../backend/session-workspace.mdx)

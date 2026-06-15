@@ -4,8 +4,7 @@ from datetime import UTC, datetime, timedelta
 from secrets import token_urlsafe
 from typing import Protocol
 
-from sc_core.execution import TaskResultHandle
-
+from app_backend.domain.runtime_contracts.execution import TaskResultHandle
 from app_backend.domain.session import (
     ServerTargetSummary,
     SessionState,

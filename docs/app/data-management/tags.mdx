@@ -1,0 +1,57 @@
+---
+aliases:
+ - "Manage Tags"
+ - "Manage Tags"
+tags:
+ - diataxis/how-to
+ - status/stable
+ - topic/database
+status: stable
+owner: docs-team
+audience: user
+scope: "Manage Tags using Application Interface or Backend API"
+version: v0.2.0
+last_updated: 2026-05-28
+updated_by: codex
+sidebar:
+ label: Tags
+ order: 30
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Manage Tags
+
+When you need to organize or unify dataset labels, first use the Application Interface's dataset surface.
+When batch maintenance is required, call the metadata API of Python Backend or write a maintenance script.
+
+## Usage
+
+1. Open `Dataset` in Electron App.
+2. Select the target dataset.
+3. Check tag and provenance metadata.
+4. If you need to rename or delete batches, call the official metadata API through the backend maintenance script.
+
+## Validation
+
+Tag maintenance must leave dataset, design, trace, and provenance records consistent.
+Run backend tests after changing maintenance code:
+
+```bash
+uv run --package superconducting-circuits-backend pytest app/backend/tests -q
+```
+
+## Notes / Warnings
+
+<Aside type="caution" title="Deletion will affect the association">
+
+Deleting a Tag will simultaneously remove the association with the Dataset. Please first confirm that downstream analysis no longer relies on this tag.
+
+</Aside>
+
+<Aside type="caution" title="No active CLI">
+
+The old command-based database tools are no longer active product surfaces.
+Keep new database maintenance behind backend APIs or `scripts/maintenance/`.
+
+</Aside>

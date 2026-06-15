@@ -1,0 +1,161 @@
+---
+aliases:
+ - "Logging Rules"
+ - "Log specifications"
+tags:
+ - audience/team
+ - sot/true
+status: stable
+owner: docs-team
+audience: team
+scope: "Logging specifications: classification, usage, scripts boundaries"
+version: v2.0.0
+last_updated: 2026-03-25
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Logging Standards
+
+The Python runtime of this project uses the standard `logging` module. Rich can be used for development-side color output, but may not be promoted to a user-facing command product surface.
+
+<Aside type="note" title="Use this page for runtime logging">
+
+This page manages development and execution logging, not app-level audit logging. When governance records for actor/action/resource are required, look at `App > Shared / Audit Logging`.
+To distinguish the responsibilities of audit logging, workflow observability, and product telemetry, you should see `App > Shared / Observability Model`.
+
+</Aside>
+
+## Logging Map
+
+| Question | Where to look |
+| --- | --- |
+| Where can I get `print()`? | Boundary between `core/` and `scripts/` |
+| When to use `info` / `warning` / `error`? | Log level table |
+| scripts How to display development side logging? | `setup_logging` + optional `RichHandler` |
+
+## in principle
+
+1. **`core/` layer prohibits `print()`** - only `scripts/` layer can be output directly
+2. **All `core/` layers use `logging`** - let the caller decide what to do with the logs
+3. **Color Grading** - Console output using Rich
+4. **Rich is the development-side output option** - scripts can use `RichHandler`, but it is not a product CLI contract
+
+## Log level
+
+| Level | Purpose | Color |
+|-------|------|------|
+| `DEBUG` | Development and debugging information | Gray |
+| `INFO` | Normal process information | Green |
+| `WARNING` | Potential Problems | Yellow |
+| `ERROR` | Error but can continue | Red |
+| `CRITICAL` | Serious error | Bold red |
+
+<Aside type="caution" title="Message formatting rule">
+
+Always use parameterized formats for logging calls, such as `logger.info("Value: %s", value)`; do not use f-string to expand the message first.
+
+</Aside>
+
+## Usage
+
+<Tabs>
+<TabItem label="At layer `core/`">
+
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+def process_data(path: Path) -> Result:
+  logger.info("Processing %s", path.name)
+
+  if not path.exists():
+    logger.warning("File not found: %s", path)
+    return None
+
+  try:
+    result = do_something()
+    logger.debug("Result: %s", result)
+    return result
+  except ValueError as e:
+    logger.error("Failed to process: %s", e)
+    raise
+```
+
+</TabItem>
+
+<TabItem label="At layer `scripts/`">
+
+
+```python
+from superconducting_circuits_analysis.infrastructure.logging import setup_logging
+
+def main() -> None:
+setup_logging(level="INFO") # or DEBUG for verbose
+
+# Now all core/ layer logging will show colored output
+  result = process_data(path)
+
+# The scripts layer can use print() to make the final developer-facing summary
+  print(f"Result: {result}")
+```
+
+</TabItem>
+
+</Tabs>
+
+## Configuration
+
+### Default Logger Setup (`superconducting_circuits_analysis/infrastructure/logging.py`)
+
+```python
+from rich.logging import RichHandler
+
+def setup_logging(level: str = "INFO") -> None:
+  logging.basicConfig(
+    level=level,
+    format="%(message)s",
+    handlers=[RichHandler(rich_tracebacks=True)]
+  )
+```
+
+## Migration Guide
+
+Replace existing `print()` with `logging`:
+
+| original | replaced by |
+|------|--------|
+| `print(f"[Info] ...")` | `logger.info("...")` |
+| `print(f"[Warning] ...")` | `logger.warning("...")` |
+| `print(f"[Error] ...")` | `logger.error("...")` |
+| `print(f"[OK] ...")` | `logger.info("...")` |
+
+<details class="docs-disclosure docs-disclosure--note">
+<summary>Why this page stays simple</summary>
+
+The logging rules are deliberately kept thin: first define the `print()` boundaries, level semantics, and scripts handlers, and then let each subsystem determine the specific fields and correlation data.
+
+</details>
+
+---
+
+## Agent Rule
+```markdown
+## Logging
+- **No `print()` in `core/`**: Use `logging` module only.
+- **`print()` allowed ONLY in `scripts/`**: For final developer-facing helper output.
+- **Setup**:
+  - Import: `import logging; logger = logging.getLogger(__name__)`
+  - Configure in scripts when useful: `from superconducting_circuits_analysis.infrastructure.logging import setup_logging`
+  - **Handler**: Use `RichHandler` only as developer-facing script output, not as a product CLI contract.
+- **Levels**:
+  - `logger.debug()`: Development details.
+  - `logger.info()`: Normal flow (e.g., "Processing file...").
+  - `logger.warning()`: Potential issues (e.g., "File not found").
+  - `logger.error()`: Errors that allow continuation.
+  - `logger.critical()`: Fatal errors.
+- **Never**: Use f-string in logger. Use `logger.info("Value: %s", value)`.
+```

@@ -3,12 +3,12 @@
 - Subagent work lanes are optional delegation scopes, not permanent ownership teams or fixed named agent roles.
 - Use subagents only when they reduce real coordination cost.
 - Recommended lanes are:
-    - Julia Core + Pluto Research
-    - Product Async Contracts
-    - Backend + Runner Integration
-    - Application Workbench
-    - Python Notebook / Data Inspection
-    - Docs / SoT Consistency
+  - Julia Core + Pluto Research
+  - Product Async Contracts
+  - Backend + Runner Integration
+  - Application Workbench
+  - Python Notebook / Data Inspection
+  - Docs / SoT Consistency
 - Subagents must stay inside assigned folder structure and owner-boundary rules, avoid redefining architecture, and report findings/changes/risks back to the main thread.
 - Cross-lane conflicts are resolved by the main thread against the relevant SoT.
 - Do not create new active `Plans/` coordination artifacts or committed lane handoffs.

@@ -1,9 +1,12 @@
 ## Micro Style / Writing & Visual Elements
-- **Language**: zh-TW primary
+- **Language**: English-only editable docs source
 - **Tone**: Tutorial guiding / How-to imperative / Reference neutral / Explanation reasoning
-- **Terms**: keep technical terms in English or bilingual
+- **Terms**: preserve official names, package identifiers, physics notation, file paths, citations, and established technical terms
 - **Pairing**: macro-level page layout belongs to `information-layout.md`
-- **Admonitions**: use Zensical `!!!` / `???` (4-space indent); choose `tip/info/warning/example/success` by semantic intent, not decorative emphasis
-- **Tabs**: use `===` for variants (OS/language/context)
+- **Visual components**: use official Starlight MDX components imported from `@astrojs/starlight/components`; convert pages that need them to `.mdx`
+- **Asides**: use `<Aside type="note|tip|caution|danger">` by semantic intent, not decorative emphasis
+- **Collapsible details**: use native `<details class="docs-disclosure docs-disclosure--TYPE">` only for optional material such as source code, long tables, or advanced notes; do not use it for semantic warnings
+- **Tabs**: use official `<Tabs>` and `<TabItem>` for variants (OS/language/context)
+- **Forbidden editable-source syntax**: do not use MkDocs-style admonitions, collapsible admonitions, tab blocks, or card grids in `docs/`
 - **Mermaid**: prefer `TD`/`LR`, keep nodes < 10
 - **Code blocks**: always specify language

@@ -24,7 +24,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install Python dependencies
-        run: uv sync --group dev --frozen
+        run: uv sync --all-packages --group dev --frozen
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -32,6 +32,11 @@ jobs:
           node-version: "24"
           cache: "npm"
           cache-dependency-path: site/package-lock.json
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.12"
 
       - name: Install site dependencies
         run: npm ci --prefix site

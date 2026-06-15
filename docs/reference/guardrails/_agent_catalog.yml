@@ -2,12 +2,12 @@ version: 1
 root: docs/reference/guardrails
 
 baseline:
-  - project-basics/index.md
-  - execution-verification/index.md
+  - project-basics/index.mdx
+  - execution-verification/index.mdx
 
 rules:
   - id: guardrails-index
-    file: index.md
+    file: index.mdx
     tier: standard
     load: on_demand
     activation_mode: model_decision
@@ -16,7 +16,7 @@ rules:
     touched_paths: ["docs/reference/guardrails/**", ".agent/rules/**"]
 
   - id: project-basics-index
-    file: project-basics/index.md
+    file: project-basics/index.mdx
     tier: baseline
     load: always
     activation_mode: always_on
@@ -24,7 +24,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "docs/**"]
 
   - id: project-overview
-    file: project-basics/project-overview.md
+    file: project-basics/project-overview.mdx
     tier: critical
     load: on_demand
     activation_mode: model_decision
@@ -33,25 +33,25 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "docs/**"]
 
   - id: tech-stack
-    file: project-basics/tech-stack.md
+    file: project-basics/tech-stack.mdx
     tier: critical
     load: when_touched
     activation_mode: model_decision
     description: Apply when changing frameworks, dependencies, or tooling.
-    triggers: ["tech stack", "dependency", "dependencies", "framework", "tooling", "next.js", "fastapi", "runner", "julia", "electron", "desktop"]
-    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "pyproject.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "uv.lock"]
+    triggers: ["tech stack", "dependency", "dependencies", "framework", "tooling", "astro", "starlight", "next.js", "fastapi", "runner", "julia", "electron", "desktop", "scqubits", "qutip", "qutip-qip", "pulse simulation", "quantumtoolbox", "quantumoptics", "gdsfactory", "gsim", "gplugins", "qpdk", "sax", "jax"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "site/**", "pyproject.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "uv.lock"]
 
   - id: folder-structure
-    file: project-basics/folder-structure.md
+    file: project-basics/folder-structure.mdx
     tier: critical
     load: when_touched
     activation_mode: model_decision
     description: Apply when changing repo layout or module boundaries.
-    triggers: ["folder structure", "directory", "layout", "path", "rename", "move"]
+    triggers: ["folder structure", "directory", "layout", "path", "rename", "move", "research contracts", "external fem", "equivalent circuit", "quantum model", "quantum dynamics", "pulse simulation", "vector fitting", "passivity", "sax", "jax"]
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "tests/**", "docs/**"]
 
   - id: code-quality-index
-    file: code-quality/index.md
+    file: code-quality/index.mdx
     tier: standard
     load: on_demand
     activation_mode: model_decision
@@ -60,7 +60,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**"]
 
   - id: code-style
-    file: code-quality/code-style.md
+    file: code-quality/code-style.mdx
     tier: standard
     load: on_demand
     activation_mode: model_decision
@@ -69,7 +69,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**"]
 
   - id: type-checking
-    file: code-quality/type-checking.md
+    file: code-quality/type-checking.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
@@ -78,7 +78,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**"]
 
   - id: design-patterns
-    file: code-quality/design-patterns.md
+    file: code-quality/design-patterns.mdx
     tier: standard
     load: on_demand
     activation_mode: model_decision
@@ -87,7 +87,7 @@ rules:
     touched_paths: ["app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**"]
 
   - id: script-authoring
-    file: code-quality/script-authoring.md
+    file: code-quality/script-authoring.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
@@ -96,7 +96,7 @@ rules:
     touched_paths: ["scripts/**"]
 
   - id: execution-index
-    file: execution-verification/index.md
+    file: execution-verification/index.mdx
     tier: baseline
     load: always
     activation_mode: always_on
@@ -104,7 +104,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "scripts/**", "core/**", "legacy/**", "src/**", "docs/**", ".github/**"]
 
   - id: build-commands
-    file: execution-verification/build-commands.md
+    file: execution-verification/build-commands.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
@@ -113,7 +113,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "docs/**", "pyproject.toml", "package.json"]
 
   - id: linting
-    file: execution-verification/linting.md
+    file: execution-verification/linting.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
@@ -122,7 +122,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", ".pre-commit-config.yaml", "pyproject.toml"]
 
   - id: testing
-    file: execution-verification/testing.md
+    file: execution-verification/testing.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
@@ -131,7 +131,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**", "docs/**"]
 
   - id: ci-gates
-    file: execution-verification/ci-gates.md
+    file: execution-verification/ci-gates.mdx
     tier: critical
     load: when_touched
     activation_mode: model_decision
@@ -140,7 +140,7 @@ rules:
     touched_paths: [".github/**", ".github/workflows/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "docs/**"]
 
   - id: branch-worktree-flow
-    file: execution-verification/branch-and-worktree-flow.md
+    file: execution-verification/branch-and-worktree-flow.mdx
     tier: critical
     load: on_demand
     activation_mode: model_decision
@@ -149,7 +149,7 @@ rules:
     touched_paths: ["docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "app/desktop/**", "desktop/**", "legacy/**", "src/**", ".github/**"]
 
   - id: multi-agent-collaboration
-    file: execution-verification/multi-agent-collaboration.md
+    file: execution-verification/multi-agent-collaboration.mdx
     tier: critical
     load: on_demand
     activation_mode: model_decision
@@ -176,7 +176,7 @@ rules:
     touched_paths: ["docs/reference/guardrails/**", "docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**"]
 
   - id: ui-ux-index
-    file: ui-ux-quality/index.md
+    file: ui-ux-quality/index.mdx
     tier: standard
     load: on_demand
     activation_mode: model_decision
@@ -185,16 +185,16 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**", "app/desktop/**", "desktop/**"]
 
   - id: ui-ux-theming
-    file: ui-ux-quality/theming.md
+    file: ui-ux-quality/theming.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
     description: Apply when tasks involve theming, semantic tokens, or dark mode.
     triggers: ["theme", "css", "tailwind", "color", "dark mode"]
-    touched_paths: ["app/frontend/**", "frontend/**", "docs/stylesheets/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "docs/stylesheets/**", "site/src/styles/**", "site/src/components/**"]
 
   - id: ui-ux-components
-    file: ui-ux-quality/component-guidelines.md
+    file: ui-ux-quality/component-guidelines.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
@@ -203,7 +203,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**"]
 
   - id: ui-ux-layouts
-    file: ui-ux-quality/layout-patterns.md
+    file: ui-ux-quality/layout-patterns.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
@@ -212,7 +212,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**"]
 
   - id: ui-ux-state
-    file: ui-ux-quality/state-management.md
+    file: ui-ux-quality/state-management.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
@@ -221,7 +221,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**"]
 
   - id: ui-ux-accessibility
-    file: ui-ux-quality/accessibility.md
+    file: ui-ux-quality/accessibility.mdx
     tier: standard
     load: on_demand
     activation_mode: model_decision
@@ -230,7 +230,7 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**"]
 
   - id: ui-ux-routing
-    file: ui-ux-quality/routing.md
+    file: ui-ux-quality/routing.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
@@ -239,37 +239,46 @@ rules:
     touched_paths: ["app/frontend/**", "frontend/**"]
 
   - id: documentation-standards
-    file: documentation-design/standards.md
+    file: documentation-design/standards.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
     description: Apply when editing docs, frontmatter, or documentation structure.
     triggers: ["docs", "documentation", "frontmatter", "diataxis"]
-    touched_paths: ["docs/**", "zensical.toml"]
+    touched_paths: ["docs/**", "site/astro.config.mjs", "site/src/content.config.ts", "scripts/build/prepare_starlight_docs.py"]
 
   - id: documentation-style
-    file: documentation-design/style.md
+    file: documentation-design/style.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
     description: Apply when editing documentation style, tone, or visual presentation rules.
     triggers: ["docs", "documentation", "style", "admonition", "tabs", "mermaid"]
-    touched_paths: ["docs/**", "zensical.toml"]
+    touched_paths: ["docs/**", "site/astro.config.mjs", "site/src/content.config.ts", "scripts/build/prepare_starlight_docs.py"]
 
-  - id: documentation-zensical-native-style
-    file: documentation-design/zensical-native-style.md
+  - id: documentation-starlight-native-style
+    file: documentation-design/starlight-native-style.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
-    description: Apply when writing or restructuring Zensical-native technical documentation.
-    triggers: ["docs", "documentation", "zensical", "style", "native docs", "writing"]
-    touched_paths: ["docs/**", "zensical.toml"]
+    description: Apply when writing or restructuring Starlight-native technical documentation.
+    triggers: ["docs", "documentation", "starlight", "astro docs", "style", "native docs", "writing", "research routes", "workflow kb", "route-first"]
+    touched_paths: ["docs/**", "site/astro.config.mjs", "site/src/content.config.ts", "scripts/build/prepare_starlight_docs.py"]
+
+  - id: documentation-api-reference
+    file: documentation-design/api-reference.mdx
+    tier: critical
+    load: when_touched
+    activation_mode: model_decision
+    description: Apply when changing generated API reference docs, docstrings, Sphinx, Documenter.jl, or API docs deployment.
+    triggers: ["api reference", "sphinx", "documenter", "documenter.jl", "docstring", "docs string", "autodoc", "autosummary"]
+    touched_paths: ["docs/api-reference/**", "docs/reference/api/**", "docs/reference/guardrails/documentation-design/api-reference.mdx", "core/python/analysis/**", "core/python/circuit_libraries/**", "core/julia/**", "scripts/build/build_api_docs.sh", "scripts/build/check_api_reference_links.py", ".github/workflows/api-reference-integrity.yml"]
 
   - id: documentation-information-layout
-    file: documentation-design/information-layout.md
+    file: documentation-design/information-layout.mdx
     tier: standard
     load: when_touched
     activation_mode: model_decision
     description: Apply when editing overview pages, documentation page maps, or macro-level documentation layout under Style.
-    triggers: ["docs", "documentation", "overview", "index", "page map", "layout", "readability"]
-    touched_paths: ["docs/**", "zensical.toml"]
+    triggers: ["docs", "documentation", "overview", "index", "page map", "layout", "readability", "research routes", "workflow kb", "concepts", "vector fitting", "passivity", "pulse simulation"]
+    touched_paths: ["docs/**", "site/astro.config.mjs", "site/src/content.config.ts", "scripts/build/prepare_starlight_docs.py"]

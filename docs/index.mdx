@@ -1,0 +1,73 @@
+---
+aliases:
+ - Technical Documentation
+ - Technical documents
+tags:
+ - diataxis/reference
+ - audience/user
+ - sot/true
+ - topic/documentation
+status: stable
+owner: docs-team
+audience: user
+scope: "Astro + Starlight reader/task-first technical documentation entry."
+version: v3.0.0
+last_updated: 2026-06-12
+updated_by: codex
+title: Technical documents
+description: Start from the task you want to complete, the concept you need to understand, or the contract you need to verify.
+sidebar:
+ label: Docs Home
+ order: 0
+---
+
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+This is the technical documentation entry for the Superconducting Circuits Research Workbench. First choose your current intention: start research from the notebook, complete the work, understand the model, check the contract, view the Product App, or maintain the project.
+
+<CardGrid>
+ <LinkCard
+  title="Start Here"
+  href="./start/"
+description="Install the research environment, run your first Pluto Notebook, and understand reusable circuit design."
+ />
+ <LinkCard
+  title="Workflows"
+  href="./workflows/"
+description="Pluto research, Julia Core circuit authoring, simulation, analysis, notebooks, and research evidence."
+ />
+ <LinkCard
+  title="Concepts"
+  href="./concepts/"
+description="Physics, reusable circuit systems, circuit authoring models, and research-stack boundaries."
+ />
+ <LinkCard
+  title="Product App"
+  href="./app/"
+description="Frontend, backend, shared contracts and App prototyping lines of future productization workbench."
+ />
+ <LinkCard
+  title="Reference"
+  href="./reference/"
+description="Find API, Core package, Julia Core, Julia Visualizer, notebook, utility, and contributor contracts."
+ />
+ <LinkCard
+  title="Contribute & Govern"
+  href="./contribute/"
+description="Contribution process, agent skills, guardrails and contributors registry."
+ />
+</CardGrid>
+
+<Aside type="note" title="API Reference">
+The generated API reference is a sibling site, not a Starlight content tree:
+<a href="../api/python/">Python Sphinx API</a> and
+<a href="../api/julia/">Julia Documenter.jl API</a>.
+</Aside>
+
+<Aside type="tip" title="Open-source acknowledgements">
+This project builds on important open-source scientific tools, especially
+<a href="https://josephsoncircuits.org/stable/">JosephsonCircuits.jl</a>,
+<a href="https://plutojl.org/">Pluto</a>, and
+<a href="https://plotly.com/julia/">Plotly / PlotlyJS.jl</a>.
+Their maintainers have made superconducting-circuit simulation, reactive Julia notebooks, and interactive scientific visualization much more accessible to the community.
+</Aside>

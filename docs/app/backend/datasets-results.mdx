@@ -1,0 +1,900 @@
+---
+aliases:
+ - Backend Datasets Results Reference
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
+status: stable
+owner: docs-team
+audience: team
+scope: Backend dataset catalog, DesignScope lifecycle / target selection, sweep-aware trace browse / preview / mutation, analysis-facing trace projection, dataset profile, tagged core metrics and provenance-bearing result handles
+version: v1.1.1
+last_updated: 2026-05-30
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Datasets & Results
+
+This page defines the dataset / design / trace / result surface that Dashboard, Header dataset switcher, Raw Data Browser, Analysis Workbench and ResultView depend on.
+
+<Aside type="caution" title="Authoring authority">
+
+This page is the current Backend data-surface authority for Dataset Catalog, Dataset Profile, DesignScope, Trace Surface, Result Handles, sweep-aware trace browse, analysis-facing trace projection, and summary-first query rules.
+Future implementation agents should treat these contracts as active unless a newer source-of-truth explicitly replaces them.
+
+</Aside>
+
+<Aside type="note" title="Surface Boundary">
+
+This page owns dataset catalog, dataset profile, dataset-local DesignScope browse / lifecycle / target selection, sweep-aware trace browse / preview / edit payload, trace mutation gating, analysis-facing trace filtering projection, tagged core metrics summary, and provenance-bearing result handles.
+task lifecycle, analysis-specific artifact manifest and audit query are not the responsibility of this page.
+
+</Aside>
+
+<Aside type="tip" title="Primary Consumers">
+
+The main consumers are [Dashboard](../frontend/workspace/dashboard.mdx), [Raw Data Browser](../frontend/workspace/raw-data-browser.mdx), Analysis Workbench, ResultView API and [Header](../frontend/shared-shell/header.mdx).
+
+</Aside>
+
+## Coverage
+
+| Surface | Meaning |
+| --- | --- |
+| Dataset Catalog | Header / Dashboard visible dataset list |
+| Dataset Profile | Dashboard The only official metadata write surface |
+| Design Browse |dataset-local `DesignScope` list within active dataset|
+| Design Scope Lifecycle |create / rename / merge / archive / delete gating and stale `design_id` resolution|
+| Target Design Scope |Data Ingestion and Simulation publication useof explicit existing-scope / create-new contract|
+| Trace Surface |trace metadata list, sweep-aware filter projection, single-trace preview, trace edit payload, single / batch delete gating|
+| Tagged Core Metrics Summary | Dashboard read-only summary |
+| Result Handles |result refs pointing to persisted artifacts / trace payload|
+
+## Dataset Catalog Contract
+
+The dataset catalog must support at least:
+
+| Field | Meaning |
+| --- | --- |
+| `dataset_id` | dataset identity |
+| `name` | display name |
+| `visibility_scope` | `local`, `private` or `workspace` |
+| `lifecycle_state` | `active`, `archived`, `deleted` |
+| `device_type` | dataset profile summary |
+| `updated_at` | freshness summary |
+| `allowed_actions` | Select / update profile / publish / archive and other available actions |
+
+### Catalog rules
+
+1. The catalog in local mode only lists `Local Space` datasets; the catalog in online mode only lists datasets visible to the active workspace.
+2. `active_dataset` switching must use the stable identity of this catalog.
+3. Catalog row only provides summary-safe fields and must not contain trace payload.
+4. Dataset Catalog is the browse and selection surface for dataset identity, lifecycle state, visibility, and allowed actions.
+
+## Dataset Profile Contract
+
+The backend must support reading and writing the profile corresponding to the Dashboard:
+
+| Field | Meaning |
+| --- | --- |
+| `dataset_id` | active dataset identity |
+| `device_type` | dataset profile device type |
+| `capabilities[]` | dataset capability labels |
+| `source` |`manual`, `inferred`, `imported` and similar values profile source|
+| `updated_at` | profile freshness |
+
+<Aside type="caution" title="Single write entry">
+
+The formal writable entry of the dataset profile only serves the Dashboard type surface.
+Raw Data Browser, Simulation Workbench, and Analysis Workbench should not provide equivalent metadata writes.
+
+</Aside>
+
+## Design Browse Contract
+
+`Raw Data Browser` and Analysis Workbench select `design_id` in the active dataset.
+Data Ingestion and Simulation publication use the `Target Design Scope` selector, but the backend/domain canonical resource name is still `DesignScope`.
+
+| Field | Meaning |
+| --- | --- |
+| `design_id` | dataset-local design identity |
+| `dataset_id` | parent dataset |
+| `name` | design label |
+| `lifecycle_state` | `active`, `archived`, `deleted` |
+| `redirect_design_id` | stale-link / merge redirect target; when there is no redirect, it is `null` |
+| `source_coverage` | source summary / provenance coverage |
+| `compare_readiness` | `ready`, `inspect_only`, `blocked` |
+| `trace_count` | trace metadata row count |
+| `allowed_actions` |row-level lifecycle gating, for example rename / merge / archive / delete|
+| `mutation_policy_summary` | UI-safe lifecycle restriction summary |
+| `updated_at` | freshness summary |
+
+### Design browse rules
+
+1. `design_id` is only guaranteed to be stable within the corresponding `dataset_id`.
+2. Normal browse / target selectors only list `active` scopes by default; archived scopes can only be displayed in explicit history / stale-link context.
+3. Design browse is cursor-based by default.
+4. After switching the dataset, design browse must rebind the entire batch.
+5. Successful trace delete responses must also return the updated design browse row so that the Raw Data Browser can immediately synchronize `trace_count` and compare/browse readiness.
+
+## Design Scope Lifecycle Contract
+
+| Operation | Backend-owned behavior | Minimum response |
+| --- | --- | --- |
+| create | create active `DesignScope` inside one dataset and enforce active-name uniqueness | new design browse row |
+| rename | update display `name` without changing `design_id` | updated design browse row |
+| merge | re-parent source design-scoped metadata to target, archive source and set redirect | source archived row, target updated row, recompute / invalidation summary |
+| archive | remove scope from default target selectors while preserving history and optional redirect | archived row |
+| delete | mark terminal soft state when backend policy allows; no frontend physical purge | deleted / tombstone summary |
+
+### Lifecycle ownership rules
+
+1. backend is the only authority that creates `design_id`, changes `lifecycle_state`, writes `redirect_design_id`, or re-parents design-scoped records.
+2. frontend may request lifecycle actions and render returned rows, but must not rewrite `design_id` locally.
+3. archive / delete availability must come from `allowed_actions` and `mutation_policy_summary`, not frontend inference from trace counts.
+4. `DesignScope.name` is a display label; matching an existing scope by free-text name is not an authority rule.
+
+## Target Design Scope Contract
+
+Data Ingestion and Simulation publication must bind output to an explicit target decision.
+
+| Mode | Request contract | Backend rule |
+| --- | --- | --- |
+| existing target | `dataset_id + design_id` | validate active scope and attach imported / published records to that scope |
+| create-new target | `dataset_id + requested_name` plus create intent | create active scope first, then attach records to the new `design_id` |
+| invalid / archived target | request carries `design_id` that is not active | reject with target-scope error and optional redirect summary |
+
+<Aside type="caution" title="No hidden auto-match">
+
+A free-text design name is only a create-new default.
+Backend must not silently treat a name as an existing target unless the request carries the explicit existing `design_id`.
+
+</Aside>
+
+## Design Scope Merge Contract
+
+| Concern | Rule |
+| --- | --- |
+| Scope boundary | source and target must be different active scopes under the same `dataset_id` |
+| Re-parented records |traces, trace batches, trace-batch links, analysis runs, result artifacts, derived parameters, design assets, design-scoped summaries / read models|
+| Source lifecycle | source scope becomes `archived` and carries `redirect_design_id=target_design_id` |
+| Target refresh |target row must reflect refreshed or invalidated `source_coverage`, `trace_count`, `compare_readiness`, `collection_projection`, analysis readiness and tagged metrics summaries|
+| TraceStore | physical payload paths may remain unchanged; `store_ref` is opaque backend-owned locator |
+| Conflict handling | backend must reject trace identity collisions and return explicit conflict details for non-coalescible design assets |
+
+TraceStore physical paths are opaque Backend-owned locators. Application code and Python Notebook helpers may display handles or use read-only file paths for analysis when explicitly provided, but they must not infer publication authority from physical path structure.
+
+### Merge response minimum
+
+| Field | Meaning |
+| --- | --- |
+| `operation` | `merged` |
+| `dataset_id` | dataset boundary |
+| `source_design` | archived source row with redirect |
+| `target_design` | updated active target row |
+| `reparented_counts` | counts by record family |
+| `recompute_status` | refreshed / invalidated materialized summaries |
+| `warnings[]` | optional conflict / stale-link notes |
+
+## Deep Link And Stale Design Scope Resolution
+
+| Input state | Backend response rule |
+| --- | --- |
+| active `design_id` | return normal design row / trace browse |
+| archived `design_id` with redirect | return `design_scope_redirected` metadata and target design summary |
+| archived `design_id` without redirect | return archived-state summary and no normal target selection |
+| deleted `design_id` | return tombstone / not-found style response; do not create replacement scope |
+
+## Trace Surface Contract
+
+The trace surface must be strictly split into the following path families:
+
+1. **Trace Metadata List Path**
+2. **Trace Preview Path**
+3. **Trace Edit Path**
+4. **Trace Mutation Path**
+
+<Aside type="caution" title="Preview is not edit authority">
+
+`Trace Preview Path` only serves single-trace preview.
+The sampled preview payload must not be treated directly as a numeric edit authority.
+
+</Aside>
+
+### Trace metadata list minimum fields
+
+| Field | Meaning |
+| --- | --- |
+| `trace_id` | trace identity |
+| `dataset_id` | parent dataset |
+| `design_id` | parent design scope |
+| `family` | `s_matrix`, `y_matrix`, `z_matrix` |
+| `parameter` | observable parameter |
+| `representation` | `real`, `imaginary`, `magnitude`, `phase` |
+| `trace_mode_group` | `base`, `sideband`, `all` |
+| `source_kind` | `circuit_simulation`, `layout_simulation`, `measurement` |
+| `stage_kind` | `raw`, `preprocess`, `postprocess` |
+| `ndim` | canonical axis rank summary |
+| `shape` | persisted ND grid shape summary |
+| `axes_summary` | UI-safe axis summary; at least indicate whether trace is 1D/ND with visible axis names |
+| `axis_signature` | Deterministic coordinate/hash summary used for caching / collection derivation / deep-link safety |
+| `available_sweep_axes[]` | analysis / compare available structured sweep axis names |
+| `collection_projection` | optional scientific grouping / collection summary; for consumers such as Analysis Workbench as filter / grouping prompt |
+| `provenance_summary` | UI-safe provenance label |
+| `allowed_actions` | row-level mutation gating, containing at least `edit`, `delete` |
+| `mutation_policy_summary` | UI-safe restriction summary; explain why row is mutable / delete-only / read-only |
+
+### Trace preview minimum fields
+
+| Field | Meaning |
+| --- | --- |
+| `trace_id` | trace identity |
+| `axes` | axis metadata |
+| `preview_payload` | lightweight preview rows or sampled series |
+| `payload_ref` | persisted numeric authority handle |
+| `result_handles[]` | optional result / artifact linkage |
+
+<Aside type="caution" title="Summary-first browse">
+
+The trace metadata list path can only provide summary-safe fields.
+Large numeric payloads must not be returned along with the list query.
+
+Full numeric arrays and full coordinate arrays only belong to detail, explorer, ResultView, or export paths with explicit payload bounds.
+
+</Aside>
+
+## Sweep-aware Trace Browse Rules
+
+| Concern | Rule |
+| --- | --- |
+| Canonical storage | The authority of parameter-swept trace is still ND `TraceRecord`; the trace list is only summary / browse projection |
+| Point-level browse | implementation can provide point / slice read model, but must be able to refer back to canonical `trace_id`, and projection must not be used as the only persisted authority |
+| Axis discoverability | trace browse and trace detail must at least let the consumer know the axis names, whether sweep axes exist, and which axes are available to Analysis Workbench / explorer |
+| Structured filtering | backend should support filtering traces by structured characteristics such as family, representation, source, stage, axis name, available sweep axes, etc. |
+| Summary-safe sweep filtering | Supports axis-name / collection-level / summary-safe filters; coordinate-value / range filtering requires an explicit coordinate-domain summary contract, and dense coordinates must not be turned on by default |
+| Collection projection | backend can return UI-safe `collection_projection`, indicating scientific grouping derived from shared axes / lineage; but it is a read model and does not replace trace identity |
+| Analysis selection | Analysis Workbench can derive collections from selected traces; raw checkbox list is not the final scientific model |
+
+## Materialized Metadata Summary Rules
+
+The query / filter / readiness surface should rely on the materialized summary of the metadata DB / read model instead of opening the full ND payload from `TraceStore` every time.
+
+minimum direction:
+
+| Summary concern | Materialization target |
+| --- | --- |
+| rank / shape |``person'', ``shape''|
+| axis structure |`axis_names`, `axis_units`, `axis_lengths`|
+| sweep filtering | `available_sweep_axes[]` |
+| coordinate identity | `axis_signature` or equivalent hash / signature summary |
+| scientific typing |`family`, `parameter`, `representation`, `source_kind`, `stage_kind`|
+| grouping inputs | batch / lineage / shared-axis summary |
+| summary-safe filtering contract | Axis-name / collection-level / summary-safe filters; excludes coordinate-value / range filtering |
+
+<Aside type="caution" title="List paths are summary-first">
+
+trace list, design browse, analysis readiness and filter suggestion path must not load full ND values ​​by default.
+full numeric arrays and full coordinate arrays should only go into the detail / explorer / result path.
+
+</Aside>
+
+## Axis Responsibility Split
+
+| Surface | Responsibility |
+| --- | --- |
+| `TraceRecord.axes` |canonical axis identity, axis names, order, units and semantic axis meaning|
+| `TraceStore` |dense numeric values and dense coordinate arrays|
+| metadata DB / read model |query-safe axis summary, `ndim`, `shape`, `available_sweep_axes`, `axis_signature` and similar values materialized summaries|
+| list / filter / readiness path | Can only rely on summary surface and must not require opening of dense coordinate arrays |
+
+## Axis Signature Contract
+
+| Concern | Rule |
+| --- | --- |
+| Semantic role |`axis_signature` is canonical axis identity / coordinate structure of deterministic summary|
+| Allowed uses |cache safety, collection derivation, grouping compatibility checks, deep-link safety|
+| Non-goal | Do not use `axis_signature` as a user-facing scientific label, nor use it to replace full coordinates |
+| Equality meaning | equal signatures should mean the same canonical axis structure under this contract |
+| Formula | exact signature formula can remain backend-owned, but must be deterministic, rebuildable, and rely only on stable axis inputs |
+
+### Trace edit minimum fields
+
+| Field | Meaning |
+| --- | --- |
+| `trace_id` | stable trace identity |
+| `editable_metadata` | backend summary metadata that allows modification; for example, `parameter`, `representation`, `provenance_summary` |
+| `immutable_summary` | Unwritable trace identity / lineage context |
+| `editable_numeric_payload` | dialog-specific numeric edit payload; must be a complete submittable version, not a sampled preview |
+| `recompute_scope` | dependent summary / derived surface family affected by backend edit path |
+| `allowed_actions` | edit / delete gating |
+| `mutation_policy_summary` | UI-safe description of origin / provenance restrictions |
+
+## Trace Mutation Rules
+
+| Concern | Rule |
+| --- | --- |
+| Stable identity | `trace_id` is the only trace identity; successful edit must maintain the same `trace_id` |
+| Editable scope | single-trace edit only allows modification of numeric payload and backend explicitly allowed UI-safe summary metadata |
+| Immutable scope | `trace_id`, `dataset_id`, `design_id`, `family`, `trace_mode_group`, `source_kind`, `stage_kind`, `payload_ref` authority handle and `result_handles[]` cannot be rewritten by mutation |
+| Edit invalidation obligation | If numeric edit or editable metadata affects axis structure, coordinate identity, materialized summaries, collection derivation, analysis readiness or persisted analysis/result truth, backend must synchronize re-materialize or invalidate these dependencies |
+| Minimum downstream scope | edit path must process at least `axis_signature`, materialized metadata summary, `collection_projection`, analysis readiness summary and all persisted analysis/result surfaces that depend on this trace truth; if axis / coordinates change, axis-derived summaries must also be recalculated |
+| Edit availability rule | If the backend cannot maintain the above invalidation / recomputation contract, the `allowed_actions.edit` of the trace class must be `false` |
+| Origin restriction | provenance-bearing or system-produced traces can be `edit=false`, `delete=true`; frontend shall not be deduced from `source_kind` / `stage_kind` by itself, and must be presented according to `allowed_actions` and `mutation_policy_summary` |
+| Audit semantics | edit / delete is in-place mutation + audited operation; if trace version lineage needs to be saved independently, it must be defined by a special contract |
+| Batch scope | Currently only supports batch delete; batch edit does not belong to this page SoT |
+
+## Analysis-facing Trace Projection
+
+Analysis Workbench requires not just a generic trace metadata list, but also a selection / filtering projection that can be derived from the persisted trace structure.
+
+minimum projection direction:
+
+| Field | Meaning |
+| --- | --- |
+| `available_families[]` | family filter available for analysis compatibility |
+| `available_representations[]` | Representation filter available for analysis compatibility |
+| `available_sweep_axes[]` | structured sweep axis names visible in the current design scope |
+| `collection_projection[]` | optional; scientific grouping summary derived from shared axes / source batch lineage |
+| `analysis_readiness` | optional; whether a certain analysis can form a summary of a valid collection under the current trace structure |
+| `summary_filter_scope` | summary-safe filter capability description; indicates that coordinate-value / range filtering requires coordinate-domain summary contract |
+
+<Aside type="tip" title="Selection remains user-driven">
+
+Users can still explicitly check traces.
+But when the backend submits / result query in Analysis Workbench, those selections should be interpreted with the persisted trace structure instead of just looking at the checkbox list itself.
+
+</Aside>
+
+## Collection Projection Contract
+
+| Concern | Rule |
+| --- | --- |
+| Authority | `collection_projection` is a read model derived from canonical trace structure, not an independent owner |
+| Identity | projection exposes deterministic `collection_key` for use by deep-linking, caching and UI restoration |
+| Allowed derivation inputs | `collection_key` and projection summary can only come from dataset/design scope, shared axes / `axis_signature`, lineage / batch grouping, and trace set intrinsic scientific typing, etc. stable structural inputs |
+| Disallowed derivation inputs | Analysis-specific readiness outcome, per-analysis compatibility verdict, consumer-specific presentation choice, and UI sort/filter state must not participate in `collection_key` identity |
+| Read-model scope | collection projection does not require persisted `TraceCollectionRecord` or editable collection resource |
+| Stronger contract path | If you need a collection that can store / bookmark / edit, you must specify a stronger contract instead of directly using projection as authority |
+| Identity discipline | `collection_key` can be used as a projected identity, but must not be regarded as an independent persisted resource existence proof |
+
+## Query Efficiency Rules
+
+| Concern | Rule |
+| --- | --- |
+| List / filter paths | Must rely on materialized metadata summary; must not default to read full ND values ​​|
+| Preview path | Slice/sampled projection should be returned first, rather than the entire dense tensor |
+| Detail / explorer paths | Load full coordinate arrays or dense numeric slices only when really needed |
+| Dominant access pattern |Currently, priority should be given to aligning `fixed sweep point -> read full frequency slice` and `fixed result axes -> read single projection`|
+| Storage access | chunking / retrieval should serve the main scientific access pattern, not the generic default |
+| Full dense transport | Full dense trace payload is not the default contract of list/filter; only detail / export / explicitly defined view can be returned |
+
+## Trace Mutation Path Contract
+
+| Operation | Contract |
+| --- | --- |
+| Single edit | Lock a single trace with `dataset_id + design_id + trace_id` and submit new editable metadata and complete numeric payload |
+| Single delete | Delete a single trace with the same stable identity; clear destructive confirmation is required |
+| Batch delete | Submit `trace_ids[]` under the same `dataset_id + design_id`; do not delete across designs |
+
+### Mutation result rules
+
+1. After the single edit is successful, the backend must at least return the updated trace summary so that the Raw Data Browser can immediately refresh the row and focused preview.
+2. If single edit affects axis structure, coordinate identity, collection derivation, analysis readiness or persisted result truth, backend must first complete the corresponding re-materialize / invalidate, and then return the successful result.
+3. After the single delete is successful, the backend must return at least `deleted_trace_id`, `deleted_count=1` and the updated design browse row.
+4. After the batch delete is successful, the backend must return at least `deleted_trace_ids[]`, `deleted_count` and the updated design browse row.
+5. Batch delete must be a single request contract; partial silent delete cannot be a default behavior.
+
+### Mutation failure family
+
+| Code | Meaning |
+| --- | --- |
+| `trace_update_denied` | The current session or provenance policy does not allow editing this trace |
+| `trace_delete_denied` | The current session or provenance policy does not allow deletion of this trace |
+| `trace_batch_delete_denied` | batch delete contains traces that cannot be deleted, are invisible, or cross-design |
+| `trace_mutation_conflict` | The mutation target has changed or the current payload is incompatible with the submit prerequisite |
+| `trace_not_found` | The specified trace does not exist in the current `dataset_id + design_id` scope |
+
+## Tagged Core Metrics Summary
+
+The `Tagged Core Metrics` displayed by Dashboard is a read-only summary surface.
+
+| Field | Meaning |
+| --- | --- |
+| `metric_id` | metric identity |
+| `label` | display name |
+| `source_parameter` | source parameter label |
+| `designated_metric` | target metric name |
+| `tagged_at` | tagging time |
+
+<Aside type="tip" title="Read / Write split">
+
+The read summary for `Tagged Core Metrics` belongs to this page.
+identify / tagging mutations are still defined by [Analysis Results](characterization-results.mdx).
+
+</Aside>
+
+## Result Handles
+
+Result handles connect tasks, artifacts, traces, published result views, and provenance-bearing result browsing.
+
+They are consumed by ResultView API and Application workbenches after Backend publication. They are not Runner manifests and not raw Zarr payloads.
+
+| Concern | Rule |
+| --- | --- |
+| Authority | Backend publication creates and registers result handles |
+| Consumers | Simulation Workbench, Analysis Workbench, Raw Data Browser, Python Notebook, and ResultView API |
+| Payload boundary | handles point to published records, previews, projections, or locators; they do not carry full ND arrays |
+| Provenance | handles preserve task/artifact/trace lineage needed for result browsing and analysis recovery |
+
+## Dataset Activation Pairing
+
+| Concern | Rule |
+| --- | --- |
+| Dataset browse | List only datasets visible to the active workspace |
+| Design browse | List design scopes only within active dataset |
+| Trace browse | Must be bound at the same time `dataset_id + design_id` |
+| Profile write | must correspond to active dataset, page-local false dataset is not accepted |
+| Tagged metrics summary | Switches with active dataset switching |
+
+## Request / Response Examples
+
+<Aside type="note" title="Visible dataset catalog">
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "rows": [
+   {
+    "dataset_id": "ds_xy_001",
+    "name": "FloatingQubitWithXYLine Post 0308_1819",
+    "visibility_scope": "workspace",
+    "lifecycle_state": "active",
+    "device_type": "transmon",
+    "updated_at": "2026-03-14T10:20:00Z",
+    "allowed_actions": {
+     "select": true,
+     "update_profile": true,
+     "publish": false,
+     "archive": true
+    }
+   }
+  ]
+ },
+ "meta": {
+  "limit": 20,
+  "next_cursor": null,
+  "prev_cursor": null,
+  "has_more": false
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Dataset profile read">
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "dataset_id": "ds_xy_001",
+  "device_type": "transmon",
+  "capabilities": ["analysis", "simulation_review"],
+  "source": "manual",
+  "updated_at": "2026-03-14T10:20:00Z"
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Dataset profile update">
+
+Request:
+```json
+{
+ "dataset_id": "ds_xy_001",
+ "device_type": "transmon",
+ "capabilities": ["analysis", "simulation_review"]
+}
+```
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "dataset_id": "ds_xy_001",
+  "device_type": "transmon",
+  "capabilities": ["analysis", "simulation_review"],
+  "source": "manual",
+  "updated_at": "2026-03-14T10:22:00Z"
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Design browse within active dataset">
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "rows": [
+   {
+    "design_id": "design_flux_scan_a",
+    "dataset_id": "ds_xy_001",
+    "name": "Flux Scan A",
+    "lifecycle_state": "active",
+    "redirect_design_id": null,
+    "source_coverage": {
+     "measurement": 2,
+     "layout_simulation": 1
+    },
+    "compare_readiness": "ready",
+    "trace_count": 18,
+    "allowed_actions": {
+     "rename": true,
+     "merge": true,
+     "archive": true,
+     "delete": false
+    },
+    "mutation_policy_summary": "Active design scope with persisted traces.",
+    "updated_at": "2026-03-14T10:24:00Z"
+   }
+  ]
+ },
+ "meta": {
+  "limit": 20,
+  "next_cursor": null,
+  "prev_cursor": null,
+  "has_more": false,
+  "filter_echo": {
+   "dataset_id": "ds_xy_001"
+  }
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Design scope merge">
+
+Request:
+```json
+{
+ "source_design_id": "design_hfss_import_01",
+ "target_design_id": "design_flux_scan_a"
+}
+```
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "operation": "merged",
+  "dataset_id": "ds_xy_001",
+  "source_design": {
+   "design_id": "design_hfss_import_01",
+   "dataset_id": "ds_xy_001",
+   "name": "HFSS import 01",
+   "lifecycle_state": "archived",
+   "redirect_design_id": "design_flux_scan_a"
+  },
+  "target_design": {
+   "design_id": "design_flux_scan_a",
+   "dataset_id": "ds_xy_001",
+   "name": "Flux Scan A",
+   "lifecycle_state": "active",
+   "redirect_design_id": null,
+   "trace_count": 27
+  },
+  "reparented_counts": {
+   "traces": 9,
+   "trace_batches": 1,
+   "analysis_runs": 2,
+   "result_artifacts": 4,
+   "derived_parameters": 3,
+   "design_assets": 1
+  },
+  "recompute_status": {
+   "source_coverage": "refreshed",
+   "collection_projection": "invalidated",
+   "analysis_readiness": "invalidated",
+   "tagged_metrics": "refreshed"
+  },
+  "warnings": []
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Trace metadata list">
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "rows": [
+   {
+    "trace_id": "trace_101",
+    "dataset_id": "ds_xy_001",
+    "design_id": "design_flux_scan_a",
+    "family": "y_matrix",
+    "parameter": "Y_dm_1_2_dm_1_2",
+    "representation": "imaginary",
+    "trace_mode_group": "base",
+    "source_kind": "measurement",
+    "stage_kind": "postprocess",
+    "ndim": 2,
+    "shape": [401, 11],
+    "axes_summary": {
+     "rank": 2,
+     "axis_names": ["frequency", "L_jun"]
+    },
+    "axis_signature": "axsig_freq_ljun_v1",
+    "available_sweep_axes": ["L_jun"],
+    "collection_projection": {
+     "collection_key": "collection_postprocess_batch4_ljun",
+     "kind": "batch_axis_group",
+     "group_label": "Postprocess batch #4 · L_jun sweep"
+    },
+    "provenance_summary": "Y · Post-Processed · batch #4",
+    "allowed_actions": {
+     "edit": false,
+     "delete": true
+    },
+    "mutation_policy_summary": "Provenance-bearing or system-produced trace; delete is allowed, but edit from the source workflow."
+   }
+  ]
+ },
+ "meta": {
+  "limit": 50,
+  "next_cursor": null,
+  "prev_cursor": null,
+  "has_more": false
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Trace preview">
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "trace_id": "trace_101",
+  "axes": [
+   {"name": "frequency", "unit": "GHz", "length": 401},
+   {"name": "L_jun", "unit": "nH", "length": 11}
+  ],
+  "preview_payload": {
+   "kind": "sampled_series",
+   "slice_axis": "L_jun",
+   "slice_value": 15.0,
+   "points": [
+    [1.0, 0.014],
+    [1.1, 0.018]
+   ]
+  },
+  "payload_ref": {
+   "backend": "local_zarr",
+   "store_key": "datasets/ds_xy_001/designs/design_flux_scan_a/batches/batch_4.zarr",
+   "group_path": "/traces/trace_101",
+   "array_path": "values"
+  },
+  "result_handles": []
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Trace edit payload">
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "trace_id": "trace_manual_014",
+  "dataset_id": "ds_xy_001",
+  "design_id": "design_flux_scan_a",
+  "editable_metadata": {
+   "parameter": "S21",
+   "representation": "magnitude",
+   "provenance_summary": "Manual import · corrected on 2026-03-25"
+  },
+  "immutable_summary": {
+   "family": "s_matrix",
+   "trace_mode_group": "base",
+   "source_kind": "measurement",
+   "stage_kind": "raw"
+  },
+  "editable_numeric_payload": {
+   "kind": "series_table",
+   "columns": [
+    {"key": "frequency", "label": "Frequency", "unit": "GHz", "role": "axis"},
+    {"key": "value", "label": "Magnitude", "unit": null, "role": "value"}
+   ],
+   "rows": [
+    {"frequency": 1.0, "value": 0.014},
+    {"frequency": 1.1, "value": 0.018}
+   ]
+  },
+  "recompute_scope": {
+   "materialized_metadata_summary": true,
+   "collection_projection": true,
+   "analysis_readiness_summary": true,
+   "persisted_analysis_results": "invalidate_or_recompute_if_dependent"
+  },
+  "allowed_actions": {
+   "edit": true,
+   "delete": true
+  },
+  "mutation_policy_summary": "Manually ingested raw trace."
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Single trace edit">
+
+Request:
+```json
+{
+ "parameter": "S21_corrected",
+ "representation": "magnitude",
+ "provenance_summary": "Manual correction · 2026-03-25",
+ "numeric_payload": {
+  "kind": "series_table",
+  "rows": [
+   {"frequency": 1.0, "value": 0.014},
+   {"frequency": 1.1, "value": 0.019}
+  ]
+ }
+}
+```
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "operation": "updated",
+  "recompute_status": {
+   "materialized_metadata_summary": "refreshed",
+   "collection_projection": "refreshed",
+   "analysis_readiness_summary": "refreshed",
+   "dependent_results": "invalidated"
+  },
+  "trace": {
+   "trace_id": "trace_manual_014",
+   "dataset_id": "ds_xy_001",
+   "design_id": "design_flux_scan_a",
+   "family": "s_matrix",
+   "parameter": "S21_corrected",
+   "representation": "magnitude",
+   "trace_mode_group": "base",
+   "source_kind": "measurement",
+   "stage_kind": "raw",
+   "provenance_summary": "Manual correction · 2026-03-25",
+   "allowed_actions": {
+    "edit": true,
+    "delete": true
+   },
+   "mutation_policy_summary": "Manually ingested raw trace."
+  }
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Batch delete">
+
+Request:
+```json
+{
+ "trace_ids": ["trace_manual_014", "trace_manual_015"]
+}
+```
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "operation": "deleted",
+  "dataset_id": "ds_xy_001",
+  "design_id": "design_flux_scan_a",
+  "deleted_trace_ids": ["trace_manual_014", "trace_manual_015"],
+  "deleted_count": 2,
+  "design": {
+   "design_id": "design_flux_scan_a",
+   "dataset_id": "ds_xy_001",
+   "name": "Flux Scan A",
+   "lifecycle_state": "active",
+   "redirect_design_id": null,
+   "source_coverage": {
+    "measurement": 1,
+    "layout_simulation": 1
+   },
+   "compare_readiness": "ready",
+   "trace_count": 16,
+   "updated_at": "2026-03-26T03:28:00Z"
+  }
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Tagged core metrics summary">
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "dataset_id": "ds_xy_001",
+  "metrics": [
+   {
+    "metric_id": "metric_mode_1_frequency",
+    "label": "Mode 1 Frequency",
+    "source_parameter": "L_q",
+    "designated_metric": "mode_1_frequency",
+    "tagged_at": "2026-03-14T10:24:00Z"
+   }
+  ]
+ }
+}
+```
+
+</Aside>
+
+## Error Code Contract
+
+| Code | Category | When it applies |
+| --- | --- | --- |
+| `dataset_not_found` | `not_found` | dataset does not exist |
+| `dataset_not_visible_in_workspace` | `permission_denied` | dataset is not visible in active workspace |
+| `dataset_profile_update_denied` | `permission_denied` | session without dataset metadata write permission |
+| `dataset_profile_invalid` | `validation_error` | device type or capability payload does not comply with contract |
+| `design_not_found` | `not_found` | design scope not found in dataset |
+| `design_scope_name_conflict` | `validation_error` | active design scope name conflicts with existing active scope in the same dataset |
+| `target_design_scope_required` | `validation_error` | ingest / publication request No existing target or create-new intent provided |
+| `target_design_scope_invalid` | `validation_error` | target scope does not belong to the dataset, is not active, or is not visible |
+| `design_scope_redirected` | `stale_reference` | stale `design_id` is archived and points to target scope |
+| `design_scope_merge_denied` | `permission_denied` | session or lifecycle policy does not allow merge |
+| `design_scope_merge_conflict` | `conflict` | merge encountered a trace / asset / summary conflict that cannot be automatically handled |
+| `trace_not_found` | `not_found` | trace detail points to non-existent trace |
+| `trace_payload_not_ready` | `task_not_ready` |trace payload not yet materialized|
+
+## Related
+
+- [Dashboard](../frontend/workspace/dashboard.mdx)
+- [Raw Data Browser](../frontend/workspace/raw-data-browser.mdx)
+- [Frontend Reference](../frontend/index.md)
+- [Analysis Results](characterization-results.mdx)
+- [Product Async Contracts](../architecture/contracts/product-async-contracts.md)
+- [ResultView API](result-view-api.md)
+- [Dataset / Design / Trace Schema](../data-contracts/dataset-record.mdx)
+- [Analysis Result](../data-contracts/analysis-result.mdx)
+- [Data Handling](../../reference/guardrails/code-quality/data-handling.mdx)

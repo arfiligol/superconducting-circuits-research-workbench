@@ -1,0 +1,39 @@
+---
+aliases:
+ - "Floating Qubit Research"
+tags:
+ - diataxis/reference
+ - status/draft
+sidebar:
+ label: Floating Qubit Study
+ order: 120
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+#FloatingQubit Research
+
+<Aside type="note" title="research notes">
+
+This page documents the exploration and analysis of the Floating Qubit circuit model.
+
+</Aside>
+
+## background
+
+The Floating Qubit is a transmon design that is not directly connected to ground and is capacitively coupled to the read resonator and XY control lines.
+
+## Model File
+
+- `circuit_model_analysis/floating_1Q_coupled_XY.jl`
+- `circuit_model_analysis/floating_1Q_coupled_Readout.jl`
+
+## Questions to be explored
+
+- [ ] Effect of different coupling strengths on modal frequencies
+- [ ] Comparison with HFSS simulation results
+- [ ] Applicable conditions for Kron reduction
+
+## Related resources
+
+- Q3D capacitor matrix: `data/q3d_exports/PF6FQ_C_Matrix.csv`

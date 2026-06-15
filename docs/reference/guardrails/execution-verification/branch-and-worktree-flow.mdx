@@ -1,0 +1,116 @@
+---
+aliases:
+ - Branch and Worktree Flow
+ - Git Flow and Worktree Policy
+ - Branch / Worktree Policy
+ - Branching and Worktree processes
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/execution
+status: stable
+owner: docs-team
+audience: team
+scope: main/develop branch roles, direct-develop policy, optional worktree isolation and release promotion.
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Branch & Worktree Flow
+
+`develop` is the active integration branch, and direct updates on `develop` are allowed when they keep the working tree coherent and the touched-area checks are run.
+
+Use branches and isolated worktrees as tools for risk management, not as mandatory ceremony.
+
+<Aside type="caution" title="`main` is release, `develop` is active development">
+
+`main` is the release branch. Do not use it for daily work.
+
+`develop` is the normal place for implementation, docs, cleanup, and integration work.
+
+</Aside>
+
+## Branch Roles
+
+| Branch | Canonical role | Rule |
+| --- | --- | --- |
+| `main` | release branch | only receives verified promotion from `develop` |
+| `develop` | active development branch | normal target for direct updates |
+| task branch | optional isolation branch | use when risk, review, or parallel work needs separation |
+
+## Direct Develop Policy
+
+Direct work on `develop` is allowed when:
+
+- the user asks for fast iteration or direct update;
+- the current change is scoped and understandable;
+- existing dirty changes are either part of the request or clearly unrelated and left untouched;
+- validation is run for the touched area;
+- the final report names remaining dirty state or skipped validation.
+
+This policy replaces the previous mandatory isolated-worktree model.
+
+<Aside type="caution" title="Do not overwrite unrelated work">
+
+Direct `develop` work is not permission to trample local changes. Always inspect `git status --short` before editing. If unrelated dirty files exist, avoid them and call that out in the final report.
+
+</Aside>
+
+## Optional Branch / Worktree Use
+
+Use a separate branch or worktree when:
+
+- a change is risky or broad enough that rollback may be useful;
+- multiple people or Codex subagents must edit overlapping files;
+- the root worktree has unrelated dirty changes in files you must edit;
+- the user explicitly asks for a branch, PR, or isolated delivery line;
+- you need to test an experiment without disturbing the current app state.
+
+When isolation is used, keep it simple: create one task branch, finish the work, verify, then merge or fast-forward back to `develop`.
+
+## Commit And Merge Expectations
+
+| Situation | Expected action |
+| --- | --- |
+| Small local docs/code update | edit directly on `develop`, validate, report |
+| Reviewable feature slice | optional task branch; merge or fast-forward to `develop` after acceptance |
+| Release promotion | promote `develop` to `main` only after release checks |
+| Dirty unrelated state | preserve it; do not stage or revert it unless the user asks |
+
+No repo-level role gate controls who can update `develop`. Codex may use subagents internally, but the visible delivery is one coherent change owned by the current conversation.
+
+## Promotion Path
+
+```text
+direct update or task branch
+  -> develop
+  -> verified release promotion
+  -> main
+```
+
+## Related
+
+- [Execution & Verification](index.mdx)
+- [CI Gates](ci-gates.mdx)
+- [Commit Standards](commit-standards.mdx)
+- [Task Scope Sizing](./prompt-grading.md)
+
+## Agent Rule
+```markdown
+## Branch & Worktree Flow
+- `main` is the release branch; do not use it for daily development.
+- `develop` is the active development branch.
+- Direct updates on `develop` are allowed when the working tree stays coherent and touched-area checks are run.
+- Branches and isolated worktrees are optional risk-management tools, not mandatory ceremony.
+- Use a task branch/worktree when the change is risky, broad, parallel, review-heavy, or blocked by unrelated dirty files.
+- Always inspect `git status --short` before editing.
+- Preserve unrelated dirty work; do not stage, revert, or overwrite it unless the user explicitly asks.
+- Codex may use subagents internally, but repo rules no longer gate `develop` updates by role.
+- Promotion path is:
+  - direct update or task branch -> `develop`
+  - verified release promotion -> `main`
+```

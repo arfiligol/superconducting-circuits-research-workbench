@@ -1,0 +1,62 @@
+---
+aliases:
+ - Accessibility
+ - Accessible design
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/ui-ux
+status: stable
+owner: docs-team
+audience: contributor
+scope: frontend a11y, semantic HTML, keyboard operations, and the ARIA specification.
+version: v1.1.0
+last_updated: 2026-03-14
+updated_by: docs-team
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Accessibility
+
+<Aside type="note" title="Use this page for default accessibility decisions">
+
+This page sets the minimum acceptable a11y baseline. If an exception is required for an interactive element, it should first be explained why the standard semantic element is insufficient.
+
+</Aside>
+
+## Accessibility Map
+
+| concern | minimum requirements |
+| --- | --- |
+| semantics | Using semantic HTML |
+| keyboard | All interactive elements are keyboard operable |
+| labels |icon-only button has `aria-label`, form field has label|
+| feedback | Error messages are visible and can be read |
+| contrast | Text and key states comply with WCAG AA |
+
+## Core Rules
+
+- Use semantic HTML
+- Interactive elements must be keyboard operable
+- icon-only button must have `aria-label`
+- Form fields must have labels and error messages
+- Text and background contrast must comply with WCAG AA
+
+<Aside type="caution" title="Do not use clickable div">
+
+If the button or link has the correct semantics, don't use `div` to add a click handler. This breaks both keyboard and assistive technology behavior.
+
+</Aside>
+
+## Agent Rule
+```markdown
+## Accessibility
+- Use semantic HTML.
+- Interactive elements must be keyboard accessible.
+- Icon-only buttons require `aria-label`.
+- Form fields require labels and visible error messages.
+- Maintain WCAG AA contrast for text and critical UI states.
+- Do not use clickable `div` elements when a button or link is the correct semantic choice.
+```

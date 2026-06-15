@@ -1,0 +1,66 @@
+---
+aliases:
+ - Schema Editor Formatting
+ - Schema Editor formatting strategy
+tags:
+ - diataxis/explanation
+ - audience/team
+ - topic/architecture
+ - topic/visualization
+ - topic/ui
+status: stable
+owner: docs-team
+audience: team
+scope: Design decisions and boundaries of Schema Editor formatting capabilities (Explanation)
+version: v0.2.0
+last_updated: 2026-03-06
+updated_by: codex
+sidebar:
+ label: Schema Editor Formatting
+ order: 50
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Schema Editor Formatting
+
+This page only answers "Why is formatting capability necessary and why is it defined like this?"
+Specific fields, button behaviors, and error contracts have been moved to Reference.
+
+## Decision Context
+
+Schema Editor uses source-form as the only SoT, and users will frequently edit netlist.
+Without repeatable and predictable formatting capabilities, subsequent review/debug costs can quickly rise.
+
+## Why This Is an Architecture Decision
+
+- This is not just a UI detail, it will affect the readability of source-form and the efficiency of error location.
+- Will affect the mental consistency of the pipeline between Schema Editor and Simulation
+- Will affect the diff quality of netlist changes during multi-person collaboration
+
+## Design Boundaries
+
+1. `Format` can only change the source text formatting, but does not change the expansion semantics.
+2. Keep the original text when it fails, and do not destroy the source during editing.
+3. The formatting process must be consistent with the editor state model to avoid dual-state divergence.
+4. The expanded netlist seen by `/schemas/{id}` and `/simulation` must come from the same parse/validate/expand pipeline
+
+## Non-Goals
+
+- Do not implement full IDE/LSP functionality in Schema Editor
+- The formatter is not designed as a semantic migration tool (no automatic upgrade of old formats)
+
+## Where the Formal Contract Lives
+
+<Aside type="caution" title="Reference SoT">
+
+For the field and behavior contract, please see:
+[Schema Editor UI Reference](../../frontend/definition/schema-editor.mdx)
+
+</Aside>
+
+## Related
+
+- [Schema Editor UI Reference](../../frontend/definition/schema-editor.mdx)
+- [Circuit Netlist Schema](../old-app-contracts/circuit-netlist.mdx)
+- [Julia Runner Compute Plane](../../architecture/contracts/julia-runner-compute-plane.md)

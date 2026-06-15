@@ -1,0 +1,119 @@
+---
+aliases:
+ - Agent Skill Library
+ - Project Skill Library
+ - Agent skill library
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/governance
+status: draft
+owner: docs-team
+audience: contributor
+scope: It is recommended to synchronize the project-provided skill catalog and synchronization rules when cross-tool AI Agent participates in the development of this project.
+version: v0.1.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Agent Skill Library
+
+This area provides project-provided Skill templates so that Codex App, Claude Code, Gemini or other coding agents can be synchronized into reusable instructions, skills, commands or agent contexts supported by their respective tools.
+
+This is not a new runtime surface, nor is it a fixed agent build. What it defines is: if an agent wants to participate in the development of this project, it is best to have what reusable capabilities it has.
+
+<Aside type="caution" title="Sync, then load SoT">
+
+Skills can only provide workflow capabilities. Every actual development must still read the SoT, guardrails, folder structure, commands and validation rules of this repo first. Skills cannot replace workspace rules.
+
+</Aside>
+
+## Sync Contract
+
+When the Agent synchronizes the skills in this area, three things must be kept:
+
+| Required part | Rule |
+| --- | --- |
+| `name` | Reserve the canonical skill name so that different tools and delivery reports can use the same name |
+| trigger description | Keep a description of when to use this skill, don't just leave the text |
+| hard-block behavior | If the skill requires that the file is missing, it will stop. It cannot be changed to the agent's own guessing |
+
+<details class="docs-disclosure docs-disclosure--example">
+<summary>Copy this table as Markdown</summary>
+
+```markdown
+| Required part | Rule |
+| --- | --- |
+| `name` | Reserve the canonical skill name so that different tools and delivery reports can use the same name |
+| trigger description | Keep a description of when to use this skill, don't just leave the text |
+| hard-block behavior | If the skill requires that the file is missing, it will stop. It cannot be changed to the agent's own guessing |
+```
+
+</details>
+
+Agent can convert the same Skill template into the native format of different tools:
+
+| Agent environment | Expected sync behavior |
+| --- | --- |
+| Codex App | Create the corresponding Codex Skill and let the skill description trigger the loading |
+| Claude Code | Create equivalent reusable instruction, command, agent definition or context fragment |
+| Gemini | Create equivalent reusable instruction or project context fragment |
+| Other coding agents | Use the reusable context / skill / command mechanism supported by this tool |
+
+<details class="docs-disclosure docs-disclosure--example">
+<summary>Copy this table as Markdown</summary>
+
+```markdown
+| Agent environment | Expected sync behavior |
+| --- | --- |
+| Codex App | Create the corresponding Codex Skill and let the skill description trigger the loading |
+| Claude Code | Create equivalent reusable instruction, command, agent definition or context fragment |
+| Gemini | Create equivalent reusable instruction or project context fragment |
+| Other coding agents | Use the reusable context / skill / command mechanism supported by this tool |
+```
+
+</details>
+
+<Aside type="note" title="Tool-specific details">
+
+This repo does not specify the native installation path for every external tool. The synchronization agent must create skills according to the official mechanism currently supported by its own tools, and retain the canonical content of this area.
+
+</Aside>
+
+## Catalog
+
+| Skill | Status | Use when | Template |
+| --- | --- | --- | --- |
+| `work-lane-orchestration` | Recommended | The task requires main thread integration, multiple surface vertical slices, subagent work lanes, SoT loading, and cross-border acceptance | [Work Lane Orchestration](work-lane-orchestration.mdx) |
+| `write-pluto-notebook` | Recommended | The task requires building, modifying, converting or reviewing a Pluto.jl reactive notebook, especially `.jl` notebook, PlutoUI / `@bind`, package environment, cell dependency or duplicate global definition issues | [Write Pluto Notebook](write-pluto-notebook.mdx) |
+
+<details class="docs-disclosure docs-disclosure--example">
+<summary>Copy this table as Markdown</summary>
+
+```markdown
+| Skill | Status | Use when | Template |
+| --- | --- | --- | --- |
+| `work-lane-orchestration` | Recommended | The task requires main thread integration, multiple surface vertical slices, subagent work lanes, SoT loading, and cross-border acceptance | [Work Lane Orchestration](work-lane-orchestration.mdx) |
+| `write-pluto-notebook` | Recommended | The task requires building, modifying, converting or reviewing a Pluto.jl reactive notebook, especially `.jl` notebook, PlutoUI / `@bind`, package environment, cell dependency or duplicate global definition issues | [Write Pluto Notebook](write-pluto-notebook.mdx) |
+```
+
+</details>
+
+## Update Rules
+
+When adding or modifying skills in this area:
+
+1. Add or update template page in `docs/reference/agent-skills/`.
+2. Update this page `Catalog`.
+3. If a new page is added, make sure Starlight sidebar and route checks can find the new page.
+4. Keep the skill template available across projects and do not hardcode the lane taxonomy, commands or folder ownership of this repo into the generic skill.
+5. If the purpose of the skill is specifically for this repo, it must be marked project-specific on the page and should not be packaged as a general capability.
+
+## Related
+
+- [Codex Subagent Coordination](../guardrails/execution-verification/multi-agent-collaboration.mdx)
+- [Source of Truth Order](../guardrails/project-basics/source-of-truth-order.mdx)
+- [Folder Structure](../guardrails/project-basics/folder-structure.mdx)

@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Any, cast
 
 import zarr
-from sc_core.execution import TaskResultHandle
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app_backend.domain.runtime_contracts.execution import TaskResultHandle
 from app_backend.domain.storage import ResultHandleRef, TracePayloadRef
 from app_backend.domain.tasks import TaskDetail, TaskLifecycleUpdate, TaskResultRefs
 from app_backend.infrastructure.persistence.models import (

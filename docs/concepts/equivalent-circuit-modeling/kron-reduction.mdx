@@ -1,0 +1,150 @@
+---
+aliases:
+- Schur Complement and Kron Reduction
+ - Online Reduction (Schur Complement)
+tags:
+ - diataxis/explanation
+ - audience/team
+ - topic/physics
+ - topic/simulation
+ - node_type/method
+status: stable
+owner: docs-team
+audience: team
+scope: The physical semantics, mathematical derivation and usage boundaries of Kron Reduction implemented with Schur Complement in this project
+version: v0.1.1
+last_updated: 2026-03-05
+updated_by: docs-team
+sidebar:
+ label: Schur Complement and Kron Reduction
+ order: 80
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Schur Complement and Kron Reduction
+
+If you are doing multi-port matrix analysis of superconducting circuits, you will almost certainly encounter this problem:
+"I only care about certain ports/modes, how can I eliminate other degrees of freedom while retaining the correct equivalent I-V relationship?"
+At the heart of Kron Reduction is Schur Complement.
+
+## Let’s talk about the conclusion first
+
+After dividing the admittance matrix into "retaining sets" and "eliminating sets", under the conditions of `I_drop = 0` (Neumann boundary), the equivalent admittance is:
+
+```text
+Y_eff = Y_kk - Y_kd * (Y_dd)^(-1) * Y_dk
+```
+
+- `k`: keep (ports/modes to be retained)
+- `d`: drop (ports/modes to be eliminated)
+
+This formula is Schur Complement, which is also the calculation core of Kron Reduction.
+
+## Why this is right (physical semantics)
+
+Set `I_drop = 0` on the eliminated degrees of freedom, which means:
+
+- These nodes/modes have no external injected current
+- But they can still react passively and give back to retaining degrees of freedom
+
+Therefore, "elimination" does not mean to delete them hard, but to absorb their passive responses into the equivalent matrix.
+This is why the result is not the simplex matrix `Y_kk`, but the coupling term is subtracted.
+
+## Derivation (minimum necessary version)
+
+Start with a block matrix:
+
+```text
+[ I_k ]  [ Y_kk Y_kd ] [ V_k ]
+[ I_d ] = [ Y_dk Y_dd ] [ V_d ]
+```
+
+Apply `I_d = 0`:
+
+```text
+0 = Y_dk V_k + Y_dd V_d
+=> V_d = -(Y_dd)^(-1) Y_dk V_k
+```
+
+Replace `I_k`:
+
+```text
+I_k = (Y_kk - Y_kd (Y_dd)^(-1) Y_dk) V_k
+```
+
+Get `Y_eff`.
+
+## Two-stage usage in this project
+
+### 1) Port-space reduction (can be done first)
+
+First eliminate ports that you don't care about (such as environment ports) in the physical port space.
+
+### 2) Modal reduction after Coordinate transform
+
+First perform coordinate transformation (for example, `1,2 -> cm,dm`), and then use the same Schur Complement to eliminate the non-target modes (for example, `cm`).
+
+<Aside type="caution" title="The same core can be reused">
+
+Port reduction and modal reduction are mathematically the same thing, except in the matrix coordinate system.
+
+</Aside>
+
+## Relation to Floating Qubit `Y_in`
+
+A common target is the input admittance of differential mode:
+
+1. First get the converted matrix (including `dm`)
+2. Perform Schur Complement on the remaining degrees of freedom
+3. Get the equivalent port element `Y_dm,dm`
+4. Use `Re(Y_dm,dm)` to do subsequent dissipation/T1 related analysis
+
+## Relationship to Port Termination Compensation (PTC)
+
+PTC and Kron Reduction are two different operations:
+
+- PTC: First deduct the shunt termination of the selected ports in the `Y` field (for example, `diag(1/R_i)`)
+- Kron: Eliminate degrees of freedom under specified boundary conditions
+
+You can do PTC first and then Kron, or you can keep the termination of a specific port and then Kron depending on the analysis goal.
+
+## Use boundaries (current project)
+
+<Aside type="caution" title="Currently it is Port-Level, not Nodal-Level">
+
+The post-processing of the current research process is used to simulate the return port-space `Y(ω)`.
+It is not a complete internal node (nodal) matrix, so arbitrary internal-node elimination cannot be done directly.
+
+</Aside>
+
+<Aside type="note" title="Comparable context of HFSS">
+
+If the goal is to compare with HFSS floating-port results, you usually need:
+1. Explicit coordinate conversion (including normalization definition)
+2. Consistent reference impedance assumption
+3. Clearly specify which ports need to be PTC
+
+</Aside>
+
+## Common misunderstandings
+
+1. **Misunderstanding: Kron reduction means deleting columns/rows**
+wrong. That would throw away coupled feedback, which is usually not correct.
+2. **Misconception: Just do it once and it will work for you**
+wrong. Port-space and mode-space often need to be done twice.
+3. **Misunderstanding: S-domain can also use the same transformation directly**
+Need to be careful. The wave normalization/reference setting will affect the results, and it is usually more stable to process it in the Y/Z domain first.
+
+## Related links
+
+- [Physics Overview](./)
+- [Symbol table](./symbol-glossary/)
+- [Simulation Result Views](../architecture/circuit-simulation/simulation-result-views/)
+- [Floating Qubit Real-Part Admittance Notebook](./floating-qubit-real-part-admittance-extraction/)
+
+## References
+
+1. Kron, G. (1939). *Tensor Analysis of Networks*. John Wiley & Sons.
+2. Dorf, R. C., & Svoboda, J. A. (2018). *Introduction to Electric Circuits* (9th ed.). Wiley.
+3. Zhang, F. (Ed.). (2005). *The Schur Complement and Its Applications*. Springer.

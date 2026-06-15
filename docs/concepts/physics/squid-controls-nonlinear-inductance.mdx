@@ -1,0 +1,68 @@
+---
+aliases:
+- SQUID controls nonlinear inductance
+tags:
+- diataxis/explanation
+- audience/user
+- topic/physics
+status: draft
+owner: docs-team
+audience: user
+scope: Explain how SQUID can control the equivalent Josephson inductor
+version: v0.1.0
+last_updated: 2026-02-16
+updated_by: team
+sidebar:
+ label: SQUID Nonlinear Inductance
+ order: 60
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Why can SQUID control nonlinear inductance values?
+
+## Questions answered in this chapter
+
+Why can the equivalent inductance and nonlinear strength of SQUID be changed only by applying an external magnetic flux bias under a fixed geometric structure?
+
+## Prerequisite knowledge comparison
+
+- Quantum: phase difference and single value of wave function
+- Electromagnetic: external magnetic flux and loop constraints
+- Classical: equivalent parameters and small signal linearization
+
+## Physics Core
+
+A symmetric SQUID can be written as the effective Josephson energy under common approximations
+
+$$
+E_J^{\mathrm{eff}}(\Phi_{\mathrm{ext}}) \approx 2E_{J0}\cos\left(\pi\frac{\Phi_{\mathrm{ext}}}{\Phi_0}\right).
+$$
+
+The Josephson inductance is approximately inversely proportional to the energy scale, so the equivalent inductance can be continuously controlled by `\Phi_{\mathrm{ext}}`:
+
+$$
+L_J^{\mathrm{eff}} \propto \frac{1}{E_J^{\mathrm{eff}}}.
+$$
+
+<Aside type="note" title="Historical context">
+
+Tunable inductors allow a single chip to switch between different operating points, leading to the rapid development of tunable qubits, parametric amplifiers and reconfigurable coupling architectures.
+
+</Aside>
+
+## Project mapping
+
+- Adjustable frequency, nonlinearity and coupling strength using flux bias.
+- Design requires a trade-off between adjustable range, sensitivity and noise.
+
+## Limitations and approximations
+
+- When symmetrical and small loops approximate failure, asymmetry and self-induction effects need to be included.
+- Near the `E_J^{\mathrm{eff}} \to 0` region, the model is more sensitive to noise and higher-order effects.
+
+## Cross-file navigation
+
+- Preface: [How does Lagrangian mechanics combine with circuit physics? ](lagrangian-mechanics-and-circuit-physics.mdx)
+- Task-oriented: [SQUID Fitting](../../workflows/fem-result-to-equivalent-circuit/squid-fitting.mdx)
+- Task-oriented: [Notebook Interface](../../reference/notebooks/index.md)

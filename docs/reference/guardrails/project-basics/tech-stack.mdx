@@ -1,0 +1,427 @@
+---
+aliases:
+ - Tech Stack
+ - Technology stack
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/tech-stack
+status: stable
+owner: docs-team
+audience: contributor
+scope: Current platform's Public Site, Notebook/Application/Julia Runner technology selection and tool specifications.
+version: v3.7.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Tech Stack
+
+The target technology stack of this branch is **Astro public site + Astro/Starlight docs + Next.js application + FastAPI + Electron + Julia Core + Julia Runner + local filesystem Zarr**.
+Astro public site owns the public introduction pages; Astro + Starlight owns reader/task-first technical docs under `/docs/`.
+Generated API reference sites are sibling static outputs: Sphinx owns `/api/python/` and Documenter.jl owns `/api/julia/`.
+Python Backend is control/data plane; Julia Runner is compute plane; Notebook is explicit research execution environment.
+The research docs expose four route-first workflow groups: reusable circuit authoring through Julia Core + Pluto + JosephsonCircuits.jl, FEM result to equivalent circuit through Python analysis/notebooks, equivalent circuit to quantum model through Python notebooks or a future Python quantum package, and quantum dynamics / pulse simulation through QuTiP/qutip-qip first with isolated Julia dynamics as optional research.
+
+<Aside type="note" title="How to use this page">
+
+This page is used to confirm the official baseline stack, not to discuss optional alternatives. If a technology is not listed yet, it should not be considered a default dependency.
+
+</Aside>
+
+See [Simulation Interface Boundaries](../../../app/architecture/contracts/simulation-interface-boundaries.md) for the canonical Pluto / Python Notebook / Application Simulation Workbench split.
+
+## Canonical Top-Level Surfaces
+
+| Surface | Required interpretation |
+| --- | --- |
+| `site/` | Astro public introduction site and Starlight docs host |
+| `app/backend/` | canonical Python Backend control/data plane |
+| `app/frontend/` | canonical Next.js application surface |
+| `app/desktop/` | canonical Electron shell surface |
+| `core/julia/SuperconductingCircuitsCore/` | docs-defined Julia Core Authoring model, simulation helpers, and analysis helpers |
+| `core/julia/SuperconductingCircuitsVisualizer/` | Julia PlotlyJS figure construction for Pluto and report figures |
+| `core/julia/SuperconductingCircuitsRunner/` | async Julia compute runner |
+| `core/julia/SuperconductingCircuitsAnalysisBridge/` | Pluto-friendly Julia wrapper around Python analysis through PythonCall |
+| `core/python/analysis/superconducting_circuits_analysis/` | installable Python analysis package for fitting, S/Y/Z transforms, and mode extraction |
+| `core/python/circuit_libraries/schemdraw_circuit_library/` | Python Schemdraw renderer-side reusable circuit visual components |
+| `notebooks/pluto/` | Julia research cockpit |
+| `notebooks/python/` | Python-native research lane for external FEM result normalization, equivalent-circuit fitting, scqubits modeling, QuTiP/qutip-qip dynamics or pulse experiments, file inspection, Backend API inspection, migration, and emergency analysis |
+| `scripts/` | dev/build/test/maintenance helpers only |
+
+<Aside type="caution" title="Root `src/` is not the canonical umbrella">
+
+Python editable packages use direct layout in this repo, not package-internal `src/`.
+Frontend/JULIA package source directories may still use their ecosystem conventions,
+but root-level `src/` is not a canonical topology container.
+root-level runtime or app code must not be recreated there.
+
+</Aside>
+
+## Stack Map
+
+| layer | baseline |
+| --- | --- |
+| Public site | Astro static site + Starlight docs + custom CSS |
+| Frontend | Next.js App Router + React 19 + TypeScript |
+| Backend | FastAPI + Pydantic + SQLAlchemy/Alembic + NumPy + Zarr |
+| Python analysis | uv workspace package under `core/python/analysis/superconducting_circuits_analysis/` |
+| Python Schemdraw circuit renderer | uv workspace package under `core/python/circuit_libraries/` |
+| Compute runner | Julia + HTTP.jl + JSON3.jl + StructTypes.jl + Zarr.jl |
+| Local runtime | frontend + Python Backend + Julia Runner |
+| Scientific core | Julia package under `core/julia/SuperconductingCircuitsCore/` |
+| Scientific visualization | Julia package under `core/julia/SuperconductingCircuitsVisualizer/` |
+| Scientific analysis bridge | Julia package under `core/julia/SuperconductingCircuitsAnalysisBridge/` |
+| Desktop shell | Electron |
+
+## Interface Boundary Rules
+
+| Surface | Role | May use the Julia scientific core directly? | May read local/exported/canonical data files directly? | May submit Backend tasks? |
+| --- | --- | ---: | ---: | ---: |
+| Pluto Notebook | Research-grade simulation cockpit | Yes | Yes | No |
+| Python Notebook | Python-native analysis, external-result, quantum-modeling, and inspection surface | No | Yes | Yes |
+| Electron Application / Simulation Workbench | Productized workflow UI | No | Through Backend APIs | Yes |
+| Python Backend | Control/data plane | No | Owns storage adapters | Owns task lifecycle |
+| Julia Runner | Compute plane | Uses Julia Core through task execution | Writes staging packages | Claims tasks |
+
+### Pluto Notebook
+
+Pluto Notebook is the direct Julia Core research interface. It may directly use `SuperconductingCircuitsCore` through the docs-defined Julia Core Authoring model, compiler path, simulation helpers, sweep helpers, and Julia analysis helpers.
+
+It is not a Backend task submitter in the platform architecture. If a Pluto result should become official platform data, it must go through an explicit import/publication path defined separately.
+
+### Python Notebook
+
+Python Notebook is a Python-native data-analysis, external-result, quantum-modeling, dynamics/pulse, and inspection surface. It may normalize upstream FEM/simulation results, inspect Touchstone/trace/Zarr payloads, run equivalent-circuit fitting experiments, explore scqubits quantum-modeling workflows, and run QuTiP/qutip-qip dynamics or pulse studies when those dependencies are isolated to the Python notebook or a future Python quantum package.
+
+It may directly read local Zarr, exported data, CSV/raw files, and canonical TraceStore files for ad hoc analysis. It must use Backend contracts for platform state changes, including task creation, metadata mutation, TraceStore publication, result registration, provenance, and indexing.
+
+It must not directly call `SuperconductingCircuitsCore` or use JuliaCall as a normal simulation compute path. Scientific simulation compute belongs to Pluto direct execution or Julia Runner async execution.
+Julia dynamics packages such as QuantumToolbox.jl or QuantumOptics.jl may be explored only as separate notebook-level or future package-level dynamics routes. They are not replacements for scqubits-style superconducting-qubit modeling and are not Julia Core dependencies by default.
+
+### Application Simulation Workbench
+
+Application Simulation Workbench is a first-class product surface. It is not replaced by Pluto.
+
+All Application-triggered simulation must be submitted as persisted Backend tasks and executed asynchronously by Julia Runner.
+
+## Shared Languages
+
+### Python
+
+| Tools | Purpose |
+| --- | --- |
+| `uv` | Dependency and virtual environment management |
+| `fastapi` | API framework |
+| `pydantic` | schema / validation |
+| `sqlalchemy`, `alembic` | metadata persistence and migration |
+| `pydantic-settings` | backend settings |
+| `numpy`, `zarr`, `fsspec` | TraceStore validation/publication |
+| `rich` | developer-facing logging output when useful |
+| `schemdraw` | renderer-side circuit visuals in `schemdraw_circuit_library`, not Backend/App/Julia Core runtime |
+| `ruff`, `basedpyright`, `pytest` | lint / type / test |
+
+Application backend dependencies must stay focused on the control/data plane.
+Do not add legacy UI runtimes, queue-service clients, command-line product packages, in-process Julia bridges, or notebook-only analysis/plotting libraries unless a new SoT explicitly reintroduces them for the backend.
+Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml` or a notebook dependency group, not in the application backend.
+Python-native quantum-modeling dependencies such as scqubits, QuTiP, or scikit-rf-compatible ingestion tools belong in `notebooks/python/` or a future dedicated Python quantum package. They must not be added to the Python Backend or Julia Core to make research notebooks convenient.
+
+### TypeScript / JavaScript
+
+| Tools | Purpose |
+| --- | --- |
+| `Next.js` (App Router) | frontend framework |
+| `Astro` | public introduction site framework |
+| `React 19` | UI runtime |
+| `TypeScript` | frontend language |
+| `Tailwind CSS v4` | styling |
+| `Radix UI` + `shadcn/ui` | UI primitives and app components |
+| `next-themes` | theme switching |
+| `SWR` | server-state fetching and cache |
+| `react-hook-form` + `zod` | form state and validation |
+| `lucide-react` | icons |
+| `Playwright`, `Vitest` | frontend test stack |
+| `Electron` | desktop shell for local app packaging |
+
+### Julia
+
+| Tools | Purpose |
+| --- | --- |
+| `juliaup` | Julia version management |
+| `JosephsonCircuits.jl` | Core circuit simulation engine inside Julia Core/Runner |
+| `PlotlyJS.jl` | figure backend inside Julia Visualizer |
+| `HTTP.jl` | Runner client for backend task protocol |
+| `JSON3.jl`, `StructTypes.jl` | Runner task / manifest contracts |
+| `Zarr.jl` | local filesystem Zarr v2 staging writer |
+| `DataFrames.jl` | tabular summaries when needed |
+| `Documenter.jl` | generated Julia package API reference under `/api/julia/` |
+
+QuantumToolbox.jl and QuantumOptics.jl are valid future Julia dynamics tools only when isolated from Julia Core. They are not current baseline Julia Core dependencies and must not be introduced into the reusable component/plan package without a new SoT decision.
+
+## Module Direction
+
+### Public Site
+
+- Astro public site and Starlight docs host live under `site/`
+- Public introduction pages, product positioning, audience framing, visual storytelling, and public entry CTAs belong to `site/`
+- Public site builds as static output and mounts Starlight technical docs at `/docs/`
+- Starlight docs use curated manual top/two-level navigation with selective autogenerated leaf groups
+- Public site artifact also mounts generated API reference at `/api/python/` and `/api/julia/`
+- Public site must not import application internals or become an app runtime surface
+- PDF / Typst / deck outputs are not part of the default public-site build unless a separate explicit publishing script is added
+
+### Frontend
+
+- Next.js App Router
+- TypeScript strict mode
+- component system based on shadcn/ui + Radix
+- Do not directly implement business processes or hard-code API contracts within components
+- primary surfaces include Dashboard, Dataset, Simulation Workbench, Analysis Workbench, Task / Execution Center, Data Ingestion, Raw Data / Trace Browser, and Design Assets
+- Application Simulation Workbench is a first-class product surface, but it must submit async tasks rather than owning compute logic
+- Application Analysis Workbench is a first-class product surface, but it must submit async tasks rather than owning compute logic
+
+### Desktop
+
+- Electron can be used as desktop shell
+- Electron main/preload layer only handles desktop capabilities, window life cycle, security IPC and runtime supervisor
+- Do not insert business processes into Electron main process
+- desktop wrapper does not change canonical frontend/backend/runner boundaries
+- desktop local mode starts frontend, Python Backend, and Julia Runner
+- desktop local mode must not start a separate queue service
+
+### Backend
+
+- FastAPI + Pydantic
+- Separation of service layer and data access
+- The API layer only does I/O, verification, mapping, authorization and response
+- multi-user app authorization baseline uses `Casbin`
+- `JWT` / refresh token owns authentication; capabilities and allowed actions by backend authorization engine materialize
+
+### Local Runtime Backbone
+
+- frontend process: `npm run dev --prefix app/frontend`
+- backend process: `uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000`
+- runner process: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'`
+- task claiming is DB-backed through the Python Backend runner API
+- local staging uses filesystem Zarr under `data/staging/tasks/<task_id>/`
+- official numeric authority is Python Backend-managed TraceStore under `data/trace_store/`
+- Local Mode is not a shell-only product mode. A usable Local Mode means the frontend can reach the Python Backend and the Python Backend can coordinate Julia Runner execution. UI-only shell previews are developer tools, not product runtime modes.
+
+<Aside type="caution" title="Runner is the active local compute baseline">
+
+local heavy execution must not run in the Python Backend process.
+The app submit path creates persisted tasks and the Julia Runner claims them asynchronously through the backend protocol.
+
+</Aside>
+
+<Aside type="caution" title="Do not bypass the backend authorization path">
+
+Frontend, desktop, and notebooks should not rebuild the app authorization matrix by themselves. The baseline for multi-user app permissions is in the backend, and materializes `capabilities` and `allowed_actions` by the backend.
+
+</Aside>
+
+### Scripts
+
+- No active command-line product surface.
+- `scripts/` may contain dev/build/test/maintenance helpers only.
+- Scripts are not user-facing workflow contracts and must not own business logic.
+
+### Scientific Core
+
+- `SuperconductingCircuitsCore` owns the docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers.
+- `SuperconductingCircuitsVisualizer` owns Julia-side PlotlyJS figure construction, display/export configuration, trace-to-figure helpers, and Pluto/report presentation helpers.
+- `SuperconductingCircuitsRunner` calls Julia Core for deterministic task execution and owns task polling/claiming, dispatch, local Zarr staging, manifest writing, progress/heartbeat/complete/fail reporting.
+- Python analysis owns external-result ingestion, S/Y/Z transforms, equivalent-circuit fitting, mode extraction, and Python-native quantum-modeling preparation.
+- Runner adapters must not create a separate circuit construction path.
+- Runner adapters must not preserve outdated Core APIs as fallback paths.
+- Julia Core and Julia Runner must not depend on PlotlyJS; PlotlyJS belongs to `SuperconductingCircuitsVisualizer`.
+- Julia Core must not depend on scqubits, QuTiP, QuantumToolbox.jl, QuantumOptics.jl, gdsfactory, gsim, gplugins, qpdk, PythonCall, or notebook-only analysis packages.
+- Julia Runner does not write formal metadata DB records
+- Python Backend validates Runner manifests and publishes result Zarr into official TraceStore
+
+### GDSFactory Ecosystem Boundary
+
+GDSFactory ecosystem compatibility means compatible artifacts and terminology, not runtime ownership.
+This repo may consume trace tables, Touchstone files, Zarr packages, and equivalent-circuit parameters that were produced by GDSFactory, gsim, gplugins, qpdk, or adjacent FEM/layout tooling.
+This repo must not become the owner of layout generation, meshing, or FEM execution jobs from those ecosystems without a new SoT decision.
+
+## No Fake-First Compute Policy
+
+The project does not use fake Runner compute to make product workflows appear complete.
+
+- Real task kinds execute real Julia Core / JosephsonCircuits / analysis logic.
+- Unimplemented task kinds fail clearly.
+- Test fixtures stay inside tests.
+- Production dispatch must not call fixture writers.
+- AI agents must not add smoke, fake, or dummy task kinds to satisfy tests.
+
+### Removed Surface Notes
+
+- root `backend/`, `frontend/`, and `desktop/` must not exist as active surfaces after relocation to `app/`
+- root command workflow, legacy UI code, and retired root runtime-worker path names are removed from active package discovery
+- Any mention of historical `src/worker` paths refers to retired legacy code, not the active Julia Runner role.
+- root `src/` must not be re-legitimized as canonical target topology
+
+## Forbidden Architecture Regressions
+
+The following changes require a new SoT decision before implementation:
+
+- Reintroducing Backend task submission into the Pluto Notebook role.
+- Reintroducing Python Notebook as a Julia Core / JuliaCall compute surface.
+- Adding scqubits, QuTiP, qutip-qip, QuantumToolbox.jl, QuantumOptics.jl, gdsfactory, gsim, gplugins, qpdk, PythonCall, or notebook-only analysis packages to Julia Core.
+- Treating GDSFactory ecosystem compatibility as permission to run layout/FEM jobs from this repo.
+- Treating Python quantum-modeling notebooks as Backend runtime behavior.
+- Removing Application Simulation Workbench as a first-class product surface.
+- Removing Application Analysis Workbench as a first-class product surface.
+- Running heavy simulation in Python Backend request threads.
+- Reintroducing queue-service or standalone runtime-wall product metaphors for task execution.
+- Treating fixture output as a product Runner task.
+- Reintroducing a user-facing CLI product surface.
+- Reintroducing NiceGUI or any retired Python UI runtime.
+- Reintroducing Redis/RQ as the default local runtime queue.
+- Recreating root-level `backend/`, `frontend/`, `desktop/`, `cli/`, or historical `src/worker` legacy paths as active architecture surfaces.
+
+## Storage Direction
+
+- metadata DB:
+ - current baseline: `SQLite`
+ - service target: `PostgreSQL`
+ - schema versioning baseline: `Alembic`
+ - detailed migration/version authority: [App / Backend / Circuit Definitions](../../../app/backend/circuit-definitions.mdx)
+- numeric traces:
+ - Runner staging baseline: local filesystem `Zarr v2`
+ - official TraceStore baseline: backend-managed local filesystem `Zarr`
+ - complex arrays use real/imag arrays, never cross-language complex dtype assumptions
+ - remote object storage requires a storage-backend SoT before it becomes part of the product contract
+
+<details class="docs-disclosure docs-disclosure--note">
+<summary>Why alternatives are not listed</summary>
+
+This page only records the official baseline and does not list all frameworks that have been considered. If you really change the stack later, you should update this page first and then let the implementation catch up.
+
+</details>
+
+## Dependency Management
+
+- Python: root `pyproject.toml` uv workspace + root `uv.lock`
+- Public site: `site/package.json` + lockfile
+- Frontend: `app/frontend/package.json` + lockfile
+- Desktop: `app/desktop/package.json` + lockfile
+- Julia Core: `core/julia/SuperconductingCircuitsCore/Project.toml`
+- Julia Runner: `core/julia/SuperconductingCircuitsRunner/Project.toml`
+- Julia Analysis Bridge: `core/julia/SuperconductingCircuitsAnalysisBridge/Project.toml`
+
+### Python Workspace Ownership
+
+- Python Backend package root is `app/backend/`
+- Python analysis package root is `core/python/analysis/superconducting_circuits_analysis/`
+- Python Schemdraw circuit library project root is `core/python/circuit_libraries/`; its import package is `core/python/circuit_libraries/schemdraw_circuit_library/`
+- App Backend runtime contracts live under `app/backend/app_backend/domain/runtime_contracts/`
+- root `.venv` and root `uv.lock` are the single Python dependency authority
+- backend-local persistence, circuit-definition inspection, and preview helpers belong to `app/backend/`
+- Python notebook dependencies belong to `notebooks/python/`
+- root `pyproject.toml` is a non-installable uv workspace orchestrator
+- backend-local virtualenvs and backend-local lockfiles are not canonical runtime surfaces
+
+## Agent Rule
+```markdown
+## Tech Stack
+- **Public site**:
+  - `site/`
+  - Astro
+  - Starlight for `/docs/`
+  - reader/task-first docs IA with curated manual top/two-level sidebar groups
+  - custom CSS for the public introduction pages
+  - static output
+  - mounts Starlight technical docs at `/docs/`
+  - mounts Sphinx Python API reference at `/api/python/`
+  - mounts Documenter.jl Julia API reference at `/api/julia/`
+  - does not import application internals or own app runtime behavior
+- **Frontend**:
+  - Next.js App Router
+  - React 19
+  - TypeScript
+  - Tailwind CSS v4
+  - Radix UI + shadcn/ui
+  - next-themes
+  - SWR
+  - react-hook-form + zod
+  - Electron is allowed as the desktop shell around the frontend
+- **Backend**:
+  - FastAPI
+  - Pydantic
+  - Pydantic Settings
+  - SQLAlchemy
+  - Alembic
+  - NumPy
+  - Zarr
+  - fsspec
+- **Julia Core**:
+  - `core/julia/SuperconductingCircuitsCore/`
+  - docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers
+  - must not depend on scqubits, QuTiP, QuantumToolbox.jl, QuantumOptics.jl, gdsfactory, gsim, gplugins, qpdk, PythonCall, or notebook-only analysis packages
+- **Julia Runner**:
+  - `core/julia/SuperconductingCircuitsRunner/`
+  - calls Julia Core for deterministic task execution
+  - Runner adapters must not create a separate circuit construction path or preserve outdated Core APIs as fallback paths
+  - HTTP.jl
+  - JSON3.jl
+  - StructTypes.jl
+  - Zarr.jl
+  - DataFrames.jl
+- **Local runtime backbone**:
+  - frontend
+  - Python Backend
+  - Julia Runner
+  - no separate queue service
+  - Local Mode is not a shell-only product mode; UI-only shell previews are developer tools, not product runtime modes.
+- **Interface boundaries**:
+  - Docs expose four route-first research workflows: Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
+  - Pluto Notebook is the direct Julia Core research interface.
+  - Backend task submission is outside the Pluto Notebook role.
+  - Python Notebook is a Python-native research and inspection surface for external FEM result normalization, trace/Touchstone/Zarr ingestion, equivalent-circuit fitting, scqubits modeling, QuTiP/qutip-qip dynamics or pulse experiments, and platform inspection.
+  - Python Notebook must not directly call Julia Core or use JuliaCall as normal simulation compute.
+  - Python Notebook may directly read data files, but platform state changes must go through Backend contracts.
+  - GDSFactory ecosystem compatibility means artifact compatibility, not running gdsfactory/gsim/gplugins/qpdk layout or FEM jobs from this repo.
+  - Future quantum modeling belongs in Python notebooks or a future separate Python quantum package, not Backend and not Julia Core.
+  - Application Simulation Workbench and Analysis Workbench are first-class and submit persisted async tasks through Python Backend and Julia Runner.
+  - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
+  - Julia Runner owns async compute execution and local Zarr staging.
+- **Scripts**:
+  - `scripts/dev/`
+  - `scripts/build/`
+  - `scripts/test/`
+  - `scripts/maintenance/`
+  - no active command-line product surface
+- **Topology**:
+  - canonical architecture boundaries are `site/`, `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/analysis/`, `core/python/circuit_libraries/`, `notebooks/`, `scripts/`, and `docs/`
+  - `core/python/circuit_libraries/schemdraw_circuit_library/` owns Python Schemdraw visual components that consume renderer-neutral schematic data; it must not define solver semantics or become an App/Backend runtime dependency
+  - `app/backend/app_backend/domain/runtime_contracts/` owns App Backend tasking, execution, and storage runtime contracts; it must stay framework-agnostic and not import FastAPI, SQLAlchemy, repositories, file I/O, or runner process code
+  - `site/` is the Astro public introduction site and Starlight docs host
+  - `docs/` is the Astro + Starlight technical documentation source mounted at `/docs/`
+  - `docs/app/` owns Product App documentation and app shared/frontend/backend contracts
+  - `docs/start/` is notebook-first and should lead with Pluto research setup
+  - `docs/workflows/` and `docs/concepts/` are research-core lanes and must not expose Product App implementation workflows
+  - `docs/app/archive/` preserves legacy App-specific workflow/design notes as inert reference
+  - `docs/api-reference/` is generated API reference source for Sphinx and Documenter.jl
+  - generated API reference deploys as sibling static sites under `/api/python/` and `/api/julia/`
+  - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces
+- **Quality tools**:
+  - Ruff
+  - BasedPyright
+  - pytest
+  - Sphinx
+  - Documenter.jl
+  - Vitest / Playwright when frontend exists
+- **Storage direction**:
+  - metadata DB: SQLite local, PostgreSQL target
+  - metadata DB schema versioning: Alembic
+  - Runner staging: local filesystem Zarr v2
+  - official TraceStore: Python Backend-managed Zarr
+- New UI work should target Next.js, not the legacy UI layer.
+- New public introduction page work should target Astro under `site/`, not Starlight docs templates.
+- Desktop packaging should use Electron around frontend + Python Backend + Julia Runner.
+```

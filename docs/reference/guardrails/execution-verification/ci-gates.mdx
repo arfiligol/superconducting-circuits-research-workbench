@@ -1,0 +1,144 @@
+---
+aliases:
+ - CI Gates
+ - CI quality level
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/execution
+status: stable
+owner: docs-team
+audience: contributor
+scope: PR quality threshold for develop daily integration and main release promotion, including public site, app layout, Julia Runner, desktop shell and docs route validation.
+version: v3.3.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# CI Gates
+
+All PRs must pass the necessary checks corresponding to the touched area before merging.
+The default target for daily integration is `develop`; `main` only receives verified release promotion.
+
+<Aside type="note" title="How to use this page">
+
+First find the corresponding gate according to the touched area, and then confirm whether additional checks of docs or desktop are needed. This page sets the minimum merge bar. It does not have to be run every time you develop locally.
+
+</Aside>
+
+## Gate Map
+
+| touched area | gate that must be passed at least |
+| --- | --- |
+| foundation workspaces | backend pytest + frontend test/build + desktop lint/build + Julia Runner test |
+| public site | Astro check/build + combined public artifact build |
+| API reference | Sphinx Python API build + Documenter.jl Julia API build |
+| backend | startup smoke + backend pytest |
+| frontend | lint + typecheck + test + build |
+| desktop | lint + build |
+| docs | source route check + docs build + built route check |
+
+## Mandatory Gates
+
+<Tabs>
+<TabItem label="Foundation Workspaces">
+
+
+- install:`uv sync --all-packages`, `npm install --prefix app/frontend`, `npm install --prefix app/desktop`
+- check:`uv run --package superconducting-circuits-backend pytest app/backend/tests -q`, `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`, `npm run test --prefix app/frontend`, `npm run lint --prefix app/desktop`, `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`, `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- build:`npm run build --prefix app/frontend`, `npm run build --prefix app/desktop`
+
+</TabItem>
+
+<TabItem label="Backend / Frontend / Desktop">
+
+
+- backend foundation:startup smoke and `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+- frontend:`npm run lint --prefix app/frontend`, `npm run typecheck --prefix app/frontend`, `npm run test --prefix app/frontend`, `npm run build --prefix app/frontend`
+- desktop:`npm run lint --prefix app/desktop`, `npm run build --prefix app/desktop`
+- Julia Runner:`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+- Julia Analysis Bridge:`julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+
+</TabItem>
+
+<TabItem label="Public Site">
+
+
+- site:`npm run check --prefix site`, `npm run build --prefix site`
+- combined artifact:`./scripts/build/build_public_site.sh`
+- deployment artifact must upload `site/dist/`; `site/dist/docs/` is produced by the Astro/Starlight build
+
+</TabItem>
+
+<TabItem label="API Reference">
+
+
+- Python API: `uv run sphinx-build -W --keep-going -b html docs/api-reference/python/source build/api-reference/python/html`
+- Julia API:`julia --project=docs/api-reference/julia docs/api-reference/julia/make.jl`
+- combined API docs:`./scripts/build/build_api_docs.sh`
+- public artifact links:`uv run python scripts/build/check_api_reference_links.py` after `./scripts/build/build_public_site.sh`
+
+</TabItem>
+
+<TabItem label="Docs / Review">
+
+
+- docs: `uv run python scripts/check_docs_nav_routes.py --check-source`, `./scripts/build_docs_sites.sh`, `uv run python scripts/check_docs_nav_routes.py --check-built` when docs are touched
+- At least one reviewer approves
+
+</TabItem>
+
+</Tabs>
+
+## Notes
+
+- Starlight dev preview warnings are not CI failures by themselves; failing build, route, or API reference integrity checks are merge blockers
+- The backend-specific lint / type-check gate can be upgraded later; currently the foundation gate is mainly based on startup smoke + pytest
+
+<Aside type="caution" title="Merge blocking rule">
+
+Any failing required check directly blocks the merge; don't use "this time it looks like a small change" as a reason to skip the CI gate.
+
+</Aside>
+
+## Branch Policy
+
+- `main` prohibits direct push
+- Daily feature/docs/test work default merge to `develop`
+- `main` only accepts verified release promotion from `develop`
+- branch roles, direct-develop policy and optional worktree use are subject to [Branch & Worktree Flow](branch-and-worktree-flow.mdx)
+- Rule changes for guardrail source need to be updated simultaneously `.agent/rules`
+
+## Agent Rule
+```markdown
+## CI Gates
+- Mandatory checks include:
+  - backend startup smoke and `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+  - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
+  - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `npm run lint --prefix app/frontend`
+  - `npm run typecheck --prefix app/frontend`
+  - `npm run test --prefix app/frontend`
+  - `npm run build --prefix app/frontend`
+  - `npm run check --prefix site` when public site is touched
+  - `npm run build --prefix site` when public site is touched
+  - `./scripts/build/build_public_site.sh` when public site, docs mount, or deployment artifact is touched
+  - `./scripts/build/build_api_docs.sh` when API reference docs, Python core package exports/docstrings, or Julia package exports/docstrings are touched
+  - `uv run python scripts/build/check_api_reference_links.py` after public artifact builds that touch API reference links
+  - `npm run lint --prefix app/desktop`
+  - `npm run build --prefix app/desktop`
+  - `uv run python scripts/check_docs_nav_routes.py --check-source` when docs are touched
+  - `./scripts/build_docs_sites.sh` when docs are touched
+  - `uv run python scripts/check_docs_nav_routes.py --check-built` when docs are touched
+- `main` must not receive direct pushes.
+- Daily feature/docs/test integration targets `develop` by default.
+- `main` only receives verified release promotion from `develop`.
+- Branch roles, direct-develop policy, and optional worktree use are defined in `Branch & Worktree Flow`.
+- Guardrail source changes must keep `.agent/rules` in sync.
+- Starlight dev preview warnings do not fail CI by themselves; failing build, route, or API reference integrity checks block merge.
+- Any failing required check blocks merge.
+```

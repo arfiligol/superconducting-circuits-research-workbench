@@ -1,0 +1,60 @@
+---
+aliases:
+ - Code Quality
+ - Code quality standards
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/code-quality
+status: stable
+owner: docs-team
+audience: contributor
+scope: Code quality, types, architectural boundaries, contract versions, and error model indexes.
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Code Quality
+
+This area defines the program quality specifications for the rewrite branch.
+The focus is not on pursuing framework skills, but on allowing the UI, API, Notebook, Julia Runner and scientific core to stably co-evolve.
+
+<Aside type="note" title="How to use this section">
+
+First use `Design Patterns` and `Contract Versioning` to determine the boundary, and then return to `Code Style`, `Type Checking`, `Error Handling` and other finer rules.
+Don't just read the style page and start changing the service boundary or contract owner.
+
+</Aside>
+
+## Page Map
+
+| Page | Read this when | Primary concern |
+| --- | --- | --- |
+| [Code Style](code-style.mdx) | You are writing or refactoring general code | naming, small functions, clarity |
+| [Type Checking](type-checking.mdx) | You are changing the Python / TypeScript type | static guarantees |
+| [Design Patterns](design-patterns.mdx) | You are changing service, repository, DI, layer boundary | architectural consistency |
+| [Script Authoring](script-authoring.mdx) | You are adding or reorganizing dev/build/test/maintenance helper | scripts structure and responsibility |
+| [Data Handling](data-handling.mdx) | You are moving metadata, trace store, result storage | data boundaries |
+| [Logging](logging.mdx) | You are adding runtime logging | log discipline |
+| [Contract Versioning](contract-versioning.mdx) |You are changing the public contract / canonical schema| compatibility strategy |
+| [Error Handling](error-handling.mdx) | You are changing API / worker / CLI error paths | shared error model |
+
+<Aside type="caution" title="Common failure mode">
+
+The most common error is not "inconsistent code style", but that the UI, API, Notebook, Runner or scripts each redo the same workflow.
+As soon as the task starts encountering the shared workflow, it must first check `Design Patterns`, `Contract Versioning` and `Error Handling`.
+
+</Aside>
+
+## Agent Rule
+```markdown
+## Code Quality
+- Follow Clean Code: clear naming, short functions, and single responsibility.
+- UI, API, Notebook, Runner, and scripts must not each replicate business processes; sharing rules should be focused on app backend services, Julia Core, Julia Runner, or explicit contract packages.
+- Prioritize fixing code rather than adding exceptions or ignoring rules.
+- Consult sub-files when needed: Code Style / Type Checking / Design Patterns / Script Authoring / Data Handling / Logging / Contract Versioning / Error Handling.
+```

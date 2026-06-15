@@ -1,0 +1,19 @@
+[project]
+name = "schemdraw-circuit-library"
+version = "0.1.0"
+description = "Renderer-side Schemdraw reusable circuit visual components."
+requires-python = ">=3.12"
+dependencies = [
+    "schemdraw>=0.21",
+]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["schemdraw_circuit_library*"]
+
+[tool.setuptools.package-data]
+schemdraw_circuit_library = ["py.typed"]

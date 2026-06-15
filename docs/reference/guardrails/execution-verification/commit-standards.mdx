@@ -1,0 +1,112 @@
+---
+aliases:
+ - "Commit Standards"
+ - "Submission specifications"
+tags:
+ - audience/team
+ - sot/true
+status: stable
+owner: docs-team
+audience: team
+scope: "Commit timing, granularity, format specifications"
+version: v1.1.0
+last_updated: 2026-03-14
+updated_by: docs-team
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Commit Standards
+
+Specify **when** and **how** to submit code.
+
+<Aside type="note" title="Use this page before creating a commit">
+
+First determine whether this is a single logical unit, and then confirm whether the check has passed. If you need to write a long description to explain "why this commit changes many unrelated things at the same time", it usually means that the commit granularity is too large.
+
+</Aside>
+
+## Decision Map
+
+| Question | Qualified Answer |
+| --- | --- |
+| Is this a single logical unit? | A feature, a bugfix, a refactor |
+| Is this the right time to commit? | Compilation, type, testing, and necessary checks have all passed |
+| Can this commit be revert independently? | Yes, other functions will not be broken together |
+
+## When should Commit
+
+1. **Single logical unit completed** - one feature, one bugfix, and one refactor
+2. **PASS ALL CHECK** - `uv run pre-commit run --all-files` PASSED
+3. **Independently revert** - This commit can be undone independently without destroying other functions
+
+## When not to Commit
+
+1. **Failed halfway** - Failed to compile, type error, failed test
+2. **Mixed changes** - fix bugs + add features + change format at the same time
+3. **WIP Status** - Function not completed (unless explicitly marked `WIP:`)
+
+## Commit granularity
+
+| Type | Granularity | Example |
+|------|------|------|
+| `feat:` | A complete function | `feat: add SQLite persistence layer` |
+| `fix:` | A bug fix | `fix: handle empty dataset in fit` |
+| `docs:` | A document update | `docs: add logging guardrails` |
+| `refactor:` | A reconstruction step | `refactor: extract repositories` |
+| `style:` | Format correction | `style: apply ruff formatting` |
+| `test:` | Test new/modified | `test: add unit tests for UoW` |
+| `chore:` | Maintenance tasks | `chore: update dependencies` |
+
+<Aside type="caution" title="Do not hide mixed changes">
+
+If the same commit is mixed with features, bugfixes, formatting, and file organization, the review and revert costs will increase. Unpacking is more important than stuffing it all at once.
+
+</Aside>
+
+## Commit Message format
+
+```
+<type>: <short description>
+
+[Optional: detailed description]
+
+[Optional: Closes #issue]
+```
+
+**example:**
+
+```
+feat: add colored logging with Rich
+
+- Created superconducting_circuits_analysis/infrastructure/logging.py setup function
+- Updated tech-stack.md with Rich dependency
+- Added logging.md guardrails
+
+Closes #42
+```
+
+<details class="docs-disclosure docs-disclosure--note">
+<summary>WIP commits</summary>
+
+Unfinished commits that need to be saved on-site are only allowed if the team process explicitly accepts them and the commit message has a clear `WIP:` prefix.
+
+</details>
+
+---
+
+## Agent Rule
+```markdown
+## Commit Standards
+- **When to Commit**:
+  - Single logical unit complete (one feature, one fix, one refactor).
+  - All checks pass: `uv run pre-commit run --all-files`.
+  - Independently revertable.
+- **When NOT to Commit**:
+  - Code doesn't compile/type-check.
+  - Mixed changes (bug fix + feature + formatting).
+  - Incomplete work (unless `WIP:` prefix).
+- **Commit Format**: `<type>: <description>`
+  - Types: `feat`, `fix`, `docs`, `refactor`, `style`, `test`, `chore`.
+- **Before Commit**: ALWAYS run `uv run pre-commit run --all-files`.
+```

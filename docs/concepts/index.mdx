@@ -1,0 +1,34 @@
+---
+aliases:
+ - Concepts
+ - concept
+tags:
+ - diataxis/explanation
+ - audience/team
+ - topic/concepts
+status: stable
+owner: docs-team
+audience: team
+scope: "Workflow-supporting knowledge base for physics, circuit authoring, equivalent-circuit modeling, quantum modeling, pulse simulation, and GDSFactory-compatible artifacts."
+version: v2.0.0
+last_updated: 2026-06-14
+updated_by: codex
+title: Concepts
+description: Choose this section when you need to understand the model behind the workflows and contracts.
+sidebar:
+ label: Overview
+ order: 10
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+This area answers "why". It is the workflow knowledge base for the four research routes. Pure physics stays in Physics Foundations; engineering and research-method knowledge lives beside the route it supports. Formal contracts still live in Reference owner pages.
+
+<CardGrid>
+ <LinkCard title="Physics Foundations" href="./physics/" description="Superconducting-circuit principles that support every route." />
+ <LinkCard title="Circuit Authoring Model" href="./circuit-authoring-model/" description="Reusable components, systems, CircuitPlan, and compiler mental model." />
+ <LinkCard title="Equivalent Circuit Modeling" href="./equivalent-circuit-modeling/" description="S/Y/Z traces, poles, residues, vector fitting, passivity, and model-family choice." />
+ <LinkCard title="Quantum Modeling" href="./quantum-modeling/" description="Equivalent-circuit parameters to Hamiltonians, scqubits-style models, and quantization boundaries." />
+ <LinkCard title="Quantum Dynamics & Pulse Simulation" href="./quantum-dynamics-pulse-simulation/" description="Time evolution, open-system simulation, and pulse-level route boundaries." />
+ <LinkCard title="GDSFactory-Compatible Artifacts" href="./gdsfactory-compatible-artifacts/" description="Artifact compatibility with gsim, gplugins, SAX, and JAX-style downstream use." />
+</CardGrid>

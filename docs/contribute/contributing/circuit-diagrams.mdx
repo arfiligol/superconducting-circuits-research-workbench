@@ -1,0 +1,151 @@
+---
+aliases:
+ - "Circuit Diagrams"
+ - "Contributing Circuit Diagrams"
+tags:
+ - diataxis/how-to
+ - audience/contributor
+ - topic/contributing
+status: stable
+owner: docs-team
+audience: contributor
+scope: Schemdraw-based docs asset corpus for circuit figures.
+version: v0.2.0
+last_updated: 2026-06-12
+updated_by: codex
+sidebar:
+ label: Circuit Diagrams
+ order: 20
+---
+
+# Contributing Circuit Diagrams
+
+Circuit diagrams are documentation assets. They are generated from pure Python
+Schemdraw sources and committed as SVG files for docs rendering plus PNG files
+for quick repository preview. The source and generated figures are reviewable
+in ordinary code review.
+
+Schemdraw is not an application workflow, backend service, simulation runtime,
+or circuit-authoring model. Reusable circuit semantics belong to Julia Core and
+Pluto-facing authoring paths.
+
+## Folder Contract
+
+Create each diagram under `docs/assets/circuit_draw/`:
+
+```text
+docs/assets/circuit_draw/
+├── _lib/
+│  └── style.py
+├── registry.yml
+└── <topic>/<diagram_id>/
+  ├── draw.py
+  ├── diagram.yml
+  ├── diagram.light.svg
+  ├── diagram.dark.svg
+  ├── diagram.light.png
+  └── diagram.dark.png
+```
+
+`draw.py` must define `build_drawing(theme="light")` and return a
+`schemdraw.Drawing`.
+It must not import Backend modules, Julia modules, archived simulation runtimes,
+or legacy Python circuit visualizers.
+Diagram sources use Schemdraw's documented context-manager and chained-method
+style through `_lib.style.circuit_drawing(...)`. Do not place elements with
+`d += ...` in new diagram sources, and use `with drawing.hold():` instead of
+manual `push()` / `pop()` pairs for branches.
+
+`diagram.yml` records the reviewable traceability for the figure: owning docs,
+Julia Core semantics references, physical/circuit model references,
+implementation references, light/dark SVG and PNG output paths, and review
+status.
+
+## Add Or Update A Diagram
+
+1. Add or edit the diagram source under `docs/assets/circuit_draw/<topic>/<diagram_id>/draw.py`.
+2. Add or update `diagram.yml`.
+3. Add the manifest path to `docs/assets/circuit_draw/registry.yml`.
+4. Render SVG and PNG outputs:
+
+```bash
+uv run python scripts/build/render_circuit_drawings.py
+```
+
+5. Check the corpus:
+
+```bash
+uv run python scripts/test/check_circuit_drawings.py
+uv run python scripts/build/render_circuit_drawings.py --check
+```
+
+6. Reference `diagram.light.svg` and `diagram.dark.svg` from the owning docs
+  using the shared `circuit-figure` wrapper. PNG outputs are committed for
+  repo-local preview, not for docs site rendering.
+
+## Authoring Style
+
+Write diagram sources like the Schemdraw documentation examples:
+
+```python
+import schemdraw
+import schemdraw.elements as elm
+from _lib.style import Theme, circuit_drawing
+
+
+def build_drawing(theme: Theme = "light") -> schemdraw.Drawing:
+  with circuit_drawing(theme=theme) as drawing:
+    elm.Dot(open=True).label("$P_1$", loc="left")
+    elm.Line().right(0.8)
+    node = elm.Dot()
+
+    with drawing.hold():
+      drawing.move_from(node.center)
+      elm.Capacitor().down().label("$C$", loc="right")
+      elm.Ground()
+
+  return drawing
+```
+
+Prefer anchors, `at(...)`, `to(...)`, `tox(...)`, `toy(...)`, `Wire(...)`, and
+`with drawing.hold():` over raw coordinate patchwork. Use labels on elements or
+anchors, not free-floating text, unless the figure is explicitly an annotation.
+
+## Review Status
+
+Use `review.status: draft` for new or unreviewed diagrams.
+
+Use `review.status: accepted` only when the diagram is accepted for use by the
+owning documentation page in both light and dark themes. Stable documentation
+pages must not reference draft diagrams.
+
+The review status is a documentation asset gate. It does not make a figure a
+machine-verification contract.
+
+## Dependency Boundary
+
+Schemdraw belongs to the root `dev` dependency group and is run through the root
+uv workspace environment:
+
+```bash
+uv run python scripts/build/render_circuit_drawings.py
+```
+
+Do not add Schemdraw to `app/backend`, Julia Core, or runtime package
+dependencies for documentation drawing.
+
+---
+
+## Agent Rule
+```markdown
+## Circuit Diagrams
+- Schemdraw circuit diagrams are docs assets under `docs/assets/circuit_draw/`.
+- Each diagram has `draw.py`, `diagram.yml`, committed `diagram.light.svg`, committed `diagram.dark.svg`, committed `diagram.light.png`, and committed `diagram.dark.png`.
+- `draw.py` must define `build_drawing(theme="light")`, use `_lib.style.circuit_drawing(...)`, and must not import infrastructure services, Julia, archived simulation runtimes, or legacy Python circuit visualizer modules.
+- Write Schemdraw sources with context-manager placement and chained element methods; do not use `d += ...` placement or `push()` / `pop()` branch pairs.
+- Register diagrams in `docs/assets/circuit_draw/registry.yml`.
+- Render with `uv run python scripts/build/render_circuit_drawings.py`.
+- Verify with `uv run python scripts/test/check_circuit_drawings.py` and `uv run python scripts/build/render_circuit_drawings.py --check`.
+- Schemdraw is a root dev dependency only; do not add it to product runtime packages.
+- This corpus is not a product Schemdraw workflow, service, product CLI, or second circuit-authoring model.
+```

@@ -1,0 +1,81 @@
+---
+aliases:
+ - "Contributors list"
+ - "Contributors Registry"
+tags:
+ - diataxis/reference
+ - status/stable
+ - audience/contributor
+ - topic/governance
+owner: docs-team
+audience: contributor
+scope: Officially verified directory of name fields in Frontmatter
+version: v1.1.0
+last_updated: 2026-03-14
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+#Contributors
+
+This document is the official record of contributors to the project. All names mentioned in the file Frontmatter (e.g. `owner`, `last_updated_by`) **must** exist in this directory.
+
+<Aside type="note" title="How to use this page">
+
+This page is not a thank you list, but an official registry for frontmatter name verification. This should be updated before adding or citing new names.
+
+</Aside>
+
+## Registry Map
+
+| category | purpose |
+| --- | --- |
+| Primary Contributors | Core development, maintenance, document writing |
+| Secondary Contributors | Provide advice or guidance, but do not directly write code/docs |
+| Honorary Contributors | Formerly a major contributor, now retired from core maintenance |
+
+## Primary Contributors
+
+The core member who is mainly responsible for project development, maintenance, and document writing.
+
+| Name | GitHub ID | Role | Date Joined |
+|------|-----------|------|----------|
+| I-LI CHIU | arfiligol | Project creator, main maintainer | 2024-01 |
+
+---
+
+## Secondary Contributors
+
+Members who do not directly participate in the writing of code or documents, but provide suggestions and guidance verbally, in writing, or in other ways.
+
+| Name | Role/Contribution | Notes |
+|------|-----------|------|
+| — | — | No records yet |
+
+---
+
+## Honorary Contributors
+
+A member who was once a major contributor but later withdrew from core maintenance for some reason. We thank them for their past contributions.
+
+| Name | GitHub ID | Original role | Contribution period |
+|------|-----------|--------|----------|
+| — | — | — | — |
+
+<Aside type="caution" title="Name validation rule">
+
+Any name fields such as `owner`, `updated_by`, `last_updated_by` that appear in the frontmatter should not be entered directly without skipping this list.
+
+</Aside>
+
+## Agent Rule
+```markdown
+## Contributors Registry Rules
+- **Name Validation**: Any person mentioned in Frontmatter (`owner`, `last_updated_by`) MUST exist in this Contributors registry.
+- **Categories**:
+  - Primary: Core developers and maintainers.
+  - Secondary: Advisors who don't directly write code/docs.
+  - Honorary: Former primary contributors.
+- **Update Protocol**: Add new contributors before referencing them in any document.
+```

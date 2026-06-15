@@ -1,0 +1,60 @@
+---
+aliases:
+ - State Management
+ - Status management
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/ui-ux
+status: stable
+owner: docs-team
+audience: contributor
+scope: Strategy for frontend server/client/form state.
+version: v1.1.0
+last_updated: 2026-03-14
+updated_by: docs-team
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# State Management
+
+<Aside type="note" title="How to read this page">
+
+First determine whether the status belongs to server, UI, form or URL, and then select the tool. Don't extrapolate state boundaries from tool preferences.
+
+</Aside>
+
+## State Categories
+
+| Type | Tool | Purpose |
+| --- | --- | --- |
+| Server State | SWR | API read, cache, validation |
+| Client UI State | React Context or local state | shell state, selection state, temporary UI state |
+| Form State | React Hook Form + Zod | Form validation and submission |
+| URL State | route params / search params | Shareable and replayable page state |
+
+<Aside type="caution" title="Do not hide shareable state">
+
+If a state affects the collection of data or page results seen by the user, and needs to be replayable/shareable, it should not be hidden in the global context or local component state.
+
+</Aside>
+
+## Rules
+
+- Do not scatter `fetch` directly inside the component
+- API reading should be concentrated in hooks/services
+- mutation should handle loading, success, error explicitly
+- State that can be represented by URL, do not hide it in global context
+
+## Agent Rule
+```markdown
+## State Management
+- Use SWR for server state.
+- Use React Hook Form + Zod for form state.
+- Use Context or local state for UI-only state.
+- Use route params or search params for shareable page state.
+- Do not scatter direct `fetch` calls across components.
+- Keep read and mutation logic in hooks or services with explicit loading/error handling.
+```

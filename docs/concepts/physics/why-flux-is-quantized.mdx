@@ -1,0 +1,203 @@
+---
+aliases:
+- Why is magnetic flux quantized?
+tags:
+- diataxis/explanation
+- audience/user
+- topic/physics
+status: draft
+owner: docs-team
+audience: user
+scope: Derivation of Magnetic Flux Quantization in Superconducting Loops from Gauge Invariance and Uniqueness of Wave Functions
+version: v0.2.0
+last_updated: 2026-02-24
+updated_by: team
+sidebar:
+ label: Flux Quantization
+ order: 40
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Why is magnetic flux quantized?
+
+## Summary of this chapter
+
+In a superconducting closed loop, the allowed magnetic flux is not a continuous value, but an integer multiple of the flux quantum $\Phi_0 = h/2e$. This result arises directly from the single-valuedness of macroscopic wave functions and the gauge invariance of electromagnetic fields. This chapter starts from these two principles and gradually derives the conditions for magnetic flux quantization.
+
+## Prerequisite knowledge comparison
+
+- **Quantum Mechanics**: Single value and phase of wave function
+- **Electromagnetism**: Vector potential $\mathbf{A}$, definition of magnetic flux, Stokes' theorem
+- **Preliminary reading**: [Macroscopic wave function of superconductors](macroscopic-wavefunction.mdx) - the physical meaning of the order parameter $\Psi(\mathbf{r}) = |\Psi| e^{i\theta}$
+
+<details class="docs-disclosure docs-disclosure--info">
+<summary>If you want to supplement the background, please read first</summary>
+
+- [Macroscopic wave function of superconductors](macroscopic-wavefunction.mdx): Understand why superconductors can be described by a single wave function
+
+</details>
+
+## Symbol definition
+
+| Symbol | Name | Definition/Description |
+|------|------|------------|
+| $\Psi(\mathbf{r})$ | Macroscopic wave function | Superconducting order parameter, $\Psi = \|\Psi\| e^{i\theta}$ |
+| $\theta(\mathbf{r})$ | Macroscopic phase | Phase of sequence parameter |
+| $\mathbf{A}(\mathbf{r})$ | Magnetic vector potential (magnetic vector potential) | Satisfies $\mathbf{B} = \nabla \times \mathbf{A}$ |
+| $\mathbf{B}$ | magnetic field (magnetic field) | magnetic flux density |
+| $\Phi$ | magnetic flux | The magnetic flux passing through the area enclosed by a closed loop, $\Phi = \oint \mathbf{A} \cdot d\mathbf{l}$ |
+| $\Phi_0$ | flux quantum (flux quantum) | $\Phi_0 = h / 2e \approx 2.068 \times 10^{-15}\;\mathrm{Wb}$ |
+| $e^* = 2e$ | Cooper pair charge | Because the carrier is Cooper pair |
+| $\hbar$ | Reduced Planck constant | $\hbar = h / 2\pi$ |
+| $n$ | Quantum number | Integer, $n \in \mathbb{Z}$ |
+| $C$ | Closed path | Closed integral path inside a superconductor |
+
+## Physical context
+
+### 1. Starting from the macroscopic wave function
+
+As mentioned in the previous chapter, the condensed state of superconductors can be described by order parameters (Tinkham, 2004, Ch. 4):
+
+$$
+\Psi(\mathbf{r}) = |\Psi(\mathbf{r})|\, e^{i\theta(\mathbf{r})}
+$$
+
+This wave function is continuous and single-valued throughout the superconductor - when it comes back to the origin along any closed path, the wave function must return to its original value. This is a basic requirement of the wave function in quantum mechanics.
+
+### 2. What is canonical invariance?
+
+In electromagnetism, the physical observables (electric field $\mathbf{E}$, magnetic field $\mathbf{B}$) are determined by Maxwell's equations. However, the vector potential $\mathbf{A}$ and the scalar potential $\phi$ are not unique - the physics remains unchanged after the following **gauge transformation** (Jackson, 1999, Ch. 6):
+
+$$
+\mathbf{A} \to \mathbf{A}' = \mathbf{A} + \nabla\chi, \qquad
+\phi \to \phi' = \phi - \frac{\partial \chi}{\partial t}
+$$
+
+where $\chi(\mathbf{r}, t)$ is any smooth function.
+
+<Aside type="note" title="The physical meaning of gauge invariance">
+
+Gauge invariance means that the potential itself is not a physical quantity, and only specific combinations of potentials (such as $\mathbf{B} = \nabla \times \mathbf{A}$) correspond to observable quantities. Therefore, any physical expression involving $\mathbf{A}$ must appear in gauge-invariant form.
+
+</Aside>
+
+### 3. Minimal coupling and gauge-invariant phase gradient
+
+In quantum mechanics, the coupling of charged particles and electromagnetic fields is achieved through **minimal coupling**: the momentum operator $\hat{\mathbf{p}}$ is replaced by
+
+$$
+\hat{\mathbf{p}} \to \hat{\mathbf{p}} - e^*\mathbf{A}
+$$
+
+This is called Peierls substitution. For Cooper pair ($e^* = 2e$), the corresponding phase gradient in the superconducting current density is not simply $\nabla\theta$, but **gauge invariant phase gradient** (Tinkham, 2004, Ch. 4):
+
+$$
+\boldsymbol{\gamma}(\mathbf{r}) \equiv \nabla\theta - \frac{2\pi}{\Phi_0}\mathbf{A}
+$$
+
+<Aside type="tip" title="Why is this combination normatively invariant?">
+
+When performing a gauge transformation $\mathbf{A} \to \mathbf{A} + \nabla\chi$, the phase of the wave function also changes: $\theta \to \theta + (2\pi / \Phi_0)\chi$ (this is a standard result of quantum mechanics). The changes in the two exactly offset:
+
+$$
+\nabla\theta' - \frac{2\pi}{\Phi_0}\mathbf{A}' = \left(\nabla\theta + \frac{2\pi}{\Phi_0}\nabla\chi\right) - \frac{2\pi}{\Phi_0}\left(\mathbf{A} + \nabla\chi\right) = \nabla\theta - \frac{2\pi}{\Phi_0}\mathbf{A} = \boldsymbol{\gamma}
+$$
+
+Therefore $\boldsymbol{\gamma}$ is invariant under gauge transformation and is a real physical quantity.
+
+</Aside>
+
+### 4. Uniqueness conditions on closed paths
+
+Now consider integrating $\boldsymbol{\gamma}$ along a closed path $C$ inside the superconductor:
+
+$$
+\oint_C \boldsymbol{\gamma} \cdot d\mathbf{l} = \oint_C \left(\nabla\theta - \frac{2\pi}{\Phi_0}\mathbf{A}\right) \cdot d\mathbf{l}
+$$
+
+The left side is divided into two parts:
+
+**Part 1**: $\oint_C \nabla\theta \cdot d\mathbf{l}$
+
+The integral of phase $\theta$ along a closed path is equal to the total change in phase after one revolution. Since the wave function $\Psi = |\Psi| e^{i\theta}$ must be single-valued, $e^{i\theta}$ must return to its original value after one circle, which requires:
+
+$$
+\oint_C \nabla\theta \cdot d\mathbf{l} = 2\pi n, \quad n \in \mathbb{Z}
+$$
+
+**Part 2**: $\oint_C \mathbf{A} \cdot d\mathbf{l}$
+
+According to Stokes' theorem:
+
+$$
+\oint_C \mathbf{A} \cdot d\mathbf{l} = \int_S (\nabla \times \mathbf{A}) \cdot d\mathbf{S} = \int_S \mathbf{B} \cdot d\mathbf{S} = \Phi
+$$
+
+where $S$ is any surface bounded by $C$ and $\Phi$ is the total magnetic flux passing through the surface.
+
+### 5. Magnetic flux quantization
+
+Substituting the above results, we get:
+
+$$
+\oint_C \boldsymbol{\gamma} \cdot d\mathbf{l} = 2\pi n - \frac{2\pi}{\Phi_0}\Phi
+$$
+
+Deep within the bulk of a superconductor (outside the region within the London penetration depth $\lambda_L$), the superconducting current density approaches zero (a consequence of the Meissner effect). Since the superconducting current is proportional to $\boldsymbol{\gamma}$, this means:
+
+$$
+\boldsymbol{\gamma} = 0 \quad \text{(deep in superconductors)}
+$$
+
+Therefore integrating along a path $C$ located deep in the superconductor:
+
+$$
+0 = 2\pi n - \frac{2\pi}{\Phi_0}\Phi
+$$
+
+After sorting, the **magnetic flux quantization conditions** are obtained:
+
+$$
+\boxed{\Phi = n\,\Phi_0, \quad n \in \mathbb{Z}}
+$$
+
+The magnetic flux passing through a superconducting closed loop can only be an integer multiple of the flux quantum $\Phi_0 = h/2e$.
+
+<Aside type="note" title="Historical context">
+
+Magnetic flux quantization was first observed in 1961 by two independent experimental teams: Deaver and Fairbank (1961) in the United States, and Doll and Näbauer (1961) in Germany. Their experiments also confirmed that the value of the magnetic flux quantum is $h/2e$ (not $h/e$), thus confirming that the carriers in superconductivity are pairs of electrons (Cooper pairs) rather than single electrons. This is one of the key experimental verifications of the BCS theory.
+
+</Aside>
+
+<Aside type="tip" title="From experiment to technology">
+
+Magnetic flux quantization turns "superconducting is a macroscopic quantum state" into a directly measurable fact. It not only verifies the BCS theory, but also lays the physical foundation for SQUID magnetometers, quantum interferometers, and the entire superconducting quantum circuit technology.
+
+</Aside>
+
+## Project mapping
+
+- $\Phi / \Phi_0$ directly determines the bias operating point of the SQUID loop and is the core parameter in circuit design.
+- Quantization conditions impose constraints on the phases in the loop, limiting the allowed dynamical branches.
+- In loops with Josephson junctions, the flux quantization condition is corrected to include the junction phase difference (see [SQUID Control of Nonlinear Inductance](squid-controls-nonlinear-inductance.mdx)).
+
+## Limitations and approximations
+
+- The above derivation assumes that path $C$ is completely deep in the superconductor bulk ($\boldsymbol{\gamma} = 0$). If the loop wall thickness is comparable to $\lambda_L$, a correction is required.
+- Clear quantization can only be observed if the coherence length $\xi$ and temperature conditions allow.
+- Loops with multiple Josephson junctions need to include phase jumps at the junctions ($\theta$ discontinuities on both sides of the junction).
+
+## Cross-file navigation
+
+- Preface: [Macroscopic wave function of superconductors](macroscopic-wavefunction.mdx)
+- Next step: [Why does nonlinearity make the energy level spacing inconsistent? ](why-nonlinearity-makes-unequal-level-spacing.mdx)
+- Task-oriented: [Flux Dependence Analysis](../../workflows/fem-result-to-equivalent-circuit/flux-analysis.md)
+
+## References
+
+- Tinkham, M. (2004). *Introduction to Superconductivity* (2nd ed.). Dover Publications. ISBN 978-0-486-43503-9.
+- Jackson, J. D. (1999). *Classical Electrodynamics* (3rd ed.). Wiley. ISBN 978-0-471-30932-1.
+- Deaver, B. S., & Fairbank, W. M. (1961). Experimental evidence for quantized flux in superconducting cylinders. *Physical Review Letters*, 7(2), 43–46. [DOI:10.1103/PhysRevLett.7.43](https://doi.org/10.1103/PhysRevLett.7.43)
+- Doll, R., & Näbauer, M. (1961). Experimental proof of magnetic flux quantization in a superconducting ring. *Physical Review Letters*, 7(2), 51–52. [DOI:10.1103/PhysRevLett.7.51](https://doi.org/10.1103/PhysRevLett.7.51)
+- Annett, J. F. (2004). *Superconductivity, Superfluids and Condensates*. Oxford University Press. ISBN 978-0-19-850756-7.

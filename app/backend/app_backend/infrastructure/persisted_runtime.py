@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import ast
-import copy
 import json
 import math
-import re
 import shutil
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -13,9 +11,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from sc_core.execution import TaskResultHandle
 
 from app_backend.domain.result_traces import ResultTraceSelection, build_trace_parameter
+from app_backend.domain.runtime_contracts.execution import TaskResultHandle
 from app_backend.domain.tasks import TaskDetail, TaskResultRefs
 from app_backend.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
@@ -29,16 +27,8 @@ SIMULATION_PTC_BUNDLE_KEY = "simulation_ptc_bundle"
 POST_PROCESSING_RAW_BUNDLE_KEY = "post_processing_raw_bundle"
 POST_PROCESSING_PTC_BUNDLE_KEY = "post_processing_ptc_bundle"
 
-_SIMULATION_CACHE: dict[str, dict[str, object]] = {}
 _PARSED_BUNDLE_PAYLOAD_CACHE: dict[tuple[int, str, str], tuple[str, dict[str, object]]] = {}
 _PARSED_BUNDLE_PAYLOAD_CACHE_MAX = 32
-_MODE_TRACE_LABEL_PATTERN = re.compile(
-    r"^[SYZ](?P<output_port>\d+)(?P<input_port>\d+)\[om=(?P<output_mode>\([^]]*\)),im=(?P<input_mode>\([^]]*\))\]$"
-)
-_POST_PROCESSING_BASIS_LABEL_PATTERN = re.compile(
-    r"^(?P<family>cm|dm)\(\s*(?P<port_a>\d+)\s*,\s*(?P<port_b>\d+)\s*\)$",
-    re.IGNORECASE,
-)
 
 
 @dataclass(frozen=True)
@@ -96,74 +86,22 @@ def _trace_store() -> Any:
 
 @lru_cache(maxsize=1)
 def _core_symbols() -> dict[str, Any]:
-    from core.shared.persistence.trace_store import LocalZarrTraceStore, get_trace_store_path
-    from core.simulation.application.post_processing import (
-        PortMatrixSweep,
-        PortMatrixSweepPoint,
-        PortMatrixSweepRun,
-        apply_coordinate_transform,
-        build_common_differential_transform,
-        build_port_y_sweep,
-        compensate_simulation_result_port_terminations,
-        infer_port_termination_resistance_ohm,
-        kron_reduce,
-    )
-    from core.simulation.application.run_simulation import (
-        SimulationSweepAxis,
-        SimulationSweepPointResult,
-        SimulationSweepRun,
-        build_simulation_sweep_plan,
-        run_parameter_sweep,
-        run_simulation,
-        simulation_sweep_run_from_payload,
-        simulation_sweep_run_to_payload,
-    )
-    from core.simulation.application.trace_architecture import (
-        build_post_processed_trace_specs,
-        build_raw_simulation_trace_specs,
-        persist_trace_batch_bundle,
-    )
-    from core.simulation.domain.circuit import (
-        CircuitDefinition,
-        DriveSourceConfig,
-        FrequencyRange,
-        SimulationConfig,
-        SimulationResult,
-        parse_circuit_definition_source,
+    from app_backend.infrastructure.local_store.trace_store import (
+        LocalZarrTraceStore,
+        get_trace_store_path,
     )
 
     return {
-        "CircuitDefinition": CircuitDefinition,
-        "DriveSourceConfig": DriveSourceConfig,
-        "FrequencyRange": FrequencyRange,
         "LocalZarrTraceStore": LocalZarrTraceStore,
-        "PortMatrixSweep": PortMatrixSweep,
-        "PortMatrixSweepPoint": PortMatrixSweepPoint,
-        "PortMatrixSweepRun": PortMatrixSweepRun,
-        "SimulationConfig": SimulationConfig,
-        "SimulationResult": SimulationResult,
-        "SimulationSweepAxis": SimulationSweepAxis,
-        "SimulationSweepPointResult": SimulationSweepPointResult,
-        "SimulationSweepRun": SimulationSweepRun,
-        "apply_coordinate_transform": apply_coordinate_transform,
-        "build_common_differential_transform": build_common_differential_transform,
-        "build_port_y_sweep": build_port_y_sweep,
-        "build_post_processed_trace_specs": build_post_processed_trace_specs,
-        "build_raw_simulation_trace_specs": build_raw_simulation_trace_specs,
-        "build_simulation_sweep_plan": build_simulation_sweep_plan,
-        "compensate_simulation_result_port_terminations": (
-            compensate_simulation_result_port_terminations
-        ),
         "get_trace_store_path": get_trace_store_path,
-        "infer_port_termination_resistance_ohm": infer_port_termination_resistance_ohm,
-        "kron_reduce": kron_reduce,
-        "parse_circuit_definition_source": parse_circuit_definition_source,
-        "persist_trace_batch_bundle": persist_trace_batch_bundle,
-        "run_parameter_sweep": run_parameter_sweep,
-        "run_simulation": run_simulation,
-        "simulation_sweep_run_from_payload": simulation_sweep_run_from_payload,
-        "simulation_sweep_run_to_payload": simulation_sweep_run_to_payload,
     }
+
+
+def _in_process_runtime_removed() -> RuntimeError:
+    return RuntimeError(
+        "In-process Python simulation runtime was archived; submit simulation work "
+        "to the Julia Runner instead."
+    )
 
 
 def run_real_simulation_task(
@@ -171,48 +109,8 @@ def run_real_simulation_task(
     *,
     definition_source_text: str,
 ) -> tuple[dict[str, object], TaskResultRefs]:
-    if task.simulation_setup is None:
-        raise ValueError("Simulation setup is missing.")
-    cached = _cached_simulation_runtime(task=task, definition_source_text=definition_source_text)
-    raw_bundle = _persist_simulation_bundle(
-        task=task,
-        bundle_id=task.task_id,
-        source_key="raw",
-        result=copy.deepcopy(cached["raw_result"]),
-        sweep_payload=copy.deepcopy(cached["raw_sweep_payload"]),
-    )
-    ptc_bundle = None
-    if cached.get("ptc_result") is not None:
-        ptc_bundle = _persist_simulation_bundle(
-            task=task,
-            bundle_id=(task.task_id * 1000) + 1,
-            source_key="ptc",
-            result=copy.deepcopy(cached["ptc_result"]),
-            sweep_payload=copy.deepcopy(cached["ptc_sweep_payload"]),
-        )
-    return (
-        {
-            "summary": "Simulation completed in the local runtime.",
-            "artifact_label": "simulation-trace-bundle",
-            "task_kind": task.kind,
-            "dataset_id": task.dataset_id,
-            "definition_id": task.definition_id,
-            "point_count": task.simulation_setup.frequency_sweep.point_count,
-            "frequency_range_ghz": {
-                "start": task.simulation_setup.frequency_sweep.start_ghz,
-                "stop": task.simulation_setup.frequency_sweep.stop_ghz,
-            },
-            SIMULATION_RAW_BUNDLE_KEY: raw_bundle,
-            **({SIMULATION_PTC_BUNDLE_KEY: ptc_bundle} if ptc_bundle is not None else {}),
-        },
-        _task_result_refs_from_bundle(
-            task=task,
-            bundle_payload=raw_bundle,
-            handle_kind="simulation_trace",
-            handle_label="Persisted simulation trace bundle",
-            trace_batch_record_id=f"trace_batch:{task.task_id}",
-        ),
-    )
+    del task, definition_source_text
+    raise _in_process_runtime_removed()
 
 
 def run_real_post_processing_task(
@@ -220,62 +118,8 @@ def run_real_post_processing_task(
     *,
     upstream_task: TaskDetail,
 ) -> tuple[dict[str, object], TaskResultRefs]:
-    if task.post_processing_setup is None:
-        raise ValueError("Post-processing setup is missing.")
-    if upstream_task.simulation_setup is None:
-        raise ValueError("Upstream simulation setup is missing.")
-
-    raw_input = _bundle_payload_for_task(upstream_task, SIMULATION_RAW_BUNDLE_KEY)
-    if raw_input is None:
-        raise ValueError("Upstream simulation raw bundle is missing.")
-    raw_runtime = _build_post_processing_runtime_output(
-        bundle_payload=raw_input,
-        setup=task.post_processing_setup,
-    )
-    raw_bundle = _persist_post_processing_bundle(
-        task=task,
-        bundle_id=task.task_id,
-        source_key="raw",
-        runtime_output=raw_runtime,
-    )
-    ptc_bundle = None
-    ptc_input = _bundle_payload_for_task(upstream_task, SIMULATION_PTC_BUNDLE_KEY)
-    if ptc_input is not None:
-        ptc_runtime = _build_post_processing_runtime_output(
-            bundle_payload=ptc_input,
-            setup=task.post_processing_setup,
-        )
-        ptc_bundle = _persist_post_processing_bundle(
-            task=task,
-            bundle_id=(task.task_id * 1000) + 1,
-            source_key="ptc",
-            runtime_output=ptc_runtime,
-        )
-
-    return (
-        {
-            "summary": "Post-processing completed in the local runtime.",
-            "artifact_label": "post-processing-trace-bundle",
-            "task_kind": task.kind,
-            "dataset_id": task.dataset_id,
-            "upstream_task_id": upstream_task.task_id,
-            "operation_count": len(task.post_processing_setup.operations),
-            "operations": [
-                operation.operation
-                for operation in task.post_processing_setup.operations
-                if operation.enabled
-            ],
-            POST_PROCESSING_RAW_BUNDLE_KEY: raw_bundle,
-            **({POST_PROCESSING_PTC_BUNDLE_KEY: ptc_bundle} if ptc_bundle is not None else {}),
-        },
-        _task_result_refs_from_bundle(
-            task=task,
-            bundle_payload=raw_bundle,
-            handle_kind="fit_summary",
-            handle_label="Persisted post-processing trace bundle",
-            trace_batch_record_id=f"trace_batch:{task.task_id}",
-        ),
-    )
+    del task, upstream_task
+    raise _in_process_runtime_removed()
 
 
 def available_sources_for_task_family(task: TaskDetail, family: str) -> tuple[str, ...]:
@@ -850,501 +694,6 @@ def delete_trace_payload_store(store_key: str) -> None:
         store_path.unlink()
 
 
-def _cached_simulation_runtime(
-    *,
-    task: TaskDetail,
-    definition_source_text: str,
-) -> dict[str, object]:
-    if task.simulation_setup is None:
-        raise ValueError("Simulation setup is missing.")
-    cache_key = json.dumps(
-        {
-            "definition_source_text": definition_source_text,
-            "simulation_setup": task.simulation_setup.to_mapping(),
-        },
-        sort_keys=True,
-    )
-    cached = _SIMULATION_CACHE.get(cache_key)
-    if cached is not None:
-        return copy.deepcopy(cached)
-
-    symbols = _core_symbols()
-    circuit = symbols["parse_circuit_definition_source"](definition_source_text)
-    frequency_range = symbols["FrequencyRange"](
-        start_ghz=task.simulation_setup.frequency_sweep.start_ghz,
-        stop_ghz=task.simulation_setup.frequency_sweep.stop_ghz,
-        points=task.simulation_setup.frequency_sweep.point_count,
-    )
-    config = _build_simulation_config(task=task)
-    raw_result: object
-    raw_sweep_payload: dict[str, object] | None
-    if len(task.simulation_setup.parameter_sweeps) == 0:
-        raw_result = symbols["run_simulation"](circuit, frequency_range, config)
-        raw_sweep_payload = None
-    else:
-        axes = tuple(
-            symbols["SimulationSweepAxis"](
-                target_value_ref=sweep.parameter,
-                values=tuple(float(value) for value in sweep.values),
-                unit=sweep.unit or "",
-            )
-            for sweep in task.simulation_setup.parameter_sweeps
-        )
-        plan = symbols["build_simulation_sweep_plan"](
-            circuit=circuit,
-            axes=axes,
-            config=config,
-        )
-        sweep_run = symbols["run_parameter_sweep"](
-            circuit=circuit,
-            freq_range=frequency_range,
-            config=config,
-            plan=plan,
-        )
-        raw_result = sweep_run.representative_result
-        raw_sweep_payload = symbols["simulation_sweep_run_to_payload"](sweep_run)
-
-    ptc_result = None
-    ptc_sweep_payload = None
-    if task.simulation_setup.ptc is not None and task.simulation_setup.ptc.enabled:
-        ptc_result, ptc_sweep_payload = _apply_port_termination_compensation(
-            circuit=circuit,
-            raw_result=raw_result,
-            raw_sweep_payload=raw_sweep_payload,
-            compensated_ports=task.simulation_setup.ptc.compensate_ports,
-        )
-
-    cached = {
-        "raw_result": raw_result,
-        "raw_sweep_payload": raw_sweep_payload,
-        "ptc_result": ptc_result,
-        "ptc_sweep_payload": ptc_sweep_payload,
-    }
-    _SIMULATION_CACHE[cache_key] = copy.deepcopy(cached)
-    return cached
-
-
-def _build_simulation_config(*, task: TaskDetail) -> Any:
-    if task.simulation_setup is None:
-        raise ValueError("Simulation setup is missing.")
-    symbols = _core_symbols()
-    sources = [
-        symbols["DriveSourceConfig"](
-            pump_freq_ghz=source.frequency_ghz or 5.0,
-            port=_extract_port_index(source.target) or 1,
-            current_amp=source.amplitude,
-        )
-        for source in task.simulation_setup.sources
-    ]
-    harmonic_balance = task.simulation_setup.solver.harmonic_balance
-    harmonic_count = (
-        harmonic_balance.harmonic_count
-        if harmonic_balance is not None and harmonic_balance.enabled
-        else None
-    )
-    return symbols["SimulationConfig"](
-        sources=sources or None,
-        pump_freq_ghz=sources[0].pump_freq_ghz if sources else 5.0,
-        pump_current_amp=sources[0].current_amp if sources else 0.0,
-        pump_port=sources[0].port if sources else 1,
-        n_modulation_harmonics=int(harmonic_count or 1),
-        n_pump_harmonics=int(harmonic_count or 1),
-        max_iterations=task.simulation_setup.solver.max_iterations,
-        f_tol=task.simulation_setup.solver.convergence_tolerance,
-    )
-
-
-def _apply_port_termination_compensation(
-    *,
-    circuit: Any,
-    raw_result: object,
-    raw_sweep_payload: Mapping[str, object] | None,
-    compensated_ports: Sequence[str],
-) -> tuple[object, dict[str, object] | None]:
-    symbols = _core_symbols()
-    inference = symbols["infer_port_termination_resistance_ohm"](circuit)
-    selected_ports = {
-        port_index
-        for label in compensated_ports
-        if (port_index := _extract_port_index(label)) is not None
-    }
-    resistance_ohm_by_port = {
-        port: resistance
-        for port, resistance in inference.resistance_ohm_by_port.items()
-        if port in selected_ports
-    }
-    if raw_sweep_payload is None:
-        return (
-            symbols["compensate_simulation_result_port_terminations"](
-                raw_result,
-                resistance_ohm_by_port=resistance_ohm_by_port,
-            ),
-            None,
-        )
-
-    raw_sweep_run = symbols["simulation_sweep_run_from_payload"](dict(raw_sweep_payload))
-    compensated_points = tuple(
-        symbols["SimulationSweepPointResult"](
-            point_index=point.point_index,
-            axis_indices=point.axis_indices,
-            axis_values=dict(point.axis_values),
-            result=symbols["compensate_simulation_result_port_terminations"](
-                point.result,
-                resistance_ohm_by_port=resistance_ohm_by_port,
-            ),
-        )
-        for point in raw_sweep_run.points
-    )
-    compensated_run = symbols["SimulationSweepRun"](
-        axes=raw_sweep_run.axes,
-        points=compensated_points,
-        representative_point_index=raw_sweep_run.representative_point_index,
-    )
-    return (
-        compensated_run.representative_result,
-        symbols["simulation_sweep_run_to_payload"](compensated_run),
-    )
-
-
-def _persist_simulation_bundle(
-    *,
-    task: TaskDetail,
-    bundle_id: int,
-    source_key: str,
-    result: object,
-    sweep_payload: Mapping[str, object] | None,
-) -> dict[str, object]:
-    symbols = _core_symbols()
-    trace_specs = symbols["build_raw_simulation_trace_specs"](
-        result=result,
-        sweep_payload=sweep_payload,
-    )
-    return symbols["persist_trace_batch_bundle"](
-        bundle_id=bundle_id,
-        design_id=task.task_id,
-        design_name=f"Task {task.task_id}",
-        source_kind="circuit_simulation",
-        stage_kind="postprocess" if source_key == "ptc" else "raw",
-        setup_kind=f"simulation.{source_key}",
-        setup_payload=(
-            task.simulation_setup.to_mapping() if task.simulation_setup is not None else {}
-        ),
-        provenance_payload={
-            "task_id": task.task_id,
-            "definition_id": task.definition_id,
-            "runtime_mode": "local",
-            "source_key": source_key,
-        },
-        trace_specs=trace_specs,
-        summary_payload={
-            "trace_count": len(trace_specs),
-            "point_count": _sweep_point_count(task),
-            "representative_point_index": 0,
-        },
-    )
-
-
-def _build_post_processing_runtime_output(
-    *,
-    bundle_payload: Mapping[str, object],
-    setup: Any,
-) -> Any:
-    symbols = _core_symbols()
-    result, sweep_payload = _simulation_bundle_to_runtime(bundle_payload)
-    if sweep_payload is None:
-        base_sweep = symbols["build_port_y_sweep"](
-            result=result,
-            mode=(0,),
-            ports=list(result.available_port_indices),
-        )
-        return _apply_post_processing_operations(base_sweep, operations=setup.operations)
-
-    sweep_run = symbols["simulation_sweep_run_from_payload"](dict(sweep_payload))
-    points = tuple(
-        symbols["PortMatrixSweepPoint"](
-            point_index=point.point_index,
-            axis_indices=point.axis_indices,
-            axis_values=dict(point.axis_values),
-            sweep=_apply_post_processing_operations(
-                symbols["build_port_y_sweep"](
-                    result=point.result,
-                    mode=(0,),
-                    ports=list(point.result.available_port_indices),
-                ),
-                operations=setup.operations,
-            ),
-        )
-        for point in sweep_run.points
-    )
-    return symbols["PortMatrixSweepRun"](
-        axes=sweep_run.axes,
-        points=points,
-        representative_point_index=sweep_run.representative_point_index,
-    )
-
-
-def _apply_post_processing_operations(
-    sweep: Any,
-    *,
-    operations: Sequence[Any],
-) -> Any:
-    symbols = _core_symbols()
-    current = sweep
-    for operation in operations:
-        if not operation.enabled:
-            continue
-        if operation.operation == "coordinate_transform":
-            port_a = int(operation.config.get("port_a", 1)) - 1
-            port_b = int(operation.config.get("port_b", 2)) - 1
-            alpha = float(operation.config.get("alpha", 0.5))
-            beta = float(operation.config.get("beta", 0.5))
-            transform = symbols["build_common_differential_transform"](
-                dimension=current.dimension,
-                first_index=port_a,
-                second_index=port_b,
-                alpha=alpha,
-                beta=beta,
-            )
-            labels = list(current.labels)
-            first_label = labels[port_a]
-            second_label = labels[port_b]
-            labels[port_a] = f"CM({first_label},{second_label})"
-            labels[port_b] = f"DM({first_label},{second_label})"
-            current = symbols["apply_coordinate_transform"](
-                current,
-                transform,
-                labels=tuple(labels),
-            )
-            continue
-        if operation.operation == "kron_reduction":
-            keep_labels = tuple(
-                _normalize_post_processing_basis_label(label)
-                for label in operation.config.get("keep_labels", ())
-                if str(label).strip()
-            )
-            if len(keep_labels) == 0:
-                raise ValueError("Kron reduction requires keep_labels.")
-            keep_label_set = set(keep_labels)
-            keep_indices = [
-                index
-                for index, label in enumerate(current.labels)
-                if _normalize_post_processing_basis_label(label) in keep_label_set
-            ]
-            current = symbols["kron_reduce"](current, keep_indices=keep_indices)
-            continue
-    return current
-
-
-def _normalize_post_processing_basis_label(label: object) -> str:
-    trimmed = str(label).strip()
-    transformed_match = _POST_PROCESSING_BASIS_LABEL_PATTERN.match(trimmed)
-    if transformed_match is None:
-        return trimmed
-    family = (transformed_match.group("family") or "").upper()
-    port_a = transformed_match.group("port_a") or ""
-    port_b = transformed_match.group("port_b") or ""
-    return f"{family}({port_a},{port_b})"
-
-
-def _persist_post_processing_bundle(
-    *,
-    task: TaskDetail,
-    bundle_id: int,
-    source_key: str,
-    runtime_output: object,
-) -> dict[str, object]:
-    symbols = _core_symbols()
-    trace_specs = symbols["build_post_processed_trace_specs"](runtime_output=runtime_output)
-    return symbols["persist_trace_batch_bundle"](
-        bundle_id=bundle_id,
-        design_id=task.task_id,
-        design_name=f"Task {task.task_id}",
-        source_kind="circuit_simulation",
-        stage_kind="postprocess",
-        setup_kind=f"post_processing.{source_key}",
-        setup_payload=(
-            task.post_processing_setup.to_mapping()
-            if task.post_processing_setup is not None
-            else {}
-        ),
-        provenance_payload={
-            "task_id": task.task_id,
-            "upstream_task_id": task.upstream_task_id,
-            "runtime_mode": "local",
-            "source_key": source_key,
-        },
-        trace_specs=trace_specs,
-        summary_payload={
-            "trace_count": len(trace_specs),
-            "point_count": _sweep_point_count(task),
-            "labels": list(getattr(runtime_output, "representative_sweep", runtime_output).labels),
-        },
-    )
-
-
-def _simulation_bundle_to_runtime(
-    bundle_payload: Mapping[str, object],
-) -> tuple[Any, dict[str, object] | None]:
-    symbols = _core_symbols()
-    loaded_bundle = _load_bundle_trace_records(bundle_payload)
-    frequencies = np.asarray(loaded_bundle.frequencies_ghz, dtype=float)
-    axis_defs = loaded_bundle.first_record.get("axes", [])
-    sweep_axes = axis_defs[1:] if isinstance(axis_defs, list) else []
-    axis_values_lookup: list[tuple[str, tuple[float, ...], str]] = []
-    for _axis_index, axis_def in enumerate(sweep_axes, start=1):
-        if not isinstance(axis_def, Mapping):
-            continue
-        axis_name = str(axis_def.get("name", "")).strip()
-        axis_unit = str(axis_def.get("unit", "")).strip()
-        values = tuple(
-            float(value)
-            for value in _read_axis_values(
-                loaded_bundle.trace_store,
-                _require_mapping(
-                    loaded_bundle.first_record.get("store_ref"),
-                    field_name="store_ref",
-                ),
-                axis_name=axis_name,
-            )
-        )
-        axis_values_lookup.append((axis_name, values, axis_unit))
-
-    if len(axis_values_lookup) == 0:
-        return _simulation_result_from_trace_records(
-            trace_records=loaded_bundle.trace_records,
-            frequencies_ghz=frequencies,
-            axis_indices=(),
-        ), None
-
-    points: list[Any] = []
-    symbols = _core_symbols()
-    sweep_shape = tuple(len(values) for _, values, _ in axis_values_lookup)
-    for point_index, axis_indices in enumerate(np.ndindex(*sweep_shape)):
-        axis_values = {
-            name: float(values[position])
-            for (name, values, _), position in zip(axis_values_lookup, axis_indices, strict=False)
-        }
-        points.append(
-            symbols["SimulationSweepPointResult"](
-                point_index=point_index,
-                axis_indices=tuple(int(value) for value in axis_indices),
-                axis_values=axis_values,
-                result=_simulation_result_from_trace_records(
-                    trace_records=loaded_bundle.trace_records,
-                    frequencies_ghz=frequencies,
-                    axis_indices=tuple(int(value) for value in axis_indices),
-                ),
-            )
-        )
-    sweep_run = symbols["SimulationSweepRun"](
-        axes=tuple(
-            symbols["SimulationSweepAxis"](
-                target_value_ref=name,
-                values=values,
-                unit=unit,
-            )
-            for name, values, unit in axis_values_lookup
-        ),
-        points=tuple(points),
-        representative_point_index=0,
-    )
-    return sweep_run.representative_result, symbols["simulation_sweep_run_to_payload"](sweep_run)
-
-
-def _simulation_result_from_trace_records(
-    *,
-    trace_records: Sequence[object],
-    frequencies_ghz: np.ndarray,
-    axis_indices: tuple[int, ...],
-) -> Any:
-    symbols = _core_symbols()
-    trace_store = symbols["LocalZarrTraceStore"](root_path=symbols["get_trace_store_path"]())
-    s_real: dict[str, list[float]] = {}
-    s_imag: dict[str, list[float]] = {}
-    y_real: dict[str, list[float]] = {}
-    y_imag: dict[str, list[float]] = {}
-    z_real: dict[str, list[float]] = {}
-    z_imag: dict[str, list[float]] = {}
-    ports: set[int] = set()
-    modes: set[tuple[int, ...]] = set()
-    for record in trace_records:
-        if not isinstance(record, Mapping):
-            continue
-        trace_meta = record.get("trace_meta", {})
-        if not isinstance(trace_meta, Mapping):
-            continue
-        output_port = int(trace_meta.get("output_port", 0) or 0)
-        input_port = int(trace_meta.get("input_port", 0) or 0)
-        output_mode = tuple(int(value) for value in trace_meta.get("output_mode", [])) or (0,)
-        input_mode = tuple(int(value) for value in trace_meta.get("input_mode", [])) or (0,)
-        ports.update({port for port in (output_port, input_port) if port > 0})
-        modes.update({output_mode, input_mode})
-        label = str(trace_meta.get("label", "")).strip()
-        if len(label) == 0:
-            continue
-        values = _read_trace_values(
-            trace_store,
-            _require_mapping(record.get("store_ref"), field_name="store_ref"),
-            axis_indices,
-        )
-        family = str(record.get("family", "")).strip()
-        representation = str(record.get("representation", "")).strip()
-        if family == "s_matrix":
-            target = s_real if representation == "real" else s_imag
-        elif family == "y_matrix":
-            target = y_real if representation == "real" else y_imag
-        elif family == "z_matrix":
-            target = z_real if representation == "real" else z_imag
-        else:
-            continue
-        target[label] = [float(value) for value in values]
-    normalized_modes = sorted(
-        modes,
-        key=lambda mode: (len(mode), tuple(mode)),
-    ) or [(0,)]
-    normalized_ports = sorted(port for port in ports if port > 0) or [1]
-    base_mode = next(
-        (mode for mode in normalized_modes if all(value == 0 for value in mode)),
-        normalized_modes[0],
-    )
-    first_port = normalized_ports[0]
-    s11_label = _mode_trace_label(base_mode, first_port, base_mode, first_port)
-    return symbols["SimulationResult"](
-        frequencies_ghz=[float(value) for value in frequencies_ghz.tolist()],
-        s11_real=list(s_real.get(s11_label, [0.0 for _ in frequencies_ghz])),
-        s11_imag=list(s_imag.get(s11_label, [0.0 for _ in frequencies_ghz])),
-        port_indices=normalized_ports,
-        mode_indices=[tuple(int(value) for value in mode) for mode in normalized_modes],
-        s_parameter_real={
-            f"S{output_port}{input_port}": values
-            for label, values in s_real.items()
-            if (parsed := _parse_mode_trace_label(label)) is not None
-            and parsed[0] == base_mode
-            and parsed[2] == base_mode
-            and (output_port := parsed[1]) > 0
-            and (input_port := parsed[3]) > 0
-        },
-        s_parameter_imag={
-            f"S{output_port}{input_port}": values
-            for label, values in s_imag.items()
-            if (parsed := _parse_mode_trace_label(label)) is not None
-            and parsed[0] == base_mode
-            and parsed[2] == base_mode
-            and (output_port := parsed[1]) > 0
-            and (input_port := parsed[3]) > 0
-        },
-        s_parameter_mode_real=s_real,
-        s_parameter_mode_imag=s_imag,
-        y_parameter_mode_real=y_real,
-        y_parameter_mode_imag=y_imag,
-        z_parameter_mode_real=z_real,
-        z_parameter_mode_imag=z_imag,
-        qe_parameter_mode={},
-        qe_ideal_parameter_mode={},
-        cm_parameter_mode={},
-    )
-
-
 def _bundle_payload_for_task(task: TaskDetail, key: str) -> dict[str, object] | None:
     completion_event = next(
         (
@@ -1788,27 +1137,6 @@ def _decode_axis_indices(setup: object | None, sweep_index: int | None) -> tuple
     return tuple(coordinates)
 
 
-def _sweep_point_count(task: TaskDetail) -> int:
-    setup = task.simulation_setup
-    if setup is None or len(setup.parameter_sweeps) == 0:
-        return 1
-    total = 1
-    for axis in setup.parameter_sweeps:
-        total *= max(len(axis.values), 1)
-    return total
-
-
-def _extract_port_index(token: object) -> int | None:
-    if not isinstance(token, str):
-        return None
-    stripped = token.strip().lower()
-    if stripped.startswith("port_") and stripped[5:].isdigit():
-        return int(stripped[5:])
-    if stripped.startswith("p") and stripped[1:].isdigit():
-        return int(stripped[1:])
-    return None
-
-
 def _matrix_inverse(matrix: np.ndarray) -> np.ndarray:
     identity = np.eye(matrix.shape[0], dtype=np.complex128)
     return np.linalg.solve(np.asarray(matrix, dtype=np.complex128), identity)
@@ -1836,37 +1164,3 @@ def _require_trace_records(payload: Mapping[str, object]) -> list[dict[str, obje
 def _stable_positive_int(*parts: object) -> int:
     token = "|".join(str(part) for part in parts)
     return (abs(hash(token)) % 900_000_000) + 1
-
-
-def _mode_trace_label(
-    output_mode: tuple[int, ...],
-    output_port: int,
-    input_mode: tuple[int, ...],
-    input_port: int,
-) -> str:
-    return f"S{output_port}{input_port}[om={tuple(output_mode)},im={tuple(input_mode)}]"
-
-
-def _parse_mode_trace_label(label: str) -> tuple[tuple[int, ...], int, tuple[int, ...], int] | None:
-    matched = _MODE_TRACE_LABEL_PATTERN.fullmatch(label.strip())
-    if matched is None:
-        return None
-    try:
-        output_mode = tuple(
-            int(value)
-            for value in matched.group("output_mode").strip("() ").split(",")
-            if value.strip()
-        )
-        input_mode = tuple(
-            int(value)
-            for value in matched.group("input_mode").strip("() ").split(",")
-            if value.strip()
-        )
-    except ValueError:
-        return None
-    return (
-        output_mode or (0,),
-        int(matched.group("output_port")),
-        input_mode or (0,),
-        int(matched.group("input_port")),
-    )

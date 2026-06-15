@@ -1,11 +1,11 @@
 ## Lint / Format Commands
 - **Python format**: `uv run ruff format .`
 - **Python lint**: `uv run ruff check .`
-- **Python type check**: `uv run basedpyright app/backend/app_backend core/analysis core/python core/sc_core core/shared core/simulation scripts`
+- **Python type check**: `uv run basedpyright app/backend/app_backend core/python scripts`
 - **Pre-commit**: `uv run pre-commit run --all-files`
 - **Frontend lint**: `npm run lint --prefix app/frontend`
 - **Frontend format**: `npm run format --prefix app/frontend`
 - **Frontend typecheck**: `npm run typecheck --prefix app/frontend`
 - **Desktop lint/build**: `npm run lint --prefix app/desktop` and `npm run build --prefix app/desktop`
-- **Julia package checks**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`, `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`, `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`, and `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- **Julia package checks**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`, `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`, `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`, and `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - **Policy**: no new lint or type errors in touched areas.

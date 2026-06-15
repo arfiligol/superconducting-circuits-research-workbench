@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Julia Core Component Libraries
-  - Component Library Boundary
+ - Julia Core Component Libraries
+ - Component Library Boundary
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -37,7 +37,7 @@ Julia Core does not ship lab-specific components. It defines the kernel contract
 
 ```text
 Component Library
-        depends on
+    depends on
 Julia Core Kernel
 ```
 
@@ -114,12 +114,12 @@ Plan Builders should use Julia Core physical relation helpers when they connect 
 
 ```julia
 couple_capacitive!(
-    plan;
-    id = "feedline_to_resonator",
-    from = pin(feedline, :output),
-    to = pin(resonator, :input),
-    capacitance = Cc,
-    role = :readout_coupling,
+  plan;
+  id = "feedline_to_resonator",
+  from = pin(feedline,:output),
+  to = pin(resonator,:input),
+  capacitance = Cc,
+  role =:readout_coupling,
 )
 ```
 
@@ -158,7 +158,7 @@ This metadata is stored in the CircuitPlan and used by the sweep engine.
 For HB-capable plan builders, the component library should also declare the HB intent needed by Runner-safe execution:
 
 - pump-axis IDs and their frequency-parameter names;
-- pump and DC source slots, including `HBSourceSlot(role = :dc_bias, mode = (0,))` where DC bias exists;
+- pump and DC source slots, including `HBSourceSlot(role =:dc_bias, mode = (0,))` where DC bias exists;
 - observable requests for S/Z/QE/QEideal/CM extraction;
 - default `HBSolverControls` suitable for the circuit family.
 

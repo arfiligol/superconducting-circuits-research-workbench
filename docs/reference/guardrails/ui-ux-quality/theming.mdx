@@ -1,0 +1,125 @@
+---
+aliases:
+ - Theming
+ - Subject Specifications
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/ui-ux
+status: stable
+owner: docs-team
+audience: contributor
+scope: frontend theme system, Starlight docs palette system, semantic tokens, and dark mode rules.
+version: v2.3.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Theming
+
+The theme system must serve the Next.js frontend, rather than scattering colors within components.
+
+<Aside type="note" title="Use this page for theme decisions">
+
+This page sets theme ownership and token baseline. If it is just a visual adjustment of a single component, you should still go back to semantic token instead of hard-coding the color value directly.
+
+</Aside>
+
+## Theme Map
+
+| concern | baseline |
+| --- | --- |
+| theme runtime | `next-themes` |
+| supported modes | `light` / `dark` / `system` |
+| color semantics | Use token instead of raw utility or hex as product semantics |
+| state preservation | theme switch must not clear form or selection state |
+
+## Theme Management
+
+- Use `next-themes`
+- root layout provides `ThemeProvider`
+- Provide three modes: light / dark / system
+
+## Semantic Tokens
+
+Styles should give priority to semantic tokens, for example:
+
+- `background`
+- `foreground`
+- `card`
+- `muted`
+- `border`
+- `primary`
+- `destructive`
+
+It is forbidden to directly use `bg-white`, `text-black`, and hard-coded hex as product semantics.
+
+<Aside type="caution" title="Semantic tokens first">
+
+Tailwind utility can express layout and status, but product color semantics must first pass through token. Don’t let the component dictate the color language of the entire product.
+
+</Aside>
+
+## Rules
+
+- Tailwind can be used for layout and semantic classes, not for spreading hard-coded color decisions
+- New components must be readable in light / dark
+- The chart theme must follow the current theme
+- Any theme switching cannot cause the form or selection state to be reset
+
+## Light Mode Direction
+
+| Concern | Baseline |
+|---|---|
+| Base surface | Use a clean white base or a warm neutral base as the main base, and should not cover the entire app with a cold blue-gray wash |
+| Accent language |Preserve light accent fills, soft icon accents, and restrained semantic states|
+| Mood | light mode should be a sibling of dark mode, not another product language |
+| Rejection | Large areas of cold, bluish, debug shell-like light-mode washes are not accepted |
+
+<Aside type="tip" title="Light mode should stay calm">
+
+The visual emphasis of light mode should come from layers, borders, spacing and status, rather than large areas of colored background.
+If you need to distinguish status, give priority to using local accent, badge, icon chip and card hierarchy instead of full page color cast.
+
+</Aside>
+
+## Starlight Docs Palettes
+
+Astro + Starlight docs may use a separate docs palette layer in addition to Starlight `light` / `dark` mode. The palette switch must map into semantic tokens first, then into Starlight variables.
+
+| Palette | Intent |
+| --- | --- |
+| `research-mint` | current mint/teal docs UI; calm technical docs default |
+| `tech-slate` | high-contrast technical reports and solver diagnostics |
+| `nordic-calm` | low-fatigue long-form reports and review material |
+| `coffee-terminal` | warm paper / research-log style docs and exploratory reports |
+
+Required docs palette tokens:
+
+- `background`
+- `surface`
+- `text`
+- `muted`
+- `accent`
+- `rule`
+
+Do not scatter palette hex values across components. Palette values should be centralized in the Starlight stylesheet and exposed to components through semantic CSS variables.
+
+## Agent Rule
+```markdown
+## Theming
+- Use `next-themes` for theme management.
+- Provide `light`, `dark`, and `system` modes.
+- Prefer semantic tokens such as `background`, `foreground`, `card`, `muted`, `border`, and `primary`.
+- Do not hardcode product colors with raw utility choices like `bg-white`, `text-black`, or literal hex values unless there is a documented exception.
+- Every component must remain readable in both light and dark themes.
+- Chart styling must follow the active theme.
+- Theme switching must not trigger avoidable state loss.
+- Light mode should prefer a clean white base or warmer neutral base over a cool blue-gray wash.
+- Preserve restrained accent fills and icon accents, but do not tint the whole dashboard as if it were a diagnostics shell.
+- Starlight docs palettes are `research-mint`, `tech-slate`, `nordic-calm`, and `coffee-terminal`; keep `research-mint` available as the current mint/teal baseline.
+- Docs palette switching must be separate from light/dark/system mode, persisted without resetting page state, and implemented through semantic tokens before mapping to Starlight variables.
+```

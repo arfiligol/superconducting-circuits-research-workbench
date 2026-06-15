@@ -1,0 +1,13 @@
+[project]
+name = "docs-site"
+version = "0.1.0"
+description = "Development-only docs site helper for the research workbench."
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+docs-site = "docs_site:main"
+
+[build-system]
+requires = ["uv_build>=0.9.16,<0.10.0"]
+build-backend = "uv_build"

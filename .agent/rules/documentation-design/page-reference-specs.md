@@ -1,21 +1,21 @@
 ## Page Reference Specs
-- **Type**: App frontend page 技術文件必須寫成 Page Reference Spec，不是需求文件、散文或實作筆記
-- **Diataxis**: 這類文件屬於 `Reference`
-- **Now-only**: 只寫當前正式頁面契約；不要寫舊版/legacy/migration 歷史
-- **Title alignment**: 文件 `title` 與 H1 必須優先對齊 sidebar / nav label；route 另寫在 frontmatter `route` 與正文 identity
-- **Observed input**: 其他 Agent 抽出的 page context、截圖整理、現有 UI inventory 只能當輸入材料，不能直接當正式 spec
-- **Normalization**: 輸入材料必須重新整理成 8 個固定區塊；`Unknown from current page context` 不得直接留在正式 SoT
-- **Current product wins**: 若目前產品已要求 task management、result recovery、research workflow 等能力，正式 spec 必須納入，不受舊畫面限制
-- **Fixed sections**: 必須包含 8 個區塊：
-  1. Purpose
-  2. User Goal
-  3. Layout Structure
-  4. Component Inventory
-  5. Data & State Contract
-  6. Interaction Flows
-  7. Visual Rules
-  8. Acceptance Checklist
-- **Optional sections**: `Related Contracts`、`Runtime Notes` 只在需要時加入
-- **Focus**: 先寫 page purpose、layout、components、state、flows、acceptance；不要先寫框架細節
-- **Do not include**: framework 實作細節、repository/service 類名、pixel 級 CSS、歷史背景
-- **Naming**: 新頁面優先使用 `docs/reference/app/frontend/pages/<route-name>.md`，並與 sidebar IA 對齊
+- **Type**: App frontend page technical documents must be written as Page Reference Spec, not requirements documents, prose or implementation notes
+- **Diataxis**: This type of file belongs to `Reference`
+- **Now-only**: Only write the current official page contract; do not write the old version/legacy/migration history
+- **Title alignment**: Files `title` and H1 must be aligned sidebar / nav label first; route is also written in frontmatter `route` and body identity
+- **Observed input**: The page context, screenshot collection, and existing UI inventory extracted by other Agents can only be used as input materials and cannot be directly used as official specs.
+- **Normalization**: Input materials must be reorganized into 8 fixed blocks; `Unknown from current page context` must not be left directly in the official SoT
+- **Current product wins**: If the current product requires task management, result recovery, research workflow and other capabilities, the official spec must be included and is not restricted by the old screen.
+- **Fixed sections**: must contain 8 sections:
+ 1. Purpose
+ 2. User Goal
+ 3. Layout Structure
+ 4. Component Inventory
+ 5. Data & State Contract
+ 6. Interaction Flows
+ 7. Visual Rules
+ 8. Acceptance Checklist
+- **Optional sections**: `Related Contracts`, `Runtime Notes` are added only when needed
+- **Focus**: Write page purpose, layout, components, state, flows, acceptance first; do not write framework details first
+- **Do not include**: framework implementation details, repository/service class name, pixel-level CSS, historical background
+- **Naming**: New pages use `docs/app/frontend/pages/<route-name>.md` first and align with Product App sidebar IA

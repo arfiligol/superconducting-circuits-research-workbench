@@ -1,0 +1,160 @@
+---
+aliases:
+ - Guardrails
+ - Development Code
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/governance
+status: stable
+owner: docs-team
+audience: contributor
+scope: Workspace guardrails master index for humans and AI Agents to load task-related rules.
+version: v3.1.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Guardrails
+
+This area is the single source of truth for development specifications in the workspace.
+The core direction is **Notebook Interface + Electron Application Interface + Julia Runner Compute Plane**.
+Python Backend is the control/data plane; Julia Runner is the compute plane; TraceStore is managed by the Backend publication process.
+
+<Aside type="note" title="How to read this section">
+
+Look at `Project Basics` first, then enter `Code Quality`, `UI/UX Quality`, `Execution & Verification` or `Documentation Design` according to the nature of the work.
+Don't treat the entire guardrails tree as a one-time must-read list; look for the owner section first, then read the subpages.
+
+</Aside>
+
+<Tabs>
+<TabItem label="Human Developers">
+
+
+- First confirm which concern the current task belongs to.
+- Only open sections directly related to the current modification.
+- To change the architectural direction, collaboration method, or SoT, first go back to `Project Basics` or `Execution & Verification`.
+
+</TabItem>
+
+<TabItem label="AI Agents">
+
+
+- Use `_agent_catalog.yml` to select the rule first, do not load it all at once.
+- Read concern owner first, then touched-area rules.
+- If owner docs conflict with consumer docs, [Source of Truth Order](project-basics/source-of-truth-order.mdx) will be used to decide.
+
+</TabItem>
+
+</Tabs>
+
+<Aside type="caution" title="Guardrails are owner documents">
+
+Guardrails is not a collection of style suggestions, nor is it a set of tips that can be skipped freely.
+If the task involves the concerns defined here, the relevant rules must be loaded first before being designed or implemented.
+
+</Aside>
+
+## Section Map
+
+| Section | Use this when | Primary focus |
+| --- | --- | --- |
+| [Project Basics](project-basics/index.mdx) | The task will change the product direction, technology selection, data authority or repo structure | mission, stack, folder layout, SoT ordering |
+| [Code Quality](code-quality/index.mdx) | Tasks that change implementation boundaries, service pattern, contract handling, or error/logging behavior | implementation discipline |
+| [UI/UX Quality](ui-ux-quality/index.mdx) |The task will change the frontend shell, layout, state, routing, component interaction| app frontend quality baseline |
+| [Execution & Verification](execution-verification/index.mdx) | Task requires build, test, CI, handoff or subagent coordination | delivery and verification rules |
+| [Documentation Design](documentation-design/documentation.mdx) | The task is directly writing docs, changing docs IA, frontmatter or page specs | documentation writing and layout |
+
+## Project Basics
+
+| Page | Focus | Agent Rule |
+| --- | --- | --- |
+| [Project Basics](project-basics/index.mdx) | Project goals, technical direction, directory structure index | [#agent-rule](project-basics/index.mdx#agent-rule) |
+| [Project Overview](project-basics/project-overview.mdx) |Notebook / Application / Julia Runner / TraceStore scope| [#agent-rule](project-basics/project-overview.mdx#agent-rule) |
+| [Tech Stack](project-basics/tech-stack.mdx) | Next.js + FastAPI + Electron + Julia Runner + Zarr stack | [#agent-rule](project-basics/tech-stack.mdx#agent-rule) |
+| [Folder Structure](project-basics/folder-structure.mdx) |app/core/notebooks/scripts/docs division of rewrite branch| [#agent-rule](project-basics/folder-structure.mdx#agent-rule) |
+| [Backend Architecture](project-basics/backend-architecture.mdx) | Python Backend control/data plane and publication boundary | [#agent-rule](project-basics/backend-architecture.mdx#agent-rule) |
+| [Source of Truth Order](project-basics/source-of-truth-order.mdx) | The order of decision when reference, shared core, adapter, legacy conflicts | [#agent-rule](project-basics/source-of-truth-order.mdx#agent-rule) |
+
+## Code Quality
+
+| Page | Focus | Agent Rule |
+| --- | --- | --- |
+| [Code Quality](code-quality/index.mdx) | Program quality overview | [#agent-rule](code-quality/index.mdx#agent-rule) |
+| [Code Style](code-quality/code-style.mdx) | Python / TypeScript co-writing principles | [​​#agent-rule](code-quality/code-style.mdx#agent-rule) |
+| [Type Checking](code-quality/type-checking.mdx) | BasedPyright + TypeScript strict | [#agent-rule](code-quality/type-checking.mdx#agent-rule) |
+| [Design Patterns](code-quality/design-patterns.mdx) | Dependency boundaries between API/UI/Notebook/Runner/scripts and core services | [#agent-rule](code-quality/design-patterns.mdx#agent-rule) |
+| [Script Authoring](code-quality/script-authoring.mdx) | Structure and responsibility boundaries of dev/build/test/maintenance scripts | [#agent-rule](code-quality/script-authoring.mdx#agent-rule) |
+| [Data Handling](code-quality/data-handling.mdx) | metadata / trace store Division of responsibilities | [#agent-rule](code-quality/data-handling.mdx#agent-rule) |
+| [Logging](code-quality/logging.mdx) | How to use logging | [#agent-rule](code-quality/logging.mdx#agent-rule) |
+| [Contract Versioning](code-quality/contract-versioning.mdx) | Version and compatibility policy for canonical contracts | [#agent-rule](code-quality/contract-versioning.mdx#agent-rule) |
+| [Error Handling](code-quality/error-handling.mdx) | API, Runner, Notebook and recovery flow share the error model | [#agent-rule](code-quality/error-handling.mdx#agent-rule) |
+
+## UI/UX Quality
+
+| Page | Focus | Agent Rule |
+| --- | --- | --- |
+| [UI/UX Quality](ui-ux-quality/index.mdx) |UI/UX overview of Next.js frontend| [#agent-rule](ui-ux-quality/index.mdx#agent-rule) |
+| [Theming](ui-ux-quality/theming.mdx) |semantic tokens, dark mode, theme provider| [#agent-rule](ui-ux-quality/theming.mdx#agent-rule) |
+| [Component Guidelines](ui-ux-quality/component-guidelines.mdx) |shadcn/ui, dialog, form, table specifications| [#agent-rule](ui-ux-quality/component-guidelines.mdx#agent-rule) |
+| [Layout Patterns](ui-ux-quality/layout-patterns.mdx) | App Router layout and master-detail rules | [​​#agent-rule](ui-ux-quality/layout-patterns.mdx#agent-rule) |
+| [State Management](ui-ux-quality/state-management.mdx) | SWR / Context / RHF + Zod | [#agent-rule](ui-ux-quality/state-management.mdx#agent-rule) |
+| [Accessibility](ui-ux-quality/accessibility.mdx) | a11y and keyboard/ARIA rules | [​​#agent-rule](ui-ux-quality/accessibility.mdx#agent-rule) |
+| [Routing](ui-ux-quality/routing.mdx) | Next.js App Router routing policy | [#agent-rule](ui-ux-quality/routing.mdx#agent-rule) |
+
+## Execution & Verification
+
+| Page | Focus | Agent Rule |
+| --- | --- | --- |
+| [Execution & Verification](execution-verification/index.mdx) |build/lint/test/CI index| [#agent-rule](execution-verification/index.mdx#agent-rule) |
+| [Build Commands](execution-verification/build-commands.mdx) | app/frontend / app/backend / Julia Runner / desktop / docs Common commands | [#agent-rule](execution-verification/build-commands.mdx#agent-rule) |
+| [Linting & Formatting](execution-verification/linting.mdx) | Ruff / BasedPyright / frontend checks | [#agent-rule](execution-verification/linting.mdx#agent-rule) |
+| [Testing](execution-verification/testing.mdx) | pytest / Vitest / Playwright / docs checks | [#agent-rule](execution-verification/testing.mdx#agent-rule) |
+| [CI Gates](execution-verification/ci-gates.mdx) | Merge quality threshold for rewrite branch | [#agent-rule](execution-verification/ci-gates.mdx#agent-rule) |
+| [Task Scope Sizing](./execution-verification/prompt-grading.md) | Task granularity, verification depth and whether a short plan is needed | [#agent-rule](./execution-verification/prompt-grading.md#agent-rule) |
+| [Codex Subagent Coordination](execution-verification/multi-agent-collaboration.mdx) | Codex-managed subagent work lanes with single delivery responsibility | [#agent-rule](execution-verification/multi-agent-collaboration.mdx#agent-rule) |
+| [Work Summary Formats](./execution-verification/contributor-reporting.md) |final summary / PR body / risk report format| [#agent-rule](./execution-verification/contributor-reporting.md#agent-rule) |
+| [Commit Standards](execution-verification/commit-standards.mdx) | commit boundary and message specifications | [#agent-rule](execution-verification/commit-standards.mdx#agent-rule) |
+
+## Documentation Design
+
+| Page | Focus | Agent Rule |
+| --- | --- | --- |
+| [Documentation Design](documentation-design/documentation.mdx) | Document specification index | [#agent-rule](documentation-design/documentation.mdx#agent-rule) |
+| [Documentation Standards](documentation-design/standards.mdx) |Diataxis and frontmatter| [#agent-rule](documentation-design/standards.mdx#agent-rule) |
+| [Starlight Native Style](documentation-design/starlight-native-style.mdx) | Starlight-native writing rhythm and presentation | [#agent-rule](documentation-design/starlight-native-style.mdx#agent-rule) |
+| [Documentation Maintenance](documentation-design/maintenance.mdx) | Monolingual document sources and build process | [#agent-rule](documentation-design/maintenance.mdx#agent-rule) |
+
+<details class="docs-disclosure docs-disclosure--info">
+<summary>Installed vs loaded rules</summary>
+
+`docs/reference/guardrails/` is SoT.
+`.agent/rules/` is the synchronization result used by the agent after installation.
+
+</details>
+
+## Agent Rule
+```markdown
+## Guardrails
+- `docs/reference/guardrails/` is the workspace rules Source of Truth.
+- Use `_agent_catalog.yml` to load only task-relevant guardrails instead of loading the full tree.
+- Current architecture is Notebook Interface + Electron Application Interface + Julia Runner Compute Plane.
+- Python Backend is the control/data plane; Julia Runner is the compute plane; Backend-managed TraceStore is the official numeric authority.
+- Retired command workflow, Python UI runtime, separate queue worker runtime, and Python in-process Julia execution have no authority over current product/runtime surfaces.
+- `.agent/rules/` must be synchronized one-to-one from each guardrail file's `## Agent Rule` block whenever guardrail source changes.
+```
+Installation and loading are two different things; usually only a few necessary rules need to be loaded for a task.
+
+## Verification instructions
+
+```bash
+uv run ruff format .
+uv run ruff check .
+uv run basedpyright app/backend/app_backend core/python scripts
+uv run pytest
+./scripts/build_docs_sites.sh
+```

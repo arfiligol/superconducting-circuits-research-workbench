@@ -1,0 +1,323 @@
+---
+title: "Header"
+aliases:
+ - "Frontend Header"
+ - "Workspace Header"
+ - "App Header"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/ui
+status: draft
+owner: docs-team
+audience: team
+scope: Frontend shared header of shell identity, runtime mode entry, global context entry, account surface, developer mode and shell-side panel contract
+version: v0.12.0
+last_updated: 2026-05-27
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Header
+
+This page defines the formal contract for the frontend shared header. It is the single-line identity, compact global context entry and account-preference entry surface of the app shell.
+
+<Aside type="note" title="Surface Boundary">
+
+Header is responsible for the only visible shell identity, `Runtime Mode`, `Active Workspace`, `Active Dataset`, `Task Execution`, Runner runtime status summary, account surface and app-level preferences.
+page-local title, workspace management page, membership management, form, table filter, result table and editor internals does not belong to Header.
+
+</Aside>
+
+<Aside type="caution" title="Single Visible Shell Identity">
+
+Header allows only one visible shell identity: `SUPERCONDUCTING CIRCUITS`.
+It must remain on a single line and must not contain `Research Workbench`, secondary shell subtitle, or additional brand helper text.
+
+</Aside>
+
+<Aside type="caution" title="Global Context Lives Behind Compact Triggers">
+
+`Runtime Mode`, `Active Workspace`, `Active Dataset` and `Task Execution` are the global context of the shared shell.
+Users must be able to enter these contexts from the Header, but the Header closed state only displays compact triggers and does not expand summary cards.
+
+</Aside>
+
+<Aside type="caution" title="Page Bodies Must Not Duplicate Shell Context">
+
+The following content belongs to the shared shell and should not be paved with summary cards or authority walls in each page body:
+`Runtime Mode`, `Active Workspace`, `Active Dataset`, `Task Execution`, Runner runtime summary, task recovery / attach / cancel / retry / terminate, shell-level session / authority summary.
+If the page is simply repeating information already known to the shell, it should be removed rather than retained as a "helpful context".
+
+</Aside>
+
+<Aside type="tip" title="Compact Trigger, Selected Detail Elsewhere">
+
+Header is still the global context owner, but only hosts compact triggers / chips.
+The actual workspace switch, dataset switch, recent task rows, account preference and debug disclosure should be concentrated on the right `Shell-Side Panel`; Runner status detail and long task history should go to `/tasks` or developer disclosure.
+
+</Aside>
+
+<Aside type="tip" title="Read With Task Management">
+
+Header is responsible for "where to switch active workspace, switch dataset, open task execution summary, view Runner runtime status, and open user menu."
+The behavioral semantics of `Attach`, `Cancel`, `Terminate`, and `Retry` in the task row are defined by [Task Management](../shared-workflow/task-management.md).
+
+</Aside>
+
+## Slot Map
+
+| Slot | Responsibility |
+|---|---|
+| Left Cluster |Sidebar toggle, single-line shell identity|
+| Global Context Cluster |`Runtime Mode`, `Active Workspace`, `Active Dataset`, `Task Execution` of compact triggers / chips|
+| Right Cluster | user menu / account trigger |
+
+## Shell Identity Contract
+
+| Concern | Required behavior |
+|---|---|
+| Visible label | Show only `SUPERCONDUCTING CIRCUITS` |
+| Line rule | Must maintain a single line, no line breaks |
+| Subtitle rule | MUST NOT display `Research Workbench` or any secondary shell copy |
+| Ownership rule | Sidebar may not assume repeated shell identity |
+| Page-title rule | page identity must return to the page body and is not borne by the Header |
+
+## Shell-Side Panels
+
+| Panel concern | Required behavior |
+|---|---|
+| Owner | Opened by Header triggers, it is the official management surface of the shared shell |
+| Placement | Right drawer / panel; users must not be required to leave the current page to switch shell context |
+| Sections | Undertake at least two panel families `Global Context` and `Account` |
+| Density rule | Header displays compact summary, panel displays management UI; they must not be flattened at the same time to cause double density |
+| Top strip rule | There is no longer a large resident status strip below the Header; if the summary strip is retained, it can only be summary-only and shall not be responsible for management actions |
+
+## Shell-Side Panel Interaction Model
+
+| Concern | Required behavior |
+|---|---|
+| Single active panel | There can only be one active shell-side panel at the same time |
+| Trigger switching | Clicking another header trigger should switch the active panel instead of leaving the second trigger unclickable |
+| Same-trigger toggle | Clicking the same trigger again should directly close the panel |
+| Outside click | Clicking outside the panel should close |
+| Escape | `Escape` should close active panel |
+| Close CTA | No explicit `Close menu` / `Close panel` CTA is required to close |
+| Z-order / hit-testing | open panel must not make other header triggers non-interactive; if the panel is open, other triggers must still be switchable active panel |
+| Shared model | account panel and global-context panel belong to the same shell-side panel interaction model and are not independent of each other overlays |
+
+## Global Context Panel
+
+| Concern | Required behavior |
+|---|---|
+| Role | Compact management entry of shared shell, undertaking workspace, dataset and recent task detail |
+| Top row | Shows 3 to 4 compact section triggers: `Runtime Mode`, `Active Workspace`, `Active Dataset`, `Task Execution` |
+| Trigger role | triggers are section switchers; must not be changed to large summary cards for "completeness" |
+| Detail model | Only the detailed content of the currently selected section is displayed below triggers. All sections must not be stacked at once |
+| Non-selected sections | Non-selected sections only retain compact trigger label / badge and do not display the complete detail body |
+| Runner rule | Runner runtime only displays compact health badge in task execution trigger; Runner detail belongs to `/tasks` or developer disclosure |
+| Density rule | `Global Context` must be summary-first and selected-section-only; it must not become a shell-state management wall |
+
+<Aside type="tip" title="Selected-section detail only">
+
+The core of `Global Context` is "compact triggers cut sections, and only one active section is displayed in the detail area."
+Do not expand the five sections of runtime mode, workspace, dataset, task execution, and runner runtime into the entire package.
+
+</Aside>
+
+## Global Context Order
+
+| Order | Control | Why it comes first |
+|---|---|---|
+| 1 | `Runtime Mode` | Determines whether to connect to the local backend or remote server, and also determines whether auth is necessary |
+| 2 | `Active Workspace` | Determine dataset list, task visibility and capability context |
+| 3 | `Active Dataset` | Determine the default dataset scope for pages | workflow
+| 4 | `Task Execution` | Display task activity in the current workspace / mode |
+| 5 | user menu |identity, settings, appearance and sign out|
+
+## Global Controls
+
+<Tabs>
+<TabItem label="Runtime Mode Trigger">
+
+
+| Element | Required behavior |
+|---|---|
+| mode chip / button | The display is currently `Local Mode` or `Online Mode`, and can be accompanied by compact target summary |
+| open behavior | Click to open the `Global Context` runtime-mode section of the right shell-side panel |
+| mode switch | should support switching to local or configured online target; after switching, the workspace / dataset / task state of the old mode must not be mixed |
+| local outcome | When switching to local mode, enter local session directly without going through auth entry |
+| online outcome | When switching to online mode, first verify the active server target; after success, you should receive `entered_online_auth_required` outcome, and the auth transition is `online_auth_required` or `online_session_dropped`, and then re-enter auth entry |
+| target summary source | compact target summary should come from the summary object of `connection.target` (`label` / `origin` / `validation_status`), not the frontend spelling string by itself |
+| unsafe-context handling | If switching mode will clear dirty draft, attached task or task context, you must ask for confirmation first |
+
+</TabItem>
+
+<TabItem label="Active Workspace Trigger">
+
+
+| Element | Required behavior |
+|---|---|
+| workspace chip / button | Directly display the current active workspace name and role summary |
+| open behavior | Click to open `Global Context` in the shell-side panel on the right, focus on the workspace section, and only list the current user memberships |
+| mode applicability | In local mode, it can be reduced to a single `Local Space` summary, without forcing multiple membership switchers to be displayed |
+| propagation | active dataset, task visibility, role / capabilities must be updated synchronously after switching |
+| unsafe-context handling | If the switch causes the attached task or active dataset to no longer be visible, the Header must trigger the cleanup or reselection process |
+| dirty-state handling | If there is a dirty draft on the current page, the Header will first display confirm and then send a switch mutation |
+
+</TabItem>
+
+<TabItem label="Active Dataset Trigger">
+
+
+| Element | Required behavior |
+|---|---|
+| dataset chip / button | Directly display the name and status of the current active dataset |
+| open behavior | Click to open the `Global Context` dataset section of the shell-side panel on the right. Only the datasets visible in the active workspace are listed, and search and select are supported |
+| propagation | Dashboard, Raw Data, Simulation Workbench, Analysis Workbench must be updated synchronously after switching |
+| no-dataset state | If there is currently no dataset available in the workspace, the trigger must display clear empty state and next step |
+
+</TabItem>
+
+<TabItem label="Task Execution Trigger">
+
+
+| Element | Required behavior |
+|---|---|
+| task button / badge | Displays the number of currently visible active tasks |
+| open behavior | Click to open the `Global Context` task execution section of the right shell-side panel |
+| task section | Displays a small number of recent task rows and filters (`Workspace` / `Mine`); non-selected sections only leave compact trigger summary |
+| mode behavior |local mode shows local runtime tasks; online mode shows workspace-visible shared tasks|
+| Runner runtime summary | Header / Global Context only keeps compact health badge; each Runner's `idle / running / degraded / draining / offline` detail enters `/tasks` or developer disclosure |
+| liveness wording | `idle` represents Runner alive and available; `offline` only represents unavailable. A merely idle Runner or a passive heartbeat sparse Runner must not be mislabeled as `offline` |
+| row action entry | Each row supports at least `Attach` and displays `Cancel` / `Terminate` / `Retry` according to permissions |
+| default ordering | active tasks first, then press `updated_at desc` to display the latest terminal tasks |
+| extended browse | standalone [`Tasks`](../workspace/tasks.mdx) page is responsible for longer history / deeper inspect; panel must not become the second full task center |
+
+</TabItem>
+
+<TabItem label="User Menu">
+
+
+| Element | Required behavior |
+|---|---|
+| user icon trigger | Off state only displays compact identity / avatar / initials and necessary compact warning indicator |
+| closed-state density | Closed states must not include full error text, session diagnostics, or recovery instructions |
+| open behavior | You can directly open the `Account` section of the right shell-side panel, but you must not open the second set of independent overlay models |
+| menu sections | Contain at least mode-aware `Account Summary`, `Appearance`, `Developer Mode` and corresponding auth / mode actions |
+| opened-state detail | Full degraded / warning / recovery detail only displayed after opening |
+| appearance control | `Light / Dark / System` is owned by User Menu, not by Sidebar |
+
+</TabItem>
+
+</Tabs>
+
+## Account Surface Contract
+
+| Concern | Required behavior |
+|---|---|
+| Role | Lightweight personal / app-preference surface, not a shell-wide state-management surface |
+| Allowed content |account summary, appearance, developer mode, mode-aware auth actions and runtime-mode entry|
+| Mode relation | account can display the account-side summary of the current mode and provide mode switch entry; the real switching authority is still shared runtime-mode mutation |
+| Excluded content |workspace state, session diagnostics, membership management, task detail, heavy collaboration controls|
+| Header density | account panel header should be kept simple, use `Account`, `Appearance` or equivalent lightweight headers |
+| Branding rule | account panel must not repeat `SUPERCONDUCTING CIRCUITS` or other shell identity |
+| Diagnostics rule | If degraded / error / debug detail needs to be displayed, it must be presented with disclosure or secondary block in the opened panel |
+
+## Account Surface By Mode
+
+| Mode | Required account behavior |
+|---|---|
+| `local` | Display local operator / `Local Space` summary, appearance, developer mode and `Connect to Online Mode` / Specify target entry; do not display remote sign out |
+| `online-authenticated` |Display authenticated user summary, appearance, developer mode, target summary, `Sign out` and `Switch to Local Mode`|
+| `online-auth-required` | Display target summary, appearance, developer mode, `Sign in`, re-specify `IP:Port` / target and `Switch to Local Mode`; do not pretend to have an authenticated account |
+| `online-session-dropped` | Display target summary and compact warning, indicating that the target is currently connected but the old online session can no longer be used; priority is given to re-login |
+
+<Aside type="tip" title="Local account is preference-first">
+
+The account surface under `Local Mode` is not a smaller version of the login portal.
+It should first answer "Currently in Local Space, this is the local operator, here you can change the appearance or open Developer Mode", and then provide an entrance to online when you need to connect.
+
+</Aside>
+
+## Developer Mode Preference
+
+| Concern | Required behavior |
+|---|---|
+| Ownership | app-level preference, on the same level as `Appearance`, owned by account surface |
+| Scope | Not workspace-scoped nor session-scoped |
+| Default | local development build can default to `On`; product defaults to user-facing sessions `Off` |
+| `Off` behavior | The primary product UI only displays concise status and recovery messaging; if technical details still need to be retained, they should be placed in secondary disclosure, debug panel or compact debug block |
+| `On` behavior | Allow raw backend / JS exception detail to appear directly in the main content area where the problem occurred, helping to identify which UI surface is broken; the debug panel can still be retained as a more complete structured detail |
+| Covered surfaces |shell-side panels, auth entry, page-level error blocks, diagnostics-heavy workflow surfaces|
+
+<Aside type="note" title="Developer Mode controls message density, not panel existence">
+
+`Developer Mode` determines whether the error message in the main content area should display user-safe summary or raw technical detail.
+It is not responsible for determining whether the debug panel exists; the secondary debug surface can exist in both `On` and `Off` modes.
+
+</Aside>
+
+<Aside type="caution" title="Inline raw detail should stay local to the failing surface">
+
+Even if `Developer Mode` is `On`, the raw technical detail should appear in the corresponding broken block instead of turning the entire page into a diagnostics wall.
+
+</Aside>
+
+## Toggle And Trigger Affordance
+
+| Control | Required behavior |
+|---|---|
+| Sidebar toggle | Must have pointer cursor, clear hover state and focus-visible state |
+| Global context cards/chips | Must be clearly clickable, selected state obvious, cannot rely solely on text descriptions to understand interaction |
+| Account trigger | Must have pointer cursor, hover and focus-visible state; closed state remains compact |
+
+## Context Switching Outcomes
+
+| Switch | Header must do |
+|---|---|
+| workspace changed | Reconnect active dataset, refresh task visibility, update role and user menu capabilities |
+| dataset changed | Update dataset chip, notify workflow pages to re-read dataset-bound state |
+| workspace caused task detachment | Display detached notice and keep task execution panel reattachable |
+| invite accepted in another workspace | Show `Switch to workspace` CTA instead of silently switching |
+
+## Delivery Rules
+
+| Rule | Meaning |
+|---|---|
+| Context follows authority | workspace / dataset comes from session surface; definition comes from definition surface; task comes from persisted task surface |
+| Runtime mode is the outer shell boundary | `Runtime Mode` first determines the local / online authority, and then determines the workspace, dataset and task context |
+| Workspace is top-level shell context | `Active Workspace` takes precedence over `Active Dataset` because dataset list, task visibility and capabilities all depend on it |
+| Task execution is globally reachable | No matter which page you are on, you can open `Task Execution` from the Header |
+| Runner runtime summary is runtime-driven | The compact Runner badge displayed by the Header must come from the runtime summary and cannot be inferred by the UI |
+| Header is summary-first | Header can prompt dirty / attached / stale, but should not flatten a large management UI |
+| Shell-side panel owns selected detail | workspace switch, dataset switch, recent task rows and account detail should be concentrated in the right panel; Runner detail and long history belong to `/tasks` |
+| Account is preference-first | The account panel takes precedence over personal/app preference and does not take over the workspace and collaboration management interface |
+| Responsive collapse | Narrow screens can be reduced to icon + chips, but dataset, task execution and user menu trigger must still be retained |
+| Helpful context is not enough | page If information can be obtained through Header / Global Context, runtime / dataset / authority summary cards should not be redone |
+
+<Aside type="tip" title="Header vs Sidebar">
+
+Header is responsible for the entry of global context and user controls.
+[Sidebar](sidebar.md) is only responsible for stable navigation and no longer responsible for dataset switch or appearance toggle.
+
+</Aside>
+
+## App Pair
+
+| Concern | Authority |
+|---|---|
+| active workspace / dataset / user summary | [Backend / Session & Workspace](../../backend/session-workspace.mdx) |
+| runtime mode / mode switch outcome | [App / Shared / Runtime Modes](../../shared/runtime-modes.mdx), [Backend / Session & Workspace](../../backend/session-workspace.mdx) |
+| attached task summary / task rows | [Backend / Tasks & Execution](../../backend/tasks-execution.md) |
+| permission & user menu capability | [App / Shared / Authentication & Authorization](../../shared/authentication-and-authorization.mdx) |
+| workspace ownership / visibility | [App / Shared / Resource Ownership & Visibility](../../shared/resource-ownership-and-visibility.mdx) |
+| Runner runtime / processor status summary | [App / Shared / Task Runtime & Processors](../../shared/task-runtime-and-processors.md) |
+
+## Related
+
+- [Sidebar](sidebar.md)
+- [Task Management](../shared-workflow/task-management.md)
+- [Runtime Modes](../../shared/runtime-modes.mdx)

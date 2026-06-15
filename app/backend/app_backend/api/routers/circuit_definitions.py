@@ -18,24 +18,13 @@ from app_backend.domain.circuit_definitions import (
     SortOrder,
     ValidationNotice,
 )
-from app_backend.domain.schemdraw_render import (
-    SchemdrawDiagnostic,
-    SchemdrawLinkedSchema,
-    SchemdrawRenderRequest,
-    SchemdrawRenderResult,
-)
 from app_backend.infrastructure.request_debug import current_debug_ref
-from app_backend.infrastructure.runtime import (
-    get_circuit_definition_service,
-    get_schemdraw_render_service,
-)
+from app_backend.infrastructure.runtime import get_circuit_definition_service
 from app_backend.services.circuit_definition_service import CircuitDefinitionService
-from app_backend.services.schemdraw_render_service import SchemdrawRenderService
 from app_backend.services.service_errors import ServiceError, service_error
 
 router = APIRouter(tags=["definition-authoring"])
 definitions_router = APIRouter(prefix="/circuit-definitions", tags=["circuit-definitions"])
-schemdraw_router = APIRouter(prefix="/schemdraw", tags=["schemdraw"])
 
 
 @definitions_router.get("")
@@ -206,22 +195,6 @@ def delete_circuit_definition(
     )
 
 
-@schemdraw_router.post("/render")
-def render_schemdraw_preview(
-    payload: Annotated[object, Body(...)],
-    render_service: Annotated[
-        SchemdrawRenderService,
-        Depends(get_schemdraw_render_service),
-    ],
-) -> JSONResponse:
-    try:
-        request = _parse_schemdraw_request(payload)
-        result = render_service.render(request)
-    except ServiceError as exc:
-        return _service_error_response(exc)
-    return _success_response(data=_serialize_schemdraw_result(result))
-
-
 def _parse_definition_create_payload(payload: object) -> CircuitDefinitionDraft:
     body = _as_mapping(payload)
     name = _required_string(body, "name")
@@ -258,44 +231,6 @@ def _parse_definition_clone_payload(payload: object | None) -> CircuitDefinition
         return CircuitDefinitionCloneDraft()
     body = _as_mapping(payload)
     return CircuitDefinitionCloneDraft(name=_optional_string(body.get("name")))
-
-
-def _parse_schemdraw_request(payload: object) -> SchemdrawRenderRequest:
-    body = _as_mapping(payload)
-    relation_config = body.get("relation_config")
-    if not isinstance(relation_config, dict):
-        raise service_error(
-            400,
-            code="schemdraw_relation_invalid",
-            category="validation_error",
-            message="relation_config must be an object.",
-        )
-    linked_schema_payload = body.get("linked_schema")
-    linked_schema = None
-    if linked_schema_payload is not None:
-        linked_schema_mapping = _as_mapping(linked_schema_payload)
-        linked_schema = SchemdrawLinkedSchema(
-            definition_id=_required_string(linked_schema_mapping, "definition_id"),
-            workspace_id=_required_string(linked_schema_mapping, "workspace_id"),
-            name=_required_string(linked_schema_mapping, "name"),
-            source_hash=_optional_string(linked_schema_mapping.get("source_hash")),
-        )
-    render_mode = _optional_string(body.get("render_mode")) or "debounced"
-    if render_mode not in {"debounced", "manual"}:
-        raise service_error(
-            400,
-            code="schemdraw_relation_invalid",
-            category="validation_error",
-            message="render_mode must be 'debounced' or 'manual'.",
-        )
-    return SchemdrawRenderRequest(
-        source_text=_required_string(body, "source_text"),
-        relation_config=relation_config,
-        linked_schema=linked_schema,
-        document_version=_required_int(body, "document_version"),
-        request_id=_required_string(body, "request_id"),
-        render_mode=cast(Any, render_mode),
-    )
 
 
 def _serialize_definition_summary(summary: CircuitDefinitionSummary) -> dict[str, object]:
@@ -339,44 +274,6 @@ def _serialize_definition_detail(detail: CircuitDefinitionDetail) -> dict[str, o
     }
 
 
-def _serialize_schemdraw_result(result: SchemdrawRenderResult) -> dict[str, object]:
-    return {
-        "request_id": result.request_id,
-        "document_version": result.document_version,
-        "status": result.status,
-        "svg": result.svg,
-        "diagnostics": [_serialize_schemdraw_diagnostic(item) for item in result.diagnostics],
-        "cursor_position": (
-            None
-            if result.cursor_position is None
-            else {
-                "x": result.cursor_position.x,
-                "y": result.cursor_position.y,
-            }
-        ),
-        "probe_points": [
-            {
-                "name": item.name,
-                "x": item.x,
-                "y": item.y,
-            }
-            for item in result.probe_points
-        ],
-        "render_time_ms": result.render_time_ms,
-        "preview_metadata": (
-            None
-            if result.preview_metadata is None
-            else {
-                "width": result.preview_metadata.width,
-                "height": result.preview_metadata.height,
-                "view_box": result.preview_metadata.view_box,
-                "source_line_count": result.preview_metadata.source_line_count,
-                "linked_definition_id": result.preview_metadata.linked_definition_id,
-            }
-        ),
-    }
-
-
 def _serialize_allowed_actions(allowed_actions: object) -> dict[str, bool]:
     return {
         "update": bool(allowed_actions.update),
@@ -393,18 +290,6 @@ def _serialize_validation_notice(notice: ValidationNotice) -> dict[str, object]:
         "message": notice.message,
         "source": notice.source,
         "blocking": notice.blocking,
-    }
-
-
-def _serialize_schemdraw_diagnostic(diagnostic: SchemdrawDiagnostic) -> dict[str, object]:
-    return {
-        "severity": diagnostic.severity,
-        "code": diagnostic.code,
-        "message": diagnostic.message,
-        "source": diagnostic.source,
-        "blocking": diagnostic.blocking,
-        "line": diagnostic.line,
-        "column": diagnostic.column,
     }
 
 
@@ -484,18 +369,6 @@ def _required_string(payload: dict[str, object], key: str) -> str:
             message=f"{key} must be a non-empty string.",
         )
     return value.strip()
-
-
-def _required_int(payload: dict[str, object], key: str) -> int:
-    value = payload.get(key)
-    if not isinstance(value, int):
-        raise service_error(
-            400,
-            code="request_validation_failed",
-            category="validation_error",
-            message=f"{key} must be an integer.",
-        )
-    return value
 
 
 def _optional_string(value: object) -> str | None:

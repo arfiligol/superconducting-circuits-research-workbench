@@ -5,9 +5,21 @@ on:
     paths:
       - "site/**"
       - "docs/**"
-      - "zensical.toml"
       - "scripts/build/build_public_site.sh"
+      - "scripts/build/build_api_docs.sh"
+      - "scripts/build/check_api_reference_links.py"
+      - "scripts/check_docs_app_quarantine.py"
+      - "scripts/check_docs_language.py"
+      - "scripts/check_docs_language_allowlist.txt"
+      - "scripts/build/prepare_starlight_docs.py"
       - "scripts/build_docs_sites.sh"
+      - "package.json"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "app/backend/app_backend/domain/runtime_contracts/**"
+      - "core/python/analysis/superconducting_circuits_analysis/**"
+      - "core/python/circuit_libraries/schemdraw_circuit_library/**"
+      - "core/julia/**"
       - ".github/workflows/public-site-integrity.yml"
       - ".github/workflows/deploy-docs.yml"
   push:
@@ -15,9 +27,21 @@ on:
     paths:
       - "site/**"
       - "docs/**"
-      - "zensical.toml"
       - "scripts/build/build_public_site.sh"
+      - "scripts/build/build_api_docs.sh"
+      - "scripts/build/check_api_reference_links.py"
+      - "scripts/check_docs_app_quarantine.py"
+      - "scripts/check_docs_language.py"
+      - "scripts/check_docs_language_allowlist.txt"
+      - "scripts/build/prepare_starlight_docs.py"
       - "scripts/build_docs_sites.sh"
+      - "package.json"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "app/backend/app_backend/domain/runtime_contracts/**"
+      - "core/python/analysis/superconducting_circuits_analysis/**"
+      - "core/python/circuit_libraries/schemdraw_circuit_library/**"
+      - "core/julia/**"
       - ".github/workflows/public-site-integrity.yml"
       - ".github/workflows/deploy-docs.yml"
 
@@ -31,7 +55,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install Python dependencies
-        run: uv sync --group dev --frozen
+        run: uv sync --all-packages --group dev --frozen
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -40,8 +64,16 @@ jobs:
           cache: "npm"
           cache-dependency-path: site/package-lock.json
 
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.12"
+
       - name: Install site dependencies
         run: npm ci --prefix site
+
+      - name: Validate docs App quarantine
+        run: uv run python scripts/check_docs_app_quarantine.py
 
       - name: Build public site
         run: ./scripts/build/build_public_site.sh

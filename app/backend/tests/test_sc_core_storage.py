@@ -1,5 +1,5 @@
-from sc_core.execution import TaskResultHandle
-from sc_core.storage import (
+from app_backend.domain.runtime_contracts.execution import TaskResultHandle
+from app_backend.domain.runtime_contracts.storage import (
     STORAGE_CONTRACT_VERSION,
     TraceBatchHandle,
     TraceBatchProvenance,

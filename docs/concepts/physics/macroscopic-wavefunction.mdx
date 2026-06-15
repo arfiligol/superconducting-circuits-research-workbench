@@ -1,0 +1,142 @@
+---
+aliases:
+- Macroscopic wave functions of superconductors
+tags:
+- diataxis/explanation
+- audience/user
+- topic/physics
+status: draft
+owner: docs-team
+audience: user
+scope: Explain why superconductors can be described by a single macroscopic wave function
+version: v0.1.0
+last_updated: 2026-02-24
+updated_by: team
+sidebar:
+ label: Macroscopic Wavefunction
+ order: 30
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Macroscopic wave function of superconductors
+
+## Summary of this chapter
+
+One of the most surprising properties of superconductors is that a large number of electrons in the entire material can be described by a single wave function. This wave function is not a single-particle wave function, but a macroscopic-scale quantum state—its existence is the starting point for all subsequent superconducting quantum circuit physics.
+
+## Prerequisite knowledge comparison
+
+- **Quantum Mechanics**: Wave function $\Psi$, Schrödinger equation, Bose–Einstein condensation concept
+- **Statistical Mechanics**: phase transition, order parameter
+- **Solid State Physics**: Fermi surface, electron-phonon interaction (qualitative understanding is enough)
+
+## Symbol definition
+
+| Symbol | Name | Definition/Description |
+|------|------|------------|
+| $\Psi(\mathbf{r})$ | Macroscopic wave function | Order parameter describing the superconducting condensed matter, also known as Ginzburg–Landau order parameter |
+| $\|\Psi(\mathbf{r})\|^2$ | Superfluid density (superfluid density) | The density of the superconducting Cooper pair condensed matter, proportional to the Cooper pair number density $n_s$ |
+| $\theta(\mathbf{r})$ | Macroscopic phase | The phase of the order parameter, which plays the core dynamic variable in superconducting circuits |
+| $n_s$ | Cooper pair number density | Number of Cooper pairs per unit volume |
+| $\Delta$ | Superconducting gap | Binding energy of Cooper pair, related to pairing strength |
+| $T_c$ | critical temperature | temperature threshold of superconducting phase transition |
+| $\xi$ | Coherence length (coherence length) | The characteristic length required for the order parameter to change significantly in space |
+
+## Physical context
+
+### 1. Electrons in normal metals
+
+In general metals, conduction electrons are fermions and obey the Pauli exclusion principle. Each electron occupies an independent quantum state, filled up to the Fermi energy $E_F$. These electrons cannot be described by a common wave function - their behavior is inherently "many-body" and "independent."
+
+### 2. Cooper Pairing: How electrons pair up
+
+In 1956, Cooper pointed out that two electrons near the Fermi surface can form a bound state even if there is a weak attractive interaction between electrons (for example, indirectly through lattice vibrations - phonons) (Cooper, 1956). This bound state is called **Cooper pair**.
+
+Key features of Cooper pair:
+
+- Consists of two electrons with opposite momentum and opposite spin: $(\mathbf{k}\uparrow, -\mathbf{k}\downarrow)$
+- Total spin is zero -> overall behaves like a **boson**
+- The pairing energy gap $\Delta$ prevents the pair from being easily separated
+
+<Aside type="note" title="Why are Cooper pairs bosons?">
+
+A composite particle composed of two fermions (half-integer spin) whose total spin is an integer (here 0) and therefore satisfies the Bose–Einstein statistic. This is the physical basis on which the Cooper pair can gel.
+
+</Aside>
+
+### 3. From pairing to condensation: BCS ground state
+
+In 1957, Bardeen, Cooper and Schrieffer constructed a complete microscopic theory (called BCS theory), proving that below the critical temperature $T_c$, all pairable electrons near the Fermi surface will simultaneously form Cooper pairs and occupy the same quantum state (Bardeen et al., 1957).
+
+This is the analogy of Bose–Einstein condensation: a large number of Cooper pairs condense into the same quantum ground state, forming a macroscopic quantum condensate.
+
+<Aside type="tip" title="Historical context">
+
+After the BCS theory was published in 1957, it successfully explained experimental phenomena such as the energy gap, Meissner effect and isotope effect of superconductors. Bardeen, Cooper and Schrieffer won the 1972 Nobel Prize in Physics.
+
+</Aside>
+
+### 4. Order parameters: mathematical description of condensed matter
+
+Since all Cooper pairs occupy the same quantum state, we can describe the entire condensed state with a single field $\Psi(\mathbf{r})$. This is the order parameter introduced by Ginzburg and Landau as early as 1950 based on phenomenological theory (Ginzburg & Landau, 1950), and later Gor'kov (1959) showed that it can be strictly derived from BCS theory.
+
+The order parameters are written in polar form:
+
+$$
+\Psi(\mathbf{r}) = |\Psi(\mathbf{r})|\, e^{i\theta(\mathbf{r})}
+$$
+
+This expression contains two physical quantities:
+
+| Ingredients | Physical meaning | Remarks |
+|------|---------|------|
+| $\|\Psi(\mathbf{r})\|$ | Amplitude, proportional to $\sqrt{n_s}$ | Describes how "strong" superconductivity is |
+| $\theta(\mathbf{r})$ | Phase | Describes the quantum phase of superconducting condensed matter; phenomena such as current and magnetic flux quantization are determined by it |
+
+<Aside type="caution" title="This is not a single electron wave function">
+
+$\Psi(\mathbf{r})$ is not a quantum mechanical wave function of an electron, but an order parameter field that describes the Cooper pair condensate. Its square gives the number density of Cooper pairs, not the single-electron probability density.
+
+</Aside>
+
+### 5. Why is phase $\theta$ so important?
+
+In a bulk of a superconductor, the amplitude $|\Psi|$ is usually uniform and stable (away from the boundaries and vortex core). Therefore, all the interesting dynamics in superconductors—current flow, magnetic field response, Josephson effect—are driven by phase $\theta(\mathbf{r})$.
+
+The relationship between superconducting current density and phase gradient is:
+
+$$
+\mathbf{J}_s = \frac{n_s e^*}{m^*}\left(\hbar\nabla\theta - e^*\mathbf{A}\right)
+$$
+
+Where $e^* = 2e$ is the charge of the Cooper pair, $m^*$ is its effective mass, and $\mathbf{A}$ is the magnetic vector potential. This expression directly tells us: **Superconducting current is driven by spatial changes in macroscopic phase**.
+
+This is exactly why superconducting quantum circuits can exist - the phase $\theta$ is simultaneously macroscopically observable (can drive an electric current) and quantum mechanically (satisfies all the properties of a wave function, such as singularity).
+
+## Project mapping
+
+- All designs of superconducting quantum circuits are based on the existence of macroscopic wave functions.
+- **node flux** $\Phi = (\hbar/2e)\,\theta$ in the circuit is exactly the engineering equivalent of phase.
+- The superconducting energy gap $\Delta$ determines the threshold of quasiparticle excitation and affects the decoherence of qubits.
+- The coherence length $\xi$ sets the geometric lower limit of the Josephson junction.
+
+## Limitations and approximations
+
+- The above description is most accurate when $T \ll T_c$; when close to $T_c$, the fluctuation of the order parameter amplitude cannot be ignored.
+- The Ginzburg–Landau theory is a mean-field approximation and needs correction in low-dimensional systems or regions with strong fluctuations.
+- This article does not involve the complete derivation of BCS theory (such as gap equation). The focus is on the physical meaning and notation of order parameters.
+
+## Cross-file navigation
+
+- Next step: [Why is magnetic flux quantized? ](why-flux-is-quantized.mdx) — Use the singularity of macroscopic wave functions to derive magnetic flux quantization
+- Task-oriented: [Flux Dependence Analysis](../../workflows/fem-result-to-equivalent-circuit/flux-analysis.md)
+
+## References
+
+- Bardeen, J., Cooper, L. N., & Schrieffer, J. R. (1957). Theory of superconductivity. *Physical Review*, 108(5), 1175–1204. [DOI:10.1103/PhysRev.108.1175](https://doi.org/10.1103/PhysRev.108.1175)
+- Cooper, L. N. (1956). Bound electron pairs in a degenerate Fermi gas. *Physical Review*, 104(4), 1189–1190. [DOI:10.1103/PhysRev.104.1189](https://doi.org/10.1103/PhysRev.104.1189)
+- Ginzburg, V. L., & Landau, L. D. (1950). On the theory of superconductivity. *Zhurnal Eksperimental'noi i Teoreticheskoi Fiziki*, 20, 1064–1082. (English translation in *Collected Papers of L. D. Landau*, Pergamon, 1965.)
+- Gor'kov, L. P. (1959). Microscopic derivation of the Ginzburg–Landau equations in the theory of superconductivity. *Soviet Physics JETP*, 9(6), 1364–1367.
+- Tinkham, M. (2004). *Introduction to Superconductivity* (2nd ed.). Dover Publications. ISBN 978-0-486-43503-9.
+- Annett, J. F. (2004). *Superconductivity, Superfluids and Condensates*. Oxford University Press. ISBN 978-0-19-850756-7.

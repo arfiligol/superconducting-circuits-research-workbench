@@ -1,0 +1,582 @@
+---
+aliases:
+ - Coupled Transmission Lines
+ - Even/Odd, Maxwell, Mutual
+ - Coupled transmission lines: Even/Odd, Maxwell, Mutual
+tags:
+ - diataxis/explanation
+ - audience/team
+ - topic/physics
+ - topic/simulation
+ - node_type/model
+status: draft
+owner: docs-team
+audience: team
+scope: Explain the even/odd modal parameters of the coupled transmission line, the Maxwell capacitance matrix, the mutual capacitance matrix, and how they interface to the decentralized ladder builder
+version: v0.1.1
+last_updated: 2026-06-12
+updated_by: codex
+sidebar:
+ label: Coupled Transmission Lines
+ order: 70
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import coupledLineLadderSectionDark from '../../assets/circuit_draw/physics/coupled_line_ladder_section/diagram.dark.svg';
+import coupledLineLadderSectionLight from '../../assets/circuit_draw/physics/coupled_line_ladder_section/diagram.light.svg';
+
+# Coupled Transmission Lines:Even/Odd, Maxwell, Mutual
+
+If what you want to do now is distributed coupled-line section, you will almost certainly run into these three representations:
+
+- even / odd mode parameters
+- Maxwell capacitance matrix
+- mutual capacitance matrix
+
+These three names look like three different theories, but in fact they are discussing the same symmetrical double-conductor coupled line, but they are just from different description angles.
+
+The core question of this article is:
+
+**Why does `JosephsonCircuits` provide `maxwell_to_even_odd`, `mutual_to_even_odd`, and `even_odd_to_mutual` at the same time? If I want to write `add_coupled_line_section!`, which one should I use? **
+
+<span class="circuit-figure">
+ <img class="circuit-figure__image circuit-figure__light" src={coupledLineLadderSectionLight.src ?? coupledLineLadderSectionLight} alt="Coupled-line ladder section" />
+ <img class="circuit-figure__image circuit-figure__dark" src={coupledLineLadderSectionDark.src ?? coupledLineLadderSectionDark} alt="" aria-hidden="true" />
+</span>
+
+<details class="docs-disclosure docs-disclosure--quote">
+<summary>Schemdraw drawing source</summary>
+
+The drawing source and review metadata live under `docs/assets/circuit_draw/physics/coupled_line_ladder_section/`.
+Regenerate it with `uv run python scripts/build/render_circuit_drawings.py --diagram physics.coupled_line_ladder_section`.
+
+</details>
+
+## Let’s talk about the conclusion first
+
+If your goal is to actually write the coupled line as a distributed ladder in the netlist, the most practical process is usually:
+
+1. First use the even/odd parameters to describe the coupled section you want
+2. Use `even_odd_to_mutual(...)` to convert to `L` and `C_mutual`
+3. Then discrete it into many small sections
+4. Use for each section:
+- Two series `L`
+- a mutual `K`
+- Two to the ground `C`
+- One jumper `C`
+
+That is to say:
+
+- **even/odd form** is most suitable for specifications and physical interpretation
+- **Maxwell form** is most suitable for matrix analysis
+- **mutual form** is most suitable for mapping to "entity netlist elements"
+
+If you end up writing `add_coupled_line_section!`, the most critical thing is usually not `maxwell_to_even_odd`, but:
+
+- `even_odd_to_mutual`
+- `mutual_to_even_odd`
+
+The former turns the modal specification into a physical section that can be downloaded from the netlist; the latter allows you to check "whether the physical ladder I wrote corresponds to the even/odd modal I originally wanted."
+
+## You can start here
+
+- Do you know the `Z_0`, phase velocity, phase velocity or refractive index of the transmission line?
+- You know that coupled line has even mode and odd mode
+- You can accept 2×2 matrices representing `L` and `C` per unit length
+
+To add background, please read:
+
+- [Physics Overview](index.mdx)
+- [Schur Complement & Kron Reduction](schur-complement-kron-reduction.mdx)
+
+If you just want to do the task first:
+
+- First use the idea of [Pluto Parameter Sweep Workflow](../../workflows/reusable-circuit-authoring/pluto-parameter-sweep-workflow.mdx) to treat the coupled section as a sweepable structure
+
+## The three representations are talking about the same thing
+
+### 1. Even / Odd mode form: most suitable for teaching physics
+
+The two eigenmodes of a symmetric coupled line are:
+
+- **even mode**: The two lines have the same potential and current in the same direction
+- **odd mode**: two lines with opposite phase potential and reverse direction current
+
+For a symmetric coupled line, what you often get is:
+
+- `Z_even`
+- `Z_odd`
+- `n_even`
+- `n_odd`
+
+The advantage of these four quantities is that physical intuition is very strong:
+
+- `Z_even` / `Z_odd` tells you the characteristic impedance of the two modes
+- `n_even` / `n_odd` tells you the phase velocity difference between the two modes
+
+This is also one of the main ways Qucs describes coupled transmission line components: treat the coupled line as an independent transmission line for even mode and odd mode, and then combine them back into a 4-port result. See Qucs' coupled transmission line technical note. [Qucs](https://qucs.sourceforge.net/tech/node63.html)
+
+### 2. Maxwell capacitance matrix: most suitable for node charge-voltage analysis
+
+`JosephsonCircuits.maxwell_to_even_odd(L, Cmaxwell)` uses **Maxwell capacitance matrix**.
+
+Its definition is:
+
+```text
+Q = C_maxwell V
+```
+
+That is to say:
+
+- `C_maxwell[i, j] = dQ_i / dV_j`
+- The diagonal term represents the sensitivity of the node's charge to its own voltage
+- The off-diagonal term is usually negative because an increase in the voltage at a neighboring node will pull away the charge at this node
+
+For two symmetric coupled lines, if Maxwell form is used, the most typical form will be:
+
+```text
+C_maxwell =
+[ C11  C12 ]
+[ C12  C11 ]
+```
+
+And usually `C12 < 0`.
+
+In the reference of `JosephsonCircuits`, in the symmetric case:
+
+```text
+Z_even = sqrt((L11 + L12) / (C11 + C12))
+Z_odd = sqrt((L11 - L12) / (C11 - C12))
+```
+
+See the official reference and original implementation. [JosephsonCircuits Reference](https://josephsoncircuits.org/stable/reference/)
+
+### 3. Mutual capacitance matrix: most suitable for drawing as an entity netlist
+
+`JosephsonCircuits.even_odd_to_mutual(...)` returns the **mutual capacitance matrix**.
+
+The point of this notation is not `Q = CV`, but:
+
+- Diagonal term = physical capacitance of each line to ground
+- Off-diagonal term = physical coupling capacitance between lines
+
+In other words, it is more like "a list of capacitive components that really needs to be placed in the netlist."
+
+When the double line is symmetrical, it looks like:
+
+```text
+C_mutual =
+[ Cg  Cm ]
+[ Cm  Cg ]
+```
+
+here:
+
+- `Cg` is the physical capacitor of each line to ground
+- `Cm` is the physical coupling capacitor between the two lines
+
+This is why **mutual form is best suited to be turned directly into a section ladder**.
+
+## Why do Maxwell form and mutual form look different?
+
+This is where the most confusion arises.
+
+In `JosephsonCircuits`:
+
+```text
+C_mutual = maxwell_to_mutual(C_maxwell)
+```
+
+The most common correspondences of symmetrical double lines are:
+
+```text
+C_mutual =
+[ Cg  Cm ]
+[ Cm  Cg ]
+```
+
+Corresponds to:
+
+```text
+C_maxwell =
+[ Cg + Cm  -Cm   ]
+[ -Cm    Cg + Cm ]
+```
+
+so:
+
+- `Cm` in mutual form is the capacitor you would really put between the two lines
+- The off-diagonal of Maxwell form is negative because it is the node charge-voltage relationship, not the physical branch list
+
+This is why the result of `mutual_to_even_odd(...)` becomes:
+
+```text
+Z_even = sqrt((Ls + Lm) / Cg)
+Z_odd = sqrt((Ls - Lm) / (Cg + 2Cm))
+```
+
+It seems strange at first, but it actually makes perfect sense:
+
+- In even mode, the two lines have the same potential, so the **cross-line capacitor `Cm` has no voltage difference and does not participate in energy storage**
+- In odd mode, the two lines are in opposite phase, so the voltage difference between the two ends of the capacitor across the line is the largest and the energy storage is the strongest**
+
+therefore:
+
+- The only effective capacitance seen in even mode is `Cg`
+- The effective capacitance seen by odd mode will increase to `Cg + 2Cm`
+
+This is exactly the physical meaning of `JosephsonCircuits.mutual_to_even_odd(...)`. [JosephsonCircuits Reference](https://josephsoncircuits.org/stable/reference/)
+
+## It will be most clear to see this matter using base conversion.
+
+Let the transformation matrix on even/odd basis be:
+
+```text
+T = 1/sqrt(2) * [ 1  1 ]
+         [ 1 -1 ]
+```
+
+In the case of symmetry,
+
+```text
+L =
+[ Ls  Lm ]
+[ Lm  Ls ]
+```
+
+will be diagonalized into:
+
+```text
+T^T L T = diag(Ls + Lm, Ls - Lm)
+```
+
+and Maxwell capacitance matrix
+
+```text
+C_maxwell =
+[ Cg + Cm  -Cm   ]
+[ -Cm    Cg + Cm ]
+```
+
+It will also be diagonalized into:
+
+```text
+T^T C_maxwell T = diag(Cg, Cg + 2Cm)
+```
+
+So the even / odd mode essentially diagonalizes the symmetric coupled pair.
+
+This is also the real reason why `maxwell_to_even_odd` looks so simple:
+It's not a magic formula, it's the 2×2 modal decomposition of a symmetric double line.
+
+## How to use each of the three functions
+
+### `maxwell_to_even_odd(L, Cmaxwell)`
+
+Use if you already have:
+
+- inductance matrix `L`
+- Maxwell capacitance matrix `Cmaxwell`
+
+And you want to know:
+
+- `Z_even`
+- `Z_odd`
+- `n_even`
+- `n_odd`
+
+This works great for:
+
+- extract modal quantities from field solver / nodal matrix results
+- Do basic understanding and sanity check
+
+### `mutual_to_even_odd(L, Cmutual)`
+
+Use if you already have:
+
+- physical inductor coupling
+- physical capacitors to ground and between lines
+
+And you want to know:
+
+- What even / odd modes do these solid components correspond to?
+
+This works great for:
+
+- Check whether your hand-engraved ladder section is reasonable
+- Push back modal behavior from entity section value
+
+### `even_odd_to_mutual(Zeven, Zodd, neven, nodd)`
+
+This is the most critical one if you are going to write `add_coupled_line_section!`.
+
+The questions it is suitable for are:
+
+**I first specify the coupled line specification in the modal space. How can I turn it into a section element in the netlist? **
+
+That is:
+
+```text
+(Z_even, Z_odd, n_even, n_odd)
+  -> (L matrix, C_mutual matrix)
+  -> ladder sections
+```
+
+## Example 1: The limit of complete uncoupling
+
+if
+
+```text
+Lm = 0
+Cm = 0
+```
+
+So:
+
+```text
+L = [Ls 0; 0 Ls]
+C_mutual = [Cg 0; 0 Cg]
+```
+
+at this time:
+
+- `Z_even = Z_odd`
+- `n_even = n_odd`
+
+These are two independent lines that do not affect each other.
+
+This example is important because it is the first sanity check of any coupled-line builder:
+
+- If coupling is turned off, the result must be reduced to two ordinary transmission lines
+
+## Example 2: Why odd mode is slower than even mode
+
+Assumptions:
+
+```text
+Ls = 1.0
+Lm = 0.1
+Cg = 1.6
+Cm = 0.4
+```
+
+So:
+
+```text
+L_even = Ls + Lm = 1.1
+L_odd = Ls - Lm = 0.9
+C_even = Cg   = 1.6
+C_odd = Cg + 2Cm = 2.4
+```
+
+so:
+
+- Even mode has a larger inductance but smaller capacitance
+- The inductance of odd mode is smaller, but the capacitance is larger
+
+In many practical structures, the capacitance increase in odd mode is more obvious, so it is often slower than even mode.
+
+This is why the coupled-line calculator often reports both:
+
+- `Z_even`
+- `Z_odd`
+- `n_even`
+- `n_odd`
+
+Instead of just giving you a single `Z0`.
+
+## Example 3: Export a single ladder section from even/odd specifications
+
+Suppose you have a coupled section of length `ℓ`, divided into `N` segments.
+
+You already know:
+
+- `Z_even`
+- `Z_odd`
+- `n_even`
+- `n_odd`
+
+First do:
+
+```julia
+Lmat, Cmut = JosephsonCircuits.even_odd_to_mutual(Zeven, Zodd, neven, nodd)
+```
+
+Get the matrix per unit length:
+
+```text
+Lmat =
+[ L11 L12 ]
+[ L12 L11 ]
+
+Cmut =
+[ Cg  Cm ]
+[ Cm  Cg ]
+```
+
+Let `Δx = ℓ / N`, then each discrete section can be written as:
+
+```text
+Line A series inductor: L11 * Δx
+Line B series inductor: L11 * Δx
+Mutual coupling:     K = L12 / L11
+Line A shunt capacitor: Cg * Δx
+Line B shunt capacitor: Cg * Δx
+Cross capacitor:     Cm * Δx
+```
+
+If it is a lossless superconducting case, then:
+
+```text
+R' = 0
+G' = 0
+```
+
+There is absolutely no need to put any `R` or `G` branches.
+
+## Example 4: How do we do `add_coupled_line_section!`
+
+The following is an approach that is conceptually correct and consistent with the current netlist style of this repo:
+
+```julia
+function add_coupled_line_section!(
+  circuit;
+  prefix,
+  left_node_a,
+  right_node_a,
+  left_node_b,
+  right_node_b,
+  length_m,
+  n_sections,
+  Zeven,
+  Zodd,
+  neven,
+  nodd,
+)
+  Lmat, Cmut = JosephsonCircuits.even_odd_to_mutual(Zeven, Zodd, neven, nodd)
+  dx = length_m / n_sections
+
+  Lself = Lmat[1, 1] * dx
+  Lmut = Lmat[1, 2] * dx
+  Cg = Cmut[1, 1] * dx
+  Cm = Cmut[1, 2] * dx
+  k = Lmut / Lself
+
+# Then for each section:
+# 1. line A put one series L
+# 2. line B put one series L
+# 3. Place a K between two L’s
+# 4. Place a Cg on each of the two lines.
+# 5. Place a Cm between the two lines
+end
+```
+
+If expanded into a single section, it would probably correspond to a netlist like this:
+
+```text
+("L_A_1", a0, a1, Lself)
+("L_B_1", b0, b1, Lself)
+("K_1", "L_A_1", "L_B_1", k)
+("C_A_1", a1, 0, Cg)
+("C_B_1", b1, 0, Cg)
+("C_AB_1", a1, b1, Cm)
+```
+
+This is why I said before:
+**To write distributed coupled-line section, the most practical entry is often `even_odd_to_mutual`. **
+
+## Why this builder is reasonable
+
+Because it satisfies three things at the same time:
+
+1. **modal specification clear**
+- You can directly design and compare `Z_even`, `Z_odd`, `n_even`, `n_odd`
+2. **netlist mapping clear**
+- You can actually end up using `L / C / K` components down to `JosephsonCircuits`
+3. **Discrete and Convergable**
+- The larger `N`, the better the approximation to the distributed section
+
+This is different from shoehorning a coupled line into "some mysterious lumped coupler."
+You retain:
+
+- length
+- Location
+- Local coupling window
+-Joints with other structures
+
+So it's perfect for what you want to do now:
+
+- A certain section of the Purcell filter is distributed coupled with another structure
+- readout line and resonator create a limited-length coupled window
+
+## Project mapping: from modal specifications to circuit builder
+
+If you're coming from a design perspective, the most natural workflow is usually:
+
+1. Get from EM/calculator:
+  - `Z_even`, `Z_odd`
+  - `n_even`, `n_odd`
+2. Use `even_odd_to_mutual(...)` to get per-unit-length `L` and `C`
+3. Select a coupled window length `ℓ`
+4. Select the section number `N`
+5. Discretize into ladder
+6. Then insert this coupled ladder into a larger circuit
+
+If you start from a known circuit and want to verify the physical meaning of a certain coupling window, the process is reversed:
+
+1. First write the physical `L / C / K` of section
+2. Calculate the corresponding `Lmat`, `Cmut`
+3. Then use `mutual_to_even_odd(...)` to push back the modal quantities
+4. See if it is what you originally wanted `Z_even/Z_odd/n_even/n_odd`
+
+## Limitations and approximations
+
+This discussion has several important limitations:
+
+1. **Only discuss the symmetrical two-line coupled section**
+- That is `L11 = L22`, `C11 = C22`
+2. **Assume lossless first**
+  - `R' = 0`, `G' = 0`
+3. **early HAS / almost HAS intuition**
+- This is a common low-loss approximation of CPW / microstrip, but does not hold perfectly for all frequency bands
+4. **builder is the ladder approximation, not the continuous analytical solution itself**
+- If `N` is too small, the dispersion effect will be contaminated by discrete errors
+
+Also pay special attention to:
+
+<Aside type="caution" title="C matrix conventions in the literature may differ">
+
+`C_m` in some documents is the coupling coefficient in the telegrapher equation, and `C_m` in some documents is the physical capacitor.
+In this project, if you want to download netlist, the safest way is to clearly distinguish:
+- `C_maxwell`
+- `C_mutual`
+
+</Aside>
+
+## How can you report this to someone else?
+
+If you are giving an oral presentation, the easiest way for the audience to catch the main line is:
+
+1. **even/odd form**: It is a modal language of coupled line, which is most suitable for talking about physics.
+2. **Maxwell form**: It is a charge-voltage matrix language, most suitable for discussing node analysis
+3. **mutual form**: It is the language of physical capacitor / inductor, most suitable for netlist
+4. When we actually make the builder, we use `even_odd_to_mutual` to convert the modal spec into a discrete ladder section.
+
+If you only remember one thing, please remember:
+
+> `even_odd_to_mutual` is not an extra fancy function, it actually helps you translate "modal specification" into "implementable circuit section".
+
+## Related links
+
+- [Physics Overview](index.mdx)
+- [Symbol table](symbol-glossary.md)
+- [Circuit Diagrams Guide](../../contribute/contributing/circuit-diagrams.mdx)
+- [Pluto Parameter Sweep Workflow](../../workflows/reusable-circuit-authoring/pluto-parameter-sweep-workflow.mdx)
+
+## References
+
+1. JosephsonCircuits. (2026). *Reference*. https://josephsoncircuits.org/stable/reference/
+2. JosephsonCircuits. (2026). *Source code: `networks.jl`*. https://github.com/kpobrien/JosephsonCircuits.jl
+3. Jahn, S., & Margraf, M. (2007). *Coupled transmission line*. Qucs Technical Note. https://qucs.sourceforge.net/tech/node63.html
+4. Paul, C. R. (2008). *Analysis of Multiconductor Transmission Lines* (2nd ed.). Wiley.
+5. Steer, M. (2025). *Symmetric Coupled Transmission Lines*. Engineering LibreTexts. https://eng.libretexts.org/Bookshelves/Electrical_Engineering/Electronics/Book%3A_Fundamentals_of_Microwave_and_RF_Design_%28Steer%29/06%3A_Coupled_Lines_and_Applications/6.04%3A_Symmetric_Coupled_Transmission_Lines

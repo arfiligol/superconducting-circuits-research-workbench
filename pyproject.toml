@@ -11,9 +11,8 @@ package = false
 
 [tool.uv.workspace]
 members = [
-    "core/sc_core",
-    "core/python/sc_data_contracts",
-    "core/analysis",
+    "core/python/analysis/superconducting_circuits_analysis",
+    "core/python/circuit_libraries",
     "app/backend",
     "notebooks/python",
 ]
@@ -23,19 +22,15 @@ typeCheckingMode = "basic"
 pythonVersion = "3.12"
 include = [
     "app/backend/app_backend",
-    "core/analysis",
     "core/python",
-    "core/sc_core",
-    "core/shared",
-    "core/simulation",
     "scripts",
 ]
-exclude = ["**/__pycache__", ".venv", "data"]
+exclude = ["**/__pycache__", ".venv", "archived", "data"]
 extraPaths = [
     "app/backend",
-    "core/analysis",
-    "core",
     "core/python",
+    "core/python/analysis/superconducting_circuits_analysis",
+    "core/python/circuit_libraries",
 ]
 # Basic presence checks only, as requested
 reportMissingParameterType = "warning"
@@ -46,13 +41,10 @@ line-length = 100
 target-version = "py312"
 src = [
     "app/backend/app_backend",
-    "core/analysis",
     "core/python",
-    "core/sc_core",
-    "core/shared",
-    "core/simulation",
     "scripts",
 ]
+exclude = ["archived"]
 
 [tool.ruff.lint]
 select = [
@@ -78,12 +70,23 @@ ignore = [
 quote-style = "double"
 indent-style = "space"
 
+[tool.pytest.ini_options]
+norecursedirs = ["archived", ".venv", "node_modules", "docs/site", "docs/docs_zhtw"]
+
 [dependency-groups]
 dev = [
     "basedpyright>=1.37.1",
+    "docs-site",
     "playwright>=1.58.0",
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",
+    "pyyaml>=6.0.3",
     "ruff>=0.14.13",
-    "zensical>=0.0.21",
+    "schemdraw-circuit-library",
+    "sphinx>=9.1.0",
+    "furo>=2025.12.19",
 ]
+
+[tool.uv.sources]
+docs-site = { path = "scripts/build/docs_site_cli", editable = true }
+schemdraw-circuit-library = { workspace = true }

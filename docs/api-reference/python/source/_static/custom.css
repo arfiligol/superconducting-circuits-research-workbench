@@ -1,0 +1,16 @@
+:root {
+  --color-api-accent: #0f766e;
+}
+
+.sidebar-brand-text {
+  letter-spacing: 0;
+}
+
+.content a {
+  text-underline-offset: 0.15em;
+}
+
+.admonition-title,
+.toc-title {
+  letter-spacing: 0;
+}

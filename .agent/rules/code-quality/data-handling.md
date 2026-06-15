@@ -1,51 +1,51 @@
 ## Data Handling
 - **Immutable**: `data/raw/` is READ-ONLY.
 - **Storage split**:
-    - metadata goes to the metadata DB
-    - numeric trace payload goes to the TraceStore (`Zarr`)
+  - metadata goes to the metadata DB
+  - numeric trace payload goes to the TraceStore (`Zarr`)
 - **Summary-first query**:
-    - materialize query/filter/readiness summaries in metadata/read models
-    - do not open full ND payloads by default for list/filter paths
+  - materialize query/filter/readiness summaries in metadata/read models
+  - do not open full ND payloads by default for list/filter paths
 - **Responsibility split**:
-    - `TraceRecord.axes` owns semantic axis identity
-    - `TraceStore` may own dense coordinates and dense values
-    - metadata/read models own summary-safe query/filter fields
+  - `TraceRecord.axes` owns semantic axis identity
+  - `TraceStore` may own dense coordinates and dense values
+  - metadata/read models own summary-safe query/filter fields
 - **Paths**: NEVER hardcode metadata DB or TraceStore paths/backends.
 - **Database**:
-    - MUST use Unit of Work for metadata DB operations.
-    - NEVER access Session directly in UI/notebook/script code.
-    - MUST call `uow.commit()` explicitly.
+  - MUST use Unit of Work for metadata DB operations.
+  - NEVER access Session directly in UI/notebook/script code.
+  - MUST call `uow.commit()` explicitly.
 - **TraceStore**:
-    - MUST go through a TraceStore abstraction.
-    - MUST support local filesystem `Zarr v2` as the baseline storage contract.
-    - MUST require a storage-backend SoT before adding remote object storage.
-    - Runner staging is temporary and never authoritative.
-    - Backend owns official TraceStore publication.
-    - Complex arrays MUST be stored as explicit real/imag arrays.
+  - MUST go through a TraceStore abstraction.
+  - MUST support local filesystem `Zarr v2` as the baseline storage contract.
+  - MUST require a storage-backend SoT before adding remote object storage.
+  - Runner staging is temporary and never authoritative.
+  - Backend owns official TraceStore publication.
+  - Complex arrays MUST be stored as explicit real/imag arrays.
 - **Canonical trace contract**:
-    - `TraceRecord` is one logical observable over axes.
-    - ND traces are allowed and preferred over point-fragmented canonical storage.
-    - point/slice materialization is projection/cache/export, not the only SoT.
+  - `TraceRecord` is one logical observable over axes.
+  - ND traces are allowed and preferred over point-fragmented canonical storage.
+  - point/slice materialization is projection/cache/export, not the only SoT.
 - **Invalid cells**:
-    - `NaN` means invalid/unavailable numeric data, not zero.
-    - MUST use mask-first processing and preserve ND axis structure.
-    - MUST preserve fully masked slice positions.
+  - `NaN` means invalid/unavailable numeric data, not zero.
+  - MUST use mask-first processing and preserve ND axis structure.
+  - MUST preserve fully masked slice positions.
 - **Collection projection**:
-    - scientific grouping may be derived as a read model with deterministic keys.
-    - collection keys must be reconstructable from stable structural grouping inputs.
-    - do not derive collection identity from analysis-specific readiness or consumer presentation state.
-    - do not treat projection as an independent authority resource unless separately specified.
+  - scientific grouping may be derived as a read model with deterministic keys.
+  - collection keys must be reconstructable from stable structural grouping inputs.
+  - do not derive collection identity from analysis-specific readiness or consumer presentation state.
+  - do not treat projection as an independent authority resource unless separately specified.
 - **Retrieval**:
-    - load full coordinate arrays / dense payloads only on detail, explorer, or result paths that need them.
-    - slice/preset queries should be preferred for large tensors/matrices.
-    - no large ND arrays over HTTP/JSON.
-    - whole dense tensor transport is not the default large-result contract.
-    - sweep filtering is limited to summary-safe axis-name / collection-level filters unless a coordinate-domain summary contract exists.
+  - load full coordinate arrays / dense payloads only on detail, explorer, or result paths that need them.
+  - slice/preset queries should be preferred for large tensors/matrices.
+  - no large ND arrays over HTTP/JSON.
+  - whole dense tensor transport is not the default large-result contract.
+  - sweep filtering is limited to summary-safe axis-name / collection-level filters unless a coordinate-domain summary contract exists.
 - **Edit invalidation**:
-    - if an editable trace changes data that affects summaries, collection derivation, readiness, or dependent results, the backend MUST re-materialize or invalidate those surfaces before reporting success.
-    - if it cannot maintain that contract, it MUST expose `allowed_actions.edit=false`.
+  - if an editable trace changes data that affects summaries, collection derivation, readiness, or dependent results, the backend MUST re-materialize or invalidate those surfaces before reporting success.
+  - if it cannot maintain that contract, it MUST expose `allowed_actions.edit=false`.
 - **Flow**:
-    - Raw -> Import/Simulation/Post-Processing -> metadata DB + TraceStore -> Characterization / Reports
+  - Raw -> Import/Simulation/Post-Processing -> metadata DB + TraceStore -> Characterization / Reports
 - **Legacy**:
-    - Do not create new JSON-only numeric pipelines.
-    - Do not treat SQLite/PostgreSQL JSON/BLOB as the long-term primary numeric trace store.
+  - Do not create new JSON-only numeric pipelines.
+  - Do not treat SQLite/PostgreSQL JSON/BLOB as the long-term primary numeric trace store.

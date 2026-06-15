@@ -1,13 +1,13 @@
 ---
 aliases:
-  - "Task Scope Sizing"
-  - "Prompt Grading"
-  - "Prompt 分級"
+ - "Task Scope Sizing"
+ - "Prompt Grading"
+ - "Prompt rating"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/execution
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/execution
 status: stable
 owner: docs-team
 audience: team
@@ -70,9 +70,9 @@ Do not judge success by whether an internal prompt structure was followed exactl
 
 ## Related
 
-- [Codex Subagent Coordination](./multi-agent-collaboration.md)
-- [Branch & Worktree Flow](./branch-and-worktree-flow.md)
-- [Testing](./testing.md)
+- [Codex Subagent Coordination](multi-agent-collaboration.mdx)
+- [Branch & Worktree Flow](branch-and-worktree-flow.mdx)
+- [Testing](testing.mdx)
 
 ## Agent Rule { #agent-rule }
 

@@ -1,13 +1,13 @@
 ---
 aliases:
-  - Schematic Layout Intent
-  - SchematicLayoutIntent
-  - SchematicExportSpec
+ - Schematic Layout Intent
+ - SchematicLayoutIntent
+ - SchematicExportSpec
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -77,146 +77,146 @@ This circuit uses two transmission-line ladders and one finite MTL coupled windo
 
 ```julia
 plan = @circuit "coupled-window-example" begin
-    port1_node = external_node("port1")
-    port2_node = external_node("port2")
+  port1_node = external_node("port1")
+  port2_node = external_node("port2")
 
-    resonator_line = transmission_line!(
-        id = :resonator_line,
-        head = port1_node,
-        tail = ground(),
-        spec = resonator_spec,
-        head_termination = :external,
-        tail_termination = :grounded,
-        breakpoints = [l_r_open, l_r_open + l_c],
-        role = :resonator_path,
-    )
+  resonator_line = transmission_line!(
+    id =:resonator_line,
+    head = port1_node,
+    tail = ground(),
+    spec = resonator_spec,
+    head_termination =:external,
+    tail_termination =:grounded,
+    breakpoints = [l_r_open, l_r_open + l_c],
+    role =:resonator_path,
+  )
 
-    pump_line = transmission_line!(
-        id = :pump_line,
-        head = port2_node,
-        tail = ground(),
-        spec = pump_spec,
-        head_termination = :external,
-        tail_termination = :grounded,
-        breakpoints = [l_p_open, l_p_open + l_c],
-        role = :pump_or_readout_path,
-    )
+  pump_line = transmission_line!(
+    id =:pump_line,
+    head = port2_node,
+    tail = ground(),
+    spec = pump_spec,
+    head_termination =:external,
+    tail_termination =:grounded,
+    breakpoints = [l_p_open, l_p_open + l_c],
+    role =:pump_or_readout_path,
+  )
 
-    window = couple_transmission_window!(
-        id = :coupled_window,
-        line1 = resonator_line,
-        line2 = pump_line,
-        start1 = l_r_open,
-        start2 = l_p_open,
-        length = l_c,
-        model = coupled_window_model,
-        role = :mtl_coupled_window,
-    )
+  window = couple_transmission_window!(
+    id =:coupled_window,
+    line1 = resonator_line,
+    line2 = pump_line,
+    start1 = l_r_open,
+    start2 = l_p_open,
+    length = l_c,
+    model = coupled_window_model,
+    role =:mtl_coupled_window,
+  )
 
-    port(:port1) do
-        index = 1
-        endpoint = port1_node
-        resistance = 50.0
-        role = :input
-    end
+  port(:port1) do
+    index = 1
+    endpoint = port1_node
+    resistance = 50.0
+    role =:input
+  end
 
-    port(:port2) do
-        index = 2
-        endpoint = port2_node
-        resistance = 50.0
-        role = :input
-    end
+  port(:port2) do
+    index = 2
+    endpoint = port2_node
+    resistance = 50.0
+    role =:input
+  end
 end
 ```
 
 The schematic intent declares how those semantic objects should appear.
 
 ```julia
-schematic!(plan; id = :paper_view) do
-    track(:resonator_track) do
-        line = resonator_line
-        orientation = :left_to_right
-        relative_order = :top
-        color = :red
-    end
+schematic!(plan; id =:paper_view) do
+  track(:resonator_track) do
+    line = resonator_line
+    orientation =:left_to_right
+    relative_order =:top
+    color =:red
+  end
 
-    track(:pump_track) do
-        line = pump_line
-        orientation = :left_to_right
-        relative_order = :bottom
-        color = :blue
-    end
+  track(:pump_track) do
+    line = pump_line
+    orientation =:left_to_right
+    relative_order =:bottom
+    color =:blue
+  end
 
-    coupled_span(:middle_window) do
-        relation = window
-        track1 = :resonator_track
-        track2 = :pump_track
-        align = :start_and_end
-        label = "ℓ_c"
-        interface_nodes = (
-            line1_start = :A,
-            line1_end = :B,
-            line2_start = :C,
-            line2_end = :D,
-        )
-        render = :parallel_cpw_window
-    end
+  coupled_span(:middle_window) do
+    relation = window
+    track1 =:resonator_track
+    track2 =:pump_track
+    align =:start_and_end
+    label = "ℓ_c"
+    interface_nodes = (
+      line1_start =:A,
+      line1_end =:B,
+      line2_start =:C,
+      line2_end =:D,
+    )
+    render =:parallel_cpw_window
+  end
 
-    segment_label(:resonator_left) do
-        line = resonator_line
-        from = 0.0
-        to = l_r_open
-        label = "ℓᵒʳ"
-    end
+  segment_label(:resonator_left) do
+    line = resonator_line
+    from = 0.0
+    to = l_r_open
+    label = "ℓᵒʳ"
+  end
 
-    segment_label(:resonator_right) do
-        line = resonator_line
-        from = l_r_open + l_c
-        to = resonator_total_length
-        label = "ℓˢʳ"
-    end
+  segment_label(:resonator_right) do
+    line = resonator_line
+    from = l_r_open + l_c
+    to = resonator_total_length
+    label = "ℓˢʳ"
+  end
 
-    segment_label(:pump_left) do
-        line = pump_line
-        from = 0.0
-        to = l_p_open
-        label = "ℓᵒᵖ"
-    end
+  segment_label(:pump_left) do
+    line = pump_line
+    from = 0.0
+    to = l_p_open
+    label = "ℓᵒᵖ"
+  end
 
-    segment_label(:pump_right) do
-        line = pump_line
-        from = l_p_open + l_c
-        to = pump_total_length
-        label = "ℓˢᵖ"
-    end
+  segment_label(:pump_right) do
+    line = pump_line
+    from = l_p_open + l_c
+    to = pump_total_length
+    label = "ℓˢᵖ"
+  end
 
-    terminal(:port1) do
-        endpoint = port1_node
-        side = :left
-        kind = :port
-        label = "1"
-    end
+  terminal(:port1) do
+    endpoint = port1_node
+    side =:left
+    kind =:port
+    label = "1"
+  end
 
-    terminal(:port2) do
-        endpoint = port2_node
-        side = :left
-        kind = :port
-        label = "2"
-    end
+  terminal(:port2) do
+    endpoint = port2_node
+    side =:left
+    kind =:port
+    label = "2"
+  end
 
-    terminal(:resonator_ground) do
-        endpoint = ground()
-        track = :resonator_track
-        side = :right
-        kind = :ground
-    end
+  terminal(:resonator_ground) do
+    endpoint = ground()
+    track =:resonator_track
+    side =:right
+    kind =:ground
+  end
 
-    terminal(:pump_ground) do
-        endpoint = ground()
-        track = :pump_track
-        side = :right
-        kind = :ground
-    end
+  terminal(:pump_ground) do
+    endpoint = ground()
+    track =:pump_track
+    side =:right
+    kind =:ground
+  end
 end
 ```
 
@@ -228,20 +228,20 @@ This is enough for a renderer to draw two horizontal CPW-like tracks, a middle c
 
 ```julia
 SchematicExportSpec(
-    engineering_graph,
-    layout_intent,
-    components,
-    relations,
-    ports,
-    groups,
-    tracks,
-    segments,
-    coupled_spans,
-    terminals,
-    node_labels,
-    segment_labels,
-    anchors,
-    render_hints,
+  engineering_graph,
+  layout_intent,
+  components,
+  relations,
+  ports,
+  groups,
+  tracks,
+  segments,
+  coupled_spans,
+  terminals,
+  node_labels,
+  segment_labels,
+  anchors,
+  render_hints,
 )
 ```
 
@@ -257,7 +257,7 @@ port labels = 1, 2
 ground terminals = right-side grounds
 ```
 
-Render hints describe presentation preferences, not circuit semantics. A renderer may map `render = :parallel_cpw_window` to its own drawing primitives, but the electrical meaning remains in the `EngineeringGraph` and `CircuitPlan`.
+Render hints describe presentation preferences, not circuit semantics. A renderer may map `render =:parallel_cpw_window` to its own drawing primitives, but the electrical meaning remains in the `EngineeringGraph` and `CircuitPlan`.
 
 ## Renderer Boundary
 
@@ -265,23 +265,24 @@ Renderer packages consume `SchematicExportSpec` and produce images, diagrams, or
 
 ```text
 Macro DSL
-    -> canonical Core API
-    -> CircuitPlan
-    -> EngineeringGraph
-    -> SchematicLayoutIntent
-    -> SchematicExportSpec
-    -> renderer
+  -> canonical Core API
+  -> CircuitPlan
+  -> EngineeringGraph
+  -> SchematicLayoutIntent
+  -> SchematicExportSpec
+  -> renderer
 
 CircuitPlan
-    -> compiler
-    -> solver rows
+  -> compiler
+  -> solver rows
 ```
 
 Schemdraw belongs on the renderer side of this boundary. It consumes exported schematic data and emits a drawing artifact. It does not define component interfaces, coupling semantics, HB intent, or solver lowering.
+Reusable Python Schemdraw visual components live in `core/python/circuit_libraries/schemdraw_circuit_library/`; they map renderer-neutral component records or render hints to drawings without becoming a second circuit model.
 
 ## Cross-Links
 
 - [Engineering Graph](engineering-graph.md) defines the human-facing semantic graph.
 - [Macro Authoring DSL](macro-authoring-dsl.md) defines the authoring surface that records semantics and layout intent.
 - [Transmission Line Ladder](transmission-line-ladder.md) defines head/tail, section, and termination conventions for track-based layout.
-- [Coupling Models](coupling-models.md) defines point coupling and finite MTL coupled-window semantics.
+- [Coupling Models](coupling-models.mdx) defines point coupling and finite MTL coupled-window semantics.

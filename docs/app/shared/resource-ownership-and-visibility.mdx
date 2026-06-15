@@ -1,0 +1,159 @@
+---
+aliases:
+ - Resource Ownership and Visibility
+ - Workspace Resource Model
+ - Resource ownership and visibility
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
+status: draft
+owner: docs-team
+audience: team
+scope: dataset / schema / task / result / artifact of local / online ownership, visibility and cross-workspace sharing rules
+version: v0.3.0
+last_updated: 2026-03-14
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Resource Ownership & Visibility
+
+This page defines the ownership, visibility and cross-workspace sharing rules of the main resources of the app under `Local Mode` and `Online Mode`.
+
+<Aside type="note" title="App collaboration boundary">
+
+Dataset, schema, task, result, and artifact must all have a consistent workspace model.
+
+</Aside>
+
+<Aside type="caution" title="Single Workspace Per Resource">
+
+Each persisted resource can only belong to one workspace at any time.
+The same mutable resource is not allowed to be hung in multiple workspaces at the same time.
+
+</Aside>
+
+<Aside type="tip" title="Safe default">
+
+The default for V1 should be mode-aware conservative baseline.
+`Local Mode` defaults to `local`; `Online Mode` dataset, schema and other mutable research assets are not automatically shared to the entire workspace by default before the user explicitly publishes.
+
+</Aside>
+
+## Core Rules
+
+| Rule | Meaning |
+|---|---|
+| Users may join multiple workspaces | The same user can be a member of multiple workspaces |
+| One active workspace per session | A session only operates in one active workspace |
+| One workspace per resource | Each resource has only one `workspace_id` |
+| Visibility is separate from ownership | `visibility_scope` is not equal to multiple workspace mounts |
+| Local mode uses one fixed workspace | All persisted resources under `Local Mode` belong to `Local Space` |
+
+## Mode-specific Ownership Model
+
+| Mode | Ownership rule |
+|---|---|
+| `local` | All persisted resources fall into a single `Local Space`; multi-user workspace membership is not performed; `visibility_scope` is fixed to `local` |
+| `online` | The resource belongs to the active workspace; `visibility_scope` is controlled by `private` / `workspace` |
+
+## Resource Envelope
+
+| Field | Meaning |
+|---|---|
+| `owner_user_id` | The user who created or currently holds this resource |
+| `workspace_id` | The only workspace this resource belongs to |
+| `visibility_scope` | `local`, `private` or `workspace` |
+| `lifecycle_state` |`active`, `archived`, `deleted`|
+| `created_at` / `updated_at` | lifecycle timing |
+
+## Resource Families
+
+| Resource | Ownership rule |
+|---|---|
+| Dataset | Belongs to a workspace; local mode is `local`, online mode can be `private` or `workspace` |
+| Design scope | Belongs to a single dataset; does not have a separate set of workspace visibility |
+| Circuit Schema | Belongs to a workspace; the active workspace or `Local Space` when the default inheritance is created |
+| Task | Default inheritance of active workspace and source resource scope at submission time |
+| Result / Artifact | By default, the workspace and visibility of the source task are inherited |
+
+## Creation Defaults
+
+| Resource | Default `workspace_id` | Default `visibility_scope` | Notes |
+|---|---|---|---|
+| Dataset import | `Local Space` in local mode; current active workspace in online mode | `local` in local mode; `private` in online mode | After the import is completed, online mode can be published explicitly |
+| Circuit Schema | `Local Space` in local mode; current active workspace in online mode | `local` in local mode; `private` in online mode |Compliant draft-first editing|
+| Task | current active workspace or `Local Space` | most restrictive inherited scope | local mode is fixed to `local`; online mode if any source resource is `private`, task must also be `private` |
+| Result / Artifact | source task workspace | inherit from task | cannot be manually relaxed visibility |
+
+## Visibility Inheritance
+
+| Rule | Meaning |
+|---|---|
+| Local source stays local | The task / result / artifact produced by local mode cannot be upgraded to `private` or `workspace` |
+| Private source stays private | dataset / schema If any source is `private`, the derived task / result cannot be upgraded to `workspace` |
+| Result follows task | result / artifact cannot be more public than source task |
+| Publish is explicit | `private -> workspace` can only be triggered by explicit publish action |
+| Published resources do not silently revert | Shared resources that have been published should not be silently returned to private |
+
+## Visibility Model
+
+| Scope | Meaning |
+|---|---|
+| `local` | Only exists in `Local Space` of `Local Mode`; does not have share / invite / membership semantics |
+| `private` | Only owner, workspace owner, platform admin visible |
+| `workspace` | Visible to authorized users in this workspace |
+
+## Lifecycle States
+
+| State | Meaning |
+|---|---|
+| `active` | Normally visible and can be referenced by workflow |
+| `archived` | The preset does not appear in the main list, but can be restored |
+| `deleted` | No longer available for general workflow use; reserved only tombstone / audit lineage |
+
+## Lifecycle Operations
+
+| Operation | Rule |
+|---|---|
+| Create / Import | local mode is created in `Local Space` and defaults to `local`; online mode is created in the current active workspace and defaults to `private` |
+| Publish to Workspace | Online mode only; allows `private -> workspace` and requires audit record |
+| Clone / Copy with lineage | Create a new resource and keep `lineage_parent_id` |
+| Archive | Convert `active` to `archived`; no longer input as default workflow |
+| Restore | `archived -> active`, retain the original `workspace_id` and lineage |
+| Delete | can only be performed on resources that are no longer active workflow input; must remain tombstone / audit |
+
+<Aside type="caution" title="Use copy instead of unpublish">
+
+To return a shared resource to private editing, the formal approach is to create a private copy.
+Do not roll back directly with `workspace -> private` to avoid damaging the existing shared task/result lineage.
+
+</Aside>
+
+## Cross-workspace Sharing
+
+| Sharing mode | Allowed | Meaning |
+|---|---|---|
+| Export / Import | ✅ | Used for cross-workspace, external sharing, and archiving |
+| Publish / Copy with lineage | ✅ | Create new resources, keep lineage |
+| Multi-workspace mutable object | ❌ | Not allowed |
+
+## Required Audit Hooks
+
+| Action | Must be audited |
+|---|---|
+| import dataset / create schema | ✅ |
+| publish to workspace | ✅ |
+| archive / restore / delete | ✅ |
+| export bundle | ✅ |
+| copy with lineage | ✅ |
+
+## Related
+
+* [Identity & Workspace Model](identity-workspace-model.mdx)
+* [Authentication & Authorization](authentication-and-authorization.mdx)
+* [Audit Logging](audit-logging.mdx)
+* [Backend / Session & Workspace](../backend/session-workspace.mdx)

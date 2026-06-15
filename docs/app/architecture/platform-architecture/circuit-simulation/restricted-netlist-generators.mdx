@@ -1,0 +1,55 @@
+---
+aliases:
+ - Restricted Netlist Generators
+ - Restricted Netlist Generator
+tags:
+ - diataxis/explanation
+ - audience/team
+ - topic/architecture
+ - topic/netlist
+status: stable
+owner: docs-team
+audience: team
+scope: Explain why WebUI uses restricted repeat generation and does not allow arbitrary scripts
+version: v0.1.1
+last_updated: 2026-03-06
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Restricted Netlist Generators
+
+This page explains why Circuit Netlist uses restricted generation models (`repeat`, etc.) rather than arbitrary code execution.
+
+<Aside type="note" title="Boundary">
+
+This page only explains why the Web UI is generated in a restricted manner.
+For syntax and editor/save contracts, see Reference.
+
+</Aside>
+
+## Design reason
+
+- **Deterministic**: The same Source Form must be stably expanded into the same Expanded Form.
+- **Debuggable**: Syntax errors and expansion errors can be located in specific blocks.
+- **Minimal Surface Area**: Avoid turning the schema editor into a script execution environment.
+
+## M1 support range
+
+- `repeat`
+- `count` / `start`
+- `index` / `symbol` / `series`
+- Restricted template interpolation (`${index}`, `${symbol}` with fixed offset)
+
+## non-target
+
+- Any `for/if`
+- Nested `repeat`
+- Any function call
+
+## Related
+
+- [Circuit Netlist Format](../../../archive/old-app-contracts/circuit-netlist.mdx)
+- [Schema Editor UI Reference](../../../frontend/definition/schema-editor.mdx)
+- [Julia Runner Compute Plane](../../contracts/julia-runner-compute-plane.md)

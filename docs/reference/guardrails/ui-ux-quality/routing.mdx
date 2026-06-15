@@ -1,0 +1,54 @@
+---
+aliases:
+ - Routing
+ - Routing strategy
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/ui-ux
+status: stable
+owner: docs-team
+audience: contributor
+scope: Next.js App Router’s route groups, dynamic routes and layout boundaries.
+version: v1.1.0
+last_updated: 2026-03-14
+updated_by: docs-team
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Routing
+
+<Aside type="note" title="Use this page for route shape decisions">
+
+This page first defines the minimum rules for route group, dynamic route and layout boundary. When you need to know the specific route of each page, you should return to the frontend page reference.
+
+</Aside>
+
+## Routing Map
+
+| concern | baseline |
+| --- | --- |
+| route groups | used to organize workspace and non-workspace areas |
+| dynamic routes | Prioritize `[id]` or `[resourceId]` |
+| URL ownership | Don't let URL strings litter components |
+| nesting | If there are more than four layers, review the information architecture first |
+
+## Rules
+
+- Organize workspaces using App Router route groups
+- dynamic route preferentially uses `[id]` or `[resourceId]`
+- Don't hardcode URL strings scattered everywhere
+- The layout boundary should be aligned with the product information architecture
+- Avoid more than 4 levels of route nesting
+
+## Agent Rule
+```markdown
+## Routing
+- Use Next.js App Router route groups for workspace organization.
+- Use `[id]` or `[resourceId]` naming for dynamic routes.
+- Keep layout boundaries aligned with product information architecture.
+- Avoid hardcoded URLs scattered through components.
+- Avoid route nesting deeper than necessary; if it exceeds four levels, reconsider the information structure.
+```

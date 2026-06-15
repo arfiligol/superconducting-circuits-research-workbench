@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Julia Core Diagnostics
-  - Agent Debug Path
+ - Julia Core Diagnostics
+ - Agent Debug Path
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -61,17 +61,17 @@ Conceptual shape:
 
 ```julia
 DiagnosticIssue(
-    severity,
-    code,
-    message,
-    path;
-    stage,
-    object_id,
-    expected,
-    actual,
-    hint,
-    related_ids,
-    metadata,
+  severity,
+  code,
+  message,
+  path;
+  stage,
+  object_id,
+  expected,
+  actual,
+  hint,
+  related_ids,
+  metadata,
 )
 ```
 
@@ -98,9 +98,9 @@ Conceptual shape:
 
 ```julia
 struct DiagnosticReport
-    stage
-    issues
-    summary
+  stage
+  issues
+  summary
 end
 ```
 
@@ -258,4 +258,4 @@ Agents should resolve failures against the Julia Core reference contract, not ag
 | Tests | assert stable codes, stages, and structured fields instead of brittle message text |
 | AI agents | inspect structured fields before choosing which layer to patch |
 
-Diagnostics should not require Pluto, Backend, Electron, or task queue state.
+Diagnostics should not require Pluto, infrastructure runtime, packaged desktop state, or task queue state.

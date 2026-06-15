@@ -4,19 +4,25 @@ on:
   pull_request:
     paths:
       - "docs/**"
-      - "zensical.toml"
+      - "site/**"
       - "scripts/build_docs_sites.sh"
-      - "scripts/prepare_docs_locales.sh"
+      - "scripts/build/prepare_starlight_docs.py"
       - "scripts/check_docs_nav_routes.py"
+      - "scripts/check_docs_app_quarantine.py"
+      - "scripts/check_docs_language.py"
+      - "scripts/check_docs_language_allowlist.txt"
       - ".github/workflows/docs-route-integrity.yml"
   push:
     branches: [main]
     paths:
       - "docs/**"
-      - "zensical.toml"
+      - "site/**"
       - "scripts/build_docs_sites.sh"
-      - "scripts/prepare_docs_locales.sh"
+      - "scripts/build/prepare_starlight_docs.py"
       - "scripts/check_docs_nav_routes.py"
+      - "scripts/check_docs_app_quarantine.py"
+      - "scripts/check_docs_language.py"
+      - "scripts/check_docs_language_allowlist.txt"
       - ".github/workflows/docs-route-integrity.yml"
 
 jobs:
@@ -31,11 +37,27 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev --frozen
 
-      - name: Validate nav -> source routes
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        run: npm ci --prefix site
+
+      - name: Validate docs source routes
         run: uv run python scripts/check_docs_nav_routes.py --check-source
+
+      - name: Validate docs App quarantine
+        run: uv run python scripts/check_docs_app_quarantine.py
+
+      - name: Validate docs language
+        run: uv run python scripts/check_docs_language.py
 
       - name: Build docs sites
         run: ./scripts/build_docs_sites.sh
 
-      - name: Validate nav -> built html routes
+      - name: Validate docs built routes
         run: uv run python scripts/check_docs_nav_routes.py --check-built

@@ -1,0 +1,336 @@
+---
+aliases:
+ - "Data Handling Rules"
+ - "Data processing specifications"
+tags:
+ - audience/team
+ - sot/true
+status: stable
+owner: docs-team
+audience: team
+scope: "Data processing specifications: raw data read-only, metadata DB / TraceStore division of labor, Runner staging, ND trace, NaN/mask, summary-first query, Unit of Work, Zarr backend boundary"
+version: v3.0.0
+last_updated: 2026-03-30
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Data Handling
+
+Data processing and storage practices.
+
+<Aside type="note" title="What this page answers">
+
+This page answers where the data should be placed, who can write at which level, and the boundaries of responsibilities between raw data, metadata, and numeric payload.
+
+</Aside>
+
+## Storage Map
+
+| Block | Purpose | What not to put |
+| --- | --- | --- |
+| `data/raw/` | Original input data, read-only save | Output of import, simulation, post-processing |
+| metadata DB | index, lineage, query, setup metadata | large numeric payload |
+| Runner staging | temporary local filesystem Zarr result packages | official metadata / provenance authority |
+| TraceStore | trace values, axes arrays, sweep arrays | Backend details parsed by UI/scripts themselves |
+
+## Directory Structure
+
+```text
+data/
+├── raw/ # Raw data (read only)
+│  ├── measurement/
+│  ├── circuit_simulation/
+│  └── layout_simulation/
+├── metadata.db # metadata DB (can be SQLite; if you use PostgreSQL instead, you must still maintain the same contract)
+├── trace_store/        # official Zarr TraceStore (local backend)
+│  └── datasets/
+├── artifacts/
+│  └── tasks/
+└── staging/
+  └── tasks/
+```
+
+## Rules
+
+### 1. Raw Data is Read-Only
+
+All files under `data/raw/` are considered immutable:
+
+- Do not modify the original file
+- Does not delete original files
+- Output from ingest / import / simulation / post-processing must not be written back to the raw tree
+
+### 2. Metadata vs Numeric Payload
+
+The division of data responsibilities must be clear:
+
+<Tabs>
+<TabItem label="Metadata DB">
+
+
+- `DesignRecord`
+- `TraceRecord`
+- `TraceBatchRecord`
+- `AnalysisRunRecord`
+- `DerivedParameterRecord`
+
+</TabItem>
+
+<TabItem label="TraceStore">
+
+
+- trace numeric payload
+- axes arrays
+- sweep ND arrays
+
+</TabItem>
+
+</Tabs>
+
+<Aside type="caution" title="No large numeric payload in metadata DB">
+
+Large trace values ​​should not be stored in SQLite/PostgreSQL JSON/BLOB as the main payload.
+The metadata DB is responsible for indexing, lineage, setup, and query; numeric payload should enter `Zarr` TraceStore.
+
+</Aside>
+
+<Aside type="caution" title="No large ND arrays over HTTP/JSON">
+
+HTTP/JSON can only carry task control, status, progress, manifest locator, error summary, metadata summary and explicit slice/detail payload.
+S/Y/Z matrices, frequency sweeps, ND traces and Runner result arrays must be written to the local filesystem Zarr.
+
+</Aside>
+
+### 2.1 Materialized Summary Is Expected
+
+query / filter / readiness surfaces should rely on the materialized summary of the metadata DB / read model instead of opening the full ND payload each time.
+
+Typical summary target:
+
+- `ndim`
+- `shape`
+- `axis_names`
+- `axis_units`
+- `axis_lengths`
+- `available_sweep_axes`
+- `axis_signature` or equivalent hash / coordinate summary
+- `family` / `parameter` / `representation` / `source_kind` / `stage_kind`
+- lineage / batch summary
+
+<Aside type="caution" title="Summary-first query">
+
+trace list, design browse, analysis readiness, filter suggestion path must not load full ND values ​​or full coordinate arrays by default.
+
+</Aside>
+
+### 2.2 Responsibility Split Is Mandatory
+
+- `TraceRecord.axes` has canonical axis identity and semantic axis meaning
+- `TraceStore` can hold dense coordinate arrays and dense numeric values
+- metadata/read models have summary-safe axis information required by query/filter/readiness
+- list/filter/readiness path must not rely on turning on full coordinate arrays
+
+### 2.3 Axis Signature Discipline
+
+- `axis_signature` is deterministic summary of canonical axis identity / coordinate structure
+- Can be used for cache safety, collection derivation, grouping compatibility and deep-link safety
+- Not to be used as user-facing scientific label
+- cannot replace full coordinates
+
+### 3. Use Path / Store Helpers
+
+DB or TraceStore paths must not be hardcoded.
+
+- metadata DB path must be provided by persistence helper
+- TraceStore backend (local/S3-compatible) must be determined through the abstraction layer
+
+### 4. Database Access (Unit of Work)
+
+All metadata DB access must be through Unit of Work:
+
+<Aside type="note" title="Metadata write flow">
+
+```python
+from app_backend.infrastructure.local_store import get_unit_of_work
+
+with get_unit_of_work() as uow:
+  design = uow.designs.get_by_name("PF6FQ_Q0")
+  uow.traces.add(new_trace)
+  uow.commit()
+```
+
+</Aside>
+
+### 5. TraceStore Access
+
+Reading and writing of Trace numeric payload must go through TraceStore abstraction, rather than UI/scripts directly touching the backend details.
+
+Allowed backend directions:
+
+- local filesystem `Zarr`
+- S3-compatible `Zarr` (e.g. MinIO/S3 endpoint)
+
+`TraceStoreRef` must maintain the backend-owned locator contract:
+
+- `backend`:`local_zarr` / `s3_zarr`
+- `store_key`:backend-neutral store object key
+- `store_uri`: can be retained as compatible/debug locator, but is treated as opaque and cannot be parsed by UI/app layer local layout
+- `group_path` / `array_path`: TraceStore internal group and array positioning
+
+### 5.1 Runner Staging and Publication
+
+Julia Runner writes local staging packages only:
+
+```text
+data/staging/tasks/<task_id>/
+├── manifest.json
+├── result.zarr/
+└── logs/
+```
+
+Python Backend owns official publication:
+
+```text
+data/trace_store/datasets/<dataset_id>/designs/<design_id>/batches/<batch_id>.zarr/
+```
+
+Rules:
+
+- staging is temporary and not authoritative
+- TraceStore is the official numeric authority
+- Backend must validate manifest paths, Zarr layout, dtype, shape, chunk shape, and axis lengths before publication
+- Backend must reject absolute paths and path traversal such as `../`
+- Runner must not write DatasetRecord, TraceRecord, TraceBatchRecord, workspace, auth, or provenance tables
+- Runner result packages use Zarr v2 local filesystem staging
+- S3-compatible direct write from Julia Runner is not allowed
+
+### 5.2 Complex Arrays
+
+Complex arrays must be stored as real/imag arrays:
+
+```text
+/traces/S11/real
+/traces/S11/imag
+```
+
+Do not rely on cross-language `ComplexF64` dtype compatibility.
+
+### 6. Canonical Trace Contract
+
+- The canonical unit of `TraceRecord` is **one logical observable over axes**
+- Can be 1D / 2D / ND
+- sweep point should not automatically be regarded as a canonical trace record
+- point/slice level materialization can only be used as projection / cache / export contract
+
+### 6.1 Invalid Cell Semantics
+
+- canonical ND payload can use `NaN` to represent invalid / unavailable numeric cell
+- `NaN` shall not be treated as `0`
+- analysis/explorer should adopt mask-first processing: first establish the validity mask, and then calculate only on valid cells
+- invalid cells must not authorize consumer collapse axes, drop sweep structure, or silently reshape authority payload
+- A fully masked slice must still retain its original axis position, and the slice must not be deleted because the entire segment is invalid.
+
+### 6.2 Collection Projection Contract
+
+- scientific `collection_projection` can be derived from canonical trace structure
+- Collection projection is a read model, not an independent authority resource
+- Can use deterministic `collection_key` to support deep-linking, cache and UI restoration
+- `collection_key` must be reconstructable by stable scientific typing inherent in dataset/design scope, shared axis structure / `axis_signature`, lineage and trace set
+- analysis-specific readiness, consumer-specific presentation choice, and UI sort/filter state must not participate in `collection_key` identity
+- If persisted / editable collections are required, another formal resource contract must be established
+
+### 6.3 Access Pattern-aware Retrieval
+
+- detail / explorer / result path only loads full coordinate arrays or dense numeric slices
+- Large matrix / tensor payload should give priority to support slice / preset query instead of always inline the whole package
+- chunking / retrieval should align with the main scientific access pattern
+- whole dense tensor transport is not the default contract for large result
+- sweep filtering uses summary-safe axis-name / collection-level filters; coordinate-value / range filtering requires a coordinate-domain summary contract
+- Current priority access pattern:
+ - fixed sweep point -> read full frequency slice
+ - fixed result axes -> read one plot / table projection
+
+### 6.4 Edit Invalidation Discipline
+
+- If trace edit affects axis structure, coordinate identity, materialized metadata summary, `collection_projection`, analysis readiness or persisted analysis/result truth, backend must synchronize re-materialize or invalidate these dependencies.
+- If the backend cannot maintain the above invalidation / recomputation contract, the trace class must not declare `allowed_actions.edit=true`
+
+### 7. Output Locations
+
+| Type | Target Location |
+|------|----------|
+| metadata records | metadata DB |
+| trace numeric payload | TraceStore (`Zarr`) |
+| reports/exports | `data/processed/reports/` or explicit export path |
+
+## Related
+
+- [Design / Trace Schema](../../../app/data-contracts/dataset-record.mdx)
+- [Raw Data Layout](../../../app/data-contracts/raw-data-layout.mdx)
+- [Data Storage](../../../app/architecture/platform-architecture/data-storage.md)
+
+<details class="docs-disclosure docs-disclosure--note">
+<summary>Why this page does not describe every backend</summary>
+
+This page only defines storage split and access boundary. If PostgreSQL, S3-compatible Zarr or other backends are added, the same canonical contract must still be maintained instead of rewriting the responsibility boundaries here.
+
+</details>
+
+---
+
+## Agent Rule
+```markdown
+## Data Handling
+- **Immutable**: `data/raw/` is READ-ONLY.
+- **Storage split**:
+  - metadata goes to the metadata DB
+  - numeric trace payload goes to the TraceStore (`Zarr`)
+- **Summary-first query**:
+  - materialize query/filter/readiness summaries in metadata/read models
+  - do not open full ND payloads by default for list/filter paths
+- **Responsibility split**:
+  - `TraceRecord.axes` owns semantic axis identity
+  - `TraceStore` may own dense coordinates and dense values
+  - metadata/read models own summary-safe query/filter fields
+- **Paths**: NEVER hardcode metadata DB or TraceStore paths/backends.
+- **Database**:
+  - MUST use Unit of Work for metadata DB operations.
+  - NEVER access Session directly in UI/notebook/script code.
+  - MUST call `uow.commit()` explicitly.
+- **TraceStore**:
+  - MUST go through a TraceStore abstraction.
+  - MUST support local filesystem `Zarr v2` as the baseline storage contract.
+  - MUST require a storage-backend SoT before adding remote object storage.
+  - Runner staging is temporary and never authoritative.
+  - Backend owns official TraceStore publication.
+  - Complex arrays MUST be stored as explicit real/imag arrays.
+- **Canonical trace contract**:
+  - `TraceRecord` is one logical observable over axes.
+  - ND traces are allowed and preferred over point-fragmented canonical storage.
+  - point/slice materialization is projection/cache/export, not the only SoT.
+- **Invalid cells**:
+  - `NaN` means invalid/unavailable numeric data, not zero.
+  - MUST use mask-first processing and preserve ND axis structure.
+  - MUST preserve fully masked slice positions.
+- **Collection projection**:
+  - scientific grouping may be derived as a read model with deterministic keys.
+  - collection keys must be reconstructable from stable structural grouping inputs.
+  - do not derive collection identity from analysis-specific readiness or consumer presentation state.
+  - do not treat projection as an independent authority resource unless separately specified.
+- **Retrieval**:
+  - load full coordinate arrays / dense payloads only on detail, explorer, or result paths that need them.
+  - slice/preset queries should be preferred for large tensors/matrices.
+  - no large ND arrays over HTTP/JSON.
+  - whole dense tensor transport is not the default large-result contract.
+  - sweep filtering is limited to summary-safe axis-name / collection-level filters unless a coordinate-domain summary contract exists.
+- **Edit invalidation**:
+  - if an editable trace changes data that affects summaries, collection derivation, readiness, or dependent results, the backend MUST re-materialize or invalidate those surfaces before reporting success.
+  - if it cannot maintain that contract, it MUST expose `allowed_actions.edit=false`.
+- **Flow**:
+  - Raw -> Import/Simulation/Post-Processing -> metadata DB + TraceStore -> Characterization / Reports
+- **Legacy**:
+  - Do not create new JSON-only numeric pipelines.
+  - Do not treat SQLite/PostgreSQL JSON/BLOB as the long-term primary numeric trace store.
+```

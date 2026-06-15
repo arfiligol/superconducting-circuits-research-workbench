@@ -1,0 +1,123 @@
+---
+aliases:
+ - "Fitting SQUID Parameters"
+ - "SQUID parameter fitting"
+tags:
+ - diataxis/how-to
+ - audience/user
+ - sot/true
+ - topic/analysis
+status: stable
+owner: team
+audience: user
+scope: "How to fit SQUID circuit parameters (Ls, C) from Admittance data"
+version: v1.1.0
+last_updated: 2026-01-31
+updated_by: team
+sidebar:
+ label: SQUID Fitting
+ order: 30
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Fitting SQUID Models
+
+This guide describes the execution boundaries of LC-SQUID fitting in the study path.
+Reusable fitting belongs to Python Analysis Core; exploratory setup belongs in Pluto or Python notebooks.
+
+<Aside type="note" title="Preconditions">
+
+- HFSS admittance or notebook-produced trace data has been prepared.
+- The frequency axis, unit, port definition and target resonance interval have been confirmed.
+
+</Aside>
+
+---
+
+## Workflow
+
+```mermaid
+flowchart LR
+  HFSS["HFSS Export"] --> Files["Local Research Files"]
+  Files --> Inspect["Notebook Inspection"]
+  Inspect --> Fit["Python Analysis Core Fit"]
+  Fit --> Result["Figures + Derived Parameters"]
+```
+
+## Prepare HFSS Data
+
+Export only the traces needed by the fitting study:
+
+- admittance files for Im(Y) resonance extraction;
+- scattering files for S-parameter phase or magnitude inspection;
+- enough frequency range to cover the expected modes.
+
+Keep exported files in a local import directory, for example:
+
+```text
+data/import/hfss/LJPAL658_v1/
+```
+
+## Inspect Data
+
+Load the files in a Pluto or Python notebook. Keep source paths, units, and axis conventions next to the analysis cells.
+
+Verify:
+
+- trace family;
+- axes and units;
+- frequency span and resonance coverage;
+- representation: real/imaginary, magnitude/phase, or complex values.
+
+Move to fitting only after the trace family, port definition, and target resonance window are explicit.
+
+---
+
+## Select fitting strategy
+
+Choose the appropriate fitting mode based on your circuit design and data characteristics:
+
+| Mode | Applicable Scenario | Input |
+|------|----------|------------|
+| **Standard (With Ls)** | In general, $L_s$ and $C$ need to be determined at the same time | `mode = "standard"` |
+| **Fixed Capacitance** | The accurate capacitance value measured or designed is known and only needs to be optimized $L_s$ | `fixed_capacitance` |
+| **Ideal LC (No Ls)** | Ignore the series inductance and only fit pure LC resonance (less used) | `mode = "ideal_lc"` |
+
+---
+
+## Operation steps
+
+Use a Pluto notebook when you need direct exploration or model iteration.
+The notebook may call Julia Core directly and inspect intermediate arrays.
+
+Use a Python notebook when the input is already in Python-native arrays, CSV exports, or tables.
+Move shared model fitting code into Python Analysis Core when it is used by more than one notebook.
+
+<Aside type="note" title="Fitting execution boundary">
+
+LC-SQUID fitting belongs to either direct research execution in Pluto or reusable Python Analysis Core code.
+Keep notebook-only glue out of package code; keep reusable fitting functions covered by package tests.
+
+</Aside>
+
+---
+
+## Record Results
+
+After the fitting is completed, the study results should be recorded:
+
+1. source trace path or notebook cell provenance
+2. fitting mode and fixed parameters
+3. fitted values and uncertainty/error metrics
+4. plots or tables used in the analysis report
+5. figure generation code and table-generation code needed to reproduce the report evidence
+6. notes on whether the fitting logic stayed notebook-local or was promoted into Python Analysis Core
+
+---
+
+## Related references
+
+- [Research Evidence](research-data-evidence.mdx)
+- [Notebook Interface](../../reference/notebooks/index.md)
+- [Python Core](../../reference/core/python-core.mdx)

@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Circuit Plan
-  - CircuitPlan
+ - Circuit Plan
+ - CircuitPlan
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -47,11 +47,11 @@ Each plan represents one runnable system:
 
 ```text
 CircuitPlan
-  -> validate_authoring
-  -> validate_compile_ready
-  -> compile_to_josephson
-  -> build_hb_problem
-  -> run_hb_problem
+ -> validate_authoring
+ -> validate_compile_ready
+ -> compile_to_josephson
+ -> build_hb_problem
+ -> run_hb_problem
 ```
 
 A notebook may build several plans for comparisons or sweeps. Each plan still owns one complete design point with concrete endpoints, concrete relations, concrete ports, and concrete HB intent.
@@ -64,10 +64,10 @@ Component internals are private by default. The enclosing circuit may attach onl
 
 | Interface | Electrical? | Use |
 | --- | --- | --- |
-| `pin(instance, :name)` | yes | normal public connection point |
+| `pin(instance,:name)` | yes | normal public connection point |
 | `tap(instance, distance_from_head)` | yes | point on a distributed model |
-| `probe(instance, :name)` | yes | intentional measurement, debug, or coupling point |
-| `anchor(instance, :name)` | no | schematic, report, or layout reference point |
+| `probe(instance,:name)` | yes | intentional measurement, debug, or coupling point |
+| `anchor(instance,:name)` | no | schematic, report, or layout reference point |
 
 An anchor is not an electrical endpoint. If a renderer reference point must also be connectable, expose the physical point as a pin, tap, or probe and use an anchor only for drawing metadata.
 
@@ -108,9 +108,9 @@ The plan may carry both engineering semantics and drawing intent:
 
 ```text
 CircuitPlan
-  -> EngineeringGraph
-  -> SchematicLayoutIntent
-  -> SchematicExportSpec
+ -> EngineeringGraph
+ -> SchematicLayoutIntent
+ -> SchematicExportSpec
 ```
 
 Engineering semantics answer what the circuit is. Schematic layout intent answers how the circuit should be drawn. The compiler must depend on electrical topology and circuit parameters, not on drawing placement.
@@ -123,10 +123,10 @@ Engineering semantics answer what the circuit is. Schematic layout intent answer
 
 ```text
 @circuit
-  -> topology, components, endpoints, relations, ports
+ -> topology, components, endpoints, relations, ports
 
 @hbintent plan
-  -> pump axes, source slots, observable requests, solver defaults
+ -> pump axes, source slots, observable requests, solver defaults
 ```
 
 HB declarations reference plan objects by ID, such as port IDs and pump-axis IDs. Validation resolves those references against the owning plan before compilation and before `HBProblemSpec` construction.
@@ -135,43 +135,43 @@ Example:
 
 ```julia
 begin
-    plan = @circuit "one-port-lc" begin
-        drive = external_node("drive")
+  plan = @circuit "one-port-lc" begin
+    drive = external_node("drive")
 
-        resonator = lc_resonator!(
-            id = :res,
-            signal = drive,
-            capacitance = C,
-            inductance = L,
-        )
+    resonator = lc_resonator!(
+      id =:res,
+      signal = drive,
+      capacitance = C,
+      inductance = L,
+    )
 
-        port(:drive_port) do
-            index = 1
-            endpoint = pin(resonator, :signal)
-            resistance = 50.0
-            role = :reflection
-        end
+    port(:drive_port) do
+      index = 1
+      endpoint = pin(resonator,:signal)
+      resistance = 50.0
+      role =:reflection
+    end
+  end
+
+  @hbintent plan begin
+    pump_axis(:pump; frequency_parameter =:pump_frequency)
+
+    source_slot(:pump_in) do
+      role =:pump
+      port =:drive_port
+      mode = (1,)
+      current_parameter =:pump_current
     end
 
-    @hbintent plan begin
-        pump_axis(:pump; frequency_parameter = :pump_frequency)
-
-        source_slot(:pump_in) do
-            role = :pump
-            port = :drive_port
-            mode = (1,)
-            current_parameter = :pump_current
-        end
-
-        sparameter(:s11) do
-            outputmode = (0,)
-            outputport = :drive_port
-            inputmode = (0,)
-            inputport = :drive_port
-        end
+    sparameter(:s11) do
+      outputmode = (0,)
+      outputport =:drive_port
+      inputmode = (0,)
+      inputport =:drive_port
     end
+  end
 
-    plan
+  plan
 end
 ```
 
@@ -183,11 +183,11 @@ Compilation consumes a validated plan:
 
 ```text
 CircuitPlan
-  -> endpoint resolution
-  -> relation lowering
-  -> physical generator lowering
-  -> HBIntent validation
-  -> JosephsonCompiledCircuit
+ -> endpoint resolution
+ -> relation lowering
+ -> physical generator lowering
+ -> HBIntent validation
+ -> JosephsonCompiledCircuit
 ```
 
 The compiled circuit may preserve links back to plan records and EngineeringGraph IDs. Those links support diagnostics, traceability, and notebook inspection, but the compiled rows do not replace the plan as the authoring contract.
@@ -196,11 +196,11 @@ For harmonic-balance execution, the product-aligned handoff is:
 
 ```text
 CircuitPlan
-  -> HBIntent
-  -> compile_to_josephson
-  -> build_hb_problem
-  -> HBProblemSpec
-  -> run_hb_problem
+ -> HBIntent
+ -> compile_to_josephson
+ -> build_hb_problem
+ -> HBProblemSpec
+ -> run_hb_problem
 ```
 
 Runner code should bind runtime values to validated slots and execute `HBProblemSpec`. It must not invent circuit topology, port meanings, source slots, pump axes, or observable semantics after compilation.
@@ -210,15 +210,15 @@ Runner code should bind runtime values to validated slots and execute `HBProblem
 Plan-level transforms are recorded as semantic intent before target lowering:
 
 ```julia
-connect!(plan, pin(a, :right), pin(b, :left))
+connect!(plan, pin(a,:right), pin(b,:left))
 
-tap = line_tap(readout; line = :main, at_m = 2.0e-3)
+tap = line_tap(readout; line =:main, at_m = 2.0e-3)
 
 shunt_capacitor!(
-    plan;
-    id = :readout_shunt_c,
-    at = tap,
-    capacitance = 20.0e-15,
+  plan;
+  id =:readout_shunt_c,
+  at = tap,
+  capacitance = 20.0e-15,
 )
 ```
 
@@ -231,14 +231,14 @@ During compilation, the compiler resolves endpoint aliases, inserts line-tap bre
 For components with multiple internal lines, select the line explicitly:
 
 ```julia
-line_tap(component; line = :main, at_m = 1.2e-3)
-line_span(component; line = :main, from_m = 2.0e-3, to_m = 2.5e-3)
+line_tap(component; line =:main, at_m = 1.2e-3)
+line_span(component; line =:main, from_m = 2.0e-3, to_m = 2.5e-3)
 ```
 
 You can also resolve the line first:
 
 ```julia
-main_line = line_ref(component, :main)
+main_line = line_ref(component,:main)
 
 line_tap(main_line; at_m = 1.2e-3)
 line_span(main_line; from_m = 2.0e-3, to_m = 2.5e-3)

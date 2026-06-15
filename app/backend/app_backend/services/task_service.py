@@ -4,10 +4,6 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import Protocol
 
-from sc_core.tasking import (
-    ProcessorHeartbeat,
-)
-
 from app_backend.domain.datasets import (
     DatasetDetail,
     ResultTracePublicationDraft,
@@ -15,6 +11,9 @@ from app_backend.domain.datasets import (
     SimulationResultPublicationDraft,
     SimulationResultPublicationRecord,
     SimulationResultPublicationResult,
+)
+from app_backend.domain.runtime_contracts.tasking import (
+    ProcessorHeartbeat,
 )
 from app_backend.domain.session import SessionState
 from app_backend.domain.tasks import (

@@ -1,0 +1,209 @@
+---
+aliases:
+ - Testing
+ - Test specifications
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/execution
+status: stable
+owner: docs-team
+audience: contributor
+scope: Current platform's public site, app/backend, app/frontend, Julia Runner, desktop and docs test specifications.
+version: v3.4.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Testing
+
+This page defines the test entry and minimum test expectations of the current platform.
+
+<Aside type="note" title="How to read this page">
+
+First determine whether you are touching `root orchestration`, `app/backend`, `app/frontend`, `Julia Runner`, `desktop` or `docs`.
+This page answers "What is the minimum to run", not the complete test design itself.
+
+</Aside>
+
+## Test Map
+
+| Area | Minimum baseline |
+| --- | --- |
+| Foundation workspace | backend pytest + frontend unit + desktop lint + runner tests |
+| Public site | Astro check/build + combined public artifact build |
+| Backend | `uv run --package superconducting-circuits-backend pytest app/backend/tests -q` |
+| Python analysis | `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q` |
+| Julia Core / Visualizer / Runner / Analysis Bridge | `Pkg.test()` per Julia package |
+| Frontend | unit tests, E2E when necessary |
+| Desktop foundation | lint + build |
+| Docs | source check + build + built-route check |
+
+## Foundation Workspace Check
+
+```bash
+uv run --package superconducting-circuits-backend pytest app/backend/tests -q
+uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q
+npm run test --prefix app/frontend
+npm run lint --prefix app/desktop
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
+```
+
+`SuperconductingCircuitsAnalysisBridge` is a repo-local bridge to the root Python analysis package. Run `uv sync --all-packages` first; its test bootstrap selects the repo `.venv` automatically. Use `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` only when testing from a non-standard checkout or Python environment.
+
+## Backend
+
+```bash
+uv run --package superconducting-circuits-backend pytest app/backend/tests -q
+```
+
+Backend tests for Runner publication must cover create task, claim task, heartbeat/progress, complete with small staging Zarr manifest, canonical TraceStore publication, TraceRecord creation, trace slice read, invalid manifest rejection, and path traversal rejection.
+
+## Julia Core / Visualizer / Runner / Analysis Bridge
+
+```bash
+julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
+```
+
+Runner tests must cover JSON task contract parsing, manifest generation, local Zarr write with small real/imag fixture data, manifest path/shape validation helpers, unsupported task failure, and real task dispatch boundaries.
+
+## Frontend
+
+<Tabs>
+<TabItem label="Unit">
+
+
+```bash
+npm run test --prefix app/frontend
+```
+
+</TabItem>
+
+<TabItem label="E2E">
+
+
+```bash
+npm run test:e2e --prefix app/frontend
+```
+
+</TabItem>
+
+</Tabs>
+
+The foundation workflow currently only requires deterministic unit tests.
+Don't use placeholder E2E to pretend to cover the real workflow that hasn't been migrated yet.
+
+<Aside type="caution" title="Frontend review needs real browser evidence">
+
+If the delivered content changes the shell, layout, header/sidebar behavior, dialog/drawer interaction, auth entry, or other obvious user-visible workflow,
+Review must not only look at code diff or unit test.
+You must use Playwright to walk through the actual process at least once and check whether the UI runs away through screenshots or equivalent visual evidence.
+
+</Aside>
+
+## Public Site
+
+```bash
+npm run check --prefix site
+npm run build --prefix site
+./scripts/build/build_public_site.sh
+```
+
+Public site review should verify `/`, `/about/`, and `/docs/` in the combined artifact when the route contract or visible layout changes.
+
+## Desktop Foundation
+
+```bash
+npm run lint --prefix app/desktop
+npm run build --prefix app/desktop
+```
+
+## Docs
+
+<Aside type="caution" title="Docs changes must always verify routes">
+
+It's not enough for the build to be successful.
+Docs changes must pass both source-side nav checking and built-route checking.
+
+</Aside>
+
+```bash
+uv run python scripts/check_docs_nav_routes.py --check-source
+npm run check --prefix site
+npm run build --prefix site
+./scripts/build_docs_sites.sh
+uv run python scripts/check_docs_nav_routes.py --check-built
+
+# Generated API reference
+./scripts/build/build_api_docs.sh
+uv run python scripts/build/check_api_reference_links.py
+```
+
+## Policy
+
+| Rule | Meaning |
+| --- | --- |
+| Key workflows must have at least one reproducible test path | Core delivery that relies solely on manual verification will not be accepted |
+| Backend service and Runner publication workflow give priority to writing deterministic tests | Ensure task lifecycle and TraceStore publication first |
+| The frontend component and interaction process are covered by unit / E2E respectively | Don't use a single test type to shoulder all the responsibilities |
+| Frontend merge review requires real UI evidence | User-visible delivery such as shell / layout / overlay / auth entry must be checked at least once with Playwright smoke + screenshot |
+| docs route verification must use canonical directory routes | Does not depend on the source `.md` path speculation build results |
+
+<Aside type="tip" title="Good default">
+
+If you are not sure which test to add in this round, first choose the deterministic test closest to the changed surface;
+Only add integration / E2E when the user-visible workflow actually spans multiple surfaces.
+
+</Aside>
+
+## Agent Rule
+```markdown
+## Testing Commands
+- **Foundation workspace check**:
+  - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+  - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
+  - `npm run test --prefix app/frontend`
+  - `npm run lint --prefix app/desktop`
+  - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- **Backend/core tests**:
+  - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+  - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
+  - `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- `SuperconductingCircuitsAnalysisBridge` tests are repo-local and require root `uv sync --all-packages`; the test bootstrap selects root `.venv` unless `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` overrides it.
+- **Frontend unit tests**: `npm run test --prefix app/frontend`
+- **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
+- For user-visible frontend changes, use Playwright-based smoke verification and screenshot or equivalent visual evidence when practical.
+- **Public site checks**:
+  - `npm run check --prefix site`
+  - `npm run build --prefix site`
+  - `./scripts/build/build_public_site.sh`
+- **Desktop foundation checks**:
+  - `npm run lint --prefix app/desktop`
+  - `npm run build --prefix app/desktop`
+- **Docs checks**:
+  - `uv run python scripts/check_docs_nav_routes.py --check-source`
+  - `uv run python scripts/check_docs_app_quarantine.py`
+  - `npm run check --prefix site`
+  - `npm run build --prefix site`
+  - `./scripts/build_docs_sites.sh`
+  - `uv run python scripts/check_docs_nav_routes.py --check-built`
+- **API reference checks**:
+  - `uv run sphinx-build -W --keep-going -b html docs/api-reference/python/source build/api-reference/python/html`
+  - `julia --project=docs/api-reference/julia docs/api-reference/julia/make.jl`
+  - `./scripts/build/build_api_docs.sh`
+  - `uv run python scripts/build/check_api_reference_links.py` after `./scripts/build/build_public_site.sh`
+- Add tests for critical workflows instead of relying on manual verification only.
+- Use canonical directory routes for docs route checks instead of source `.md` paths.
+```

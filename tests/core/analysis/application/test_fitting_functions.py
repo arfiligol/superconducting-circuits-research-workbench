@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 from superconducting_circuits_analysis.application.analysis.extraction.admittance import (
     extract_modes_from_dataframe,
 )

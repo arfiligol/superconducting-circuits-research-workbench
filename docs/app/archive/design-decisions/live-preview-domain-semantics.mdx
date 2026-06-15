@@ -1,0 +1,181 @@
+---
+aliases:
+ - Live Preview Domain Semantics Profiles
+ - Live Preview Domain Semantic Profile
+tags:
+ - diataxis/explanation
+ - audience/team
+ - topic/architecture
+ - topic/visualization
+status: draft
+owner: docs-team
+audience: team
+scope: Qubit/JPA/JTWPA/Quantum Memory preview semantic settings and file splitting decisions
+version: v0.1.3
+last_updated: 2026-02-28
+updated_by: docs-team
+sidebar:
+ label: Live Preview Domain Semantics
+ order: 30
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Live Preview Domain Semantics Profiles
+
+This page defines how the domain-specific semantics of superconducting circuits are mapped to Live Preview, and constrains when it is split into multiple domain files.
+
+## Positioning
+
+### Corpus Density Snapshot (2026-02-27)
+
+| Keyword Group | Hits in docs/ |
+|---|---:|
+| `JTWPA` | 12 |
+| `JPA / parametric amplifier` | 26 |
+| `Qubit / transmon / fluxonium` | 55 |
+| `SQUID / Josephson / junction` | 265 |
+| `Quantum Memory / cat qubit` | 0 |
+
+<Aside type="note" title="Decision-making by file (currently)">
+
+Currently, a single profiles file is maintained and is not split into four:
+1) Qubit/JPA/JTWPA has enough material; 2) Quantum Memory has almost no cases; 3) Centralizing contracts first can reduce drift and maintenance costs.
+
+</Aside>
+
+## Profile Contract
+
+Each domain profile must contain at least the following fields:
+
+| Field | Purpose |
+|---|---|
+| `recognition_signals` | Topology/naming identification signal |
+| `visual_grammar` | The structural syntax that users should see |
+| `hard_constraints` | Rules that cannot be broken |
+| `soft_preferences` | Adjustable preferences |
+| `validation_cases` | Regression test case |
+
+<Aside type="tip" title="The minimum feasible implementation that has been implemented so far">
+
+At present, the program has first completed the profile contract into "coarse-grained classification + spacing / label hints":
+- `jtwpa_like`: Enlarge the distance between the backbone and the cell on the simple chain
+- `jpa_like`: Let the dense shunt area expand from the signal backbone to the left and right, and the core parallel branch labels move outward
+- `generic`: Maintain a conservative general layout heuristic
+This means that the profile is starting to impact the picture, but it is still not a complete topology-aware routing engine, nor is it a general net/hyperedge model yet.
+
+</Aside>
+
+## Domain Profiles
+
+<Aside type="note" title="Profile A: JTWPA / JJTWPA">
+
+`recognition_signals`
+- Backbone continuous series connection (`L*` / `Lj*`)
+- Repeat cell + ground shunt (`C*`, `Cj*`)
+- Nodes advance monotonically along the trunk
+
+`visual_grammar`
+- Must present ladder cell rhythm
+- Main trunk horizontally continuous
+- shunt vertical landing
+
+`hard_constraints`
+- The cell pitch is consistent (small error is allowed)
+- bridge is only enabled if conflicts are unavoidable
+- `Lj` and `Cj` value labels cannot overlap each other.
+
+`validation_cases`
+- `JTWPA (10~20 cells)`
+- `Floquet JTWPA with Dissipation`
+
+</Aside>
+
+<Aside type="note" title="Profile B: JPA / SQUID Amplifier">
+
+`recognition_signals`
+- input/output port + central nonlinear core (`Lj*`/SQUID equivalent structure)
+- pump/readout branches coexist
+- Common shunt resistor and coupling capacitor
+
+`visual_grammar`
+- Entrance/exit visible
+- The non-linear core is the visual center of gravity
+- pump branch and signal path can be distinguished
+
+`hard_constraints`
+- port boundary labels are not collided
+- Prioritize core component labels to ensure readability
+- Nodes remain single-labeled
+
+`validation_cases`
+- `Flux-pumped JPA`
+- `Double-pumped JPA`
+
+</Aside>
+
+<Aside type="note" title="Profile C: Qubit + Readout">
+
+`recognition_signals`
+- qubit nonlinear elements coexist with readout resonator
+- Coupling elements are located between two subsystems
+- Driver/sense lines may be separated
+
+`visual_grammar`
+- The qubit sub-circuit and the readout sub-circuit can be partitioned
+- The coupling component position is clear
+- Do not draw two subsystems as a single path
+
+`hard_constraints`
+- The coupling tag cannot be blurred (component name/value)
+- Subsystem backbone remains traceable
+
+`validation_cases`
+- `Floating Qubit` related cases
+- `Qubit structure resonance map` corresponding structure
+
+</Aside>
+
+<Aside type="caution" title="Profile D: Quantum Memory (Provisional)">
+
+There is currently insufficient data, so we will keep the profile interface for now.
+The existing rules of A/B/C cannot be overwritten until there is a reproducible case.
+The validation case is currently missing.
+
+</Aside>
+
+<Aside type="caution" title="Profile capabilities that are not yet implemented">
+
+Although profile has begun to affect spacing and annotation, the following capabilities still need to be completed:
+- True pattern-aware cell packing (currently only simple chain backbone)
+- profile-specific routing (such as JTWPA's fixed ladder backbone)
+- profile-specific label constraint solving (not just left and right expansion)
+Therefore this page should still be viewed as a design contract and incremental roadmap, not a fully delivered feature list.
+
+</Aside>
+
+## Shared Rules and Split Criteria
+
+<Aside type="tip" title="Shared Semantic Rules">
+
+1. `value_ref -> parameters` binding rules
+2. Node single labeling
+3. Forbidden wire piercing
+4. The large image can be viewed via zoom/pan
+
+</Aside>
+
+<Aside type="tip" title="Split Criteria (when to split into multiple domain files)">
+
+The following conditions must be met simultaneously:
+1) At least 3 stable and reproducible cases in this field
+2) At least 2 exclusive rules that conflict with other areas
+3) Have independent regression tests (including at least 1 visual stress test)
+
+</Aside>
+
+## Related
+
+- [Circuit Schema Live Preview](circuit-schema-live-preview.mdx)
+- [Dataset Schema Design](schema-design.md)
+- [Data Formats / Circuit Netlist](../old-app-contracts/circuit-netlist.mdx)

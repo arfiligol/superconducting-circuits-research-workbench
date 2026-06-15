@@ -1,0 +1,262 @@
+---
+aliases:
+ - Write Pluto Notebook Skill
+ - Pluto Notebook Authoring Skill
+ - Pluto Notebook Writing Skill
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/governance
+status: draft
+owner: docs-team
+audience: contributor
+scope: Cross-tool Skill template and synchronization rules for Pluto.jl reactive notebook authoring
+version: v0.1.0
+last_updated: 2026-05-30
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Write Pluto Notebook
+
+`write-pluto-notebook` is the Pluto.jl notebook authoring Skill for coding agents. It requires agents to treat Pluto notebooks as reactive Julia programs and interactive teaching documents, rather than as Jupyter-style transcripts that rely on manual execution sequences.
+
+This template can be synced to Codex App, Claude Code, Gemini or other tools that support reusable instruction. If the tool supports bundled resources, it should synchronize the Pluto behavior reference, featured notebook pattern reference and duplicate global definition checker; if it does not support it, at least retain the hard rules in the `SKILL.md` template.
+
+<Aside type="caution" title="Reactivity, PlutoUI, and Markdown are first-class">
+
+Pluto's dependency graph relies on syntax analysis. The synchronized Skill must retain the "one global owner cell per name" rule, and must also regard PlutoUI, `@bind`, `WideCell`, Markdown admonitions, `details`, `TableOfContents`, `combine`, `confirm`, etc. as core specifications for Pluto notebook authoring, rather than additional style recommendations.
+
+</Aside>
+
+## Source Check
+
+This template is compiled based on Pluto official documents and featured notebook corpus reviewed on 2026-05-30:
+
+| Topic | Source |
+| --- | --- |
+| Reactivity, dependency graph, no duplicate globals | [Pluto reactivity](https://plutojl.org/en/docs/reactivity/) |
+| `.jl` notebook and reactive FAQ | [Pluto FAQ](https://plutojl.org/en/docs/faq/) |
+| Embedded package environments | [Built-in package management](https://plutojl.org/en/docs/packages/) |
+| `Pkg.activate` compatibility behavior | [Advanced package setup](https://plutojl.org/en/docs/packages-advanced/) |
+| `@bind` / PlutoUI controls | [`@bind` and PlutoUI](https://plutojl.org/en/docs/bind/) |
+| Plotting cells and final-expression display | [Plotting in Pluto](https://plutojl.org/en/docs/plot/) |
+| Featured notebook publishing standards | [Featured notebooks](https://plutojl.org/en/docs/featured-notebooks/) |
+| Disabled-cell dependency behavior | [Disable a cell](https://plutojl.org/en/docs/disable-cell/) |
+| Pluto package/environment API | [Pluto public API](https://plutojl.org/en/docs/API/) |
+| PlutoUI widgets and `WideCell` examples | [PlutoUI featured notebook](https://featured.plutojl.org/basic/plutoui.jl) |
+| Markdown admonitions in featured notebooks | [Markdown.jl](https://github.com/JuliaPluto/featured/blob/main/src/basic/Markdown.jl), [Pluto for scientists.jl](https://github.com/JuliaPluto/featured/blob/main/src/basic/Pluto%20for%20scientists.jl), [PlutoUI.jl.jl](https://github.com/JuliaPluto/featured/blob/main/src/basic/PlutoUI.jl.jl), [PlutoUI Details.jl](https://github.com/JuliaPluto/PlutoUI.jl/blob/main/src/Details.jl) |
+
+Corpus pass:
+
+- `JuliaPluto/featured` commit `a1b1a0f456015eaec6ec49fe39aa65b696c0129c`: all 46 `.jl` notebooks under `src/`.
+- `JuliaPluto/PlutoUI.jl` commit `e1ced3788361555c5684bb4f519a7e851b3ced92`: PlutoUI source/doc notebook patterns, including `WideCell`, `combine`, `confirm`, `details`, and resource helpers.
+
+No Pluto-specific Codex Skill provided by Pluto official or OpenAI officials was found. This template is a project-provided Skill.
+
+## Sync Steps
+
+1. Create a reusable instruction, skill or context entry that is natively supported by the target agent.
+2. Use `write-pluto-notebook` as the canonical name.
+3. Keep the trigger description and ensure that `.jl` Pluto notebook, PlutoUI, `@bind`, Markdown admonitions, teaching callouts, PlotlyJS/`WideCell`, reactivity debugging, package environment setup, Pluto featured notebook style, and featured-notebook-style teaching material will trigger this Skill.
+4. Synchronize the `SKILL.md` template below to the skill body.
+5. If the target tool supports resources, add:
+- `references/pluto-behavior.md`: Pluto official action summary and source link.
+- `references/featured-notebook-patterns.md`: authoring patterns for `JuliaPluto/featured` and `PlutoUI.jl` corpus, including Markdown admonition usage summary.
+- `scripts/check_pluto_reactivity.py`: raw `.jl` Pluto notebook of duplicate global definition and Plotly/WideCell heuristic checker.
+
+## Canonical Template
+
+Synchronize the following content into the native skill of the target agent.
+
+````markdown
+---
+name: write-pluto-notebook
+description: Use when creating, editing, converting, or reviewing Pluto.jl notebooks (`.jl` Pluto notebooks), especially Julia tutorial/research notebooks, PlutoUI/@bind controls, Markdown admonitions, teaching callouts, WideCell layout for PlotlyJS/large figures, package-environment setup, Pluto featured notebook style, featured-notebook-style teaching material, or debugging Pluto reactivity problems such as duplicate global definitions, hidden state, stale outputs, side effects, or cells that rely on manual execution order.
+---
+
+# Write Pluto Notebook
+
+Use this skill to author Pluto notebooks as reactive Julia programs and
+interactive teaching documents, not as order-dependent Jupyter-style
+transcripts. Reactivity, PlutoUI, and Markdown/admonitions are first-class
+notebook design constraints. The goal is a notebook whose visible code fully
+describes its state, can be re-run cleanly, and presents an interactive story.
+
+Load `references/pluto-behavior.md` for source-backed behavior rules. Load
+`references/featured-notebook-patterns.md` when writing tutorials, examples,
+or rich interactive notebooks. Use `scripts/check_pluto_reactivity.py` as a
+lightweight preflight for raw `.jl` notebook edits.
+
+## Workflow
+
+1. Load the target repository's notebook, Julia, documentation, and validation
+  rules before editing. If the repository has Pluto-specific source of truth,
+  follow it over this generic guidance.
+2. Inspect the closest existing Pluto notebook before creating a new pattern.
+3. Identify the notebook role: tutorial, research exploration, parameter sweep,
+  app-facing demonstration, or local analysis. Keep reusable scientific logic
+  in packages or helper modules; keep the notebook thin and inspectable.
+4. Plan cells as a dependency graph: inputs and controls first, pure derived
+  values next, explicit side-effect actions last.
+5. Plan the teaching flow: frontmatter, title, short sections, interactive
+  controls, figures, exercise/check cells, hidden-code helpers, and appendix.
+6. Edit cells so every global name has one owner cell.
+7. Validate with the lightweight script, then run Pluto or the repository's
+  Julia checks when practical.
+
+For this repository, Pluto is the direct Julia research cockpit. Pluto notebooks
+belong under `notebooks/pluto/`, may use `SuperconductingCircuitsCore`
+directly, and must not become Backend task submitters unless the project source
+of truth changes.
+
+## Reactivity Rules
+
+- Define each global variable, function, struct, module, and `@bind` variable
+ in exactly one cell. Do not split competing definitions of `x`, `params`,
+ `plot_result`, or a helper function across cells.
+- If multiple statements must execute as one cell, wrap them in `begin ... end`
+ or `let ... end`. Use `let` for scratch locals that should not become global
+ notebook state.
+- Prefer pure cells: derive values from inputs and return the display object as
+ the last expression. Avoid cells that mutate objects created in another cell.
+- Do not depend on manual execution order. Moving cells should not change the
+ result except through the dependency graph.
+- Avoid hidden state patterns: global caches, append-only global arrays,
+ in-place mutation across cells, conditional redefinitions, and "run this cell
+ again" instructions.
+- Put long workflow logic in a function or package API, then call it from a
+ small cell. A function definition has one owner cell; its internal local
+ variables do not create notebook-level dependencies.
+- Keep slow or destructive work behind explicit controls such as a boolean
+ `run_*` flag, a PlutoUI button, or a dry-run path. The cell should make its
+ trigger dependency obvious.
+
+## Package Environment
+
+- For shareable notebooks, prefer Pluto's built-in package management: write
+ `using PackageName` or `import PackageName` directly in the notebook and let
+ Pluto store the environment in the `.jl` file.
+- Use `Pkg.activate(...)` only when the repository intentionally needs a shared
+ project environment. Put activation, instantiate, and imports in one top
+ `begin` cell, and document that this switches Pluto to compatibility behavior
+ instead of the built-in package manager.
+- Do not scatter `Pkg.add`, `Pkg.activate`, or environment mutation across
+ multiple cells. If a "Pkg cell" is needed for a special version, keep it as a
+ single explicit setup cell.
+- Do not hand-edit the embedded `Project.toml` / `Manifest.toml` cells unless
+ the task is specifically environment maintenance. Prefer Pluto's own package
+ UI or API for environment updates.
+
+## Interactivity
+
+- Treat PlutoUI as part of the normal Pluto authoring surface, not an optional
+ add-on. Import `PlutoUI` whenever a notebook uses `@bind`, layout wrappers,
+ TableOfContents, downloadable output, resources, or teaching UI.
+- Treat `@bind name widget` as the single global definition of `name`.
+- Keep UI controls small and declarative. Put expensive compute in cells that
+ depend on the bound variables, not in the widget cell.
+- Use PlutoUI widgets for sliders, text fields, checkboxes, buttons, file
+ pickers, and composed controls. Name bound variables by domain meaning, not
+ widget type.
+- Use `confirm(...)`, `Button`, or `CounterButton` for controls that would
+ otherwise trigger slow simulations on every small UI change.
+- Use `combine(...) do Child ... end` when the notebook needs a dynamic group
+ of related inputs rather than many copy-pasted `@bind` cells.
+- When placing `@bind` expressions inside collections passed to `details` or
+ layout helpers, wrap each bound expression in parentheses or interpolate it
+ into Markdown/HTML so macro expansion stays predictable.
+
+## Layout And Figures
+
+- Use `TableOfContents()` for long tutorial, lecture, or reference notebooks.
+- Use `details(summary, contents)` for long explanations, optional derivations,
+ raw data, solution hints, or code that would interrupt the main reading flow.
+- Use `Resource` for URL-addressed media and `LocalResource` only when the
+ notebook lives in a repository with stable relative asset paths.
+- Use `DownloadButton` for generated artifacts; do not `@bind` it.
+- For PlotlyJS, PlutoPlotly, PlotlyBase, or repository Plotly visualizers,
+ wrap figure outputs in PlutoUI `WideCell`.
+- `WideCell` must be the direct returned output of a cell. Use
+ `plot(...) |> WideCell(; max_width=1200)`, `WideCell(plot(...))`, or define
+ one `wide_figure_cell = WideCell(; max_width=...)` setup value and end figure
+ cells with `end |> wide_figure_cell`.
+- Prefer responsive `WideCell` widths for dense figures over custom CSS
+ overflow hacks. If a figure has a configured display width, set `max_width`
+ from that width plus a small margin.
+
+## Markdown And Admonitions
+
+- Use `md"""..."""` for long prose, formulas, callouts, and narrative blocks.
+- Use Pluto/Julia Markdown admonitions for semantic teaching callouts:
+ `!!! kind "Specific title"` followed by indented content.
+- Indent admonition content consistently with 4 spaces, or equivalent
+ indentation when the notebook already uses tabs inside `md"""..."""`.
+- Choose admonition kind by intent: `info` for background, theory, or sources;
+ `tip` for workflow guidance; `question` for reader framing or guiding
+ questions; `warning` for limits and pitfalls; `danger` for errors or failure
+ modes; `hint`, `correct`, `success`, and `exercise` for teaching feedback.
+- Keep admonitions close to the relevant code, control, or figure. Do not use
+ them as decoration or to compensate for unclear prose.
+- Keep admonitions short. Move long optional derivations, hidden solutions, raw
+ data, or verbose explanations into `details(...)`.
+- For exercise feedback, prefer `PlutoTeachingTools` helpers or a small
+ conditional Markdown/admonition cell whose dependencies are explicit.
+
+## Presentation
+
+- Use `md"""..."""` for explanatory text and equations.
+- Make each code cell's final expression the value to display. Do not rely on
+ `println` for notebook-facing output unless using a terminal-display helper.
+- Prefer tables, plots, and compact summaries over large raw dumps.
+- Keep tutorial prose close to the code it explains, but do not bury important
+ parameters inside prose-only cells.
+- Use frontmatter for published or shared notebooks: title, description, image,
+ tags, license, and authors where appropriate.
+- Prefer short cells and section headings. Pluto allows display order to serve
+ the story because dependency order is inferred from code.
+- Use `let` blocks for local scratch work inside display cells, especially
+ multi-step plotting cells. Ensure the last expression is the display object.
+- For teaching notebooks, consider `PlutoTeachingTools` feedback boxes,
+ `details` for hints/solutions, and small "try it" cells near the explanation.
+
+## Raw File Editing
+
+Prefer the Pluto UI for structural edits. When editing the `.jl` file directly:
+
+- Preserve Pluto cell boundaries and cell order metadata.
+- Do not rewrite unrelated cell IDs, embedded environment cells, or generated
+ metadata.
+- Keep diffs targeted to the requested cells.
+- Run the checker:
+
+```bash
+python3 /path/to/write-pluto-notebook/scripts/check_pluto_reactivity.py notebooks/pluto/example.jl
+```
+
+The checker is heuristic. A clean result does not prove Pluto will run, and a
+warning may need human review. Pluto itself remains the source of truth for
+reactivity errors.
+
+## Validation
+
+Use the smallest validation set that covers the edit:
+
+- For raw `.jl` edits: run `check_pluto_reactivity.py` on touched notebooks.
+- For package/environment changes: open the notebook in Pluto, or use Pluto's
+ environment API when scripting environment updates.
+- For repository-owned Julia package calls: run the repository's relevant Julia
+ package tests.
+- For tutorial or docs-adjacent notebooks: verify the notebook still tells a
+ clean top-to-bottom story after a fresh notebook process.
+
+Report any skipped validation explicitly.
+````
+
+## Related
+
+- [Agent Skill Library](index.mdx)
+- [Notebook Interface](../notebooks/index.md)
+- [Julia Scientific Core](../core/julia-scientific-core.md)

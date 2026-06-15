@@ -1,0 +1,580 @@
+---
+aliases:
+ - Backend Analysis Results
+ - Analysis Result Service
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
+status: draft
+owner: docs-team
+audience: team
+scope: Analysis Workbench registry, active DesignScope gating, Data Collection Review, analysis pipeline gating, run history, axis-aware artifact manifest, artifact payload and identify/tagging of backend reference surface.
+version: v0.13.1
+last_updated: 2026-05-29
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Analysis Results
+
+This page defines the analysis result surface that Analysis Workbench depends on.
+
+<Aside type="note" title="Surface Boundary">
+
+This page is responsible for the analysis-specific read / mutation contract.
+The task lifecycle itself is defined by [Tasks & Execution](tasks-execution.md).
+
+</Aside>
+
+<Aside type="tip" title="Primary Consumers">
+
+The main consumers are Analysis Workbench, [Dashboard](../frontend/workspace/dashboard.mdx), ResultView API and Raw Data Browser.
+
+</Aside>
+
+---
+
+## Coverage
+
+| Surface | Description |
+|:--- |:--- |
+| **Analysis Registry Summary** | Analysis item registration summary and prerequisite / downstream hints |
+| **Data Collection Review** |pre-run scientific collection review derived from selected traces and persisted trace structure|
+| **Analysis Input Collection** |scientific input collection derived from selected traces and persisted trace structure|
+| **Run History List** | Execution history list |
+| **Result Artifact Manifest** | analysis-aware, axis-aware result output list |
+| **Artifact Payload Query** | table / plot / preset output content query |
+| **Identify Mode / Parameter Tagging** | Identification mode and parameter tag changes |
+
+---
+
+## Surface Contracts
+
+<Tabs>
+<TabItem label="Analysis Registry">
+
+
+registry summary must provide at least:
+
+| Field | Description |
+|:--- |:--- |
+| `analysis_id` | Unique identification of analysis items |
+| `label` | Show label |
+| `availability_state` | Available status |
+| `required_config_fields` | Required configuration fields |
+| `trace_compatibility` | Trace Compatibility Summary |
+| `input_axis_requirements` | Summary of requirements for source trace axes / sweep axes |
+| `result_view_capabilities` | Summary of table / plot presets expected to be provided by this analysis |
+| `prerequisite_state` | `ready`, `blocked`, `requires_upstream_result` |
+| `prerequisite_summary` | Short reason why blocked / requires upstream result |
+| `required_upstream_analysis_ids[]` | If this analysis relies on upstream results, indicate which analysis types satisfy the prerequisite |
+| `available_upstream_runs[]` | optional; persisted runs that already exist in the design scope and can meet the prerequisite |
+| `next_analysis_ids[]` | If this analysis is completed, which downstream analyzes can be unlocked |
+
+query input baseline:
+
+| Field | Meaning |
+|---|---|
+| `dataset_id` | active dataset scope |
+| `design_id` |active DesignScope identity; archived / redirected scopes are not normal submit targets|
+| `selected_trace_ids[]` | An explicit selection that can be referenced for compatibility calculations; still belongs to UI interaction input |
+
+</TabItem>
+
+<TabItem label="Data Collection Review">
+
+
+Data Collection Review is the first-class review surface before submit.
+
+minimum review contract:
+
+| Field | Meaning |
+|---|---|
+| `selection_summary` | Summary of which traces / collections the user has currently selected |
+| `source_trace_ids[]` | user-selected source traces |
+| `shared_axes[]` | Collection of commonly interpretable canonical axes; contains axis names, units and recoverable coordinate values ​​/ refs |
+| `available_sweep_axes[]` | Structured sweep axes available in analysis / explorer |
+| `collection_members[]` | backend derived scientific members; retain source / trace membership and compatible grouping identity |
+| `source_coverage` | Summary of coverage from sources such as measurement / layout simulation / circuit simulation |
+| `grouping_summary` | shared axes, batch lineage, scientific grouping and collection label summary |
+| `readiness_state` | `ready`, `inspect_only`, `blocked` |
+| `runnable_analyses[]` | analyzes that can be executed directly under the current collection |
+| `blocked_analyses[]` | Currently blocked analyzes and blocking reason |
+
+collection member minimum fields:
+
+| Field | Meaning |
+|---|---|
+| `member_key` | derived member identity |
+| `trace_ids[]` | belonging trace ids |
+| `source_kind` | `measurement`, `layout_simulation`, `circuit_simulation` |
+| `family` / `representation` | member scientific typing |
+| `axis_signature` | shared axis structure summary |
+| `member_label` | UI-safe compare label |
+
+</TabItem>
+
+<TabItem label="Analysis Input Collection">
+
+
+The backend can be derived from the analysis input collection based on selected traces.
+
+minimum collection contract:
+
+| Field | Meaning |
+|---|---|
+| `source_trace_ids[]` | user-selected source traces |
+| `source_batch_ids[]` | optional upstream batch lineage |
+| `shared_axes[]` | selected traces Commonly interpretable canonical axes; including axis names, units and recoverable coordinate values ​​/ refs |
+| `available_sweep_axes[]` | Input sweep axes available for analysis / explorer |
+| `collection_members[]` | member summaries required for compare/grouping |
+| `source_coverage` | Source coverage summary for selected traces |
+| `grouping_summary` | scientific grouping summary derived from batch lineage / axis compatibility |
+| `readiness_state` |`ready`, `inspect_only`, `blocked` and similar values collection readiness|
+
+collection rules:
+
+| Concern | Rule |
+|---|---|
+| Interaction vs scientific model | `selected_trace_ids[]` is user interaction input, not the final scientific meaning; the final meaning comes from collection and persisted trace axes |
+| ND sweep preservation | If the source trace itself is a parameter-swept ND trace, the collection must directly retain the sweep axes and must not be reduced to an ad hoc point-trace bag first |
+| Structured filtering | collection readiness and analysis availability can be determined by family, representation, source, stage and available sweep axes |
+| Summary-safe filtering boundary |collection filtering uses axis-name / collection-level / summary-safe filters; coordinate-value / range filtering requires a coordinate-domain summary contract|
+| No provenance parsing | backend No parsing free-form provenance summary to guess sweep axis meaning |
+| Derived authority |Collection review / input collection are both derived read models, not editable owner resources|
+
+</TabItem>
+
+<TabItem label="Run History">
+
+
+run history Each column must provide at least:
+
+| Categories | Included Items |
+|:--- |:--- |
+| **Identity** | run identifier, analysis type |
+| **State** | status, scope |
+| **Metrics** |traces count, axis summary|
+| **Metadata** | sources summary, provenance summary, input collection summary |
+
+run history query baseline:
+
+| Field | Meaning |
+|---|---|
+| `dataset_id` | active dataset scope |
+| `design_id` | design-scoped history |
+| `analysis_id` | optional filter |
+| `limit` | optional |
+| `after` / `before` | Optional cursor-based browse position |
+
+</TabItem>
+
+<TabItem label="Result Artifacts">
+
+
+The manifest must provide at least:
+
+| Properties | Description |
+|:--- |:--- |
+| `artifact_id` | Output unique identification |
+| `category` | Category (for example: Plot, Table) |
+| `view_kind` | View type |
+| `title` | Title |
+| `axis_contract` | Input axes / derived axes / metric axes summary |
+| `preset_views[]` | Table / plot preset summary that can be directly applied |
+| `query_spec` | artifact-level query specifications |
+
+query must support at least:
+
+- **Mode Filter**: trace mode filter
+- **Selection**: category selection / artifact tab selection
+- **Axis Projection**: axis semantics required by row / column / x / y / series projections
+- **Data**: payload required for table / plot drawing
+
+artifact payload query baseline:
+
+| Field | Meaning |
+|---|---|
+| `run_id` | persisted analysis run identity |
+| `artifact_id` | selected artifact |
+| `view_mode` | `table` / `plot` |
+| `preset_id` | optional; use backend-defined preset view |
+| `row_axis` / `column_axis` | optional, table projection axis |
+| `x_axis` / `y_axis` / `series_axis` | optional, plot projection axis |
+| `slice_selector` | optional; limit payload to return only a certain set of axis slice / window |
+| `trace_mode_filter` | optional |
+| `category` | optional |
+
+</TabItem>
+
+</Tabs>
+
+## Analysis Pipeline And Dependency Contract
+
+| Concern | Contract |
+|---|---|
+| Pipeline-first model | Analysis Workbench should be considered an analysis pipeline, not a single one-off run surface |
+| Active scope gate | registry, Data Collection Review, submit path and run history normal query must first parse `dataset_id + design_id` into active DesignScope |
+| Separate run identity | Each analysis such as extraction, fitting, comparison, etc. maintains its own `run_id` |
+| Upstream result dependency | If an analysis relies on upstream analysis results, the contract must explicitly indicate `required_upstream_analysis_ids[]` and the acceptable upstream result surface |
+| Submit lineage | downstream analysis submit path should be able to carry `input_result_refs[]` or equivalent upstream lineage, instead of only retaining raw `selected_trace_ids[]` |
+| Blocking truth | backend must be able to answer whether it is `blocked` or `requires_upstream_result`; frontend is not allowed to guess on its own |
+| Next-step truth | The backend should indicate which downstream analyzes will be unlocked upon completion of a successful run |
+
+### Availability vs Run Status
+
+| State family | Values | Meaning |
+|---|---|---|
+| analysis availability | `ready`, `blocked`, `requires_upstream_result` | Whether it can be executed before submit, and which prerequisite needs to be filled |
+| run execution | `queued`, `running`, `completed`, `failed`, `cancelled`, `terminated` |Task/persisted execution state of a single analysis run|
+
+### Analysis-specific Result Axis Contract
+
+Analysis results must distinguish between source input axes and analysis-derived result axes.
+
+| Axis family | Meaning |
+|---|---|
+| `input_axis` | Axis directly from source trace canonical structure, such as `L_jun` |
+| `derived_axis` | axis generated by analysis, such as `mode_index` |
+| `member_dimension` | compare-preserving result is used to preserve the explicit dimensions of collection member / source identity |
+| `metric` | table cell / plot y-value and other observed quantities, such as `frequency_ghz` |
+
+<Aside type="caution" title="Derived axes must be labeled as derived">
+
+Analysis-produced axes such as `mode_index`, fit iteration, residual bucket, etc. must be marked as derived.
+They must not be written as source trace native axis.
+
+</Aside>
+
+## Analysis Stage Contracts
+
+### `admittance_extraction`
+
+The first stage of this analysis canonical result semantics should be defined as:
+
+| Concern | Contract |
+|---|---|
+| Input axis | sweep parameter, for example `L_jun` |
+| Derived axis | `mode_index` |
+| Metric | `frequency_ghz` |
+| Table preset | rows=`mode_index`, columns=`L_jun`, cell=`frequency_ghz` |
+| Plot preset A | x=`mode_index`, y=`frequency_ghz`, series=`L_jun` |
+| Plot preset B | x=`L_jun`, y=`frequency_ghz`, series=`mode_index` |
+| First-phase mode meaning | `mode_index` only represents the ordinal extracted mode within a single sweep point |
+| Fitting boundary | This analysis only outputs resonance surface / diagnostics and is not responsible for model fitting |
+| Explicit non-goal | This contract does not claim to have physical mode continuity across sweeps; if this capability is required, a stronger contract such as `mode_track_id` must be established |
+
+### `junction_parameter_identification`
+
+This analysis should be used as a downstream model-based fitting analysis of `admittance_extraction`.
+
+| Concern | Contract |
+|---|---|
+| Input contract | Consume upstream extraction result surface instead of directly consuming raw `Im(Y)` traces |
+| Owned controls |fit bounds, model config, branch / member selection, prior / initialization config|
+| Result preview |fit parameter table, measured vs fitted overlay, residual / diagnostics|
+| Member scope | If multiple source members are fitted separately, the result must retain member/source identity |
+| Non-goal | Do not redefine resonance extraction itself, nor turn raw trace selection into a unique scientific input |
+
+## Cross-source Compare Contract
+
+| Concern | Contract |
+|---|---|
+| Compare eligibility | `measurement`, `layout_simulation`, `circuit_simulation` can become compare candidates as long as they share compatible canonical scientific structure |
+| Structural compatibility | At least family, representation, required axes and `axis_signature` / shared-axis compatibility |
+| Scope compatibility | compare candidates must first be in the same active DesignScope; cross-source alignment is done by ingestion / publication target selection or DesignScope merge |
+| Identity preservation | compare-preserving result must retain member/source identity and must not average multiple compatible members into a single surface |
+| Result preview | table / plot preset should be able to express raw extracted resonance points per source/member, and support downstream fit lines per source/member |
+| Compare-preserving output | artifact manifest and payload must retain member/source identity; `member_dimension` or equivalent compare dimension must be stably expressed collection member / source identity |
+
+<Aside type="caution" title="Aggregation is not compare-preserving">
+
+Backend analysis surfaces must not average compatible members into a single result when the requested workflow is cross-source comparison.
+Any aggregation must be explicit in the result contract and visible in provenance.
+
+</Aside>
+
+### Invalid Cell And Mask Semantics
+
+| Concern | Contract |
+|---|---|
+| Persisted invalid cell |source ND payload can be `NaN` to represent invalid / unavailable numeric cell|
+| `NaN` meaning | `NaN` is not `0`; analysis must not bring it into calculation as a zero value |
+| Mask-first processing | analysis should first establish the validity mask, and then only perform extraction / fitting / reduction on valid cells |
+| Grid preservation | invalid cells must not automatically authorize consumer collapse axes, drop sweep coordinates, or reshape scientific grid |
+| All-masked slice | If the entire slice / sweep point / projection region is all invalid, the axis position should still be retained; the artifact payload can return empty / `null` / masked cells, but the slice cannot be omitted directly |
+| Warning summary | analysis or result payload can be accompanied by explicit warning / summary note indicating that some slices are fully masked |
+| Result transport | artifact payload can use empty cell, `null`, display-safe mask summary or explicit mask payload to render invalid cells, but invalid cells must not be secretly rewritten into computable zero values ​​|
+
+<Aside type="caution" title="Preserve ND semantics while masking">
+
+The focus of mask-first is to retain the canonical ND grid structure and then only calculate it on the valid region.
+This is not "delete the invalid cells and pretend that it was originally a sparse 1D bag".
+
+</Aside>
+
+## Artifact Payload Efficiency Rules
+
+| Concern | Rule |
+|---|---|
+| Manifest / history surfaces | run history and artifact manifest must not default to inline large matrix / tensor payload |
+| Slice-aware queries | Large result tensor / matrix should support `preset_id`, axis projection and `slice_selector` instead of always returning the entire dense payload |
+| Coordinate loading | full coordinate arrays are only loaded when the result view really needs them |
+| Dominant access pattern |Currently supports `fixed sweep point -> read full frequency slice` or `fixed result axes -> read single plot / table projection` in priority|
+| Storage / chunking | artifact payload retrieval and underlying chunking should align with the main scientific access pattern, not the generic default |
+| Whole dense tensor transport | large-result whole dense tensor transport is not a default contract; only when an artifact/view explicitly declares that it is allowed, the whole package can be returned |
+| Compare payload discipline | compare-preserving artifact should return member-aware projection first, instead of aggregating members first and then losing identity |
+
+<Tabs>
+<TabItem label="Identify / Tagging">
+
+
+backend must support the following operations:
+
+1. **Selection Path**: source parameter selection required information
+2. **Metric Path**: designated metric selection required information
+3. **Mutation**: parameter tagging mutation
+
+tagging mutation payload baseline:
+
+| Field | Meaning |
+|---|---|
+| `dataset_id` | active dataset |
+| `run_id` | source analysis run |
+| `artifact_id` | source artifact |
+| `source_parameter` | Marked source parameters |
+| `designated_metric` | Target Core Metrics |
+
+</TabItem>
+
+</Tabs>
+
+<Aside type="caution" title="Trace-first Gating">
+
+Availability must be driven by **compatible traces**, `selected_trace_ids[]`, and its derived **input collection**.
+The design profile only provides hints, not the only hard threshold.
+
+</Aside>
+
+<Aside type="tip" title="Persisted Authority">
+
+run history is **persisted record surface**.
+The frontend must be able to read back consistent content after reorganization and must not rely solely on page-local memory.
+
+</Aside>
+
+<Aside type="caution" title="Artifact-first Result View">
+
+The frontend result view should rely only on artifact manifest and artifact payload.
+The backend must not require the frontend to directly parse `DerivedParameter.name`, freely splice fit-table labels, or restore sweep axes from prose on its own.
+
+</Aside>
+
+<Aside type="tip" title="Artifact-first still means axis-aware">
+
+Artifact-first does not mean that the result can only be a single fit table or scalar report.
+Artifact payload can be axis-aware table matrix, plot payload and preset view contract.
+
+</Aside>
+
+<Aside type="tip" title="Cross-cutting storage guidance">
+
+Metadata / TraceStore division of labor, summary-first query and ND payload access boundaries should also comply with [Data Handling](../../reference/guardrails/code-quality/data-handling.mdx).
+
+</Aside>
+
+<Aside type="tip" title="Consistency Guarantee">
+
+After the mutation is completed, when the result context or run history needs to be re-read, consistent results should be obtained from **persisted state**.
+
+</Aside>
+
+---
+
+## Tagging Propagation
+
+After the `Tag Parameter` mutation is successful, the backend must also update the dataset-level metrics summary for use by the Dashboard.
+
+| Read back to consumer | Expected results |
+|:--- |:--- |
+| Analysis Workbench | See the latest tagging status after re-reading |
+| [Dashboard](../frontend/workspace/dashboard.mdx) | `Tagged Core Metrics` Summary can read back the latest tag |
+
+<Aside type="caution" title="Cross-page Consistency">
+
+identify / tagging does not only affect the Analysis Workbench partial screen.
+After the mutation is successful, the relevant dataset summary must be read back consistently across pages.
+
+</Aside>
+
+## Tagged Core Metrics Resolution Contract
+
+When Dashboard reads `Tagged Core Metrics`, it must use the same set of canonical resolution rules to
+`ParameterDesignation` corresponds to `DerivedParameter` to avoid the UI/CLI repeatedly spelling SQL to cause result drift.
+
+| Project | Contract |
+|:--- |:--- |
+| **Authority** | The persistence repository contract is responsible for designation and derived parameter query; UI/CLI is not allowed to directly operate the ORM Session. |
+| **Exact Match** | Try the exact match of `dataset_id + source_analysis_type + source_parameter_name` first. |
+| **Exact-miss Alias ​​Match** | If exact miss, query `source_parameter_name + "_b0"` alias is allowed. |
+| **Prefix Alias ​​Match** | If it still misses, the first match with the name prefix under `dataset_id + method` is finally allowed. |
+| **Tagging Uniqueness** | Under the same dataset, `designated_name + source_analysis_type + source_parameter_name` must not be repeated. |
+| **Rename Safety** | When renaming the historical parameter name in a normalized manner, if the new key already exists, duplication must be removed and idempotent must be maintained. |
+
+<Aside type="caution" title="Boundary Rule">
+
+The above matching and deduplication logic belongs to the backend/persistence contract and cannot be scattered in the session query of the page handler or CLI command.
+
+</Aside>
+
+---
+
+## Delivery Rules
+
+| Project | Rules |
+|:--- |:--- |
+| **Run/Result Split** | run lifecycle and result payload are different surfaces, but they must be connected by the same run lineage. |
+| **Empty Diagnostics** | If the run completes without a renderable artifact, the backend should return explicit empty-state diagnostic information. |
+| **No Rerun** | artifact payload query **No implicit rerun** analysis. |
+| **Trace Consistency** | The filtering semantics of `All / Base / Sideband` must be absolutely consistent with frontend. |
+
+## Request / Response Examples
+
+<Aside type="note" title="Run history query">
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "rows": [
+   {
+    "run_id": "run_20",
+    "analysis_id": "admittance_extraction",
+    "status": "completed",
+    "scope": "design_traces",
+    "trace_count": 1,
+    "input_collection_summary": {
+     "shared_axes": ["frequency", "L_jun"],
+     "available_sweep_axes": ["L_jun"]
+    },
+    "result_axes_summary": {
+     "input_axes": ["L_jun"],
+     "derived_axes": ["mode_index"],
+     "metrics": ["frequency_ghz"]
+    },
+    "sources_summary": "Y 1",
+    "provenance_summary": "Postprocess · batches #4"
+   }
+  ]
+ },
+ "meta": {
+  "limit": 20,
+  "next_cursor": null,
+  "prev_cursor": null,
+  "has_more": false
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Artifact payload query">
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "run_id": "run_20",
+  "artifact_id": "artifact_resonance_frequency_matrix",
+  "view_mode": "table",
+  "axis_contract": {
+   "row_axis": "mode_index",
+   "column_axis": "L_jun",
+   "metric": "frequency_ghz"
+  },
+  "preset_views": [
+   {
+    "preset_id": "table_mode_by_ljun",
+    "view_mode": "table"
+   },
+   {
+    "preset_id": "plot_mode_vs_frequency_by_ljun",
+    "view_mode": "plot"
+   }
+  ],
+  "columns": [
+   {"key": "mode_index", "label": "Mode #", "role": "row_axis"},
+   {"key": "14.0", "label": "L_jun = 14.0 nH", "role": "column_axis"},
+   {"key": "15.0", "label": "L_jun = 15.0 nH", "role": "column_axis"}
+  ],
+  "rows": [
+   {
+    "mode_index": 0,
+    "14.0": 4.031255,
+    "15.0": 3.927465
+   },
+   {
+    "mode_index": 1,
+    "14.0": 5.884102,
+    "15.0": 5.761774
+   }
+  ]
+ }
+}
+```
+
+</Aside>
+
+<Aside type="note" title="Tag parameter mutation">
+
+Request:
+```json
+{
+ "dataset_id": "ds_xy_001",
+ "run_id": "run_20",
+ "artifact_id": "artifact_resonance_frequency_matrix",
+ "source_parameter": "L_q",
+ "designated_metric": "mode_1_frequency"
+}
+```
+
+Response:
+```json
+{
+ "ok": true,
+ "data": {
+  "tagging_status": "applied",
+  "dataset_id": "ds_xy_001",
+  "metric_id": "metric_mode_1_frequency"
+ }
+}
+```
+
+</Aside>
+
+## Error Code Contract
+
+| Code | Category | When it applies |
+|---|---|---|
+| `analysis_not_available` | `validation_error` | analysis is incompatible with design / trace selection |
+| `trace_selection_invalid` | `validation_error` | selected trace ids are missing or illegal |
+| `characterization_input_collection_invalid` | `validation_error` | selected traces cannot form a valid scientific input collection |
+| `result_axis_not_available` | `validation_error` | The specified artifact / preset does not support the requested row / column / plot axis combination |
+| `run_not_found` | `not_found` | The run pointed to by run history or artifact does not exist |
+| `artifact_not_found` | `not_found` | The specified artifact cannot be found in the artifact manifest |
+| `tagging_conflict` | `conflict` | tagging mutation conflicts with existing metric mapping |
+
+---
+
+## Related
+
+- [Frontend Reference](../frontend/index.md)
+- [Tasks & Execution](tasks-execution.md)
+- [Dataset / Design / Trace Schema](../data-contracts/dataset-record.mdx)
+- [Analysis Result Schema](../data-contracts/analysis-result.mdx)
+- [Data Handling](../../reference/guardrails/code-quality/data-handling.mdx)

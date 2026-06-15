@@ -4,7 +4,8 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Protocol, cast
 
-from sc_core.execution import (
+from app_backend.domain.audit import AuditRecord
+from app_backend.domain.runtime_contracts.execution import (
     TaskExecutionResult,
     TaskExecutionTransition,
     TaskLifecycleMutation,
@@ -16,8 +17,6 @@ from sc_core.execution import (
     build_worker_failed_transition,
     build_worker_running_transition,
 )
-
-from app_backend.domain.audit import AuditRecord
 from app_backend.domain.tasks import (
     TaskDetail,
     TaskEvent,

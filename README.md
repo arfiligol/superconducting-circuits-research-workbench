@@ -198,7 +198,8 @@ core/
     SuperconductingCircuitsVisualizer/
     SuperconductingCircuitsRunner/
   python/
-    sc_data_contracts/
+    analysis/superconducting_circuits_analysis/
+    circuit_libraries/schemdraw_circuit_library/
 notebooks/
   pluto/
   python/
@@ -206,6 +207,8 @@ app/
   backend/
   frontend/
   desktop/
+archived
+  README.md
 site/
 scripts/
   dev/
@@ -224,8 +227,35 @@ the notebook examples first.
 - Start with the Pluto notebooks under `notebooks/pluto/`.
 - Use the Julia Core reference when you need the current authoring and compiler
   contracts: `docs/reference/julia-core/`.
-- Use the physics explanations when you need the S/Y/Z, equivalent-circuit, or
-  modeling context: `docs/explanation/physics/`.
+- Use the physics concepts when you need the S/Y/Z, equivalent-circuit, or
+  modeling context: `docs/concepts/physics/`.
+
+Run Pluto notebooks:
+
+```bash
+npm run julia:dev-install
+julia --startup-file=no --project=@v1.12
+```
+
+Then start Pluto from the Julia REPL:
+
+```julia
+using Pluto
+Pluto.run()
+```
+
+This repository has package-specific Julia environments under `core/julia/`,
+for example `core/julia/SuperconductingCircuitsCore/Project.toml`. The Pluto
+notebooks use a shared Julia `@v1.12` development environment so that Pluto,
+PlutoUI, Revise, Core, Visualizer, and local package checkouts resolve together.
+If a local package dependency was just added and Pluto reports a stale
+dependency graph, refresh that same environment:
+
+```bash
+julia --startup-file=no --project=@v1.12 -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); Pkg.precompile()'
+```
+
+For the full setup notes, read `docs/start/installation.md`.
 
 ### Platform Path
 
@@ -284,11 +314,17 @@ Build the static docs with:
 ./scripts/build_docs_sites.sh
 ```
 
-Build the combined public site artifact with Astro at `/` and Zensical docs at
-`/docs/`:
+Build the combined public site artifact with Astro at `/` and Starlight docs at
+`/docs/`, plus generated API reference at `/api/python/` and `/api/julia/`:
 
 ```bash
 ./scripts/build/build_public_site.sh
+```
+
+Preview the combined artifact locally with:
+
+```bash
+uv run docs-site serve --build
 ```
 
 ## Development Status
@@ -299,7 +335,7 @@ production-ready service or a released external-user platform.
 Current boundaries:
 
 - Public introduction pages live in the Astro site under `site/`.
-- Technical documentation lives in Zensical docs under `docs/` and is mounted at
+- Technical documentation lives in Starlight docs under `docs/` and is mounted at
   `/docs/` in the public artifact.
 - Research execution lives in Pluto notebooks and Julia Core.
 - Productized simulation and analysis tasks go through the Application, Python
@@ -321,7 +357,7 @@ state belongs in Backend contracts, and notebook workflows should either remain
 explicit research workflows or be promoted through the app-backed task and
 publication path.
 
-See `docs/how-to/contributing.md` and `docs/reference/guardrails/` before
+See `docs/contribute/contributing/` and `docs/reference/guardrails/` before
 changing public contracts, architecture boundaries, documentation source of
 truth, or validation workflows.
 

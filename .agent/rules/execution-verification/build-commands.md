@@ -1,44 +1,53 @@
 ## Run / Build Commands
 - **Repo-root orchestration**:
-    - `npm run app:dev`
-    - `npm run app:stop`
+  - `npm run app:dev`
+  - `npm run app:stop`
 - **Python install**: `uv sync --all-packages`
 - **Public site**:
-    - `npm install --prefix site`
-    - `npm run dev --prefix site`
-    - `npm run check --prefix site`
-    - `npm run build --prefix site`
-    - `./scripts/build/build_public_site.sh`
+  - `npm install --prefix site`
+  - `npm run dev --prefix site`
+  - `npm run check --prefix site`
+  - `npm run build --prefix site`
+  - `./scripts/build/build_public_site.sh`
+  - `uv run docs-site serve`
 - **Julia Core install**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'`
 - **Julia Visualizer install**: `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'`
 - **Julia Runner install**: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'`
-- **Julia Analysis Bridge install**: `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Analysis Bridge install**: `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.instantiate()'`
 - **Frontend**:
-    - `npm install --prefix app/frontend`
-    - `npm run dev --prefix app/frontend`
-    - `npm run test --prefix app/frontend`
-    - `npm run lint --prefix app/frontend`
-    - `npm run typecheck --prefix app/frontend`
-    - `npm run build --prefix app/frontend`
+  - `npm install --prefix app/frontend`
+  - `npm run dev --prefix app/frontend`
+  - `npm run test --prefix app/frontend`
+  - `npm run lint --prefix app/frontend`
+  - `npm run typecheck --prefix app/frontend`
+  - `npm run build --prefix app/frontend`
 - **Backend**:
-    - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
-    - `uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000`
+  - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+  - `uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000`
 - **Julia Visualizer**:
-    - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
 - **Julia Runner**:
-    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
 - **Julia Analysis Bridge**:
-    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - Requires root `uv sync --all-packages`; tests auto-select root `.venv` unless `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` overrides it.
 - **Desktop**:
-    - `npm install --prefix app/desktop`
-    - `npm run dev --prefix app/desktop`
-    - `npm run lint --prefix app/desktop`
-    - `npm run build --prefix app/desktop`
+  - `npm install --prefix app/desktop`
+  - `npm run dev --prefix app/desktop`
+  - `npm run lint --prefix app/desktop`
+  - `npm run build --prefix app/desktop`
 - **Docs**:
-    - `uv run python scripts/check_docs_nav_routes.py --check-source`
-    - `./scripts/prepare_docs_locales.sh`
-    - `uv run --group dev zensical build -f zensical.toml`
-    - `./scripts/build_docs_sites.sh`
-    - `uv run python scripts/check_docs_nav_routes.py --check-built`
+  - `uv run python scripts/check_docs_nav_routes.py --check-source`
+  - `uv run python scripts/check_docs_app_quarantine.py`
+  - `npm run check --prefix site`
+  - `npm run build --prefix site`
+  - `./scripts/build_docs_sites.sh`
+  - `uv run python scripts/check_docs_nav_routes.py --check-built`
+- **API reference**:
+  - `uv run sphinx-build -W --keep-going -b html docs/api-reference/python/source build/api-reference/python/html`
+  - `julia --project=docs/api-reference/julia docs/api-reference/julia/make.jl`
+  - `./scripts/build/build_api_docs.sh`
+  - `uv run python scripts/build/check_api_reference_links.py`
 - **Public artifact**:
-    - `./scripts/build/build_public_site.sh` builds Astro at `/` and embeds Zensical docs at `/docs/`.
+  - `./scripts/build/build_public_site.sh` builds Astro at `/`, embeds Starlight docs at `/docs/`, and embeds generated API reference at `/api/python/` and `/api/julia/`.
+  - `uv run docs-site serve` serves the built `site/dist` artifact locally; add `--build` to rebuild before serving.

@@ -1,0 +1,41 @@
+---
+aliases:
+ - Equivalent Circuit Modeling
+tags:
+ - diataxis/explanation
+ - audience/team
+ - topic/equivalent-circuit-modeling
+status: stable
+owner: docs-team
+audience: team
+scope: Workflow knowledge base for S/Y/Z traces, poles, residues, vector fitting, passivity, and equivalent-circuit model choice.
+version: v1.0.0
+last_updated: 2026-06-14
+updated_by: codex
+title: Equivalent Circuit Modeling
+description: Research-method concepts behind Route 2 and the equivalent-circuit handoff.
+sidebar:
+ label: Overview
+ order: 10
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+This knowledge base supports Route 2, where upstream network traces become equivalent circuits. It focuses on research method: what the traces mean, how poles and residues guide model choice, and what checks are needed before a fitted model is used downstream.
+
+<CardGrid>
+ <LinkCard title="Network Trace Views" href="./network-trace-views/" description="How S, Y, and Z matrices expose different physical and numerical views of the same network." />
+ <LinkCard title="Poles, Zeros, And Residues" href="./poles-zeros-residues/" description="How modal structure and residues guide equivalent-circuit topology selection." />
+ <LinkCard title="Vector Fitting And Passivity" href="./vector-fitting-passivity/" description="Why rational macromodels need stability, passivity, and residual checks." />
+ <LinkCard title="Resonance Poles And Circle Fit" href="./resonance-poles-and-circle-fit/" description="Compact resonance fitting knowledge used by the analysis workflows." />
+ <LinkCard title="Kron Reduction" href="./kron-reduction/" description="Network reduction concepts used when ports and internal nodes are eliminated." />
+ <LinkCard title="Coupled Transmission Lines" href="./coupled-transmission-lines-even-odd-maxwell-mutual/" description="Even/odd-mode and distributed-line intuition for equivalent model choice." />
+</CardGrid>
+
+## References
+
+- [Touchstone 2.1 specification](https://ibis.org/touchstone_ver2.1/)
+- [scikit-rf Networks tutorial](https://scikit-rf.readthedocs.io/en/latest/tutorials/Networks.html)
+- [SINTEF Vector Fitting](https://www.sintef.no/en/software/vector-fitting/)
+- [Gustavsen and Semlyen, Rational approximation of frequency domain responses by vector fitting](https://www.sintef.no/globalassets/project/vectfit/vector_fitting_1999.pdf)
+- [scikit-rf Vector Fitting tutorial](https://scikit-rf.readthedocs.io/en/latest/tutorials/VectorFitting.html)

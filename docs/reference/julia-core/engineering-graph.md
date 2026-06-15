@@ -1,12 +1,12 @@
 ---
 aliases:
-  - EngineeringGraph
-  - Engineering Graph
+ - EngineeringGraph
+ - Engineering Graph
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -45,20 +45,20 @@ Schematic layout answers another question: which visual lane is above, which tra
 
 ```text
 @circuit / @hbintent
-    -> canonical functional API
-    -> CircuitPlan
-    -> EngineeringGraph
-    -> Josephson compiler
-    -> JosephsonCircuits netlist
+  -> canonical functional API
+  -> CircuitPlan
+  -> EngineeringGraph
+  -> Josephson compiler
+  -> JosephsonCircuits netlist
 ```
 
 Schematic export uses the semantic graph plus drawing intent:
 
 ```text
 EngineeringGraph
-    + SchematicLayoutIntent
-    -> SchematicExportSpec
-    -> renderer
+  + SchematicLayoutIntent
+  -> SchematicExportSpec
+  -> renderer
 ```
 
 Notebook views should keep this layer easy to inspect. Use Markdown, compact tables, callouts, and renderer-neutral previews when the notebook is validating authoring semantics.
@@ -71,13 +71,13 @@ The model stays renderer-neutral and component-level.
 
 ```julia
 EngineeringComponent(
-    id,
-    display_name,
-    component_type,
-    role,
-    parameters,
-    pins,
-    source_location,
+  id,
+  display_name,
+  component_type,
+  role,
+  parameters,
+  pins,
+  source_location,
 )
 ```
 
@@ -95,15 +95,15 @@ EngineeringComponent(
 
 ```julia
 EngineeringRelation(
-    id,
-    relation_type,
-    from,
-    to,
-    through,
-    role,
-    label,
-    parameters,
-    source_location,
+  id,
+  relation_type,
+  from,
+  to,
+  through,
+  role,
+  label,
+  parameters,
+  source_location,
 )
 ```
 
@@ -134,13 +134,13 @@ Relation types include:
 
 ```julia
 EngineeringPort(
-    id,
-    component,
-    endpoint,
-    port_index,
-    role,
-    resistance,
-    source_location,
+  id,
+  component,
+  endpoint,
+  port_index,
+  role,
+  resistance,
+  source_location,
 )
 ```
 
@@ -163,10 +163,10 @@ Port roles are semantic metadata. A role such as `:probe` does not create a phys
 
 ```julia
 EngineeringGroup(
-    id,
-    label,
-    role,
-    members,
+  id,
+  label,
+  role,
+  members,
 )
 ```
 
@@ -185,9 +185,9 @@ HB simulation intent overlays solver-facing semantics onto the engineering graph
 
 ```julia
 EngineeringHBIntentOverlay(
-    pump_axes,
-    source_slots,
-    observables,
+  pump_axes,
+  source_slots,
+  observables,
 )
 ```
 
@@ -225,38 +225,38 @@ Macro DSL should capture engineering semantics from user code.
 
 ```julia
 plan = @circuit "readout-chain-demo" begin
-    feedline = transmission_line!(
-        id = :feedline,
-        head = external_node("readout_in"),
-        tail = external_node("readout_out"),
-        spec = feedline_spec,
-        head_termination = :external,
-        tail_termination = :external,
-        role = :feedline,
-    )
+  feedline = transmission_line!(
+    id =:feedline,
+    head = external_node("readout_in"),
+    tail = external_node("readout_out"),
+    spec = feedline_spec,
+    head_termination =:external,
+    tail_termination =:external,
+    role =:feedline,
+  )
 
-    resonator = quarter_wave_resonator!(
-        id = :resonator,
-        grounded_head = ground(),
-        open_tail = external_node("resonator_open"),
-        spec = resonator_spec,
-        role = :readout_resonator,
-    )
+  resonator = quarter_wave_resonator!(
+    id =:resonator,
+    grounded_head = ground(),
+    open_tail = external_node("resonator_open"),
+    spec = resonator_spec,
+    role =:readout_resonator,
+  )
 
-    couple_capacitive!(
-        id = :feedline_to_resonator,
-        from = node_at_distance(feedline, coupling_position_m),
-        to = resonator.line.nodes[end],
-        capacitance = Cc,
-        role = :readout_coupling,
-    )
+  couple_capacitive!(
+    id =:feedline_to_resonator,
+    from = node_at_distance(feedline, coupling_position_m),
+    to = resonator.line.nodes[end],
+    capacitance = Cc,
+    role =:readout_coupling,
+  )
 
-    port(:readout_port) do
-        index = 1
-        endpoint = feedline.head
-        role = :readout
-        resistance = 50
-    end
+  port(:readout_port) do
+    index = 1
+    endpoint = feedline.head
+    role =:readout
+    resistance = 50
+  end
 end
 ```
 
@@ -286,10 +286,10 @@ Macro DSL is preferred for human authoring, but the functional API must be able 
 
 ```julia
 register_component!(
-    plan,
-    QuarterWaveResonator(...);
-    display_name = :resonator,
-    role = :readout_resonator,
+  plan,
+  QuarterWaveResonator(...);
+  display_name =:resonator,
+  role =:readout_resonator,
 )
 ```
 
@@ -297,12 +297,12 @@ Standard physical operations record their EngineeringGraph relations as part of 
 
 ```julia
 couple_capacitive!(
-    plan;
-    id = "feedline_to_resonator",
-    from = pin(feedline, :output),
-    to = pin(resonator, :input),
-    capacitance = Cc,
-    role = :readout_coupling,
+  plan;
+  id = "feedline_to_resonator",
+  from = pin(feedline,:output),
+  to = pin(resonator,:input),
+  capacitance = Cc,
+  role =:readout_coupling,
 )
 ```
 
@@ -316,9 +316,9 @@ This lets Runner adapters, generated code, and tests build the same semantic rep
 
 ```text
 SchematicExportSpec
-    = EngineeringGraph
-    + SchematicLayoutIntent
-    + renderer-neutral hints
+  = EngineeringGraph
+  + SchematicLayoutIntent
+  + renderer-neutral hints
 ```
 
 Renderers consume `SchematicExportSpec`. They do not define circuit semantics.
@@ -330,5 +330,5 @@ Schemdraw is one renderer for the export spec. Julia Core packages import no Pyt
 - [Macro Authoring DSL](macro-authoring-dsl.md) captures source semantics for EngineeringGraph.
 - [Schematic Layout Intent](schematic-layout-intent.md) captures renderer-neutral drawing intent and defines `SchematicExportSpec`.
 - [Compiled Circuit](compiled-circuit.md) is the solver-facing output and should preserve links back to engineering semantics.
-- [HB Simulation Intent](hb-simulation-intent.md) overlays pump axes, source slots, and observables on ports and components.
+- [HB Simulation Intent](hb-simulation-intent.mdx) overlays pump axes, source slots, and observables on ports and components.
 - [Runner-Safe API](runner-safe-api.md) calls the same authoring path and must not invent EngineeringGraph semantics from task payloads.

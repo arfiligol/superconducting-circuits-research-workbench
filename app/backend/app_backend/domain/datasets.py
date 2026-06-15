@@ -261,6 +261,9 @@ class TraceAxesSummary:
     axis_lengths: tuple[int, ...]
 
 
+EMPTY_TRACE_AXES_SUMMARY = TraceAxesSummary(0, (), (), ())
+
+
 @dataclass(frozen=True)
 class TraceCollectionProjection:
     collection_key: str
@@ -369,7 +372,7 @@ class TraceMetadataSummary:
     provenance_summary: str
     ndim: int = 0
     shape: tuple[int, ...] = ()
-    axes_summary: TraceAxesSummary = TraceAxesSummary(0, (), (), ())
+    axes_summary: TraceAxesSummary = EMPTY_TRACE_AXES_SUMMARY
     axis_signature: str = ""
     available_sweep_axes: tuple[str, ...] = ()
     collection_projection: TraceCollectionProjection | None = None
@@ -459,7 +462,7 @@ class TraceDetail:
     stage_kind: TraceStageKind = "raw"
     ndim: int = 0
     shape: tuple[int, ...] = ()
-    axes_summary: TraceAxesSummary = TraceAxesSummary(0, (), (), ())
+    axes_summary: TraceAxesSummary = EMPTY_TRACE_AXES_SUMMARY
     axis_signature: str = ""
     available_sweep_axes: tuple[str, ...] = ()
     collection_projection: TraceCollectionProjection | None = None

@@ -37,9 +37,9 @@ const workflowCards = [
   {
     title: "Docs-first research infrastructure",
     meta: "Technical docs under /docs, public story at the root",
-    tags: ["Zensical", "Astro", "Guardrails"],
+    tags: ["Starlight", "Astro", "Guardrails"],
     bullets: [
-      ["Separate the surfaces:", "the public root introduces the project; Zensical remains the technical source for how-to, tutorials, explanation, and reference."],
+      ["Separate the surfaces:", "the public root introduces the project; Astro + Starlight owns the technical source for how-to, tutorials, explanation, and reference."],
       ["Keep decisions auditable:", "guardrails, command contracts, and route checks stay close to the implementation so agent work remains reviewable."],
     ],
   },
@@ -54,8 +54,8 @@ const workflowCards = [
         <h1>Research Workbench</h1>
         <p class="hero__role">Notebook-first tooling for simulation, measurement analysis, and feedback loops.</p>
         <p class="hero__summary">
-          這個 repo 聚焦 fabrication 之外的研究鏈：從 design intent、solver output、measurement trace 到 comparison evidence，
-          把超導電路研究中容易散落的步驟整理成可檢查、可重複、可交接的工作流。
+          This repo focuses on the research chain around design intent, solver output, measurement traces, and comparison evidence.
+          It turns scattered superconducting-circuit research steps into workflows that can be inspected, repeated, and handed off.
         </p>
         <div class="hero__links" aria-label="Project links">
           <a href={docsHref}>Technical documentation</a>
@@ -88,12 +88,19 @@ const workflowCards = [
             The public site now acts as a quiet introduction page. The technical documentation remains under <strong>/docs/</strong>, where tutorials,
             how-to guides, explanations, references, and guardrails belong.
           </p>
+          <p>
+            The workbench also depends on open-source scientific projects that deserve explicit credit:
+            <a href="https://josephsoncircuits.org/stable/">JosephsonCircuits.jl</a>,
+            <a href="https://plutojl.org/">Pluto</a>, and
+            <a href="https://plotly.com/julia/">Plotly / PlotlyJS.jl</a>.
+            Their maintainers have contributed essential simulation, notebook, and visualization foundations for the broader community.
+          </p>
         </div>
         <aside class="summary-panel" aria-labelledby="summary-title">
           <h3 id="summary-title">Working Boundary</h3>
           <p>Focus: design intent, simulation outputs, measurement traces, comparison, feedback, and reproducible research operations.</p>
           <p>Out of scope: fabrication integration, generic photonics workflow claims, and marketing pages that duplicate technical docs.</p>
-          <p>Source split: Astro for the public introduction; Zensical for technical docs mounted at /docs/.</p>
+          <p>Source split: Astro for the public introduction; Astro + Starlight for technical docs mounted at /docs/.</p>
         </aside>
       </div>
     </section>
@@ -139,7 +146,7 @@ const workflowCards = [
         <article class="scope-card">
           <h3>Technical docs</h3>
           <p>
-            Zensical remains mounted at <strong>/docs/</strong> for how-to guides, tutorials, explanation, reference pages,
+            Astro + Starlight remains mounted at <strong>/docs/</strong> for how-to guides, tutorials, explanation, reference pages,
             guardrails, and route-checked documentation.
           </p>
         </article>

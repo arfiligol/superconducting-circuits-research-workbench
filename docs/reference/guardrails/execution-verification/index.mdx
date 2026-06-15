@@ -1,0 +1,62 @@
+---
+aliases:
+ - Execution & Verification
+ - Execution and verification
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/execution
+status: stable
+owner: docs-team
+audience: contributor
+scope: Build, lint, test, CI, direct-develop flow and Codex subagent coordination specification index.
+version: v2.1.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Execution & Verification
+
+This area defines the execution and verification baseline of workspace delivery.
+If a new rule is inconsistent with an existing script, the script or rule source should be corrected rather than abandoning the validation baseline.
+
+<Aside type="note" title="What belongs here">
+
+This layer is not defining product functions, but defining how to deliver, how to verify, and how to collaborate.
+If the question is asking about build, test, CI, handoff or Codex subagent execution flow, the answer should be found here first.
+
+</Aside>
+
+## Page Map
+
+| Page | Read this when | Primary concern |
+| --- | --- | --- |
+| [Build Commands](build-commands.mdx) | You need to run the development environment, build, docs build | run and build entrypoints |
+| [Linting & Formatting](linting.mdx) |You need to run format, lint, typecheck| static quality gates |
+| [Testing](testing.mdx) | You need to complete unit testing, integration, and Playwright | test expectations |
+| [Commit Standards](commit-standards.mdx) | You need to organize commit boundaries and messages | commit hygiene |
+| [Branch & Worktree Flow](branch-and-worktree-flow.mdx) |You are defining `develop` direct update, optional branch/worktree or release promotion| canonical Git/worktree policy |
+| [CI Gates](ci-gates.mdx) | You are changing GitHub Actions or merge criteria | pipeline acceptance |
+| [Task Scope Sizing](./prompt-grading.md) | You are deciding task granularity, verification depth, or whether you need a short plan | task sizing |
+| [Codex Subagent Coordination](multi-agent-collaboration.mdx) | Are you deciding whether to use Codex subagents, how to cut work lanes, or how to report integration results | subagent work lanes |
+| [Work Summary Formats](./contributor-reporting.md) | You want to write a final summary, PR body or risk reward | summary structure |
+
+<Aside type="caution" title="Do not skip verification ownership">
+
+Completion of `Implementation` does not mean completion of the entire delivery line.
+integration / E2E / final summary The rules for `Testing` and `Codex Subagent Coordination` must still be aligned.
+
+</Aside>
+
+## Agent Rule
+```markdown
+## Execution & Verification
+- Define workspace baselines for build, lint, type-check, test, and CI.
+- branch roles, direct-develop policy and optional worktree use are defined by `Branch & Worktree Flow`.
+- When changing the code, give priority to checks directly related to the touched area.
+- The workspace delivery baseline includes five verification lines: app/frontend, app/backend, Julia Runner, desktop, and docs.
+- Task scope, verification depth and subagent work lane coordination need to be aligned with the rules of this area.
+```

@@ -9,12 +9,15 @@
     "site:check": "npm run check --prefix site",
     "public-site:build": "./scripts/build/build_public_site.sh",
     "docs:build": "./scripts/build_docs_sites.sh",
+    "api-docs:build": "./scripts/build/build_api_docs.sh",
+    "api-docs:python": "./scripts/build/build_api_docs.sh python",
+    "api-docs:julia": "./scripts/build/build_api_docs.sh julia",
     "julia:dev-install": "julia --startup-file=no --project=@v1.12 scripts/dev/install_julia_dev_packages.jl",
     "julia:test": "julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()' && julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()' && julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()' && JULIA_PYTHONCALL_EXE=\"$PWD/.venv/bin/python\" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'",
     "visualizer:test": "julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'",
     "runner:test": "julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'",
     "frontend:typecheck": "npm run typecheck --prefix app/frontend",
-    "analysis:test": "uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q",
+    "analysis:test": "uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q",
     "backend:test": "uv run --package superconducting-circuits-backend pytest app/backend/tests -q",
     "bridge:test": "JULIA_PYTHONCALL_EXE=\"$PWD/.venv/bin/python\" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'"
   }

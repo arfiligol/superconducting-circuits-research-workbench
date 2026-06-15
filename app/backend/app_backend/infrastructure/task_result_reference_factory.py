@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from sc_core.execution import TaskResultHandle
-
+from app_backend.domain.runtime_contracts.execution import TaskResultHandle
 from app_backend.domain.storage import ResultHandleKind
 from app_backend.domain.tasks import TaskCreateDraft, TaskResultRefs
 from app_backend.infrastructure.storage_reference_factory import (

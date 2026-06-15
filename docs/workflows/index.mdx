@@ -1,0 +1,32 @@
+---
+aliases:
+ - Workflows
+ - Workflow
+tags:
+ - diataxis/how-to
+ - audience/user
+ - topic/workflows
+status: stable
+owner: docs-team
+audience: user
+scope: "Route-first workflow map for reusable circuit authoring, FEM-result equivalent-circuit fitting, quantum-model handoff, and dynamics/pulse simulation."
+version: v3.0.0
+last_updated: 2026-06-14
+updated_by: codex
+title: Workflows
+description: Choose this section when you want to complete a task.
+sidebar:
+ label: Overview
+ order: 10
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+This area answers "What should I do next?" after the Start Here path. Workflows are organized by research route, not by tool, so the reader can see the boundary between circuit prototyping, external-result fitting, quantum-model construction, and pulse-level dynamics.
+
+<CardGrid>
+ <LinkCard title="Reusable Circuit Authoring" href="./reusable-circuit-authoring/" description="Prototype circuit performance with Pluto, Julia Core, reusable components, CircuitPlan builders, and JosephsonCircuits.jl responses." />
+ <LinkCard title="FEM Result To Equivalent Circuit" href="./fem-result-to-equivalent-circuit/" description="Normalize external S/Y/Z traces, fit equivalent RLC/RLGC/coupling models, and prepare GDSFactory ecosystem-compatible results." />
+ <LinkCard title="Equivalent Circuit To Quantum Model" href="./equivalent-circuit-to-quantum-model/" description="Turn a reviewed equivalent circuit into scqubits or Hamiltonian inputs without contaminating Julia Core." />
+ <LinkCard title="Quantum Dynamics / Pulse Simulation" href="./quantum-dynamics-pulse-simulation/" description="Use Hamiltonian-level outputs for QuTiP/qutip-qip dynamics and pulse-level studies, with Julia dynamics kept isolated." />
+</CardGrid>

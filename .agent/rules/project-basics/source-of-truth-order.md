@@ -1,15 +1,16 @@
 ## Source of Truth Order
 - Resolve conflicts by concern owner first:
-    - app collaboration/session/auth/workspace/task runtime/audit/error -> `docs/reference/app/shared/*` + `docs/reference/app/backend/*`
-    - persisted payload/schema fields -> `docs/reference/data-formats/*`
-    - Julia Core authoring invariants -> `docs/reference/julia-core/*`
-    - Julia Core / Runner runtime boundary and package invariants -> `docs/reference/core/*`
-    - page behavior/layout -> `docs/reference/app/frontend/**/*`
-    - notebook workflow behavior -> `docs/reference/notebooks/*`
-- Use `docs/reference/architecture/*` only as owner-boundary and canonical contract registry guidance, not as the primary owner when owner docs already exist.
+  - app collaboration/session/auth/workspace/task runtime/audit/error -> `docs/app/shared/*` + `docs/app/backend/*`
+  - product persisted payload/schema fields -> `docs/app/data-contracts/*`
+  - Julia Core authoring invariants -> `docs/reference/julia-core/*`
+  - Julia Core / Runner runtime boundary and package invariants -> `docs/reference/core/*`
+  - circuit research route contracts, external-result contract, equivalent-circuit model contract, quantum-model boundary, notebook role boundaries -> `docs/reference/research-contracts/*`
+  - page behavior/layout -> `docs/app/frontend/**/*`
+  - notebook workflow behavior -> `docs/reference/notebooks/*`
+- Use `docs/app/architecture/contracts/*` only as owner-boundary and canonical contract registry guidance, not as the primary owner when owner docs already exist.
 - Treat implementation and old behavior as evidence, not automatic canonical truth.
 - If owner docs and consumer docs conflict, prefer the owner docs unless the user explicitly changes the spec.
 - If Julia Core / Runner and adapters conflict, fix the adapter first unless the canonical contract is incomplete.
-- Treat root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` residues as retired surfaces with no authority over product boundaries; current architecture-level surfaces include `core/analysis/`.
+- Treat root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` residues as retired surfaces with no authority over product boundaries; current architecture-level surfaces include `core/python/analysis/` and `core/python/circuit_libraries/`.
 - Record intentional product-contract exceptions in the owner docs and canonical contract registry.
 - Legacy fallback is not a product contract unless an owner SoT explicitly requires it.

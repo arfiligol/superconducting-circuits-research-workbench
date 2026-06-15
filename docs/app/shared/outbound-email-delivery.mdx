@@ -1,0 +1,103 @@
+---
+aliases:
+ - Outbound Email Delivery
+ - SMTP Delivery
+ - Email sending
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
+status: draft
+owner: docs-team
+audience: team
+scope: workspace invitation email delivery, SMTP baseline, manual invite fallback and delivery audit contract
+version: v0.1.0
+last_updated: 2026-03-14
+updated_by: team
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Outbound Email Delivery
+
+This page defines the outbound email baseline for multi-user apps. The primary consumer of V1 is workspace invitation.
+
+<Aside type="note" title="Why this exists">
+
+Since the official invitation flow is based on email, the baseline of mail delivery must be written explicitly instead of hidden in the auth text.
+
+</Aside>
+
+<Aside type="caution" title="SMTP Is The Baseline, Not An Afterthought">
+
+As long as the deployment is to support true multi-person invite flows, it must be configured with an available outbound email transport.
+Without SMTP, only local / admin-controlled environments are allowed using the manual invite link fallback.
+
+</Aside>
+
+## Coverage
+
+| Concern | Meaning |
+|---|---|
+| Delivery transport | How to actually send the invitation letter |
+| Invite message contract | What is the minimum information that should be included in the email |
+| Delivery states | How to report status such as sent / failed / manual |
+| Failure handling | How does the system notify and audit after failure to send a message |
+
+## Transport Baseline
+
+| Item | Rule |
+|---|---|
+| Primary transport | SMTP |
+| Delivery mode | server-side send |
+| Required for production invite flow | yes |
+| Local fallback | manual invite link copy |
+
+## SMTP Configuration Baseline
+
+| Environment variable | Meaning |
+|---|---|
+| `SC_SMTP_HOST` | SMTP server host |
+| `SC_SMTP_PORT` | SMTP server port |
+| `SC_SMTP_USERNAME` | SMTP auth username |
+| `SC_SMTP_PASSWORD` | SMTP auth password |
+| `SC_SMTP_FROM_EMAIL` | sender email |
+| `SC_SMTP_FROM_NAME` | sender display name |
+| `SC_SMTP_USE_TLS` | TLS / STARTTLS baseline switch |
+| `SC_APP_BASE_URL` |invitation accept URL of base origin|
+
+## Invitation Email Contract
+
+| Field | Required meaning |
+|---|---|
+| workspace name | Which workspace you are invited to join |
+| inviter display name | Who issued the invite |
+| role summary | Default role after invitation |
+| accept URL | single use invite token URL |
+| expiry summary | When does the token expire |
+| support / admin hint | Next step if email fails or invitation error occurs |
+
+## Delivery States
+
+| State | Meaning |
+|---|---|
+| `queued_for_delivery` | invite has been established, waiting for mail send |
+| `sent` | SMTP provider accepted delivery |
+| `delivery_failed` | Failed to send email, email delivery has not been completed |
+| `manual_link_ready` | No SMTP, but copyable invite URL generated |
+
+## Failure Handling
+
+| Rule | Meaning |
+|---|---|
+| Failure must be surfaced | invite issuer must know whether delivery failed |
+| No silent downgrade | production flow should not be automatically changed to manual link without notification |
+| Audit required | invite sent / failed / manual link generated must be recorded |
+| Secret handling | mail transport secret is not writable to audit payload or general runtime logs |
+
+## Related
+
+* [Authentication & Authorization](authentication-and-authorization.mdx)
+* [Audit Logging](audit-logging.mdx)
+* [Backend / Session & Workspace](../backend/session-workspace.mdx)

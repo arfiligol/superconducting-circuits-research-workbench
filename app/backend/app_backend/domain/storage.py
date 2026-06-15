@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from sc_core.storage import STORAGE_CONTRACT_VERSION
+from app_backend.domain.runtime_contracts.storage import STORAGE_CONTRACT_VERSION
 
 MetadataBackend = Literal["sqlite_metadata"]
 MetadataRecordType = Literal["dataset", "trace_batch", "analysis_run", "result_handle"]

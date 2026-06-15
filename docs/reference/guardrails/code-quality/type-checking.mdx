@@ -1,0 +1,96 @@
+---
+aliases:
+ - Type Checking
+ - type checking
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/code-quality
+status: stable
+owner: docs-team
+audience: contributor
+scope: Type checking specifications for Python and TypeScript.
+version: v3.0.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Type Checking
+
+The purpose of type specifications is not to pursue zero warnings on the surface, but to keep the data contract between UI, API, Notebook, Runner and scientific core stable.
+
+<Aside type="note" title="How to read this page">
+
+Let’s look at the language mapping rules first, and then look at the exceptions and repair strategies. If you want to use ignore or relax types, first confirm whether the only reason left is that the third-party package lacks types.
+
+</Aside>
+
+## Type Map
+
+| Language | Tools | Main Goals |
+| --- | --- | --- |
+| Python | `basedpyright` | Keep the data contract of service, core and persistence |
+| TypeScript | `strict: true` + schema validation | Keep the trusted data boundaries of frontend service, hook, and component |
+
+## Language Rules
+
+<Tabs>
+<TabItem label="Python">
+
+
+- Tool: `basedpyright`
+- Baseline: `basic`, but considered mandatory
+- All functions must be marked with parameters and return values
+- Use `list[str]`, `dict[str, float]`, `str | None`
+- Do not use `Any` unless necessary
+
+</TabItem>
+
+<TabItem label="TypeScript">
+
+
+- Use `strict: true`
+- Service, schema, component props, and hook return values ​​must have clear types
+- It is prohibited to directly regard unverified API payloads as trusted information
+- Only the type after `zod` or equivalent schema verification can enter the UI business process
+
+</TabItem>
+
+</Tabs>
+
+## Allowed Exceptions
+
+- When the third-party scientific package has no type, the smallest range `# type: ignore` can be used
+- The reason needs to be attached and cannot be ignored in the whole file.
+
+## Fix Policy
+
+- Fix the code first if there is a type error
+- Partial ignoring is only accepted if the third-party type is missing and the repair cost is unreasonable
+
+<Aside type="tip" title="Good default">
+
+If you don't know which layer to put the type in, first define the schema, service return value, and hook return value clearly, and then let the component only eat verified data.
+
+</Aside>
+
+## Agent Rule
+```markdown
+## Type Checking
+- **Python**:
+  - use BasedPyright
+  - treat `basic` mode as mandatory
+  - type all function parameters and return values
+  - use modern syntax like `list[str]` and `str | None`
+  - avoid `Any` unless dealing with untyped third-party code
+- **TypeScript**:
+  - use strict mode
+  - do not trust raw API payloads without schema validation
+  - keep service, schema, hook, and component contracts typed
+- **Fix policy**:
+  - fix the code first
+  - use `# type: ignore` only in the smallest justified scope
+```

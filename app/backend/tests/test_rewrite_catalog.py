@@ -355,7 +355,7 @@ def test_dataset_ingestion_materializes_design_and_trace_browse_surfaces() -> No
 
 def test_durable_ingestion_materializes_nd_grid_to_trace_store() -> None:
     import numpy as np
-    from core.shared.persistence import LocalZarrTraceStore
+    from app_backend.infrastructure.local_store import LocalZarrTraceStore
 
     created = client.post(
         "/datasets",

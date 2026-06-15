@@ -1,0 +1,313 @@
+---
+aliases:
+ - Build Commands
+ - Execute instructions
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/execution
+status: stable
+owner: docs-team
+audience: contributor
+scope: Common commands for current platform’s public site, app, backend, Julia Runner, desktop, docs and repo-root orchestration.
+version: v3.5.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Build Commands
+
+This file lists the repo-root orchestration and workspace directives currently available for the current platform.
+Platform foundation must use `app/` layout, Python Backend, Julia Runner and local filesystem TraceStore, and no longer starts separate queue service or user-facing command workflow.
+
+<Aside type="note" title="How to use this page">
+
+First decide whether you are running `repo baseline`, a single workspace, or a docs build.
+Don't run all the commands from beginning to end every time; select the minimum necessary set according to the touched area.
+
+</Aside>
+
+## Command Map
+
+| Situation | Open this section |
+| --- | --- |
+| Entering the repo for the first time or completing basic dependencies | `Current Baseline` |
+| To start the repo level coordination process | `Repo Root Orchestration` |
+| Only change a single workspace | `Workspace Commands` |
+| To verify Runner-backed local runtime topology | `Local Runner Runtime Runbook` |
+| Only change the public introduction site or public artifact | `Public Site` |
+| Only change docs / nav / frontmatter | `Docs` |
+
+## Current Baseline
+
+<Aside type="tip" title="Run this first on a fresh checkout">
+
+</Aside>
+
+```bash
+uv sync --all-packages
+npm install --prefix site
+npm install --prefix app/frontend
+npm install --prefix app/desktop
+julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'
+julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'
+julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.instantiate()'
+npm install --prefix site
+```
+
+`SuperconductingCircuitsAnalysisBridge` is repo-local. The bridge test bootstrap expects the root uv environment from `uv sync --all-packages` and selects `.venv` automatically; use `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` only for non-standard checkouts.
+
+## Repo Root Orchestration
+
+<Aside type="note" title="Use these when you want repo-level orchestration">
+
+</Aside>
+
+```bash
+npm run app:dev
+npm run app:stop
+```
+
+## Workspace Commands
+
+<Tabs>
+<TabItem label="Public Site">
+
+
+```bash
+npm install --prefix site
+npm run dev --prefix site
+npm run check --prefix site
+npm run build --prefix site
+./scripts/build/build_public_site.sh
+uv run docs-site serve
+```
+
+</TabItem>
+
+<TabItem label="Frontend">
+
+
+```bash
+npm install --prefix app/frontend
+npm run dev --prefix app/frontend
+npm run test --prefix app/frontend
+npm run lint --prefix app/frontend
+npm run typecheck --prefix app/frontend
+npm run build --prefix app/frontend
+```
+
+</TabItem>
+
+<TabItem label="Backend">
+
+
+```bash
+uv sync --all-packages
+uv run --package superconducting-circuits-backend pytest app/backend/tests -q
+uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000
+```
+
+Python backend commands use the root uv workspace and root `.venv`.
+
+</TabItem>
+
+<TabItem label="Desktop">
+
+
+```bash
+npm install --prefix app/desktop
+npm run dev --prefix app/desktop
+npm run lint --prefix app/desktop
+npm run build --prefix app/desktop
+```
+
+</TabItem>
+
+<TabItem label="Julia Core">
+
+
+```bash
+julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
+```
+
+</TabItem>
+
+<TabItem label="Julia Visualizer">
+
+
+```bash
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
+```
+
+</TabItem>
+
+<TabItem label="Julia Runner">
+
+
+```bash
+julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+```
+
+</TabItem>
+
+<TabItem label="Julia Analysis Bridge">
+
+
+```bash
+julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
+```
+
+Run `uv sync --all-packages` first. The test bootstrap uses the root `.venv` automatically in this repo checkout.
+
+</TabItem>
+
+</Tabs>
+
+## Local Runner Runtime Runbook
+
+<Aside type="caution" title="Runner-backed local runtime is the verification baseline">
+
+The official baseline for compute isolation verification is not app-local thread execution.
+You must also verify that frontend, Python Backend, and Julia Runner are separate processes and do not require a separate queue service.
+
+</Aside>
+
+### Bring-up
+
+| Step | Command / expectation |
+| --- | --- |
+| frontend process | `npm run dev --prefix app/frontend` |
+| backend process | `uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000` |
+| runner process | `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'` |
+| optional repo helper |`npm run app:dev` or `./scripts/dev/start_app.sh` starts frontend, backend, runner|
+
+<Aside type="note" title="Minimal local runtime bring-up">
+
+```bash
+npm run dev --prefix app/frontend
+uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000
+julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'
+```
+
+</Aside>
+
+### Verification
+
+| Check | Command / expected result |
+| --- | --- |
+| app health | `curl --fail http://127.0.0.1:8000/health` |
+| session bootstrap | `curl --fail http://127.0.0.1:8000/session` |
+| task read model | `curl --fail 'http://127.0.0.1:8000/tasks?status_filter=active'` |
+| task submit path | Create a local task through app workflow or `/tasks` submit mutation, and confirm that both task row and detail respond with `task_id` |
+| runner claim path | `POST /runner/v1/tasks/claim` can claim one queued task |
+| publication path | completing a real Runner task or publisher fixture validates staging Zarr, validates manifest, and publishes canonical TraceStore batch |
+| process separation | Use `lsof -ti tcp:8000`, frontend dev-server PID, runner PID or equivalent tools to confirm that backend, frontend and runner are not the same PID |
+
+### Teardown
+
+| Concern | Command / expectation |
+| --- | --- |
+| repo helper processes |`npm run app:stop` or `./scripts/dev/stop_app.sh`|
+| runner process | Stop in runner shell, or shut down with PID-aware tooling |
+| separate queue service | not part of current local runtime |
+
+<Aside type="tip" title="Helper scripts manage app processes only">
+
+`scripts/dev/start_app.sh` and `scripts/dev/stop_app.sh` manage frontend, backend and runner.
+Separate queue service is no longer a local runtime prerequisite.
+
+</Aside>
+
+## Docs
+
+<Aside type="caution" title="Docs build always needs route checks">
+
+If you change the docs content, navigation, or frontmatter, you must run source-side route check, Starlight build, and built-route check at the same time.
+
+</Aside>
+
+```bash
+uv run python scripts/check_docs_nav_routes.py --check-source
+npm run check --prefix site
+npm run build --prefix site
+./scripts/build_docs_sites.sh
+uv run python scripts/check_docs_nav_routes.py --check-built
+
+# Generated API reference
+./scripts/build/build_api_docs.sh
+uv run python scripts/build/check_api_reference_links.py
+
+# Local preview for the combined public artifact
+uv run docs-site serve
+uv run docs-site serve --build
+```
+
+<details class="docs-disclosure docs-disclosure--info">
+<summary>Why both source and built checks exist</summary>
+
+`--check-source` first verifies whether the source tree is consistent with nav.
+`--check-built` Verify whether the final built path can be correctly parsed by the site.
+
+</details>
+
+## Agent Rule
+```markdown
+## Run / Build Commands
+- **Repo-root orchestration**:
+  - `npm run app:dev`
+  - `npm run app:stop`
+- **Python install**: `uv sync --all-packages`
+- **Public site**:
+  - `npm install --prefix site`
+  - `npm run dev --prefix site`
+  - `npm run check --prefix site`
+  - `npm run build --prefix site`
+  - `./scripts/build/build_public_site.sh`
+  - `uv run docs-site serve`
+- **Julia Core install**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Visualizer install**: `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Runner install**: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Analysis Bridge install**: `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.instantiate()'`
+- **Frontend**:
+  - `npm install --prefix app/frontend`
+  - `npm run dev --prefix app/frontend`
+  - `npm run test --prefix app/frontend`
+  - `npm run lint --prefix app/frontend`
+  - `npm run typecheck --prefix app/frontend`
+  - `npm run build --prefix app/frontend`
+- **Backend**:
+  - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+  - `uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000`
+- **Julia Visualizer**:
+  - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
+- **Julia Runner**:
+  - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+- **Julia Analysis Bridge**:
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - Requires root `uv sync --all-packages`; tests auto-select root `.venv` unless `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` overrides it.
+- **Desktop**:
+  - `npm install --prefix app/desktop`
+  - `npm run dev --prefix app/desktop`
+  - `npm run lint --prefix app/desktop`
+  - `npm run build --prefix app/desktop`
+- **Docs**:
+  - `uv run python scripts/check_docs_nav_routes.py --check-source`
+  - `uv run python scripts/check_docs_app_quarantine.py`
+  - `npm run check --prefix site`
+  - `npm run build --prefix site`
+  - `./scripts/build_docs_sites.sh`
+  - `uv run python scripts/check_docs_nav_routes.py --check-built`
+- **API reference**:
+  - `uv run sphinx-build -W --keep-going -b html docs/api-reference/python/source build/api-reference/python/html`
+  - `julia --project=docs/api-reference/julia docs/api-reference/julia/make.jl`
+  - `./scripts/build/build_api_docs.sh`
+  - `uv run python scripts/build/check_api_reference_links.py`
+- **Public artifact**:
+  - `./scripts/build/build_public_site.sh` builds Astro at `/`, embeds Starlight docs at `/docs/`, and embeds generated API reference at `/api/python/` and `/api/julia/`.
+  - `uv run docs-site serve` serves the built `site/dist` artifact locally; add `--build` to rebuild before serving.
+```

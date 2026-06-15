@@ -1,13 +1,13 @@
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from sc_core.tasking import TaskExecutionMode, WorkerTaskName
 
 from app_backend.api.schemas.storage import (
     MetadataRecordRefResponse,
     ResultHandleRefResponse,
     TracePayloadRefResponse,
 )
+from app_backend.domain.runtime_contracts.tasking import TaskExecutionMode, WorkerTaskName
 
 TaskStatusResponse = Literal[
     "queued",

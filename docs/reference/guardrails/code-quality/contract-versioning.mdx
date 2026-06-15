@@ -1,0 +1,114 @@
+---
+aliases:
+ - "Contract Versioning"
+ - "Contract version strategy"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/code-quality
+status: stable
+owner: docs-team
+audience: team
+scope: "Define version policies for canonical contracts, data formats, and adapter payloads"
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Contract Versioning
+
+This document defines the minimum requirements for contract evolution to prevent Julia Core, Julia Runner, Python Backend, Notebook, and frontend from interpreting the data format and API payload respectively.
+
+<Aside type="note" title="How to read this page">
+
+First determine which contract the change encounters, and then determine whether the change type is additive, soft-breaking or breaking. Finally, complete the owner docs, canonical registry and tests according to the required update set.
+
+</Aside>
+
+## Decision Map
+
+| Answer first | Decide later |
+| --- | --- |
+| What type of contract is this? | Whether version-aware field or lockstep description is required |
+| Is this additive or breaking? | Whether owner docs, canonical registry and tests must be updated simultaneously |
+| Is this persisted data? | Whether schema update, data transform, rebuild path or explicit unsupported-data rule is required |
+
+## Contracts That Must Be Version-Aware
+
+- circuit definition / netlist canonical contract
+- dataset / trace / result / provenance contracts
+- task submission / task detail / task result contracts
+- session / workspace context payloads
+- Runner task claim/complete/fail payloads and manifest contracts
+- Notebook inspection payloads
+- Python Backend API payloads
+
+## Version Fields
+
+| Contract Type | Minimum Requirements |
+| --- | --- |
+| persisted data contract | clear `schema_version` or equivalent field |
+| API payload contract | route-level version note or explicit lockstep branch policy |
+| Runner manifest | explicit `schema_version` and validation contract |
+| task/result handle | must be traceable to result/provenance contract version |
+
+## Change Classes
+
+| Type | Definition | Default Processing |
+| --- | --- | --- |
+| Additive | Add optional fields, additional metadata, retain old field semantics | Acceptable, but still need to update owner reference |
+| Soft-breaking | The field still exists, but the default value, sorting, and null value semantics have changed | Considered high risk, the behavior change needs to be written simultaneously |
+| Breaking | Delete fields, change types, change necessary fields, change enum / lifecycle semantics | Must update owner docs, canonical registry, data handling story and tests |
+
+## Persisted Data Rules
+
+- The persisted contracts of SQLite metadata, TraceStore payload, and export artifact cannot be invalidated silently.
+- If the persisted contract changes, one of the following data handling stories must be explicitly provided:
+ - schema update script or Alembic revision
+ - deterministic data transform
+ - rebuild path
+ - explicit unsupported-data rule surfaced in owner docs
+- Julia Core/Runner and backend must not each maintain different version interpretation rules.
+- Reset/rebuild tooling can be used as a development recovery path, but it cannot replace the persisted data rule in the owner docs.
+
+## Contract Rules
+
+| Rules | Description |
+| --- | --- |
+| Contract changes update owner docs | When changing fields, enum, lifecycle, manifest or task payload, update owner reference first |
+| Registry stays aligned | cross-layer contract must be updated simultaneously [Canonical Contract Registry](../../../app/architecture/contracts/canonical-contract-registry.mdx) |
+| Persisted data needs a data handling story | Destructive changes to DB, TraceStore, and export artifacts cannot be invalidated silently |
+| Legacy fallback is not implied | Do not add dual-path product behavior due to the existence of old data or old adapter |
+| Tests prove the contract | Corresponding tests must verify the new success path and rejection path |
+
+## Required Update Set for Breaking Changes
+
+Any breaking contract changes must be updated in the same delivery line:
+
+1. owner reference docs
+2. [Canonical Contract Registry](../../../app/architecture/contracts/canonical-contract-registry.mdx)
+3. persisted data handling story, when the contract stores data
+4. relevant tests
+
+<Aside type="tip" title="Fast check">
+
+If you can't answer "how does the data remain interpretable, how does the consumer know the version has changed, which owner docs need to be updated, and which tests verify the rejection path" at the same time in the same delivery line, you shouldn't send a breaking contract change yet.
+
+</Aside>
+
+## Agent Rule
+```markdown
+## Contract Versioning
+- Treat circuit definitions, dataset/trace/result contracts, task contracts, Runner manifests, session/workspace payloads, and notebook/API payloads as version-aware surfaces.
+- Contract changes MUST update:
+  - owner reference docs
+  - canonical contract registry
+  - persisted data handling story, when the contract stores data
+  - relevant tests
+- Persisted DB/TraceStore/exported data MUST have an explicit schema update, deterministic transform, rebuild path, or unsupported-data rule before breaking a contract.
+- Legacy fallback is not implied by old data or old adapters; only add dual-path product behavior when an owner SoT requires it.
+- Do not hide contract patches only inside adapters; document them in the owner docs and registry.
+```

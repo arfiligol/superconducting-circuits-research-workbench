@@ -1,0 +1,481 @@
+---
+aliases:
+ - "Page Reference Specs"
+ - "App Page Reference"
+ - "page specification file"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/documentation
+status: stable
+owner: docs-team
+audience: team
+scope: "App frontend pages The fixed skeleton, naming rules, citation methods and acceptance criteria of technical documents"
+version: v0.4.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Page Reference Specs
+
+This document defines the formal writing of technical documents for App frontend pages.
+
+This type of document is not a requirements document, a design concept essay, or an implementation note.
+They are **Page Reference Spec**:
+Directly describe what a page should look like now, what it does, how it interacts, what formal contracts it relies on, and what is called implementation completion.
+
+---
+
+## Scope of application
+
+This specification applies to:
+
+- App frontend page reference under `docs/app/frontend/`
+- Any official UI reference page in route/page units
+
+This specification does not apply to:
+
+- Tutorials
+- How-to
+- Explanation
+- migration background description
+- implementation notes / PR notes
+
+---
+
+## Core Principles
+
+| Principles | Description |
+|------|------|
+| The file is SoT | The page specification is subject to the file, and the implementation must align the file |
+| Describe the present tense | Do not write historical background, old version behavior, migration story; only write the current official specifications of this page |
+| Write a stable structure first | Fix the page purpose, block sequence, and interaction process first, and then write the details |
+| Human-machine co-reading | Humans can scan quickly, and AI Agent can extract fields stably |
+| Less about implementation, more about contract | Don’t write the framework / hook / service class name first; write the UI contract first |
+| One page format | All page references adopt the same skeleton to reduce the cost of understanding |
+
+<Aside type="caution" title="Reference boundary">
+
+Page Reference Spec belongs to `Reference`.
+It describes a formal page contract, not a design rationale, nor an operational tutorial.
+
+</Aside>
+
+---
+
+## Recommended location and naming
+
+App frontend pages technical documents are recommended to be placed at:
+
+- `docs/app/frontend/pages/<route-name>.md`
+
+If the existing project still maintains a relatively flat frontend reference structure, it should be gradually organized under `app/frontend/`, and then subdivided into subdirectories as needed.
+
+The page title should be aligned with the sidebar / nav label first.
+The route should be kept in the `route` field of the frontmatter and the identity block of the body. The route should not be used to directly replace the page name.
+
+frontmatter is recommended to contain at least:
+
+| Property | Required | Example |
+|----------|----------|---------|
+| `title` | ✅ | `Circuit Simulation` |
+| `page_id` | ✅ | `app.page.circuit_simulation` |
+| `route` | ✅ | `/circuit-simulation` |
+| `tags` | ✅ | `diataxis/reference`, `audience/team`, `sot/true`, `topic/ui` |
+| `owner` | ✅ | `team` / `team/person` |
+| `status` | ✅ | `draft` / `stable` |
+
+---
+
+## Fixed skeleton
+
+Each App page reference must be fixed into the following 8 blocks:
+
+1. `Purpose`
+2. `User Goal`
+3. `Layout Structure`
+4. `Component Inventory`
+5. `Data & State Contract`
+6. `Interaction Flows`
+7. `Visual Rules`
+8. `Acceptance Checklist`
+
+These 8 blocks are the minimum complete skeleton and cannot be omitted arbitrarily.
+
+---
+
+## Block definition
+
+### 1. Purpose
+
+Answer what this page is and what it is responsible for.
+
+Should write:
+
+- The official scope of this page's responsibility
+- Platform capabilities undertaken by this page
+
+Should not write:
+
+- Design motivation story
+- Reasons for selecting technical framework
+
+### 2. User Goal
+
+Answer what users want to accomplish when entering this page.
+
+Should contain:
+
+- Main goal
+- non-target
+
+### 3. Layout Structure
+
+Answer the screen skeleton and block sequence.
+
+It should contain at least:
+
+- shell block
+- main content order
+- Simplified UI tree
+
+Preferred use:
+
+- sheet
+- ordered list
+- Simple tree block
+
+### 4. Component Inventory
+
+Answer what the key components are and the responsibilities of each component.
+
+It should contain at least:
+
+- Component ID
+- Component name
+- type
+- Location
+- Function
+- key behaviors
+
+If a cross-page shared component already has an independent spec, it should be quoted instead of repeatedly defined.
+
+### 5. Data & State Contract
+
+Answer what official information and status this page relies on.
+
+It should contain at least:
+
+- data dependencies
+- page state
+- UI states (`loading` / `empty` / `error` / `partial` / `default`)
+
+This section should use formal contract names and should not directly reference implementation-local class names as specification bodies.
+
+### 6. Interaction Flows
+
+Answer the operation path and event results.
+
+Each flow should be written in clear steps, for example:
+
+1. What does the user do?
+2. What happens in state / request
+3. What to update the UI?
+4. What to do after success/failure
+
+### 7. Visual Rules
+
+Answer the relationship between visual hierarchy and layout.
+
+Should write:
+
+- hierarchy
+- CTA placement
+- density
+- empty-state alignment
+- responsive rules
+
+Should not write:
+
+- Pixel-level spacing
+- Pure implementation layer hover workaround
+- Framework specific style hooks
+
+### 8. Acceptance Checklist
+
+Answer what is implementation completion.
+
+A column of acceptance criteria should be used, for example:
+
+- [ ] Block order is correct
+- [ ] Complete main components
+- [ ] UI states complete
+- [ ] interaction flows can be passed through
+- [ ] Only access data through formal contracts
+
+---
+
+## Optional additional blocks
+
+### Related Contracts
+
+If the page relies on a shared contract, it should be quoted rather than repeated.
+
+For example:
+
+- Session / Workspace Contract
+- Task Runtime / Task Execution Contract
+- Dataset / Design / Trace Schema
+- Analysis Result Contract
+
+### Runtime Notes
+
+Only research workflow pages such as simulation / task / characterization can add `Runtime Notes`.
+
+Purpose is to supplement:
+
+- task attachment
+- refresh / reconnect recovery
+- persisted contract rebuild
+- failure display
+
+This section is only used for runtime-sensitive pages and is not required for all pages.
+
+---
+
+## Observation input and formal specifications
+
+Page Reference Spec can absorb page observation data compiled from other sources, such as:
+
+- Page context extracted by other Agents
+- UI inventory of existing pages
+- layout/component/flow compiled from screenshots
+- Supplementary requirements for current products
+
+However, these data can only be used as **input materials** and cannot be directly regarded as official specifications as they are.
+
+### Regularization principle
+
+When you convert a page context into a formal Page Reference Spec, you must comply with:
+
+| Principles | Description |
+|------|------|
+| Preserve stable page identity | Preserve page purpose, route, main user goals, stable layout structure |
+| Reorganized into a formal skeleton | Must be rewritten into 8 fixed blocks, no free-form observation notes retained |
+| Absorb new requirements | If the current product already requires task management, result recovery, research workflow and other capabilities, the formal spec should be included and must not be restricted by old observation content |
+| Unknown cannot directly enter the official SoT | `Unknown from current page context` This type of content can only be used as a signal to be confirmed; the official reference must be verified before being written, or it may not be included temporarily |
+| Observation does not equal a contract | Error messages seen on-site, temporary UI rendering, and framework-specific behaviors do not automatically equal a formal contract |
+
+### Block correspondence method
+
+If the input material contains the following common fields, the translation should be as follows:
+
+| Input field | Formal Page Reference location |
+|----------|--------------------------|
+| `Page Context` / `Route / Identity` | frontmatter + `Purpose` + `User Goal` |
+| `Layout Structure` / `UI Tree` | `Layout Structure` |
+| `Component Inventory` | `Component Inventory` |
+| `Data Surface` | `Data & State Contract` of `Data Dependencies` / `UI States` |
+| `Interaction Flows` | `Interaction Flows` |
+| `UI States` | `Data & State Contract` or `Runtime Notes` |
+| `Acceptance Criteria` | `Acceptance Checklist` |
+
+### Expansion rules
+
+If a page originally only had a list and basic CRUD, but the current product has clearly required a higher-level workflow, the formal spec should be proactively added:
+
+- task attachment / task management
+- result / trace / event / provenance surfaces
+- refresh / reconnect recovery
+- Consistency with backend / CLI / shared contracts
+
+The goal of a formal reference is not to copy an existing page, but to define the page contract that should currently be implemented.
+
+---
+
+## What should not be written into Page Reference
+
+The following should not be included in the body of a page reference:
+
+- historical background
+- Legacy behavior
+- migration story
+- React hook name
+- framework component implementation details
+- repository/service class name
+- CSS pixel-level details
+- Temporary workaround
+
+<Aside type="caution" title="Historical tone prohibited">
+
+Do not write "original", "old version", "legacy page" or "before porting".
+Page Reference Spec only describes the current official page contract.
+
+</Aside>
+
+---
+
+## Suggested templates
+
+````md
+---
+title: Page Name
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/ui
+page_id: app.page.route_name
+route: /route
+owner: app-team
+status: stable
+---
+
+# Page Name
+
+## 1. Purpose
+
+This page is responsible for:
+- ...
+- ...
+
+## 2. User Goal
+
+When users enter this page, they mainly want to complete:
+- ...
+- ...
+
+Non-target:
+- ...
+- ...
+
+## 3. Layout Structure
+
+### Global Shell
+
+| Block | Description |
+|---|---|
+| Sidebar | ... |
+| Main Content | ... |
+| Secondary Panel | ... |
+
+### Main Content Order
+
+1. Page Header
+2. Primary Action Row
+3. Filters / Controls
+4. Main Content Area
+5. Footer / Pagination / Status Area
+
+### UI Tree
+
+```text
+Page
+├─ Header
+├─ Action Row
+├─ Filter Row
+├─ Content Area
+└─ Footer
+```
+
+## 4. Component Inventory
+
+| ID | Component name | Type | Location | Function | Key behaviors |
+|---|---|---|---|---|---|
+| C1 | Page Title | heading | top | Display page name | None |
+| C2 | Search Input | input | filter row | filter list | update filter state |
+| C3 | Create Button | primary button | action row | Create new project | Guide create flow |
+
+## 5. Data & State Contract
+
+### Data Dependencies
+
+| Data name | Source | Necessity | Purpose |
+|---|---|---|---|
+| current_user | session contract | required | show permissions and scope |
+| dataset_list | backend API | required | master list |
+
+### Page State
+
+| State | Type | Description |
+|---|---|---|
+| search_query | local UI state | Search input value |
+| current_page | local UI state | paging page number |
+
+### UI States
+
+| Status | Description |
+|---|---|
+| default | Data loaded successfully |
+| loading | Master data loading |
+| empty | No information or filter no results |
+| error | Request failed |
+| partial | Some data available, some failed |
+
+## 6. Interaction Flows
+
+### Flow A: Search
+
+1. User enters keywords
+2. Update search_query
+3. Re-filter or re-request the list
+4. List update
+
+## 7. Visual Rules
+
+| Project | Rules |
+|---|---|
+| Title hierarchy | Page title must be higher than subtitle |
+| CTA placement | Main action buttons precede filters |
+| Empty state | Aligned with content area, does not change shell structure |
+
+## 8. Acceptance Checklist
+
+- [ ] Page purpose and user goals can be seen directly from the UI
+- [ ] The order of the main blocks conforms to the Layout Structure
+- [ ] loading / empty / error state have clear implementation
+- [ ] interaction flows can be completely routed
+- [ ] Data dependencies are only accessible through formal contracts
+````
+
+---
+
+## Review Checklist
+
+When you write or review an App page reference, make sure to at least:
+
+- Whether it completely contains 8 fixed blocks
+- Whether to write only the current official specifications
+- Whether to focus on contract / state / flow rather than implementation details
+- Whether AI Agent can be implemented directly based on files
+- Is it possible for reviewers to accept documents directly?
+
+---
+
+## Agent Rule
+```markdown
+## Page Reference Specs
+- **Type**: App frontend page technical documents must be written as Page Reference Spec, not requirements documents, prose or implementation notes
+- **Diataxis**: This type of file belongs to `Reference`
+- **Now-only**: Only write the current official page contract; do not write the old version/legacy/migration history
+- **Title alignment**: Files `title` and H1 must be aligned sidebar / nav label first; route is also written in frontmatter `route` and body identity
+- **Observed input**: The page context, screenshot collection, and existing UI inventory extracted by other Agents can only be used as input materials and cannot be directly used as official specs.
+- **Normalization**: Input materials must be reorganized into 8 fixed blocks; `Unknown from current page context` must not be left directly in the official SoT
+- **Current product wins**: If the current product requires task management, result recovery, research workflow and other capabilities, the official spec must be included and is not restricted by the old screen.
+- **Fixed sections**: must contain 8 sections:
+ 1. Purpose
+ 2. User Goal
+ 3. Layout Structure
+ 4. Component Inventory
+ 5. Data & State Contract
+ 6. Interaction Flows
+ 7. Visual Rules
+ 8. Acceptance Checklist
+- **Optional sections**: `Related Contracts`, `Runtime Notes` are added only when needed
+- **Focus**: Write page purpose, layout, components, state, flows, acceptance first; do not write framework details first
+- **Do not include**: framework implementation details, repository/service class name, pixel-level CSS, historical background
+- **Naming**: New pages use `docs/app/frontend/pages/<route-name>.md` first and align with Product App sidebar IA
+```

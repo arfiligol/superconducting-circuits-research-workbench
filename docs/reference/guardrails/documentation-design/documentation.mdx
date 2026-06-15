@@ -1,0 +1,124 @@
+---
+aliases:
+ - "Documentation Design"
+ - "Document design specifications"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/documentation
+status: stable
+owner: docs-team
+audience: team
+scope: "File design specification index: Standards/Starlight Native Style/API Reference/Macro Style/Micro Style/Maintenance/Domain Extensions"
+version: v2.2.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Documentation Design
+
+File design specification index to ensure file consistency and maintainability (aligned with the `Astro + Starlight English Docs Build` architecture of this project).
+
+<Aside type="note" title="How to read this section">
+
+Let’s first look at `Standards` and `Macro/Micro Style` to establish common syntax, and then look at `Maintenance` and `Domain Extensions`. This page is the entrance to documentation design, not rewriting every sub-specification.
+
+</Aside>
+
+## Page Map
+
+| What to read first | Purpose |
+| --- | --- |
+| Standards | Define file classification, frontmatter, core boundaries |
+| Macro Style / Information Layout | Determine page layout, information layering, overview/index rhythm |
+| Starlight Native Style | Determine the rhythm and presentation of repo-local Starlight files |
+| API Reference | Definition Sphinx/Documenter.jl generated API reference and docstring specification |
+| Micro Style / Writing & Visual Elements | Determine the use of elements such as tone, paragraphs, and official Starlight visual components |
+| Maintenance | Define source tree, update process, build/check |
+| Domain Extensions | Add more special writing methods for specific types of files |
+
+## Quick reference
+
+| Specification | Description | Agent Rule |
+|------|------|------------|
+| [Standards](standards.mdx) | Diataxis + Frontmatter + Core Rules | [​​#agent-rule](standards.mdx#agent-rule) |
+| [Starlight Native Style](starlight-native-style.mdx) | Starlight-native writing rhythm and presentation method in the project | [#agent-rule](starlight-native-style.mdx#agent-rule) |
+| [API Reference](api-reference.mdx) |Sphinx/Documenter.jl generated API reference and docstring specification| [#agent-rule](api-reference.mdx#agent-rule) |
+| [Macro Style / Information Layout](information-layout.mdx) | Page information layering, visual rhythm, overview/index arrangement | [#agent-rule](information-layout.mdx#agent-rule) |
+| [Micro Style / Writing & Visual Elements](style.mdx) | Tone, paragraph writing and the use of Starlight components / Mermaid and other components | [#agent-rule](style.mdx#agent-rule) |
+| [Maintenance](maintenance.mdx) | Monolingual source tree + Frontmatter update + Starlight build / route checks | [#agent-rule](maintenance.mdx#agent-rule) |
+| [Physics Concepts](explanation-physics.mdx) | Concepts/Physics teaching positioning, chapter skeleton and cross-file reference rules | [​​#agent-rule](explanation-physics.mdx#agent-rule) |
+| [Page Reference Specs](page-reference-specs.mdx) | App frontend pages Fixed skeleton, naming and acceptance rules of technical documents | [​​#agent-rule](page-reference-specs.mdx#agent-rule) |
+
+## Hierarchical division of labor
+
+| Norms | What you are responsible for | What you are not responsible for |
+|------|----------|------------|
+| Standards | File classification, metadata, core constraints | Page layout, tone details |
+| Starlight Native Style | Current contract priority, happy path, examples, Starlight-native rendering rhythm | Diataxis boundaries, build maintenance process |
+| API Reference |generated API docs ownership, docstring style, Sphinx/Documenter build boundary| high-level architecture narrative |
+| Macro Style / Information Layout | Macro page layout, overview/index rules, reading rhythm | word selection, component syntax details |
+| Micro Style / Writing & Visual Elements | Tone, paragraph writing, use of Starlight components / Mermaid and other elements | Diataxis boundaries, build maintenance process |
+| Maintenance | Monolingual source tree, frontmatter update, build/check process | Structural design of the file content itself |
+| Page Reference Specs | App frontend page The fixed skeleton and acceptance method of specifications | General arrangement of other types of documents |
+
+<Aside type="tip" title="Read order">
+
+If you just want to write a page correctly quickly, the usual sequence is `Standards -> Starlight Native Style -> Macro Style -> Micro Style -> domain-specific extension page`.
+
+</Aside>
+
+## Domain Extensions
+
+This layer includes supplementary specifications that are strongly related to specific document fields. They are not the base rules for `Documentation Design`, but provide more granular writing in specific content types.
+
+| Specifications | Purpose |
+|------|------|
+| [Page Reference Specs](page-reference-specs.mdx) | Fixed skeleton, naming and acceptance methods of App frontend pages |
+| [API Reference](api-reference.mdx) |Python/Julia generated API reference and docstring style|
+| [Physics Concepts](explanation-physics.mdx) | Narrative skeleton, references and boundaries of Physics concepts |
+| [Circuit Diagrams](../../../contribute/contributing/circuit-diagrams.mdx) | Schemdraw -> SVG chart writing and output process |
+
+## Formal terminology
+
+The site architecture of this project at the file level is officially named:
+
+- `Astro + Starlight English Docs Build`
+
+This term stands for:
+
+- Render `/docs/` using Astro + Starlight
+- public artifact built by `site/`, exported to `site/dist/`
+- The editing source is `docs/`, and ignored staging tree is generated before building: `site/src/content/docs/docs/`
+- generated API reference deployed to sibling sites `/api/python/` and `/api/julia/`
+- Editable docs source is English-only; generated/staging output is not an editing source.
+
+## Related
+
+- Visual charts:
+- [Circuit Diagram Guide](../../../contribute/contributing/circuit-diagrams.mdx) (Schemdraw -> SVG)
+- App page specs:
+ - [Page Reference Specs](page-reference-specs.mdx)
+- Generated API reference:
+ - [API Reference](api-reference.mdx)
+
+---
+
+## Agent Rule
+```markdown
+## Documentation Design
+- **Standards**: Diataxis + Frontmatter/Tags + Core Rules (see `standards.md`)
+- **Starlight Native Style**: Current contract priority, happy path, examples, Starlight-native rendering rhythm (see `starlight-native-style.md`)
+- **API Reference**: generated API docs ownership, docstring style, Sphinx/Documenter build boundary (see `api-reference.md`)
+- **Macro Style / Information Layout**: Macro page layout, visual rhythm, overview/index rules (see `information-layout.md`)
+- **Micro Style / Writing & Visual Elements**: Tone, paragraph writing and use of visual elements (see `style.md`)
+- **Maintenance**: Monolingual source tree + Frontmatter update + Starlight build / route checks (see `maintenance.md`)
+- **Physics Concepts**: Teaching positioning, chapter skeleton, cross-document reference specifications (see `explanation-physics.md`)
+- **Page Reference Specs**: Fixed skeleton, naming, citation and acceptance specifications of App frontend page technical documents (see `page-reference-specs.md`)
+- **Language**: editable docs source is English-only; generated/staging output is excluded from direct editing.
+- **Architecture Term**: The official name of this project file architecture is `Astro + Starlight English Docs Build`
+- Please refer to each sub-document for detailed specifications.
+```

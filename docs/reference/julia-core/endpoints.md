@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Julia Core Endpoints
-  - Circuit Endpoints
+ - Julia Core Endpoints
+ - Circuit Endpoints
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -28,16 +28,16 @@ Use `Endpoint`, not `Pin`, as the top-level concept.
 AbstractCircuitEndpoint
 |
 +-- AbstractNodeEndpoint
-|   +-- PinEndpoint
-|   +-- LineTapEndpoint
-|   +-- GroundEndpoint
-|   +-- ExternalNodeEndpoint
+|  +-- PinEndpoint
+|  +-- LineTapEndpoint
+|  +-- GroundEndpoint
+|  +-- ExternalNodeEndpoint
 |
 +-- AbstractLineSpanEndpoint
-|   +-- LineSpanEndpoint
+|  +-- LineSpanEndpoint
 |
 +-- AbstractLoopEndpoint
-    +-- LoopEndpoint
+  +-- LoopEndpoint
 ```
 
 `AbstractNodeEndpoint` is the node-resolving endpoint category. Node endpoints resolve to one circuit node and can participate in node aliasing or lumped capacitor placement. `AbstractLineSpanEndpoint` attaches across a distributed interval. `AbstractLoopEndpoint` targets an inductive or flux-related loop.
@@ -45,21 +45,21 @@ AbstractCircuitEndpoint
 ## User-Facing Examples
 
 ```julia
-pin(lc, :signal)
-pin(flc, :plus)
+pin(lc,:signal)
+pin(flc,:plus)
 line_tap(qwr; at_m = 1.2mm)
-line_tap(readout; line = :main, at_m = 2.0mm)
+line_tap(readout; line =:main, at_m = 2.0mm)
 line_span(qwr; from_m = 2.0mm, to_m = 2.5mm)
-line_span(readout; line = :main, from_m = 2.0mm, to_m = 2.5mm)
-line_tap(line_ref(readout, :main); at_m = 2.0mm)
+line_span(readout; line =:main, from_m = 2.0mm, to_m = 2.5mm)
+line_tap(line_ref(readout,:main); at_m = 2.0mm)
 ground()
 external_node("drive")
 squid_loop(lc)
 ```
 
-These values are all endpoints, but only `pin(lc, :signal)` and `pin(flc, :plus)` are pins.
+These values are all endpoints, but only `pin(lc,:signal)` and `pin(flc,:plus)` are pins.
 
-The shorthand forms `line_tap(component; at_m = ...)` and `line_span(component; from_m, to_m)` are valid only when the component has one unambiguous default line. Multi-line components must use `line = :main` or pass an explicit `line_ref(component, :main)`.
+The shorthand forms `line_tap(component; at_m = ...)` and `line_span(component; from_m, to_m)` are valid only when the component has one unambiguous default line. Multi-line components must use `line =:main` or pass an explicit `line_ref(component,:main)`.
 
 ## Endpoint Kinds
 

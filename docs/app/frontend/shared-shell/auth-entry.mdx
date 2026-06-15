@@ -1,0 +1,154 @@
+---
+title: "Auth Entry"
+aliases:
+ - "Frontend Auth Entry"
+ - "Login Surface"
+ - "Authentication Entry"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/ui
+status: draft
+owner: docs-team
+audience: team
+scope: Frontend online-mode login, logout, anonymous / degraded session entry and auth-diagnostics density contract
+version: v0.4.0
+last_updated: 2026-03-17
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Auth Entry
+
+This page defines the formal auth entry surface of the frontend when it is not logged in, logged out or session degraded under `Online Mode`.
+
+<Aside type="note" title="Surface Boundary">
+
+This page is responsible for the product presentation density of login / logout / recovery entry.
+workspace membership, invite lifecycle, capability flags, and JWT transport authority remain owned by shared auth / backend session surfaces.
+
+</Aside>
+
+<Aside type="caution" title="Auth Entry Is Online-Mode Only">
+
+`Local Mode` should not be blocked by auth entry.
+When users switch to local mode, they should directly enter the app shell; only when `Online Mode` and auth is required, the auth entry becomes the primary surface.
+
+</Aside>
+
+<Aside type="caution" title="Auth Entry Is Not A Diagnostics Dashboard">
+
+In the anonymous or degraded state, the primary UI of the auth entry must focus on the user's next action.
+Diagnostics such as `Auth State`, `Workspace`, and `Session Mode` cannot be deployed as primary cards by default.
+
+</Aside>
+
+## Primary Purpose
+
+| Situation | Primary user goal |
+|---|---|
+| anonymous | sign in / sign up |
+| expired session | re-authenticate |
+| degraded session | understand the issue briefly, then recover or sign in again |
+| signed out | return to sign-in entry quickly |
+
+## Content Density Contract
+
+| Surface area | Required behavior |
+|---|---|
+| Primary panel | Only undertakes action, concise status, minimal recovery guidance |
+| Secondary disclosure | Diagnostics, session internals, and workspace/debug state can only be secondary disclosures |
+| Tone | Concise, product-oriented, cannot be presented as a developer diagnostics page |
+| Copy weight | What can be solved by layout, field labels, status badge and button hierarchy, don't pile up paragraph descriptions |
+
+<Aside type="tip" title="Layout should carry the guidance">
+
+Auth entry should prioritize card hierarchy, field order, button prominence, and status placement to guide users.
+Don’t rely on extensive text instructions to let users know what to do next.
+
+</Aside>
+
+## Primary States
+
+| State | Required presentation |
+|---|---|
+| `anonymous` | Show sign-in / sign-up entry with minimum necessary description |
+| `degraded` | Display brief status, compact warning and recovery action |
+| `online_session_dropped` | A warning of "Connected to the target, but the old online session cannot be used" is displayed, and the priority is to guide you to log in again |
+| `signed_out` | Show logged out confirmation and re-login entrance |
+| `invite_pending_auth` | Guide login first, then reserve invite continuation |
+| `mode_switch_to_local` | Allows users to change local mode and directly bypass auth entry |
+
+## Diagnostics Placement
+
+| Item | Placement rule |
+|---|---|
+| `Auth State` | secondary disclosure only |
+| `Workspace` | secondary disclosure only |
+| `Session Mode` | secondary disclosure only |
+| transport / debug refs | secondary disclosure only |
+| recovery detail | can be displayed in secondary disclosure or opened panel, and must not overtake primary action |
+
+## Developer Mode Interaction
+
+| Concern | Required behavior |
+|---|---|
+| Preference owner | Owned by the account surface of [Header](header.mdx), belonging to app-level preference |
+| `Developer Mode = Off` | auth entry only displays concise status, action and minimal recovery guidance; raw transport / exception detail is retained in secondary disclosure or debug block |
+| `Developer Mode = On` | Allow transport / technical detail to appear directly on the auth surface where the error occurred, helping to identify broken blocks; secondary debug block can still exist |
+| Guardrail | `Developer Mode` affects the density of error messages, not whether the debug surface exists; the auth entry still cannot degenerate the entire page into diagnostics dashboard |
+
+## Mode Switching
+
+| Concern | Required behavior |
+|---|---|
+| Entry condition | Only enter auth entry if `Online Mode` and auth has not been established |
+| Local escape hatch | auth entry should allow the user to change `Local Mode` instead of permanently trapping the user on the login page |
+| Online re-entry | auth entry should allow the user to re-specify `IP:Port`/target, or retry the current target |
+| Switch-result relation | If the runtime-mode mutation returns `online_auth_required` or `online_session_dropped`, the auth entry should take over the subsequent sign-in flow |
+| Post-login handoff | online mode After successful login, return to the shell and rebuild the online session context |
+| Post-switch handoff | After switching back to local mode, directly establish the local session and leave the auth entry |
+
+## Connection Failure Presentation
+
+| Situation | Required behavior |
+|---|---|
+| target connecting | Show clear connecting / validating spinner and concise status |
+| target rejected | Display concise failure summary and provide `Retry`, `Edit Server Target`, `Switch to Local Mode` |
+| target summary | Presented as summary object of target `label` / `origin`, does not rely on raw string target |
+| target detail | `IP:Port` / target label can be displayed as secondary context and should not override primary recovery action |
+| degraded transport | compact debug ref or disclosure can be retained; when `Developer Mode = On`, raw technical detail can be displayed directly in the error block |
+
+## Layout Baseline
+
+| Concern | Rule |
+|---|---|
+| Primary layout | Single primary card or clear primary and secondary hierarchies. Large diagnostic cards of the same level in the left and right columns are not allowed |
+| Status placement | Close to primary action, keep concise |
+| Error detail | summary appears first, long detail is included in disclosure |
+| Logged-in handoff | If the session has been restored or logged in, you should hand off and return to the shell / target route instead of staying on the auth entry to pile up more information |
+
+## User-Facing Copy Baseline
+
+| Prefer | Avoid |
+|---|---|
+| `Sign in`, `Continue`, `Session expired`, `Try again` | `Auth State`, `Workspace`, `Session Mode` as headlines |
+| concise recovery hint |long diagnostics narrative|
+| action-first labels | debug-first section labels |
+
+## App Pair
+
+| Concern | Authority |
+|---|---|
+| auth state summary | [Backend / Session & Workspace](../../backend/session-workspace.mdx) |
+| invite continuation / degraded semantics | [App / Shared / Authentication & Authorization](../../shared/authentication-and-authorization.mdx) |
+| runtime mode boundary | [App / Shared / Runtime Modes](../../shared/runtime-modes.mdx) |
+| shell handoff after auth | [Header](header.mdx) |
+
+## Related
+
+- [Header](header.mdx)
+- [Authentication & Authorization](../../shared/authentication-and-authorization.mdx)
+- [Backend / Session & Workspace](../../backend/session-workspace.mdx)

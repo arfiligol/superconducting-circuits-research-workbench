@@ -1,0 +1,47 @@
+---
+aliases:
+ - Research Data
+ - Research Evidence
+tags:
+ - diataxis/how-to
+ - audience/user
+ - topic/data
+status: stable
+owner: docs-team
+audience: user
+scope: Research-facing data and evidence workflow for notebooks and reports.
+version: v1.0.0
+last_updated: 2026-06-12
+updated_by: codex
+title: Research Data & Evidence
+sidebar:
+ label: Research Evidence
+ order: 90
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Research Data & Evidence
+
+Use this workflow when you need notebook-readable inputs and reproducible evidence for a study: HFSS exports, VNA exports, local arrays, fitted parameters, generated figures, and report tables.
+
+## Minimum Evidence Bundle
+
+| Item | Record |
+| --- | --- |
+| source files | path, generator, export date, and design label |
+| axes | name, unit, ordering, and sweep range |
+| transforms | normalization, coordinate transform, filtering, and fitting window |
+| outputs | figure code, table code, and derived parameters |
+
+<Aside type="tip" title="Keep provenance close">
+
+Put the source path and unit assumptions next to the notebook cell that reads the data. A later report should not need to infer how a plotted trace was produced.
+
+</Aside>
+
+## Related
+
+- [Python Notebook Ingestion](python-notebook-ingestion.md)
+- [FEM Result To Equivalent Circuit](index.md)
+- [Notebook Interface](../../reference/notebooks/index.md)

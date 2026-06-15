@@ -1,0 +1,106 @@
+---
+aliases:
+ - Raw Data Layout
+ - original data structure
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/data-format
+status: stable
+owner: docs-team
+audience: team
+scope: raw source layout and dataset/DesignScope ingest boundary
+version: v1.2.0
+last_updated: 2026-04-30
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Raw Data Layout
+
+`data/raw/` only saves files from external sources.
+It is not a direct read format for UI/Characterization; the formal input to the trace-first process must be the ingested `TraceRecord`.
+
+## Source Categories
+
+```text
+data/raw/
+├── measurement/
+├── layout_simulation/
+└── imported/
+```
+
+<Aside type="note" title="Circuit simulation is not a raw-file source">
+
+`circuit_simulation` is usually generated internally by the application `TraceBatchRecord + TraceRecord + TraceStore payload`,
+Instead of falling to `data/raw/` first and then ingesting it a second time.
+
+</Aside>
+
+## Dataset-first / Design-scoped Layout
+
+It is recommended to use dataset as the main directory and design label as the subdirectory to compile external sources:
+
+```text
+data/raw/
+└── <dataset_name>/
+  └── designs/
+    └── <design_name>/
+      ├── layout/
+      │  ├── *.csv
+      │  └── *.txt
+      └── measurement/
+        ├── *.csv
+        └── *.s2p
+```
+
+## Ingest Boundary
+
+Upon completion ingest/import should bind or produce:
+
+1. existing `DatasetRecord`
+2. existing or newly created dataset-local `DesignScope`
+3. `DesignAssetRecord`
+4. `TraceBatchRecord`
+5. `TraceRecord`
+6. `TraceStore` numeric payload
+
+<Aside type="caution" title="Do not skip dataset scope">
+
+Even if the original source has only a single design, it must first be classified into a `DatasetRecord`.
+`design` cannot directly replace dataset, otherwise it cannot be aligned with active dataset, workspace visibility and publish lifecycle.
+
+</Aside>
+
+<Aside type="caution" title="Raw directory names are not authority">
+
+`data/raw/**` directory name can only be used as source label or create-new default.
+If Data Ingestion wants to fall into an existing scope, explicit `design_id` must be used; if a new scope is to be created, the backend create-new DesignScope contract must be used.
+
+</Aside>
+
+<Aside type="caution" title="Raw file is provenance, not the working trace authority">
+
+The raw file is responsible for preserving source integrity;
+plotting / characterization / compare should not directly rely on raw file parser to reread on the spot in the UI.
+The ingested `TraceRecord` should point to `TraceStore` with lightweight metadata + `store_ref`;
+Use metadata for selection, and then materialize when numeric payload is really needed.
+
+</Aside>
+
+### Layout HFSS ingest contract
+
+- After the layout CSV preprocess is completed, it must first be materialized into canonical ND `TraceRecord`
+- materialized trace must bring both `dataset_id` and `design_id`
+- `TraceRecord.axes` only retains `name/unit/length` in metadata DB
+- `TraceRecord.store_ref` points to the official numeric authority
+- frequency / bias axis arrays and trace values ​​must be written into `TraceStore`
+- `TraceBatchRecord(source_kind=layout_simulation, stage_kind=raw)` is responsible for retention import provenance / setup summary
+- It is no longer possible to save layout numeric matrix mainly back to metadata DB JSON as working SoT
+
+## Related
+
+- [Dataset / Design / Trace Schema](dataset-record.mdx)
+- [Data Storage](../../app/architecture/platform-architecture/data-storage.md)

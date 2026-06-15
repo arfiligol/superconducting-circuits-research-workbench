@@ -1,0 +1,107 @@
+---
+aliases:
+ - Code Style
+ - coding style
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/code-quality
+status: stable
+owner: docs-team
+audience: contributor
+scope: Common programming styles and implementation principles for Python and TypeScript.
+version: v3.0.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Code Style
+
+The style rules of this project give priority to "readable, changeable, and testable".
+An implementation is considered ineligible if it makes one of the UI, API, Notebook, Runner, or scripts layers look convenient, but makes sharing rules fragmented or difficult to verify.
+
+<Aside type="note" title="How to use this page">
+
+Let’s look at cross-language principles first, and then look at corresponding language rules. If a change touches both Python and TypeScript, priority is given to adhering to common boundaries and then handling language-specific styles.
+
+</Aside>
+
+## Style Map
+
+| Blocks | Answered Questions |
+| --- | --- |
+| Cross-Language Principles | Structural principles that all languages ​​must abide by |
+| Language Rules | How Python and TypeScript remain readable and verifiable |
+| Refactoring Rule | What kind of refactoring granularity is qualified |
+
+## Cross-Language Principles
+
+- Prioritize small diffs and avoid irrelevant refactorings
+- A function only does one thing
+- Clearly named, no vague abbreviations
+- Avoid stuffing business logic into route handlers, React components, notebook helpers or scripts
+- Repeated logic is extracted to the shared layer first, and then the call points are expanded.
+
+<Aside type="caution" title="Boundary rule">
+
+Inline workflow may seem convenient, but if route handlers, components, notebook helpers or scripts have real business decisions, it is a substandard implementation.
+
+</Aside>
+
+## Language Rules
+
+<Tabs>
+<TabItem label="Python">
+
+
+- Use modern syntax: `list[str]`, `str | None`
+- Keep import and format consistent according to Ruff specification
+- In a scientific computing context, keep the units in the name if necessary, e.g. `frequency_hz`
+- `core/` and service layer prohibit `print()`
+
+</TabItem>
+
+<TabItem label="TypeScript">
+
+
+- Use TypeScript strict mode
+- Unreasonable `any` is prohibited
+- component props, service return values, and schema parse results must have clear types
+- React components should remain presentation-focused, and data fetching and mutation logic should be concentrated in hooks / services
+
+</TabItem>
+
+</Tabs>
+
+## Refactoring Rule
+
+- Make small changes first that can be verified
+- Fix structural problems first, then consider abstraction
+- If the abstraction only serves a single use point and does not reduce complexity, don't abstract it yet
+
+<details class="docs-disclosure docs-disclosure--note">
+<summary>Why this page stays short</summary>
+
+This page only defines common styles and does not repeat lint, type-check, error handling and other more detailed guardrails. If you need specific tool rules, please refer directly to the same page.
+
+</details>
+
+## Agent Rule
+```markdown
+## Code Style
+- **Standard**:
+  - Python uses Ruff + modern Python syntax
+  - TypeScript uses strict typing and consistent formatting
+- **Naming**:
+  - variables use clear nouns
+  - functions use clear verb phrases
+  - scientific names may include units when that removes ambiguity
+- **Boundaries**:
+  - do not put business workflow logic inside route handlers, React components, notebooks, or scripts
+  - shared logic belongs in app backend services, Julia Core, Julia Runner, or explicit contract packages
+- **Refactoring**: prefer small, atomic changes
+- **Complexity**: keep functions focused; split code when one function starts handling multiple responsibilities
+```

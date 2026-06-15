@@ -1,0 +1,354 @@
+---
+aliases:
+ - Authentication and Authorization
+ - Auth and Access Control
+ - Authentication and authorization
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
+status: draft
+owner: docs-team
+audience: team
+scope: online-mode auth / authz, workspace membership, invitation accept flow, capability exposure and local-mode bypass contract
+version: v0.5.0
+last_updated: 2026-03-16
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Authentication & Authorization
+
+This page defines the App's auth / authz contract under `Online Mode`, and the auth bypass baseline under `Local Mode`.
+
+<Aside type="note" title="App-shared surface">
+
+Header's user menu, active workspace switch, active dataset switch, task execution actions, and backend session surface all rely on this contract.
+
+</Aside>
+
+<Aside type="caution" title="Online Task Execution Needs Auth First">
+
+As long as the task execution surface in `Online Mode` is shared by multiple people, visibility and action permission must be defined first.
+
+</Aside>
+
+<Aside type="caution" title="Auth Is Online-Mode Only">
+
+`Authentication / Authorization` is the official requirement of `Online Mode`.
+`Local Mode` should not be blocked by the login process, workspace invitation, or multi-user permission matrix.
+
+</Aside>
+
+## Mode Applicability
+
+| Mode | Auth / authz behavior |
+|---|---|
+| `local` | Does not require sign in; does not enable multi-user membership / invitation / role gate; backend returns local session, `Local Space` and local capability summary |
+| `online` |enable JWT auth, workspace membership, capability flags, task execution permission and collaboration controls|
+
+<Aside type="tip" title="Same session shape, different mode semantics">
+
+The frontend should try to consume the same session envelope.
+The difference between `local` and `online` is mainly permission authority and collaboration semantics, not two completely different sets of shell contracts.
+
+</Aside>
+
+<Aside type="tip" title="Chosen baseline">
+
+The official baseline adopts JWT-based auth transport, but `workspace role`, `capabilities` and `active workspace` do not declare themselves as JWT.
+These fields are still represented by the backend session surface as authority.
+
+</Aside>
+
+## Identity Objects
+
+| Object | Required meaning |
+|---|---|
+| Authenticated Session | A valid job session that binds `user`, `active workspace`, capabilities and active dataset |
+| Local Bypass Session | Local session that does not require login, still provides `user`, `Local Space`, `capabilities` and active dataset |
+| Workspace Membership | User roles and visibility boundaries within a specific workspace |
+| Active Workspace | The single workspace being operated by the current session |
+| Capability Flags | page and shared app surfaces directly consumable permission summary |
+
+## Auth Transport Baseline
+
+| Item | Rule |
+|---|---|
+| Access credential | signed JWT |
+| Access token lifetime | 15 minutes |
+| Refresh credential | rotating refresh token |
+| Refresh lifetime | 14 days |
+| Browser storage | HttpOnly + Secure cookie |
+| Session authority |active workspace, active dataset, capabilities by backend session row owns|
+| Logout | Revoke the refresh token family and invalidate the corresponding session |
+
+<Aside type="note" title="Local mode bypass">
+
+`Local Mode` does not use the JWT transport.
+The backend should directly establish the local session and return the session envelope shape that is compatible with online mode.
+
+</Aside>
+
+<Aside type="caution" title="JWT Is Not Permission Authority">
+
+JWT is used to prove `user identity` and `session continuity`.
+The workspace role, task-management permission and capability flags must be based on the backend session lookup to avoid the expiration of the token's embedded permissions.
+
+</Aside>
+
+## Authorization Engine Baseline
+
+<Aside type="note" title="Backend-owned authorization engine">
+
+App backend officially adopts `Casbin` as the authorization baseline.
+The frontend, Electron shell, standalone CLI, and core do not directly hold the role matrix, nor do they directly interpret the permission claims in the JWT.
+
+</Aside>
+
+| Concern | Rule |
+|---|---|
+| Authentication | `JWT access token + rotating refresh token` proves user identity and session continuity |
+| Authorization | backend uses `Casbin` policy evaluation to determine whether the action is allowed |
+| Policy shape | Baseline adopts `RBAC with workspace domain`, and then bring in resource envelope if necessary |
+| Resource envelope | Contains at least `workspace_id`, `owner_user_id`, `visibility_scope` |
+| Frontend contract | UI only consumes `capabilities` and `allowed_actions` returned by backend |
+| Source of truth | shared app docs define permission semantics; Casbin policy is responsible for implementation and does not replace the file itself |
+
+<Aside type="caution" title="Do not hardcode role logic in clients">
+
+Header, Task Execution Center, page CTA and destructive actions must be rendered according to the `capabilities` / `allowed_actions` of backend echo.
+The frontend cannot use `owner/member/viewer` to derive the complete permission matrix by itself.
+
+</Aside>
+
+### Casbin Modeling Baseline
+
+| Casbin concept | App meaning |
+|---|---|
+| `sub` | authenticated user |
+| `dom` |active workspace or target workspace|
+| `obj` |resource type or resource identity|
+| `act` |requested action, for example `submit_task`, `archive_schema`, `view_audit_log`|
+
+| Baseline rule | Meaning |
+|---|---|
+| Workspace membership drives domain role | Users can have different roles in different workspaces |
+| Admin override remains backend-owned | `admin` is the global override of the backend service and is not derived from the frontend |
+| Resource visibility is evaluated before policy allow | backend first parses the resource envelope and then hands it to Casbin for action decision |
+| Backend emits materialized permissions | session surface, task rows, resource detail should return the calculated `allowed_actions` |
+
+<details class="docs-disclosure docs-disclosure--info">
+<summary>Why not pure Casbin-only logic</summary>
+
+`local` / `private` / `workspace` visibility, resource owner and active workspace rebinding still need to be organized into a stable authorization context by the backend service first.
+Instead of shoehorning all the rules into the policy expression, the official baseline is `service-owned resource resolution + Casbin decision engine`.
+
+</details>
+
+## Local-Mode Bypass Rules
+
+| Concern | Required behavior |
+|---|---|
+| Session establishment | backend directly provided implicit local user / `Local Space` session |
+| Capability summary | Still materialized by backend, not assumed by frontend |
+| Task execution permission | local task controls are determined by local capability summary, but do not use multi-user role matrix |
+| Resource scope | local mode persisted resources use `local` scope, regardless of `private` / `workspace` |
+| Invitation / membership | Not applicable |
+| Auth entry | should not be the primary entry surface of local mode |
+
+## Local Capability Baseline
+
+| Capability family | Required local baseline |
+|---|---|
+| Runtime mode | `can_switch_runtime_mode = true` |
+| Workspace context | `can_switch_workspace = false`; fixed use `Local Space` |
+| Dataset context | `can_switch_dataset = true` |
+| Data movement |`can_import_datasets = true`, `can_export_datasets = true`|
+| Task management |`can_submit_tasks = true`, `can_cancel_local_tasks = true`, `can_terminate_local_tasks = true`, `can_retry_local_tasks = true`|
+| Resource editing | Local functions such as schemas / results / analyzes can be enabled normally according to each surface and will not be closed due to auth bypass |
+| Collaboration |`can_invite_members = false`, `can_remove_members = false`, `can_transfer_workspace_owner = false`|
+| Governance |`can_view_audit_logs = false`, `can_manage_platform_settings = false`|
+
+<Aside type="caution" title="Local mode still needs explicit capability materialization">
+
+`Local Mode` does not allow the frontend to treat all actions as available.
+The backend must still return explicit capability flags to avoid accidentally exposing online-only actions.
+
+</Aside>
+
+## Capability Families
+
+| Capability family | Representative flags |
+|---|---|
+| Workspace context | `can_switch_workspace`, `can_switch_dataset` |
+| Workspace collaboration | `can_invite_members`, `can_remove_members`, `can_transfer_workspace_owner` |
+| Task management | `can_submit_tasks`, `can_cancel_own_tasks`, `can_cancel_workspace_tasks`, `can_terminate_workspace_tasks`, `can_retry_own_tasks`, `can_retry_workspace_tasks` |
+| Governance | `can_view_audit_logs`, `can_manage_platform_settings` |
+
+## Role Model
+
+| Role family | Values |
+|---|---|
+| Platform roles | `admin`, `user` |
+| Workspace roles | `owner`, `member`, `viewer` |
+
+## Workspace Invitation Lifecycle
+
+<Aside type="note" title="Online mode only">
+
+invitation, join, leave, remove member and owner transfer only belong to `Online Mode`.
+`Local Mode` should not expose these collaboration controls.
+
+</Aside>
+
+<Aside type="note" title="Primary invitation mechanism">
+
+Currently officially adopted `email invitation`.
+In-app notifications can be used as a future supplementary capability, but are not the primary path of the V1 join flow.
+`SMTP` is the official baseline; if the deployment has not configured mail transport, only local/admin testing can return manual invite link.
+
+</Aside>
+
+| Step | Rule |
+|---|---|
+| Invite creation | `owner` or `admin` specify `workspace`, `email`, `role` to create invite |
+| Delivery | The system sends an email containing a single-use invite token |
+| Token lifetime | 7 days |
+| Accept flow | Logged-in users can accept directly; non-logged-in users must first log in or register before accepting |
+| Membership creation | Create workspace membership after accept and record audit event |
+| Revoke | invite issuer, workspace owner, platform admin can revoke before accept |
+
+## Invitation State Model
+
+| State | Meaning |
+|---|---|
+| `pending` | invite has been created but has not been accepted |
+| `delivered` | invite email has been sent successfully, or manual invite link has been generated |
+| `accepted` | invite has been effectively consumed and membership established |
+| `revoked` | invite has been invalidated by the initiator, workspace owner or admin |
+| `expired` | The invite token has expired and membership cannot be established |
+| `delivery_failed` | The invite was established successfully, but the mail transport did not complete the delivery |
+
+## Invitation Acceptance Flow
+
+<Tabs>
+<TabItem label="Authenticated User">
+
+
+1. The user clicks the invitation email or invite link.
+2. The backend verification token is still `pending` / `delivered` and has not expired.
+3. If the email does not match the current login account, the system must require the user to switch accounts or log in again.
+4. Backend establishes membership and marks invite as `accepted`.
+5. backend returns the updated membership list and post-accept context suggestion.
+
+</TabItem>
+
+<TabItem label="Unauthenticated User">
+
+
+1. The user opens the invite link.
+2. The system saves the invite token, first to `sign in` or `sign up`.
+3. After logging in, re-verify the invite token.
+4. After success, the membership is established and written to the audit log.
+
+</TabItem>
+
+<TabItem label="Post-accept Context Policy">
+
+
+| Situation | Rule |
+|---|---|
+| The session does not have an active workspace yet | Automatically switch to the invited workspace |
+| The session already has an active workspace | Do not switch silently; return the `switch_available` prompt to allow the Header to switch explicitly |
+| invite has expired / revoked | does not establish membership, returns rejection reason |
+
+</TabItem>
+
+</Tabs>
+
+<Aside type="tip" title="Why not auto-switch every time">
+
+Accepting an invite should not switch silently when the user already has an active workspace and an unsaved page context.
+The official baseline is to have the Header explicitly provide `Switch to workspace` after establishing membership.
+
+</Aside>
+
+## Outbound Delivery Baseline
+
+| Concern | Rule |
+|---|---|
+| Primary transport | SMTP |
+| Local fallback | Can generate manual invite link, but only in local / admin-controlled environment |
+| Failure handling | `delivery_failed` should not establish membership, nor should errors be swallowed silently |
+| Audit coverage | invite created / sent / failed / accepted / revoked must all be audited |
+| Detailed transport contract | Defined by [Outbound Email Delivery](outbound-email-delivery.mdx) |
+
+## Join / Leave / Removal Rules
+
+| Action | Rule |
+|---|---|
+| Join workspace | Membership can only be established with a valid invite token |
+| Leave workspace | `viewer` / `member` can leave by yourself |
+| Owner leave | Only allowed if there is another `owner` in the workspace; otherwise ownership must be transferred first |
+| Remove member | `owner` or `admin` can remove other memberships |
+| Active session rebinding | If the user is moved out of the current active workspace, the session must immediately clear the active workspace, active dataset and task context |
+
+## Workspace Collaboration Permission Matrix
+
+| Action | `viewer` | `member` | `owner` | `admin` |
+|---|---|---|---|---|
+| Accept valid invite for self | ✅ | ✅ | ✅ | ✅ |
+| Leave current workspace | ✅ | ✅ | ✅ with ownership rule | ✅ |
+| Invite new member | ❌ | ❌ | ✅ | ✅ |
+| Revoke pending invite | ❌ | ❌ | ✅ | ✅ |
+| Remove other member | ❌ | ❌ | ✅ | ✅ |
+| Transfer workspace ownership | ❌ | ❌ | ✅ | ✅ |
+
+## Task Execution Permission Matrix
+
+| Action | `viewer` | `member` | `owner` | `admin` |
+|---|---|---|---|---|
+| Switch active workspace (within membership) | ✅ | ✅ | ✅ | ✅ |
+| View workspace-visible tasks | ✅ | ✅ | ✅ | ✅ |
+| Switch active dataset | ✅ | ✅ | ✅ | ✅ |
+| Attach visible task | ✅ | ✅ | ✅ | ✅ |
+| Submit new task | ❌ | ✅ | ✅ | ✅ |
+| Cancel own task | ❌ | ✅ | ✅ | ✅ |
+| Cancel any workspace task | ❌ | ❌ | ✅ | ✅ |
+| Force terminate stuck task | ❌ | ❌ | ✅ | ✅ |
+| Retry own terminal task | ❌ | ✅ | ✅ | ✅ |
+| Retry any workspace-visible terminal task | ❌ | ❌ | ✅ | ✅ |
+
+## Bootstrap Admin Provisioning
+
+<Aside type="note" title="Local deployment baseline">
+
+The current default is only-on-startup bootstrap admin, which is suitable for local DB and stand-alone deployment.
+The official rule is: bootstrap is only allowed if no platform admin already exists on the system.
+
+</Aside>
+
+| Environment variable | Meaning |
+|---|---|
+| `SC_BOOTSTRAP_ADMIN_EMAIL` | Initial admin email |
+| `SC_BOOTSTRAP_ADMIN_PASSWORD` | Initial admin password |
+| `SC_BOOTSTRAP_ADMIN_DISPLAY_NAME` | Initial admin display name |
+
+| Rule | Meaning |
+|---|---|
+| One-time bootstrap | After the first platform admin is established, bootstrap will not be repeated |
+| Audit required | Audit record should be left for both success and failure of bootstrap |
+| Local-only baseline | If the deployment uses local DB, bootstrap admin is the official baseline; other provisioning modes must be defined by auth/session owner doc |
+
+## Related
+
+* [Runtime Modes](runtime-modes.mdx)
+* [Identity & Workspace Model](identity-workspace-model.mdx)
+* [Resource Ownership & Visibility](resource-ownership-and-visibility.mdx)
+* [Outbound Email Delivery](outbound-email-delivery.mdx)
+* [Backend / Session & Workspace](../backend/session-workspace.mdx)
+* [Frontend / Header](../frontend/shared-shell/header.mdx)
+* [Frontend / Task Management](../frontend/shared-workflow/task-management.md)

@@ -1,0 +1,68 @@
+---
+aliases:
+ - "Canonical Contract Registry"
+ - "Canon Contract Registry"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/architecture
+status: stable
+owner: docs-team
+audience: team
+scope: current published contracts for the Notebook + Application + Julia Runner architecture
+version: v1.2.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Canonical Contract Registry
+
+This registry names the owner for each active cross-layer contract.
+
+<Aside type="caution" title="Registry Rule">
+
+A public workflow, machine-readable payload, runtime behavior, or storage layout must have exactly one owner. If a contract is not listed here, it is not architecture-level SoT yet.
+
+</Aside>
+
+## Registry
+
+| Contract | Owner | Source of truth | Primary consumers |
+|---|---|---|---|
+| Application Interface | Electron App + Frontend | [Application Interface](../../application-interface.md), [Frontend Reference](../../frontend/index.md), [Simulation Interface Boundaries](simulation-interface-boundaries.md) | users submitting simulations, browsing datasets, tasks, traces, and results |
+| Notebook Interface | Pluto + Python notebooks | [Notebook Reference](../../../reference/notebooks/index.md), [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto research cockpit, Python data analysis, file inspection, Backend metadata/task/result API usage |
+| Product Async Contracts | Python Backend + Application + Julia Runner | [Product Async Contracts](product-async-contracts.md), [Tasks & Execution](../../backend/tasks-execution.md) | simulation request builders, Python notebooks submitting tasks, Runner integration |
+| Backend control/data plane | Python Backend | [Backend Reference](../../backend/index.md), [Tasks & Execution](../../backend/tasks-execution.md) | frontend, notebooks, Julia Runner |
+| Julia compute plane | Julia Runner | [Julia Runner Compute Plane](julia-runner-compute-plane.md) | backend runner API and claimed persisted tasks |
+| Runner result manifest | Julia Runner writes; Python Backend validates | [Runner Result Manifest](runner-result-manifest.md) | publisher, tests, Runner task families |
+| Canonical TraceStore | Python Backend | [TraceStore Zarr](trace-store-zarr.md), [Datasets & Results](../../backend/datasets-results.mdx) | raw data browser, result browser, notebooks |
+| Task lifecycle | Python Backend | [Tasks & Execution](../../backend/tasks-execution.md) | frontend task monitor, runner claim/complete loop |
+| Runner task protocol | Python Backend API + Julia Runner client | [Julia Runner Compute Plane](julia-runner-compute-plane.md) | local runner, desktop startup |
+| Dataset / Design / Trace metadata | Python Backend | [Datasets & Results](../../backend/datasets-results.mdx), [Data Contracts](../../data-contracts/index.mdx) | dashboard, raw data browser, notebooks |
+| Circuit definition metadata | Python Backend | [Circuit Definitions](../../backend/circuit-definitions.mdx), [Circuit Netlist Archive](../../archive/old-app-contracts/circuit-netlist.mdx) | design assets, notebooks, simulation task builders |
+| App shell and navigation | Frontend | [Frontend Reference](../../frontend/index.md), [Sidebar](../../frontend/shared-shell/sidebar.md) | Electron App |
+| Session/workspace/auth context | Python Backend + shared app model | [Session & Workspace](../../backend/session-workspace.mdx), [Shared App Model](../../shared/index.mdx) | frontend shell, online mode |
+
+## Removed Contracts
+
+These are no longer active contracts:
+
+| Removed surface | Replacement |
+|---|---|
+| User-facing command workflow | `scripts/` for dev/build/test/maintenance only |
+| Retired local queue worker runtime | DB-backed task claim by Julia Runner |
+| Retired Python UI runtime | Electron App + Next.js frontend |
+| Python Backend in-process Julia simulation | Julia Runner compute plane |
+| Schemdraw standalone workflow | Design assets, source documents, and notebooks |
+
+Application Simulation Workbench and Analysis Workbench remain active contracts. They are part of the Product Async Track and submit product requests to the Backend.
+
+## Related
+
+* [Architecture Reference](index.md)
+* [Product Async Contracts](product-async-contracts.md)
+* [Julia Runner Compute Plane](julia-runner-compute-plane.md)
+* [TraceStore Zarr](trace-store-zarr.md)

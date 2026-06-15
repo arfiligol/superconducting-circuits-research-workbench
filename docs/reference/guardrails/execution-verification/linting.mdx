@@ -1,0 +1,111 @@
+---
+aliases:
+ - Linting & Formatting
+ - Lint and formatting
+tags:
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/execution
+status: stable
+owner: docs-team
+audience: contributor
+scope: Python, frontend, desktop and Julia lint/format/type-check specs for rewrite branch.
+version: v3.0.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Linting & Formatting
+
+<Aside type="note" title="How to use this page">
+
+This page only answers the daily implementation methods of formatting, lint, and type-check. When you need to test the hierarchy or merge gate, see `Testing` and `CI Gates` respectively.
+
+</Aside>
+
+## Tooling
+
+- Python: Ruff + BasedPyright
+- Frontend/Desktop: project-local lint / format / typecheck commands
+- Julia: package-local tests and formatter when configured
+- Repo gate: pre-commit (if hook is set)
+
+## Command Map
+
+<Tabs>
+<TabItem label="Python / Repo">
+
+
+```bash
+uv run ruff format .
+uv run ruff check .
+uv run basedpyright app/backend/app_backend core/python scripts
+uv run pre-commit run --all-files
+```
+
+</TabItem>
+
+<TabItem label="Frontend">
+
+
+```bash
+npm run lint --prefix app/frontend
+npm run format --prefix app/frontend
+npm run typecheck --prefix app/frontend
+```
+
+</TabItem>
+
+<TabItem label="Desktop">
+
+
+```bash
+npm run lint --prefix app/desktop
+npm run build --prefix app/desktop
+```
+
+</TabItem>
+
+<TabItem label="Julia">
+
+
+```bash
+julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+```
+
+</TabItem>
+
+</Tabs>
+
+## Policy
+
+| Rules | Description |
+| --- | --- |
+| touched files do not accept new lint errors | Do not use existing noise as a fig leaf for new problems |
+| Prioritize type error correction | Don’t hide structural problems with ignore rules |
+| Frontend maintains the Python/docs baseline before it is created | It will be included in the regular gate after it is created |
+
+<Aside type="tip" title="Good default">
+
+For small-scale changes, at least the format, lint and type-check corresponding to the touched area should be run first; do not leave the entire repo gate until the problem is discovered for the first time before committing.
+
+</Aside>
+
+## Agent Rule
+```markdown
+## Lint / Format Commands
+- **Python format**: `uv run ruff format .`
+- **Python lint**: `uv run ruff check .`
+- **Python type check**: `uv run basedpyright app/backend/app_backend core/python scripts`
+- **Pre-commit**: `uv run pre-commit run --all-files`
+- **Frontend lint**: `npm run lint --prefix app/frontend`
+- **Frontend format**: `npm run format --prefix app/frontend`
+- **Frontend typecheck**: `npm run typecheck --prefix app/frontend`
+- **Desktop lint/build**: `npm run lint --prefix app/desktop` and `npm run build --prefix app/desktop`
+- **Julia package checks**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`, `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`, `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`, and `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- **Policy**: no new lint or type errors in touched areas.
+```

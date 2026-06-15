@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 import numpy as np
-from core.shared.persistence import LocalZarrTraceStore, get_trace_store_path
 
 from app_backend.domain.datasets import TraceDetail
+from app_backend.infrastructure.local_store import LocalZarrTraceStore, get_trace_store_path
 
 
 class TraceStoreAxisValueLoader:
