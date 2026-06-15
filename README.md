@@ -230,6 +230,33 @@ the notebook examples first.
 - Use the physics concepts when you need the S/Y/Z, equivalent-circuit, or
   modeling context: `docs/concepts/physics/`.
 
+Run Pluto notebooks:
+
+```bash
+npm run julia:dev-install
+julia --startup-file=no --project=@v1.12
+```
+
+Then start Pluto from the Julia REPL:
+
+```julia
+using Pluto
+Pluto.run()
+```
+
+This repository has package-specific Julia environments under `core/julia/`,
+for example `core/julia/SuperconductingCircuitsCore/Project.toml`. The Pluto
+notebooks use a shared Julia `@v1.12` development environment so that Pluto,
+PlutoUI, Revise, Core, Visualizer, and local package checkouts resolve together.
+If a local package dependency was just added and Pluto reports a stale
+dependency graph, refresh that same environment:
+
+```bash
+julia --startup-file=no --project=@v1.12 -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); Pkg.precompile()'
+```
+
+For the full setup notes, read `docs/start/installation.md`.
+
 ### Platform Path
 
 Use this path if you want to run the local app-backed research platform.
