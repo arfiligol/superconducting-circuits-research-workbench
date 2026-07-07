@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pandas as pd
-from superconducting_circuits_analysis.infrastructure.logging import get_logger
 
 CsvPath = str | Path
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def extract_mode_from_admittance(csv_file_path: CsvPath) -> pd.DataFrame | None:
