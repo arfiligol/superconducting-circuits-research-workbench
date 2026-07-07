@@ -108,12 +108,6 @@ def _check_built() -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--config",
-        action="append",
-        dest="configs",
-        help="Ignored compatibility option retained for old workflow invocations.",
-    )
-    parser.add_argument(
         "--check-source",
         action="store_true",
         help="Validate docs source files.",

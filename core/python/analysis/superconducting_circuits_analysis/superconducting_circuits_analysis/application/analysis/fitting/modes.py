@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import cast
 
 import numpy as np
@@ -16,9 +17,8 @@ from superconducting_circuits_analysis.domain.schemas.fitting import (
     ModeFitSeries,
     ModeFitSuccess,
 )
-from superconducting_circuits_analysis.infrastructure.logging import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 ParameterBounds = dict[str, tuple[float | None, float | None]]
 

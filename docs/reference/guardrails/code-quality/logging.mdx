@@ -91,16 +91,16 @@ def process_data(path: Path) -> Result:
 
 
 ```python
-from superconducting_circuits_analysis.infrastructure.logging import setup_logging
+import logging
 
 def main() -> None:
-setup_logging(level="INFO") # or DEBUG for verbose
+    logging.basicConfig(level="INFO")  # or DEBUG for verbose
 
-# Now all core/ layer logging will show colored output
-  result = process_data(path)
+    # Now all core/ layer logging will show configured output.
+    result = process_data(path)
 
-# The scripts layer can use print() to make the final developer-facing summary
-  print(f"Result: {result}")
+    # The scripts layer can use print() for the final developer-facing summary.
+    print(f"Result: {result}")
 ```
 
 </TabItem>
@@ -109,17 +109,12 @@ setup_logging(level="INFO") # or DEBUG for verbose
 
 ## Configuration
 
-### Default Logger Setup (`superconducting_circuits_analysis/infrastructure/logging.py`)
+### Default Logger Setup
 
 ```python
-from rich.logging import RichHandler
+import logging
 
-def setup_logging(level: str = "INFO") -> None:
-  logging.basicConfig(
-    level=level,
-    format="%(message)s",
-    handlers=[RichHandler(rich_tracebacks=True)]
-  )
+logging.basicConfig(level="INFO")
 ```
 
 ## Migration Guide
@@ -149,7 +144,7 @@ The logging rules are deliberately kept thin: first define the `print()` boundar
 - **`print()` allowed ONLY in `scripts/`**: For final developer-facing helper output.
 - **Setup**:
   - Import: `import logging; logger = logging.getLogger(__name__)`
-  - Configure in scripts when useful: `from superconducting_circuits_analysis.infrastructure.logging import setup_logging`
+  - Configure in scripts when useful: `logging.basicConfig(level="INFO")`
   - **Handler**: Use `RichHandler` only as developer-facing script output, not as a product CLI contract.
 - **Levels**:
   - `logger.debug()`: Development details.
