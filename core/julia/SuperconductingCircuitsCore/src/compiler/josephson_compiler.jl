@@ -1,3 +1,10 @@
+# This file lowers inspectable CircuitPlan semantics into JosephsonCircuits
+# netlist rows. It owns compilation, not the physical decision to retain or
+# compensate emitted port shunts in a design-facing observable. Canonical port
+# boundaries:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd
+
 function _validation_message(report::ValidationReport)
     return join([string(issue.code, ": ", issue.message) for issue in errors(report)], "; ")
 end
@@ -190,8 +197,6 @@ function _prepare_node_resolution!(ctx::_JosephsonCompileContext)
             _validate_endpoint_for_lumped_lowering(ctx.plan, relation.inductor_a.to)
             _validate_endpoint_for_lumped_lowering(ctx.plan, relation.inductor_b.from)
             _validate_endpoint_for_lumped_lowering(ctx.plan, relation.inductor_b.to)
-        elseif relation isa CoupledWindowRelation
-            _validation_error("CoupledWindowRelation '$(relation.id)' is not lowerable by this Josephson compiler path.")
         else
             _validation_error("Unsupported relation for Josephson lowering: $(typeof(relation)).")
         end
@@ -383,6 +388,11 @@ function _lower_relation!(ctx::_JosephsonCompileContext, relation::SeriesResisto
     )
 end
 
+# JosephsonCircuits interprets the `Lj...` row as its nonlinear junction
+# primitive; this is not a linear-inductor substitution. No dc-SQUID or
+# external-flux lowering exists in this compiler path.
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-cosine-and-quantum-anharmonicity.qmd
 function _lower_relation!(ctx::_JosephsonCompileContext, relation::JosephsonJunction)
     return _emit_inductor_relation!(
         ctx;
@@ -407,10 +417,6 @@ function _lower_relation!(ctx::_JosephsonCompileContext, relation::MutualInducti
     row_index = length(ctx.netlist)
     _record_row_provenance!(ctx, relation, row_index)
     return row_index
-end
-
-function _lower_relation!(::_JosephsonCompileContext, relation::CoupledWindowRelation)
-    _validation_error("CoupledWindowRelation '$(relation.id)' is not lowerable by this Josephson compiler path.")
 end
 
 function _lower_relation!(::_JosephsonCompileContext, relation::AbstractCircuitRelation)
@@ -466,6 +472,9 @@ function _emit_external_ports!(ctx::_JosephsonCompileContext)
     external_port_map = Dict{String,Int}()
     for port in ports
         node_name = _resolved_node(ctx, port.endpoint)
+        # The port row and explicit resistor are both part of the raw compiled
+        # network. Any later removal of the resistor must satisfy the canonical
+        # PTC evidence contract linked in this file's header.
         push!(ctx.netlist, ("P$(port.index)", node_name, "0", port.index))
         resistor_name = "R_port_$(port.index)"
         value_ref = _component_value_ref!(ctx, resistor_name, port.resistance)

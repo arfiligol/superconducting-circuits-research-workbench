@@ -105,7 +105,7 @@ end
     @test mtl.qwr.head_termination == :short
     @test mtl.qwr.tail_termination == :open
     @test mtl.readout_line.section_rlgc_per_m[mtl.window.section_range1.start].l_per_m_h ≈ 410.86374e-9
-    @test mtl.qwr.section_rlgc_per_m[mtl.window.section_range2.start].c_per_m_f ≈ 170.29538e-12
+    @test mtl.qwr.section_rlgc_per_m[mtl.window.section_range2.start].c_per_m_f ≈ (170.29538 - 8.09678) * 1e-12
     @test any(relation -> relation.relation_type == :coupled_window, mtl.graph.relations)
 
     exact_length_mtl = build_readout_line_hanging_qwr_mtl_example(;

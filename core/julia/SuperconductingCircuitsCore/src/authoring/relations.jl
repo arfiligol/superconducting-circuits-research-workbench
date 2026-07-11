@@ -41,6 +41,11 @@ struct SeriesResistor <: AbstractCircuitRelation
     parameters::Vector{ParameterMetadata}
 end
 
+# This relation stores the Josephson inductance used by the nonlinear solver
+# row. It does not represent a dc SQUID, external flux, junction asymmetry, or
+# loop inductance. Canonical physics:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-cosine-and-quantum-anharmonicity.qmd
 struct JosephsonJunction <: AbstractCircuitRelation
     id::String
     from::AbstractNodeEndpoint
@@ -63,14 +68,6 @@ struct MutualInductiveCoupling <: AbstractCircuitRelation
     inductor_b::SeriesInductor
     mutual_inductance::Any
     coupling_coefficient::Any
-    parameters::Vector{ParameterMetadata}
-end
-
-struct CoupledWindowRelation <: AbstractCircuitRelation
-    id::String
-    line_a::LineSpanEndpoint
-    line_b::LineSpanEndpoint
-    spec::Any
     parameters::Vector{ParameterMetadata}
 end
 
@@ -524,44 +521,6 @@ function _couple_branch_inductive!(
         role=role,
         label=_engineering_label(label),
         parameters=graph_parameters,
-        source_location=source_location,
-    )
-    return relation
-end
-
-function couple_window!(
-    plan::CircuitPlan;
-    id,
-    line_a,
-    line_b,
-    spec,
-    parameters=ParameterMetadata[],
-    role=:coupled_window,
-    label=nothing,
-    schematic_kind=:coupled_window,
-    source_location=nothing,
-)
-    line_a isa LineSpanEndpoint && line_b isa LineSpanEndpoint ||
-        _validation_error("couple_window! requires LineSpanEndpoint <-> LineSpanEndpoint.")
-    params = _parameter_vector(parameters)
-    relation = CoupledWindowRelation(String(id), line_a, line_b, spec, params)
-    push!(plan.relations, relation)
-    _register_relation_parameters!(plan, params)
-    record_engineering_relation!(
-        plan;
-        id=relation.id,
-        relation_type=:couple,
-        from=line_a,
-        to=line_b,
-        through=:coupled_window,
-        role=role,
-        label=_engineering_label(label),
-        parameters=_engineering_relation_parameters(
-            :spec,
-            spec,
-            params;
-            schematic_kind=schematic_kind,
-        ),
         source_location=source_location,
     )
     return relation

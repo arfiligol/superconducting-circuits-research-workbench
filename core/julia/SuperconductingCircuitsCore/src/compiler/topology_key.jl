@@ -30,8 +30,6 @@ function _relation_summary(relation::AbstractCircuitRelation)
         return (:inductive, relation.id, _endpoint_summary(relation.from), _endpoint_summary(relation.to))
     relation isa MutualInductiveCoupling &&
         return (:mutual_inductive, relation.id, relation.inductor_a.id, relation.inductor_b.id)
-    relation isa CoupledWindowRelation &&
-        return (:coupled_window, relation.id, _endpoint_summary(relation.line_a), _endpoint_summary(relation.line_b), string(typeof(relation.spec)))
     return (:unknown_relation, string(typeof(relation)))
 end
 

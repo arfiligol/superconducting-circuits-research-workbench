@@ -1,4 +1,5 @@
 import JosephsonCircuits: hbsolve
+using LinearAlgebra
 
 struct HBRunnerRecordingNetlist
     calls::Vector{Any}
@@ -228,6 +229,48 @@ end
     @test occursin("pump frequencies: [8.0e9]", message)
     @test occursin("source count: 1", message)
     @test occursin("requested outputs: S", message)
+end
+
+@testset "run_hb_problem types numerical solver failures" begin
+    compiled = JosephsonCompiledCircuit(
+        netlist=Any[("R_test", "n_test", "0", :R_test)],
+        component_values=Dict{Symbol,Any}(:R_test => 50.0),
+        port_map=Dict(:signal_port => (index=1,)),
+    )
+    problem = HBProblemSpec(
+        compiled,
+        [4.0e9],
+        [2π * 4.0e9],
+        (2π * 8.0e9,),
+        Any[(mode=(1,), port=1, current=0.0)],
+        (1,),
+        (1,),
+        HBSolverControls(
+            n_pump_harmonics=1,
+            n_modulation_harmonics=1,
+            returnS=true,
+            returnZ=false,
+            returnQE=false,
+            returnCM=false,
+        ),
+        Any[],
+        Dict{Symbol,Any}(),
+    )
+
+    failure = try
+        SuperconductingCircuitsCore._throw_hb_solver_failure(
+            LinearAlgebra.SingularException(1),
+            problem,
+        )
+        nothing
+    catch err
+        err
+    end
+
+    @test failure isa HBSolverNumericalError
+    @test failure.cause isa LinearAlgebra.SingularException
+    @test occursin("Exception type: SingularException", sprint(showerror, failure))
+    @test occursin("HBProblemSpec summary", sprint(showerror, failure))
 end
 
 @testset "HBProblemSpec normalized frequencies are the solver-facing values" begin

@@ -69,7 +69,6 @@ const _CIRCUIT_AUTHORING_CALLS = Set{Symbol}([
     :josephson_junction!,
     :couple_capacitive!,
     :couple_inductive!,
-    :couple_window!,
     :build_lc_ladder_line!,
     :transmission_line!,
     :quarter_wave_resonator!,

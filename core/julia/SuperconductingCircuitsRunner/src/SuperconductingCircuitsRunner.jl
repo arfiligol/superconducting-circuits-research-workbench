@@ -1,3 +1,11 @@
+# This module owns Runner-side task execution and staged trace publication. It
+# implements declared Core/Runner contracts; it does not define reusable
+# network-observable or port semantics, and it does not claim that PTC execution
+# is currently supported.
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/network-trace-views.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd
+
 module SuperconductingCircuitsRunner
 
 using Dates

@@ -1,3 +1,8 @@
+# This file owns plan-level harmonic-balance intent declarations and structural
+# validation. Reusable HB theory and periodic-steady-state evidence gates are
+# canonical in the Super Repo:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd
+
 Base.@kwdef struct PumpAxis
     id::Symbol
     frequency_parameter::Symbol

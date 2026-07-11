@@ -1,3 +1,8 @@
+# This file owns the runtime binding and normalization that turns compiled HB
+# intent into a solver-facing HBProblemSpec. Reusable HB theory and
+# periodic-steady-state evidence gates are canonical in the Super Repo:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd
+
 Base.@kwdef struct HBRunSpec
     frequency_sweep
     pump_frequencies::Dict{Symbol,Float64} = Dict{Symbol,Float64}()

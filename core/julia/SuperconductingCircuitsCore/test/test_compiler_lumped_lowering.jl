@@ -95,27 +95,7 @@ end
     @test !any(warning -> occursin("skeleton", lowercase(warning)), compiled.warnings)
 end
 
-@testset "lumped compiler fails clearly on non-lowerable relation paths" begin
-    plan = CircuitPlan("unsupported-window")
-    line_a = register_component!(plan, MinimalComponentLibrary.TestLineComponent("line_a", [:main], :main))
-    line_b = register_component!(plan, MinimalComponentLibrary.TestLineComponent("line_b", [:main], :main))
-    couple_window!(
-        plan;
-        id="window",
-        line_a=line_span(line_a; from_m=0.1mm, to_m=0.2mm),
-        line_b=line_span(line_b; from_m=0.1mm, to_m=0.2mm),
-        spec=base_window_spec(length_m=0.1mm),
-    )
-
-    try
-        compile_to_josephson(plan)
-        @test false
-    catch err
-        @test err isa FrameworkValidationError
-        @test occursin("not lowerable", sprint(showerror, err))
-        @test occursin("CoupledWindowRelation", sprint(showerror, err))
-    end
-
+@testset "lumped compiler fails clearly on non-lowerable inductive relation paths" begin
     flux_plan = CircuitPlan("unsupported-mutual")
     line = register_component!(flux_plan, MinimalComponentLibrary.TestLineComponent("line", [:main], :main))
     loop_owner = register_component!(flux_plan, MinimalComponentLibrary.TestGroundedComponent("loop_owner"))

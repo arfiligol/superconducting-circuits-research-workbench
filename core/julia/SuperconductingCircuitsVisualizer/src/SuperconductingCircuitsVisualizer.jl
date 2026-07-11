@@ -1,3 +1,7 @@
+# This module owns figure construction and display transforms for supplied
+# traces. Reusable S/Y/Z observable meaning remains canonical in the Super Repo:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/network-trace-views.qmd
+
 module SuperconductingCircuitsVisualizer
 
 using PlotlyJS

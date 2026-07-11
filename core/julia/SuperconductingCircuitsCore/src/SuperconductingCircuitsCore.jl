@@ -3,6 +3,7 @@ module SuperconductingCircuitsCore
 using DataFrames
 using JSON3
 using JosephsonCircuits
+using LinearAlgebra
 using SHA
 using Statistics
 
@@ -27,7 +28,6 @@ include("sweeps/sweep_result.jl")
 include("inspection/inspection_helpers.jl")
 include("diagnostics/diagnostics.jl")
 include("components/common.jl")
-include("components/coupled_window.jl")
 include("components/transmission_lines.jl")
 include("components/reusable_components.jl")
 include("examples/pluto_examples.jl")
@@ -36,6 +36,7 @@ include("simulation/hbsolve_runner.jl")
 include("io/notebook_helpers.jl")
 
 export FrameworkValidationError
+export HBSolverNumericalError
 
 export CircuitPlan
 export AbstractCircuitComponent
@@ -138,7 +139,6 @@ export SeriesResistor
 export JosephsonJunction
 export InductiveCoupling
 export MutualInductiveCoupling
-export CoupledWindowRelation
 export connect!
 export couple_capacitive!
 export shunt_capacitor!
@@ -147,7 +147,6 @@ export series_inductor!
 export series_resistor!
 export josephson_junction!
 export couple_inductive!
-export couple_window!
 
 export validate_authoring
 export validate_compile_ready
@@ -218,7 +217,6 @@ export debug_bundle
 
 export RLGCSpec
 export AbstractTransmissionLineModel
-export CoupledWindowSpec
 export TransmissionLineLadder
 export TransmissionLineSectionOverride
 export MTLCoupledRLGCSpec
@@ -232,7 +230,6 @@ export ReadoutPurcellQWRMTL
 
 export phase_velocity
 export section_values
-export coupled_window_section_values
 export mutual_capacitance_per_m_f
 export mutual_inductance_per_m_h
 export coupled_line_section_override

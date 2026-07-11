@@ -91,20 +91,6 @@ function diagnostic_plan(; id="diagnostics", tap_m=0.1e-3, numeric_domain=(1.0e-
     return plan
 end
 
-function diagnostic_span_plan(; id="span-diagnostics", span_from_m=0.1e-3, span_to_m=0.2e-3)
-    plan = CircuitPlan(id)
-    line_a_component = register_component!(plan, MinimalComponentLibrary.TestLineComponent("qwr_a", [:main], :main))
-    line_b_component = register_component!(plan, MinimalComponentLibrary.TestLineComponent("qwr_b", [:main], :main))
-    couple_window!(
-        plan;
-        id="diagnostic_window",
-        line_a=line_span(line_a_component; from_m=span_from_m, to_m=span_to_m),
-        line_b=line_span(line_b_component; from_m=span_from_m, to_m=span_to_m),
-        spec=base_window_spec(length_m=span_to_m - span_from_m),
-    )
-    return plan
-end
-
 function diagnostic_bad_plan()
     plan = CircuitPlan("bad-diagnostics")
     connect!(plan, pin("missing", :signal), ground())
@@ -252,25 +238,6 @@ end
         )
         @test topology_key(tap_a).digest == before_a
         @test topology_key(tap_b).digest == before_b
-    end
-end
-
-@testset "diff_topology_keys reports structured line span changes" begin
-    diff_topology_keys_fn = require_diagnostics_api(:diff_topology_keys)
-    if !isnothing(diff_topology_keys_fn)
-        span_a = diagnostic_span_plan(; id="span-a", span_from_m=0.1e-3, span_to_m=0.2e-3)
-        span_b = diagnostic_span_plan(; id="span-b", span_from_m=0.1e-3, span_to_m=0.3e-3)
-        before_a = topology_key(span_a).digest
-        before_b = topology_key(span_b).digest
-
-        span_diff = diff_topology_keys_fn(span_a, span_b)
-        @test diagnostic_get(span_diff, :same_digest) == false
-        assert_structured_topology_entries(
-            span_diff,
-            (:changed_line_spans, :added_line_spans, :removed_line_spans),
-        )
-        @test topology_key(span_a).digest == before_a
-        @test topology_key(span_b).digest == before_b
     end
 end
 

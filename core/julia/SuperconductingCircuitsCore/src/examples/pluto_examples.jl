@@ -1,3 +1,11 @@
+# These public example builders expose thin notebook-facing Core workflows.
+# Ideal parallel-LC physics and the raw/PTC/S observable distinction:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/ideal-parallel-lc-resonator.qmd
+# Their HB intent, mode, and evidence semantics are canonical at:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd
+# Coupled-line examples implement the canonical matrix semantics documented at:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd
+
 const DEFAULT_CPW_L_PER_M_H = 404.313e-9
 const DEFAULT_CPW_C_PER_M_F = 179.86e-12
 const DEFAULT_COUPLED_MTL_L_MATRIX_PER_M_H = [
@@ -184,6 +192,14 @@ function _schemdraw_schematic!(
     end
 end
 
+"""
+    build_parallel_lc_resonator_example(; kwargs...)
+
+Build the executable one-port parallel-LC teaching example, including its
+`CircuitPlan`, compiled JosephsonCircuits representation, and pump-off HB
+problem. The external port compiler emits an explicit resistance shunt, so raw
+Z/Y traces belong to the compiled port network rather than the isolated tank.
+"""
 function build_parallel_lc_resonator_example(;
     id="parallel-lc-resonator-example",
     capacitance=58.2e-15,

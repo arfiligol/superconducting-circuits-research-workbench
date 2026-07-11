@@ -1,7 +1,47 @@
+# This file owns JosephsonCircuits HB invocation, failure normalization, and
+# the handoff to result extraction. Reusable HB theory and periodic-steady-state
+# evidence gates are canonical in the Super Repo, while candidate outcome and
+# failure classification follow the auditable optimization contract:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/auditable-scientific-optimization.qmd
+
 struct HBSolveResult
     frequencies_hz::Vector{Float64}
     raw_solution::Any
     traces::Dict{Symbol,Any}
+end
+
+"""
+    HBSolverNumericalError
+
+Report a numerical linear-algebra failure raised inside the HB solver. Callers
+may treat this typed error as candidate-specific; malformed plans, unsupported
+settings, and unknown solver exceptions remain `FrameworkValidationError` and
+must fail fast.
+"""
+struct HBSolverNumericalError <: Exception
+    message::String
+    cause::Exception
+end
+
+Base.showerror(io::IO, err::HBSolverNumericalError) = print(io, err.message)
+
+function _is_hb_solver_numerical_error(err)
+    return err isa LinearAlgebra.SingularException ||
+           err isa LinearAlgebra.PosDefException ||
+           err isa LinearAlgebra.LAPACKException ||
+           err isa LinearAlgebra.RankDeficientException ||
+           err isa LinearAlgebra.ZeroPivotException
+end
+
+function _throw_hb_solver_failure(err, problem::HBProblemSpec)
+    message =
+        "JosephsonCircuits.hbsolve failed for HBProblemSpec.\n" *
+        "Exception type: $(typeof(err))\n" *
+        "Exception message: $(sprint(showerror, err))\n" *
+        "HBProblemSpec summary:\n  $(_hb_problem_failure_summary(problem))"
+    _is_hb_solver_numerical_error(err) && throw(HBSolverNumericalError(message, err))
+    _validation_error(message)
 end
 
 function _frequency_vector_hz(frequency_range_hz)
@@ -73,12 +113,7 @@ function run_hb_problem(problem::HBProblemSpec)
         )
     catch err
         err isa FrameworkValidationError && rethrow()
-        _validation_error(
-            "JosephsonCircuits.hbsolve failed for HBProblemSpec.\n" *
-            "Exception type: $(typeof(err))\n" *
-            "Exception message: $(sprint(showerror, err))\n" *
-            "HBProblemSpec summary:\n  $(_hb_problem_failure_summary(problem))",
-        )
+        _throw_hb_solver_failure(err, problem)
     end
 
     return HBSolveResult(

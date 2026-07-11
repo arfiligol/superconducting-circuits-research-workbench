@@ -130,6 +130,19 @@ mutable struct SchematicLayoutIntent
     render_hints::Dict{Symbol,Any}
 end
 
+"""
+    ExternalPort
+
+Declare one compiled solver port on a circuit endpoint. The current
+JosephsonCircuits compiler lowering emits both a `P<index>` port row and an
+explicit `R_port_<index>` shunt from the resolved port node to ground using
+`resistance`; this declaration does not itself decide whether that shunt may be
+removed from a later design-facing observable.
+
+Canonical port-reference and compensation semantics:
+- https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd
+- https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd
+"""
 Base.@kwdef struct ExternalPort
     id::Symbol
     index::Int
@@ -165,6 +178,18 @@ struct SchematicExportSpec
     render_hints::Dict{Symbol,Any}
 end
 
+"""
+    external_port!(plan; id, index, endpoint, resistance=50.0, role=:mixed, source_location=nothing)
+
+Record an `ExternalPort` and its engineering-graph view on `plan`. Compilation
+currently lowers the declaration to both the solver port row and the explicit
+`R_port_<index>` shunt described by [`ExternalPort`](@ref); this authoring call
+does not apply port-termination compensation.
+
+Canonical port-reference and compensation semantics:
+- https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd
+- https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd
+"""
 function external_port!(
     plan;
     id,

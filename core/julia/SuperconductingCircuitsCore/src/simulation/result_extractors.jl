@@ -1,3 +1,10 @@
+# This file owns the mapping from JosephsonCircuits HB arrays to named
+# mode-and-port traces. Reusable HB output meaning and general network-trace
+# semantics are canonical in the Super Repo:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/network-trace-views.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd
+
 function _is_zero_mode(mode)
     return all(value -> value == 0, mode)
 end

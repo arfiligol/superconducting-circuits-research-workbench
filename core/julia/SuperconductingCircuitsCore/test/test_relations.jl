@@ -76,13 +76,6 @@
             ),
         ],
     )
-    couple_window!(
-        plan;
-        id="window",
-        line_a=line_span(qwr; from_m=0.1mm, to_m=0.2mm),
-        line_b=line_span(readout; from_m=0.1mm, to_m=0.2mm),
-        spec=(kind=:test_window,),
-    )
     couple_inductive!(
         plan;
         id="flux",
@@ -91,7 +84,7 @@
         mutual_inductance=3.0e-12,
     )
 
-    @test length(plan.relations) == 9
+    @test length(plan.relations) == 8
     @test haskey(plan.parameters, :coupling_capacitance)
     @test haskey(plan.parameters, :readout_shunt_inductance)
     @test haskey(plan.parameters, :readout_series_resistance)
@@ -153,14 +146,6 @@
                 relation.relation_type == :josephson_junction,
         graph_relations,
     )
-    @test any(
-        relation ->
-            relation.id == :window &&
-                relation.relation_type == :couple &&
-                relation.through == :coupled_window,
-        graph_relations,
-    )
-
     @test_throws FrameworkValidationError connect!(plan, line_span(qwr; from_m=0.1mm, to_m=0.2mm), ground())
     @test_throws FrameworkValidationError couple_capacitive!(
         plan;

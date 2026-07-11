@@ -21,7 +21,8 @@ end
     @test mutual_capacitance_per_m_f(model) ≈ 1.0e-12
     @test mutual_inductance_per_m_h(model) ≈ 0.5e-7
     @test coupled_line_section_override(model, 1).values.l_per_m_h ≈ 4.3e-7
-    @test coupled_line_section_override(model, 2).values.c_per_m_f ≈ 1.65e-10
+    @test coupled_line_section_override(model, 1).values.c_per_m_f ≈ 1.59e-10
+    @test coupled_line_section_override(model, 2).values.c_per_m_f ≈ 1.64e-10
 
     @test_throws FrameworkValidationError MTLCoupledRLGCSpec(
         start1_m=0.0,
@@ -39,6 +40,30 @@ end
         l_matrix_per_m_h=[1.0 0.1 0.0; 0.1 1.0 0.0],
         c_matrix_per_m_f=[1.0 -0.1; -0.1 1.0],
     )
+    @test_throws FrameworkValidationError MTLCoupledRLGCSpec(
+        start1_m=0.0,
+        start2_m=0.0,
+        length_m=Inf,
+        section_length_m=0.5mm,
+        l_matrix_per_m_h=[1.0 0.1; 0.1 1.0],
+        c_matrix_per_m_f=[1.0 -0.1; -0.1 1.0],
+    )
+    @test_throws FrameworkValidationError MTLCoupledRLGCSpec(
+        start1_m=0.0,
+        start2_m=0.0,
+        length_m=1.0mm,
+        section_length_m=0.5mm,
+        l_matrix_per_m_h=[1.0 0.1; 0.1 1.0],
+        c_matrix_per_m_f=[1.0 -2.0; -2.0 5.0],
+    )
+    @test_throws FrameworkValidationError MTLCoupledRLGCSpec(
+        start1_m=0.0,
+        start2_m=0.0,
+        length_m=1.0mm,
+        section_length_m=0.5mm,
+        l_matrix_per_m_h=[Inf 0.1; 0.1 1.0],
+        c_matrix_per_m_f=[1.0 -0.1; -0.1 1.0],
+    )
 
     even_odd = MTLCoupledRLGCSpec(
         start1_m=0.0,
@@ -50,8 +75,27 @@ end
         phase_velocity_even_m_per_s=1.2e8,
         phase_velocity_odd_m_per_s=1.0e8,
     )
-    @test even_odd.l_matrix_per_m_h[1, 1] > 0
-    @test even_odd.c_matrix_per_m_f[1, 2] <= 0
+    l_even = 60.0 / 1.2e8
+    l_odd = 40.0 / 1.0e8
+    c_even = 1 / (60.0 * 1.2e8)
+    c_odd = 1 / (40.0 * 1.0e8)
+    @test even_odd.l_matrix_per_m_h ≈ [
+        (l_even + l_odd) / 2 (l_even - l_odd) / 2
+        (l_even - l_odd) / 2 (l_even + l_odd) / 2
+    ]
+    @test even_odd.c_matrix_per_m_f ≈ [
+        (c_even + c_odd) / 2 (c_even - c_odd) / 2
+        (c_even - c_odd) / 2 (c_even + c_odd) / 2
+    ]
+
+    reconstructed_l_even = even_odd.l_matrix_per_m_h[1, 1] + even_odd.l_matrix_per_m_h[1, 2]
+    reconstructed_l_odd = even_odd.l_matrix_per_m_h[1, 1] - even_odd.l_matrix_per_m_h[1, 2]
+    reconstructed_c_even = even_odd.c_matrix_per_m_f[1, 1] + even_odd.c_matrix_per_m_f[1, 2]
+    reconstructed_c_odd = even_odd.c_matrix_per_m_f[1, 1] - even_odd.c_matrix_per_m_f[1, 2]
+    @test sqrt(reconstructed_l_even / reconstructed_c_even) ≈ 60.0
+    @test sqrt(reconstructed_l_odd / reconstructed_c_odd) ≈ 40.0
+    @test inv(sqrt(reconstructed_l_even * reconstructed_c_even)) ≈ 1.2e8
+    @test inv(sqrt(reconstructed_l_odd * reconstructed_c_odd)) ≈ 1.0e8
 end
 
 @testset "MTL coupled window uses coupled self terms and generates primitive C12 and K relations" begin
@@ -114,21 +158,21 @@ end
     @test line1.series_inductors[2].inductance ≈ 4.3e-7 * 0.5mm
     @test line2.series_inductors[3].inductance ≈ 4.4e-7 * 0.5mm
     base_capacitance = 1.7e-10 * 0.5mm
-    line1_coupled_capacitance = 1.6e-10 * 0.5mm
-    line2_coupled_capacitance = 1.65e-10 * 0.5mm
+    line1_ground_capacitance = 1.59e-10 * 0.5mm
+    line2_ground_capacitance = 1.64e-10 * 0.5mm
     expected_line1_node_capacitances = [
         base_capacitance / 2,
-        (base_capacitance + line1_coupled_capacitance) / 2,
-        line1_coupled_capacitance,
-        (line1_coupled_capacitance + base_capacitance) / 2,
+        (base_capacitance + line1_ground_capacitance) / 2,
+        line1_ground_capacitance,
+        (line1_ground_capacitance + base_capacitance) / 2,
         base_capacitance / 2,
     ]
     expected_line2_node_capacitances = [
         base_capacitance / 2,
         base_capacitance,
-        (base_capacitance + line2_coupled_capacitance) / 2,
-        line2_coupled_capacitance,
-        line2_coupled_capacitance / 2,
+        (base_capacitance + line2_ground_capacitance) / 2,
+        line2_ground_capacitance,
+        line2_ground_capacitance / 2,
     ]
     graph_line1 = only(filter(relation -> relation.id == :line1_ladder, engineering_graph(plan).relations))
     graph_line2 = only(filter(relation -> relation.id == :line2_ladder, engineering_graph(plan).relations))
@@ -157,7 +201,21 @@ end
     @test graph_window.parameters[:inductive_orientation_sign] == 1
     @test graph_window.parameters[:l1_per_m_h] ≈ 4.3e-7
     @test graph_window.parameters[:c12_per_m_f] ≈ 1.0e-12
+    @test graph_window.parameters[:c1g_per_m_f] ≈ 1.59e-10
+    @test graph_window.parameters[:c2g_per_m_f] ≈ 1.64e-10
     @test graph_window.parameters[:lm_per_m_h] ≈ 0.5e-7
+
+    interior_node1 = line1.nodes[3]
+    interior_node2 = line2.nodes[4]
+    ground_c1 = sum(Float64(capacitor.capacitance) for capacitor in line1.shunt_capacitors if capacitor.at == interior_node1)
+    ground_c2 = sum(Float64(capacitor.capacitance) for capacitor in line2.shunt_capacitors if capacitor.at == interior_node2)
+    mutual_c = sum(
+        Float64(coupling.capacitance)
+        for coupling in window.capacitive_couplings
+        if coupling.from == interior_node1 && coupling.to == interior_node2
+    )
+    reconstructed_nodal_c_per_m_f = [ground_c1 + mutual_c -mutual_c; -mutual_c ground_c2 + mutual_c] / 0.5mm
+    @test reconstructed_nodal_c_per_m_f ≈ model.c_matrix_per_m_f
 
     external_port!(
         plan;
@@ -363,12 +421,13 @@ end
     @test all(relation -> relation.mutual_inductance < 0, opposite.window.inductive_couplings)
 
     same_line1_graph = only(filter(relation -> relation.id == :line1_ladder, engineering_graph(same.plan).relations))
+    line1_ground_capacitance_per_m_f = model.c_matrix_per_m_f[1, 1] + model.c_matrix_per_m_f[1, 2]
     expected_pi_shunts = [
         0.0,
         1.7e-10 * 1.0mm,
-        (1.7e-10 * 1.0mm + model.c_matrix_per_m_f[1, 1] * 1.0mm) / 2,
-        model.c_matrix_per_m_f[1, 1] * 1.0mm,
-        (model.c_matrix_per_m_f[1, 1] * 1.0mm + 1.7e-10 * 1.0mm) / 2,
+        (1.7e-10 * 1.0mm + line1_ground_capacitance_per_m_f * 1.0mm) / 2,
+        line1_ground_capacitance_per_m_f * 1.0mm,
+        (line1_ground_capacitance_per_m_f * 1.0mm + 1.7e-10 * 1.0mm) / 2,
         1.7e-10 * 1.0mm / 2,
     ]
     @test same_line1_graph.parameters[:section_model] == :pi
@@ -440,6 +499,115 @@ end
         model=valid_model,
         coupling_orientation=:diagonal,
     )
+
+    same_ladder_error = try
+        couple_transmission_window!(
+            valid_plan;
+            id="same_ladder_window",
+            line1=valid_line1,
+            line2=valid_line1,
+            model=valid_model,
+        )
+        nothing
+    catch error
+        error
+    end
+    @test same_ladder_error isa FrameworkValidationError
+    @test occursin("two distinct", sprint(showerror, same_ladder_error))
+
+    other_plan = CircuitPlan("other-mtl-window-plan")
+    other_line = build_lc_ladder_line!(
+        other_plan;
+        id="other_line",
+        head=external_node("other_a"),
+        tail=external_node("other_b"),
+        spec=spec,
+        breakpoints_m=[0.0, 0.5mm],
+        section_overrides=[coupled_line_section_override(valid_model, 2)],
+    )
+    cross_plan_error = try
+        couple_transmission_window!(
+            valid_plan;
+            id="cross_plan_window",
+            line1=valid_line1,
+            line2=other_line,
+            model=valid_model,
+        )
+        nothing
+    catch error
+        error
+    end
+    @test cross_plan_error isa FrameworkValidationError
+    @test occursin("supplied CircuitPlan", sprint(showerror, cross_plan_error))
+
+    lossy_plan = CircuitPlan("lossy-mtl-window")
+    lossy_override = TransmissionLineSectionOverride(
+        start_m=0.0,
+        length_m=0.5mm,
+        l_per_m_h=valid_model.l_matrix_per_m_h[1, 1],
+        c_per_m_f=valid_model.c_matrix_per_m_f[1, 1] + valid_model.c_matrix_per_m_f[1, 2],
+        r_per_m_ohm=1.0,
+    )
+    lossy_line1 = build_lc_ladder_line!(
+        lossy_plan;
+        id="lossy_line1",
+        head=external_node("lossy_a"),
+        tail=external_node("lossy_b"),
+        spec=spec,
+        breakpoints_m=[0.0, 0.5mm],
+        section_overrides=[lossy_override],
+    )
+    lossy_line2 = build_lc_ladder_line!(
+        lossy_plan;
+        id="lossy_line2",
+        head=external_node("lossy_c"),
+        tail=external_node("lossy_d"),
+        spec=spec,
+        breakpoints_m=[0.0, 0.5mm],
+        section_overrides=[coupled_line_section_override(valid_model, 2)],
+    )
+    @test_throws FrameworkValidationError couple_transmission_window!(
+        lossy_plan;
+        id="lossy_window",
+        line1=lossy_line1,
+        line2=lossy_line2,
+        model=valid_model,
+    )
+
+    lossy_base_spec = RLGCSpec(
+        length_m=2.0mm,
+        section_length_m=0.5mm,
+        l_per_m_h=4.2e-7,
+        c_per_m_f=1.7e-10,
+        r_per_m_ohm=1.0,
+        g_per_m_s=2.0,
+    )
+    lossy_base_plan = CircuitPlan("lossy-base-mtl-window")
+    lossy_base_line1 = build_lc_ladder_line!(
+        lossy_base_plan;
+        id="lossy_base_line1",
+        head=external_node("lossy_base_a"),
+        tail=external_node("lossy_base_b"),
+        spec=lossy_base_spec,
+        breakpoints_m=[0.0, 0.5mm],
+        section_overrides=[coupled_line_section_override(valid_model, 1)],
+    )
+    lossy_base_line2 = build_lc_ladder_line!(
+        lossy_base_plan;
+        id="lossy_base_line2",
+        head=external_node("lossy_base_c"),
+        tail=external_node("lossy_base_d"),
+        spec=lossy_base_spec,
+        breakpoints_m=[0.0, 0.5mm],
+        section_overrides=[coupled_line_section_override(valid_model, 2)],
+    )
+    @test_throws FrameworkValidationError couple_transmission_window!(
+        lossy_base_plan;
+        id="lossy_base_window",
+        line1=lossy_base_line1,
+        line2=lossy_base_line2,
+        model=valid_model,
+    )
 end
 
 @testset "MTL coupled window uses semantic breakpoints and actual dx" begin
@@ -492,4 +660,189 @@ end
     @test length(window.capacitive_couplings) == 4
     @test all(relation -> relation.capacitance ≈ 1.0e-12 * 0.75mm / 2, window.capacitive_couplings)
     @test all(relation -> relation.mutual_inductance ≈ 0.5e-7 * 0.75mm, window.inductive_couplings)
+end
+
+@testset "MTL coupled window preflights every paired section before mutation" begin
+    line_spec = RLGCSpec(
+        length_m=1.0mm,
+        section_length_m=0.4mm,
+        l_per_m_h=4.2e-7,
+        c_per_m_f=1.7e-10,
+    )
+    model = _test_mtl_model(
+        start1_m=0.0,
+        start2_m=0.0,
+        length_m=1.0mm,
+        section_length_m=0.4mm,
+    )
+    plan = CircuitPlan("mismatched-section-preflight")
+    line1 = build_lc_ladder_line!(
+        plan;
+        id="line1",
+        head=external_node("line1_head"),
+        tail=external_node("line1_tail"),
+        spec=line_spec,
+        breakpoints_m=[0.3mm, 0.6mm],
+        section_overrides=[coupled_line_section_override(model, 1)],
+    )
+    line2 = build_lc_ladder_line!(
+        plan;
+        id="line2",
+        head=external_node("line2_head"),
+        tail=external_node("line2_tail"),
+        spec=line_spec,
+        breakpoints_m=[0.3mm, 0.7mm],
+        section_overrides=[coupled_line_section_override(model, 2)],
+    )
+    @test line1.section_lengths_m ≈ [0.3mm, 0.3mm, 0.4mm]
+    @test line2.section_lengths_m ≈ [0.3mm, 0.4mm, 0.3mm]
+
+    relation_count = length(plan.relations)
+    graph_relation_count = length(engineering_graph(plan).relations)
+    @test_throws FrameworkValidationError couple_transmission_window!(
+        plan;
+        id="window",
+        line1=line1,
+        line2=line2,
+        model=model,
+    )
+    @test length(plan.relations) == relation_count
+    @test length(engineering_graph(plan).relations) == graph_relation_count
+    @test !haskey(plan.metadata, :coupled_transmission_windows)
+end
+
+@testset "MTL coupled window preflights later derived relation IDs before mutation" begin
+    line_spec = RLGCSpec(
+        length_m=1.0mm,
+        section_length_m=0.5mm,
+        l_per_m_h=4.2e-7,
+        c_per_m_f=1.7e-10,
+    )
+    model = _test_mtl_model(start1_m=0.0, start2_m=0.0, length_m=1.0mm, section_length_m=0.5mm)
+    plan = CircuitPlan("derived-id-preflight")
+    line1 = build_lc_ladder_line!(
+        plan;
+        id="line1",
+        head=external_node("line1_head"),
+        tail=external_node("line1_tail"),
+        spec=line_spec,
+        section_overrides=[coupled_line_section_override(model, 1)],
+    )
+    line2 = build_lc_ladder_line!(
+        plan;
+        id="line2",
+        head=external_node("line2_head"),
+        tail=external_node("line2_tail"),
+        spec=line_spec,
+        section_overrides=[coupled_line_section_override(model, 2)],
+    )
+
+    couple_capacitive!(
+        plan;
+        id="semantic_window_m12_2",
+        from=line1.head,
+        to=line2.head,
+        capacitance=1.0e-15,
+    )
+    semantic_relation_count = length(plan.relations)
+    semantic_graph_relation_count = length(engineering_graph(plan).relations)
+    @test_throws FrameworkValidationError couple_transmission_window!(
+        plan;
+        id="semantic_window",
+        line1=line1,
+        line2=line2,
+        model=model,
+    )
+    @test length(plan.relations) == semantic_relation_count
+    @test length(engineering_graph(plan).relations) == semantic_graph_relation_count
+
+    record_engineering_relation!(
+        plan;
+        id="graph_window_m12_2",
+        relation_type=:test_collision,
+        from=line1.head,
+        to=line2.head,
+    )
+    graph_only_relation_count = length(plan.relations)
+    graph_only_graph_relation_count = length(engineering_graph(plan).relations)
+    @test_throws FrameworkValidationError couple_transmission_window!(
+        plan;
+        id="graph_window",
+        line1=line1,
+        line2=line2,
+        model=model,
+    )
+    @test length(plan.relations) == graph_only_relation_count
+    @test length(engineering_graph(plan).relations) == graph_only_graph_relation_count
+
+    record_engineering_relation!(
+        plan;
+        id="base_window",
+        relation_type=:test_collision,
+        from=line1.head,
+        to=line2.head,
+    )
+    base_relation_count = length(plan.relations)
+    base_graph_relation_count = length(engineering_graph(plan).relations)
+    @test_throws FrameworkValidationError couple_transmission_window!(
+        plan;
+        id="base_window",
+        line1=line1,
+        line2=line2,
+        model=model,
+    )
+    @test length(plan.relations) == base_relation_count
+    @test length(engineering_graph(plan).relations) == base_graph_relation_count
+    @test !haskey(plan.metadata, :coupled_transmission_windows)
+end
+
+@testset "MTL zero-C12 window preflights only relations it will emit" begin
+    line_spec = RLGCSpec(
+        length_m=0.5mm,
+        section_length_m=0.5mm,
+        l_per_m_h=4.2e-7,
+        c_per_m_f=1.7e-10,
+    )
+    model = MTLCoupledRLGCSpec(
+        start1_m=0.0,
+        start2_m=0.0,
+        length_m=0.5mm,
+        section_length_m=0.5mm,
+        l_matrix_per_m_h=[4.3e-7 0.5e-7; 0.5e-7 4.4e-7],
+        c_matrix_per_m_f=[1.6e-10 0.0; 0.0 1.65e-10],
+    )
+    plan = CircuitPlan("zero-c12-id-preflight")
+    line1 = build_lc_ladder_line!(
+        plan;
+        id="line1",
+        head=external_node("line1_head"),
+        tail=external_node("line1_tail"),
+        spec=line_spec,
+        section_overrides=[coupled_line_section_override(model, 1)],
+    )
+    line2 = build_lc_ladder_line!(
+        plan;
+        id="line2",
+        head=external_node("line2_head"),
+        tail=external_node("line2_tail"),
+        spec=line_spec,
+        section_overrides=[coupled_line_section_override(model, 2)],
+    )
+    couple_capacitive!(
+        plan;
+        id="zero_window_c12_1_start",
+        from=line1.head,
+        to=line2.head,
+        capacitance=1.0e-15,
+    )
+
+    window = couple_transmission_window!(
+        plan;
+        id="zero_window",
+        line1=line1,
+        line2=line2,
+        model=model,
+    )
+    @test isempty(window.capacitive_couplings)
+    @test length(window.inductive_couplings) == 1
 end

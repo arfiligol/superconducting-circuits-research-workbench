@@ -1,3 +1,11 @@
+# This file composes executable reusable components from Core primitives; it
+# owns plan topology and inspectable component records, not reusable physics.
+# Canonical ideal parallel-LC physics and observable layers:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/ideal-parallel-lc-resonator.qmd
+# MTL wrappers preserve the LC-only coupled-window contract owned by
+# transmission_lines.jl. Canonical matrix physics and artifact eligibility:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd
+
 struct ParallelLCResonator
     id::String
     node::AbstractNodeEndpoint
@@ -5,6 +13,10 @@ struct ParallelLCResonator
     inductor::ShuntInductor
 end
 
+# ReflectiveJPA contains one nonlinear JosephsonJunction. It is not a dc SQUID
+# and has no external-flux, asymmetry, or loop-inductance model.
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-cosine-and-quantum-anharmonicity.qmd
 struct ReflectiveJPA
     id::String
     port_node::AbstractNodeEndpoint
@@ -48,6 +60,14 @@ function _component_node(id, name)
     return external_node("$(id)_$(name)")
 end
 
+"""
+    add_parallel_lc_resonator!(plan; id, node, capacitance, inductance)
+
+Insert an ideal capacitor and ideal inductor in parallel from `node` to ground
+and record one inspectable resonator component. This function owns only that
+Plan-level topology; ports, loading, solver intent, and observable conversion
+belong to the enclosing circuit and simulation workflow.
+"""
 function add_parallel_lc_resonator!(
     plan::CircuitPlan;
     id,

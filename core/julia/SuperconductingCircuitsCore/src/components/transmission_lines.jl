@@ -1,3 +1,8 @@
+# This file owns executable scalar RLGC ladders and the current two-line,
+# lossless LC matrix lowering. Reusable terminal-basis, modal, Maxwell, and
+# artifact-eligibility semantics are canonical in the Super Repo:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd
+
 const RLGCPerMeterValues = NamedTuple{
     (:l_per_m_h, :c_per_m_f, :r_per_m_ohm, :g_per_m_s),
     Tuple{Float64,Float64,Float64,Float64},
@@ -678,6 +683,7 @@ end
 
 function _validate_symmetric_positive_matrix(matrix::Matrix{Float64}, name::AbstractString)
     size(matrix) == (2, 2) || _validation_error("$(name) must be a 2x2 matrix.")
+    all(isfinite, matrix) || _validation_error("$(name) entries must be finite.")
     isapprox(matrix[1, 2], matrix[2, 1]; atol=1e-18, rtol=1e-9) ||
         _validation_error("$(name) must be symmetric.")
     matrix[1, 1] > 0 || _validation_error("$(name)[1,1] must be positive.")
@@ -687,7 +693,16 @@ function _validate_symmetric_positive_matrix(matrix::Matrix{Float64}, name::Abst
     return nothing
 end
 
+function _maxwell_ground_capacitance_per_m_f(model::MTLCoupledRLGCSpec, line_index::Int)
+    other_index = 3 - line_index
+    # The explicit cross capacitor adds -Cij to the nodal diagonal, so the
+    # ladder's ground shunt must be Cii + Cij to reconstruct Maxwell Cii.
+    return model.c_matrix_per_m_f[line_index, line_index] + model.c_matrix_per_m_f[line_index, other_index]
+end
+
 function _validate_mtl_coupled_rlgc_spec(spec::MTLCoupledRLGCSpec)
+    all(isfinite, (spec.start1_m, spec.start2_m, spec.length_m, spec.section_length_m)) ||
+        _validation_error("MTLCoupledRLGCSpec geometry values must be finite.")
     spec.start1_m >= 0 || _validation_error("start1_m must be non-negative.")
     spec.start2_m >= 0 || _validation_error("start2_m must be non-negative.")
     spec.length_m > 0 || _validation_error("length_m must be positive.")
@@ -696,6 +711,10 @@ function _validate_mtl_coupled_rlgc_spec(spec::MTLCoupledRLGCSpec)
     _validate_symmetric_positive_matrix(spec.c_matrix_per_m_f, "c_matrix_per_m_f")
     spec.c_matrix_per_m_f[1, 2] <= 0 ||
         _validation_error("c_matrix_per_m_f off-diagonal entries must be non-positive; Core converts -C[1,2] to physical C12.")
+    for line_index in 1:2
+        _maxwell_ground_capacitance_per_m_f(spec, line_index) > 0 ||
+            _validation_error("c_matrix_per_m_f[$(line_index),$(line_index)] + its off-diagonal entry must be positive for the physical ground shunt.")
+    end
     return nothing
 end
 
@@ -725,14 +744,16 @@ function coupled_line_section_override(model::MTLCoupledRLGCSpec, line_index::In
         start_m=start_m,
         length_m=model.length_m,
         l_per_m_h=model.l_matrix_per_m_h[index, index],
-        c_per_m_f=model.c_matrix_per_m_f[index, index],
+        c_per_m_f=_maxwell_ground_capacitance_per_m_f(model, index),
         tag=Symbol(:mtl_coupled_line_, index),
     )
 end
 
 function _section_values_match_model(values::RLGCPerMeterValues, model::MTLCoupledRLGCSpec, line_index::Int)
     return isapprox(values.l_per_m_h, model.l_matrix_per_m_h[line_index, line_index]; atol=1e-18, rtol=1e-9) &&
-        isapprox(values.c_per_m_f, model.c_matrix_per_m_f[line_index, line_index]; atol=1e-18, rtol=1e-9)
+        isapprox(values.c_per_m_f, _maxwell_ground_capacitance_per_m_f(model, line_index); atol=1e-18, rtol=1e-9) &&
+        values.r_per_m_ohm == 0.0 &&
+        values.g_per_m_s == 0.0
 end
 
 function _validate_window_line_model(
@@ -742,6 +763,10 @@ function _validate_window_line_model(
     range1::UnitRange{Int},
     range2::UnitRange{Int},
 )
+    for (name, line) in (("line1", line1), ("line2", line2))
+        line.spec.r_per_m_ohm == 0.0 && line.spec.g_per_m_s == 0.0 ||
+            _validation_error("$(name) base RLGCSpec must have R=G=0 for the current LC-only MTLCoupledRLGCSpec path.")
+    end
     for (section1, section2) in zip(range1, range2)
         _section_values_match_model(line1.section_rlgc_per_m[section1], model, 1) ||
             _validation_error("line1 coupled sections must be built with MTLCoupledRLGCSpec line-1 self RLGC values.")
@@ -766,6 +791,23 @@ end
 
 function _coupled_window_inductive_orientation_sign(orientation::Symbol)
     return orientation == :opposite_direction ? -1 : 1
+end
+
+function _validate_coupled_window_section_lengths(
+    line1::TransmissionLineLadder,
+    line2::TransmissionLineLadder,
+    section_pairs::Vector{Tuple{Int,Int}},
+    model::MTLCoupledRLGCSpec,
+)
+    for (section1, section2) in section_pairs
+        dx1 = line1.section_lengths_m[section1]
+        dx2 = line2.section_lengths_m[section2]
+        isapprox(dx1, dx2; atol=1e-12, rtol=1e-9) ||
+            _validation_error("Coupled section lengths must match between transmission lines.")
+        dx1 <= model.section_length_m * (1 + 1e-9) ||
+            _validation_error("Coupled section length exceeds MTLCoupledRLGCSpec section_length_m reference.")
+    end
+    return nothing
 end
 
 function _coupled_window_boundary_node_pair(
@@ -824,6 +866,60 @@ function _capacitive_boundary_record_metadata(record::NamedTuple)
     )
 end
 
+function _validate_coupled_window_ladder_ownership(
+    plan::CircuitPlan,
+    ladder::TransmissionLineLadder,
+    argument_name::AbstractString,
+)
+    ladders = get(plan.metadata, :transmission_line_ladders, nothing)
+    ladders isa Dict{Symbol,TransmissionLineLadder} ||
+        _validation_error("couple_transmission_window! $(argument_name) must belong to the supplied CircuitPlan.")
+    get(ladders, Symbol(ladder.id), nothing) === ladder ||
+        _validation_error("couple_transmission_window! $(argument_name) must be the ladder registered in the supplied CircuitPlan.")
+    return nothing
+end
+
+function _validate_coupled_window_id_available(plan::CircuitPlan, id)
+    windows = get(plan.metadata, :coupled_transmission_windows, nothing)
+    isnothing(windows) && return nothing
+    windows isa Dict{Symbol,CoupledTransmissionWindow} ||
+        _validation_error("CircuitPlan metadata[:coupled_transmission_windows] is reserved for CoupledTransmissionWindow records.")
+    haskey(windows, Symbol(id)) && _validation_error("Duplicate coupled transmission window id '$(id)'.")
+    return nothing
+end
+
+function _validate_coupled_window_relation_ids_available(
+    plan::CircuitPlan,
+    id,
+    section_count::Int,
+    has_capacitive_coupling::Bool,
+)
+    semantic_ids = Set(
+        string(relation_id)
+        for relation in plan.relations
+        for relation_id in (_relation_id(relation),)
+        if !isnothing(relation_id)
+    )
+    engineering_ids = Set(relation.id for relation in engineering_graph(plan).relations)
+
+    planned_ids = String[string(id)]
+    for offset in 1:section_count
+        has_capacitive_coupling && append!(
+            planned_ids,
+            ("$(id)_c12_$(offset)_start", "$(id)_c12_$(offset)_stop"),
+        )
+        push!(planned_ids, "$(id)_m12_$(offset)")
+    end
+
+    for relation_id in planned_ids
+        relation_id in semantic_ids &&
+            _validation_error("Coupled transmission window relation id '$(relation_id)' already exists in the semantic registry.")
+        Symbol(relation_id) in engineering_ids &&
+            _validation_error("Coupled transmission window relation id '$(relation_id)' already exists in the EngineeringGraph registry.")
+    end
+    return nothing
+end
+
 function couple_transmission_window!(
     plan::CircuitPlan;
     id,
@@ -837,6 +933,11 @@ function couple_transmission_window!(
 )
     line1 isa TransmissionLineLadder && line2 isa TransmissionLineLadder ||
         _validation_error("couple_transmission_window! requires TransmissionLineLadder line1 and line2.")
+    line1 === line2 &&
+        _validation_error("couple_transmission_window! requires two distinct transmission-line ladders.")
+    _validate_coupled_window_ladder_ownership(plan, line1, "line1")
+    _validate_coupled_window_ladder_ownership(plan, line2, "line2")
+    _validate_coupled_window_id_available(plan, id)
     _validate_mtl_coupled_rlgc_spec(model)
     orientation = _normalize_coupling_orientation(coupling_orientation)
 
@@ -850,6 +951,13 @@ function couple_transmission_window!(
     _validate_window_line_model(line1, line2, model, range1, range2)
 
     section_pairs = _coupled_window_section_pairs(range1, range2, orientation)
+    _validate_coupled_window_section_lengths(line1, line2, section_pairs, model)
+    _validate_coupled_window_relation_ids_available(
+        plan,
+        id,
+        Base.length(section_pairs),
+        mutual_capacitance_per_m_f(model) > 0,
+    )
     inductive_orientation_sign = _coupled_window_inductive_orientation_sign(orientation)
     capacitive_boundary_records = NamedTuple[]
     capacitive_couplings = CapacitiveCoupling[]
@@ -857,11 +965,6 @@ function couple_transmission_window!(
 
     for (offset, (section1, section2)) in enumerate(section_pairs)
         dx1 = line1.section_lengths_m[section1]
-        dx2 = line2.section_lengths_m[section2]
-        isapprox(dx1, dx2; atol=1e-12, rtol=1e-9) ||
-            _validation_error("Coupled section lengths must match between transmission lines.")
-        dx1 <= model.section_length_m * (1 + 1e-9) ||
-            _validation_error("Coupled section length exceeds MTLCoupledRLGCSpec section_length_m reference.")
         c12 = mutual_capacitance_per_m_f(model) * dx1
         lm = mutual_inductance_per_m_h(model) * dx1
         signed_lm = inductive_orientation_sign * lm
@@ -949,8 +1052,8 @@ function couple_transmission_window!(
             :c_matrix_per_m_f => model.c_matrix_per_m_f,
             :l1_per_m_h => model.l_matrix_per_m_h[1, 1],
             :l2_per_m_h => model.l_matrix_per_m_h[2, 2],
-            :c1g_per_m_f => model.c_matrix_per_m_f[1, 1],
-            :c2g_per_m_f => model.c_matrix_per_m_f[2, 2],
+            :c1g_per_m_f => _maxwell_ground_capacitance_per_m_f(model, 1),
+            :c2g_per_m_f => _maxwell_ground_capacitance_per_m_f(model, 2),
         ),
     )
 
