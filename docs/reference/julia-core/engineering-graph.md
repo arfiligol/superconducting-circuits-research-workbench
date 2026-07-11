@@ -159,6 +159,15 @@ Port roles include:
 
 Port roles are semantic metadata. A role such as `:probe` does not create a physical coupling element, remove a port termination, or apply post-processing. If the model needs a physical probe coupling, declare that coupling explicitly.
 
+The current JosephsonCircuits compiler separately lowers each simulation
+`ExternalPort` declaration to a `P<index>` row and a colocated
+`R_port_<index>` row. That adapter resistor participates in returned raw Z;
+neither an `EngineeringPort` role nor a shared resistance value proves that a
+later PTC subtraction is authorized. See the canonical [Port Reference
+Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd)
+and [Port-Termination Compensation](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd)
+contracts.
+
 ### EngineeringGroup
 
 ```julia
@@ -306,7 +315,7 @@ couple_capacitive!(
 )
 ```
 
-The same rule applies to standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `couple_inductive!`, and `couple_window!` calls. Manual `record_engineering_relation!` is for extra semantic annotations, non-physical overlays, or metadata that is not already captured by the physical operation.
+The same rule applies to standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `couple_inductive!`, and `couple_transmission_window!` calls. Manual `record_engineering_relation!` is for extra semantic annotations, non-physical overlays, or metadata that is not already captured by the physical operation.
 
 This lets Runner adapters, generated code, and tests build the same semantic representation without macro syntax while keeping the solver model and human-facing graph synchronized.
 

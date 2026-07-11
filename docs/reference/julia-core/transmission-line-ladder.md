@@ -12,8 +12,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core transmission-line ladder conventions for CPW / RLGC modeling, head/tail orientation, section indexing, and open/short terminations.
-version: v1.6.1
-last_updated: 2026-05-31
+version: v1.7.0
+last_updated: 2026-07-10
 updated_by: codex
 ---
 
@@ -22,6 +22,10 @@ updated_by: codex
 `RLGCSpec` and `build_lc_ladder_line!` are the user-facing Julia Core contract for CPW / transmission-line LC ladders.
 
 They define orientation, sectioning, generated primitive relations, and boundary conditions so Pluto notebooks can teach the physics without reimplementing ladder conventions.
+
+For terminal-domain matrix semantics and the Maxwell-to-physical-element
+mapping used by coupled windows, read
+[SCQ_Design: Multiconductor RLGC Matrices](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd).
 
 The ladder contract is electrical. Human-facing placement such as top/bottom tracks, aligned coupled spans, and length labels belongs to [Schematic Layout Intent](schematic-layout-intent.md).
 
@@ -97,9 +101,15 @@ R_section = r_per_m_ohm * dx
 G_section = g_per_m_s * dx
 ```
 
-`build_lc_ladder_line!` emits a series inductor for every section and a shunt capacitor at each section tail node unless that node is a grounded terminal.
+`build_lc_ladder_line!` uses a pi section. It emits a series inductor for every
+section and contributes half of that section's shunt capacitance to each
+boundary node. Adjacent sections therefore accumulate their two half-shunts at
+an internal boundary.
 
-When `r_per_m_ohm > 0`, each section includes a series resistor before its series inductor. When `g_per_m_s > 0`, each shunt conductance is represented by a resistor `1 / G_section` to ground.
+When `r_per_m_ohm > 0`, each section includes a series resistor before its
+series inductor. When `g_per_m_s > 0`, half of the section conductance is
+contributed to each boundary and the accumulated shunt conductance is
+represented by a resistor to ground.
 
 Section-level RLGC overrides are part of the ladder contract for physical spans such as coupled MTL windows. Overrides must resolve to generated section boundaries and are applied while the ladder is built, before any cross-coupling relations are added.
 
@@ -167,7 +177,8 @@ The terminal node is expected to connect to a port, another component, or anothe
 
 An unconnected `:external` terminal is a dangling external endpoint. It is not treated as an intentional `:open`; write `:open` when the physical boundary is open.
 
-Julia Core skips the final shunt capacitor at a grounded tail so the compiled netlist does not emit a capacitor from ground to ground.
+Julia Core skips any accumulated shunt capacitance or conductance at a grounded
+head or tail so the compiled netlist does not emit a ground-to-ground element.
 
 ## Resonator Boundaries
 

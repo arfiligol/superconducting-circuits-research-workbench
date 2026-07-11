@@ -178,6 +178,11 @@ Port `role` values are semantic metadata. A role does not create hidden componen
 
 `@circuit` may call physical model generators next to primitive relations and component instances:
 
+For the terminal-basis and Maxwell semantics behind the matrix window, read
+[SCQ_Design: Multiconductor RLGC Matrices](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd).
+The current `MTLCoupledRLGCSpec` executable path is a two-line lossless LC
+consumer despite its name.
+
 ```julia
 plan = @circuit "readout-qwr-mtl" begin
   input = external_node("input")

@@ -41,6 +41,11 @@ import transmissionLineCircuitModelLight from '../../assets/circuit_draw/pluto_e
 
 Use these Pluto examples as the Julia Core learning path for circuit authoring, harmonic-balance simulation intent, executable HB problem construction, and result-family inspection. The notebooks are research-first: Pluto calls Julia Core directly and keeps the learning path focused on local research execution.
 
+Reusable HB theory, mode meaning, and evidence gates are canonical in the
+SCQ_Design [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd)
+node. This page owns only the seven-notebook learning sequence and its
+executable Julia Core workflow.
+
 <Aside type="note" title="Learning path">
 
 The canonical learning path is exactly seven notebooks, numbered `00` through `06`.
@@ -70,23 +75,20 @@ Pluto is the direct Julia research cockpit. It can build, inspect, solve, and pl
 
 The first example is a grounded LC resonator. It gives readers a compact physics check before they move into reusable builders, response extraction, and larger circuit families.
 
-The expected resonance estimate is:
-
-$$f_0 = \frac{1}{2\pi\sqrt{LC}}$$
-
-| L (nH) | C (pF) | Estimated $f_0$ (GHz) |
-| --- | --- | --- |
-| 10 | 1.0 | 1.59 |
-| 5 | 1.0 | 2.25 |
-| 10 | 0.5 | 2.25 |
-
-Use this table only as a sanity check. The notebook result must still come from the Julia Core solver path and the extracted response traces.
+The derivation and the distinction between intrinsic, raw port-loaded,
+port-compensated, and wave observables are canonical in SCQ_Design
+[Ideal Parallel LC Resonator](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/ideal-parallel-lc-resonator.qmd).
+With the notebook defaults, the analytic sanity value is about `4.49924 GHz`.
+The executable acceptance check is stricter: the compiled rows must expose the
+declared port resistor, real solver `Y11` must become the intrinsic tank only
+after verified PTC, and real solver `S11` must match the direct one-port
+relation. Analytic arrays are checks, never substitute plot data.
 
 ## Learning Path
 
 | Notebook | Circuit diagram | Teaching responsibility | Main inspection surface |
 | --- | --- | --- | --- |
-| `00` Grounded LC resonator | <span class="circuit-figure"><img class="circuit-figure__image circuit-figure__light" src={groundedLcResonatorLight.src ?? groundedLcResonatorLight} alt="Grounded LC resonator" /><img class="circuit-figure__image circuit-figure__dark" src={groundedLcResonatorDark.src ?? groundedLcResonatorDark} alt="" aria-hidden="true" /></span> | Ground the reader in a one-port resonator, declared pump-off source slots, `HBProblemSpec`, and reflection output. | S11 magnitude/phase, Z11/Y11 real/imag, extracted QE/QEideal/CM records when requested |
+| `00` Grounded LC resonator | <span class="circuit-figure"><img class="circuit-figure__image circuit-figure__light" src={groundedLcResonatorLight.src ?? groundedLcResonatorLight} alt="Ideal grounded LC component view; the compiled port resistor is not drawn" /><img class="circuit-figure__image circuit-figure__dark" src={groundedLcResonatorDark.src ?? groundedLcResonatorDark} alt="" aria-hidden="true" /></span> | Ground the reader in a one-port resonator, declared pump-off source slots, `HBProblemSpec`, and reflection output. The drawing is the component view; compiled port rows remain visible in notebook data. | Raw and verified-PTC Y11, S11 magnitude/phase, and compiled port rows |
 | `01` Reflective JPA, capacitively coupled LC | <span class="circuit-figure"><img class="circuit-figure__image circuit-figure__light" src={reflectiveJpaCapacitiveCoupledLcLight.src ?? reflectiveJpaCapacitiveCoupledLcLight} alt="Reflective JPA capacitively coupled LC" /><img class="circuit-figure__image circuit-figure__dark" src={reflectiveJpaCapacitiveCoupledLcDark.src ?? reflectiveJpaCapacitiveCoupledLcDark} alt="" aria-hidden="true" /></span> | Show a reflective amplifier-style LC tank where the readout port couples through `C_c` and pump semantics stay explicit. | Port/source maps, pump-off versus pumped bindings, S/Z trace families |
 | `02` Floating LC with XY line | <span class="circuit-figure"><img class="circuit-figure__image circuit-figure__light" src={floatingLcXyLineLight.src ?? floatingLcXyLineLight} alt="Floating LC with XY line" /><img class="circuit-figure__image circuit-figure__dark" src={floatingLcXyLineDark.src ?? floatingLcXyLineDark} alt="" aria-hidden="true" /></span> | Teach floating-node conventions, XY drive coupling, endpoint naming, and component pins before compilation. | EngineeringGraph components, public pins, source-slot overlays, S/Z traces |
 | `03` Transmission-line circuit model | <span class="circuit-figure"><img class="circuit-figure__image circuit-figure__light" src={transmissionLineCircuitModelLight.src ?? transmissionLineCircuitModelLight} alt="Transmission-line circuit model" /><img class="circuit-figure__image circuit-figure__dark" src={transmissionLineCircuitModelDark.src ?? transmissionLineCircuitModelDark} alt="" aria-hidden="true" /></span> | Introduce `RLGCSpec`, head/tail orientation, section indexing, generated ladder elements, and open/short terminations. | Ladder nodes, section values, compiled rows, S21/S11 and impedance traces |

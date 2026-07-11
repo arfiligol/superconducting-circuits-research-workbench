@@ -12,7 +12,7 @@ owner: docs-team
 audience: contributor
 scope: Plan-level relations, endpoint constraints, capacitive couplings, inductive couplings, shunts, and distributed windows.
 version: v1.6.0
-last_updated: 2026-05-30
+last_updated: 2026-07-10
 updated_by: codex
 ---
 
@@ -21,6 +21,15 @@ updated_by: codex
 Relations are Plan-level intents. They are recorded in the Circuit Plan and lowered by the compiler after endpoint resolution, namespacing, line splitting, and validation.
 
 They are not immediate JosephsonCircuits.jl rows.
+
+Canonical physics:
+
+- [Josephson current, phase, energy, and inductance](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd)
+- [Josephson cosine and quantum anharmonicity](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-cosine-and-quantum-anharmonicity.qmd)
+- [dc SQUID flux tunability](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/dc-squid-flux-tunability.qmd)
+- [Multiconductor RLGC matrices: basis, modes, and physical meaning](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd)
+
+**Current boundary:** Core lowers one `JosephsonJunction` with a Josephson-inductance binding to a nonlinear `Lj...` solver row. It does not implement a dc-SQUID component, loop endpoint, external-flux binding, junction asymmetry, or loop-inductance lowering.
 
 ## Relation Types
 
@@ -33,13 +42,12 @@ They are not immediate JosephsonCircuits.jl rows.
 | `series_inductor!` | inductor placement between two node-resolving endpoints |
 | `series_resistor!` | resistor placement between two node-resolving endpoints |
 | `josephson_junction!` | Josephson inductive branch placement between two node-resolving endpoints |
-| `couple_window!` | distributed span-to-span coupling intent |
 | `couple_transmission_window!` | `TransmissionLineLadder` coupled-window helper |
 | `couple_inductive!` | inductive, mutual, or flux-related coupling intent |
 
 ## EngineeringGraph Capture
 
-Physical relation operations record matching [`EngineeringGraph`](engineering-graph.md) relations while they update the Circuit Plan. Standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `series_inductor!`, `series_resistor!`, `josephson_junction!`, `couple_inductive!`, `couple_window!`, and `couple_transmission_window!` calls keep the solver-facing relation and human-facing semantic graph synchronized.
+Physical relation operations record matching [`EngineeringGraph`](engineering-graph.md) relations while they update the Circuit Plan. Standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `series_inductor!`, `series_resistor!`, `josephson_junction!`, `couple_inductive!`, and `couple_transmission_window!` calls keep the solver-facing relation and human-facing semantic graph synchronized.
 
 Users should not normally call `record_engineering_relation!` after those standard operations. Use manual relation recording only for extra semantic annotations, non-physical overlays, or metadata that is not already represented by the physical operation.
 
@@ -54,7 +62,6 @@ Users should not normally call `record_engineering_relation!` after those standa
 | `series_inductor!` | `NodeEndpoint` <-> `NodeEndpoint` |
 | `series_resistor!` | `NodeEndpoint` <-> `NodeEndpoint` |
 | `josephson_junction!` | `NodeEndpoint` <-> `NodeEndpoint` |
-| `couple_window!` | `LineSpanEndpoint` <-> `LineSpanEndpoint` |
 | `couple_transmission_window!` | `TransmissionLineLadder` <-> `TransmissionLineLadder`; generated-boundary section windows |
 | `couple_inductive!` | branch inductor references for lowerable mutual inductance, or line/loop endpoints for semantic flux intent |
 
@@ -77,6 +84,8 @@ couple_capacitive!(
 `series_inductor!(plan; id, from, to, inductance)` and `series_resistor!(plan; id, from, to, resistance)` are the minimal two-node lumped primitives for ladder examples. They lower to `L_...` and `R_...` JosephsonCircuits rows between the resolved nodes. They do not create ports or source semantics.
 
 `josephson_junction!(plan; id, from, to, josephson_inductance)` is the nonlinear inductive primitive for JosephsonCircuits lowering. It resolves the two endpoint nodes like a branch relation and lowers to an `Lj...` row whose value is the Josephson inductance binding.
+
+Loop- or flux-oriented `InductiveCoupling` values may be recorded as semantic intent, but the current Josephson compiler rejects them instead of inventing a solver representation.
 
 `InductiveTargetEndpoint` is the relation-side category for non-loop inductive targets. It is not a node-resolving endpoint.
 
@@ -129,7 +138,6 @@ Examples:
 | `josephson_junction!` | Josephson inductance | `NumericParameter` if endpoints are unchanged |
 | `line_tap(...)` | tap position | `StructuralParameter` |
 | `line_span(...)` | start / stop | `StructuralParameter` |
-| `couple_window!` | window length | `StructuralParameter` |
 | `couple_transmission_window!` | start distances and window length | `StructuralParameter` |
 
 Relation-owned metadata should be stored in the CircuitPlan so `preflight_sweep` can classify sweep axes before execution.
@@ -148,19 +156,23 @@ couple_capacitive!(
 
 The tap is a node endpoint on a distributed component. The compiler decides how to insert the breakpoint and split the line.
 
-## SQUID Coupled To CPW Flux Line
+## Conceptual SQUID-To-Flux-Line Relation
 
-```julia
+This is a future component-library shape, not an executable dc-SQUID path.
+`loop_endpoint(...)` can record a generic semantic target, but dc-SQUID and
+external-flux lowering are not implemented.
+
+```text
 couple_inductive!(
   plan;
   id = "flux_to_squid",
   from = line_tap(flux_line; line =:main, at_m = 2.0mm),
-  to = squid_loop(lc),
+  to = loop_endpoint(lc, :squid_loop),
   mutual_inductance = 3.0pH,
 )
 ```
 
-The SQUID loop is a loop endpoint. The relation is flux or mutual-coupling intent, not a user-authored internal node splice.
+A future SQUID component could expose a loop endpoint for flux or mutual-coupling intent without exposing an internal node splice.
 
 ## Floating LC In Series
 
@@ -186,9 +198,12 @@ window = couple_transmission_window!(
 )
 ```
 
-This expresses a fixed-length coupled region between two generated ladder models. The coupled window uses coupled-section self terms in the generated ladder sections, then adds generated C12 and K primitive relations and records an EngineeringGraph `:coupled_window` relation.
-
-`couple_window!(line_span(...), line_span(...))` carries span-to-span intent for component-level distributed lines. Executable examples should use the Core API path that provides real compiler lowering for the declared model.
+This expresses a fixed-length coupled region between two generated ladder
+models. The current matrix model is LC-only. It lowers the supplied Maxwell
+capacitance into reference shunts and cross capacitors, adds K primitive
+relations for mutual inductance, and records an EngineeringGraph
+`:coupled_window` relation. See [Coupling Models](coupling-models.mdx) for the
+exact representation and capability boundary.
 
 ## QWR To Readout Line With Shunt
 

@@ -59,7 +59,10 @@ manual `push()` / `pop()` pairs for branches.
 `diagram.yml` records the reviewable traceability for the figure: owning docs,
 Julia Core semantics references, physical/circuit model references,
 implementation references, light/dark SVG and PNG output paths, and review
-status.
+status. When reusable physics is owned by the SCQ_Design Super Repo, keep a
+child-local `physical_model_refs` adapter for standalone docs and add the
+canonical HTTPS `.qmd` path under `canonical_physics_urls`. The local adapter
+does not become a second physics source of truth.
 
 ## Add Or Update A Diagram
 
@@ -144,6 +147,7 @@ dependencies for documentation drawing.
 - `draw.py` must define `build_drawing(theme="light")`, use `_lib.style.circuit_drawing(...)`, and must not import infrastructure services, Julia, archived simulation runtimes, or legacy Python circuit visualizer modules.
 - Write Schemdraw sources with context-manager placement and chained element methods; do not use `d += ...` placement or `push()` / `pop()` branch pairs.
 - Register diagrams in `docs/assets/circuit_draw/registry.yml`.
+- When SCQ_Design owns the reusable physics, declare its Knowledge `.qmd` URL in `canonical_physics_urls`; keep `physical_model_refs` as the child-local routing adapter.
 - Render with `uv run python scripts/build/render_circuit_drawings.py`.
 - Verify with `uv run python scripts/test/check_circuit_drawings.py` and `uv run python scripts/build/render_circuit_drawings.py --check`.
 - Schemdraw is a root dev dependency only; do not add it to product runtime packages.

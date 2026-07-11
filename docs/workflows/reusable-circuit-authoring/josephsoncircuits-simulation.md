@@ -20,6 +20,8 @@ sidebar:
 
 # JosephsonCircuits Response Path
 
+Reusable harmonic-balance theory and periodic-steady-state evidence gates are owned by the SCQ_Design [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd) node. Returned S/Z and derived-Y semantics are owned by [Port Reference Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd). This page owns only the executable Julia workflow and direct solver-debugging path.
+
 Use this page when the notebook path already built a valid circuit and you need to inspect the solver-facing response path. The default workflow stays Pluto-first: build reusable Julia Core plans, compile them, run JosephsonCircuits.jl through Julia Core helpers, then inspect real response families.
 
 ## Normal Path
@@ -33,7 +35,7 @@ Component library builder
   -> compile_to_josephson
   -> HBProblemSpec
   -> run_hb_problem
-  -> extracted S, Z, Y, QE, QEideal, or CM families
+  -> returned S/Z and derived Y, plus QE, QEideal, or CM families
 ```
 
 Use Pluto to keep the build, compile, solve, and plot cells visible. Package code should own reusable helpers, not notebook-only glue.
@@ -113,7 +115,7 @@ S11_phase = angle.(S11)
 | --- | --- |
 | checking whether a solver behavior is independent of Julia Core compilation | teaching reusable circuit authoring |
 | comparing compiled rows against a minimal hand-written circuit | building component libraries or plan builders |
-| debugging `hbsolve` controls, source slots, or extracted S/Z/Y fields | producing notebook examples or reusable package APIs |
+| debugging `hbsolve` controls, source slots, returned S/Z, or a declared derived Y | producing notebook examples or reusable package APIs |
 
 ## Related
 

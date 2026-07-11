@@ -20,6 +20,8 @@ import { Aside } from '@astrojs/starlight/components';
 
 # HB Simulation Intent
 
+Reusable harmonic-balance theory, periodic-steady-state assumptions, truncation meaning, and evidence gates are owned by the SCQ_Design [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd) node. This page owns only the Julia Core HB-intent API and its compile/runtime handoff.
+
 HB simulation intent is the CircuitPlan-level contract for harmonic-balance simulation. It declares external ports, pump axes, source slots, observable requests, and solver-facing defaults before Runner execution sees runtime values.
 
 The core rule is:
@@ -85,6 +87,10 @@ Runner code should pass `HBProblemSpec` to `run_hb_problem`; it should not reass
 
 `ExternalPort` is the plan-level declaration for a physical or logical external port that may lower to JosephsonCircuits port rows.
 
+Reusable wave-reference, explicit-shunt, raw-Z, and derived-Y semantics are
+canonical in SCQ_Design [Port Reference Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd).
+This page owns only the Julia Core declaration and lowering contract.
+
 Conceptual shape:
 
 ```julia
@@ -102,7 +108,7 @@ ExternalPort(
 | `id` | stable logical port name, such as `:signal_port`, `:pump_port`, or `:readout_port` |
 | `index` | JosephsonCircuits port index |
 | `endpoint` | CircuitPlan endpoint that lowers to a netlist node |
-| `resistance_ohm` | reference / port resistance used when emitting port rows |
+| `resistance_ohm` | positive resistance used by the current compiler to emit the colocated JosephsonCircuits port-impedance resistor; it defines the solver wave reference and participates in returned raw Z |
 | `role` | semantic role such as `:signal`, `:pump`, `:readout`, `:dc_bias`, or `:mixed` |
 
 Rules:
@@ -111,6 +117,8 @@ Rules:
 - port indices must be unique;
 - port endpoints must resolve during compile;
 - external ports must lower to compatible JosephsonCircuits port rows;
+- the current target requires exactly one colocated resistor per port; do not
+  model a separate retained physical load by silently reusing this field;
 - one physical port may support multiple source modes.
 
 ## PumpAxis

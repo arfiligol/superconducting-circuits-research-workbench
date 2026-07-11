@@ -12,8 +12,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core coupling taxonomy for point capacitive coupling, point mutual inductive coupling, distributed MTL coupled windows, and physical line generators.
-version: v1.6.1
-last_updated: 2026-05-31
+version: v1.7.0
+last_updated: 2026-07-10
 updated_by: codex
 ---
 
@@ -22,6 +22,10 @@ import { Aside } from '@astrojs/starlight/components';
 # Coupling Models
 
 Julia Core treats coupling as a domain model, not as ad hoc notebook code. A single capacitor can model point capacitive coupling, but it must not stand in for a finite-length CPW / MTL coupled window.
+
+Reusable matrix physics and artifact eligibility are canonical in
+[SCQ_Design: Multiconductor RLGC Matrices](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd).
+This page owns the Julia API and lowering behavior only.
 
 The active contract has three levels.
 
@@ -106,19 +110,29 @@ window = couple_transmission_window!(
 
 An MTL coupled window is a finite distributed region between two transmission-line ladders. It is not a single `Cc`. The sectioned representation is driven by the uncoupled `RLGCSpec` outside the window and by coupled-section per-unit-length matrices inside the window.
 
-For each coupled section, Julia Core emits self terms from the coupled-section matrices and cross terms between the two generated sections. Transmission-line ladders use a canonical pi-section discretization: series `L/R` are section-centered branches, while self `C/G` are split across the left and right section boundary nodes.
+<Aside type="caution" title="The coupled matrix path is LC-only">
+
+`MTLCoupledRLGCSpec` currently stores only $L'$ and Maxwell $C'$ matrices.
+Its section overrides use $R'=G'=0$, and the helper rejects nonzero base or
+coupled-section losses. Missing upstream loss matrices are not evidence of
+measured zero loss; true RLGC support remains a Human contract and
+implementation decision.
+
+</Aside>
+
+For each coupled section, Julia Core emits self terms from the coupled-section matrices and cross terms between the two generated sections. Transmission-line ladders use a canonical pi-section discretization: series `L` is section-centered, while physical ground and cross capacitances are split across the left and right section boundary nodes.
 
 ```text
 Line 1:
  series L11
- shunt C11/2 at each section boundary
+ shunt (C11 + C12)/2 at each section boundary
 
 Line 2:
  series L22
- shunt C22/2 at each section boundary
+ shunt (C22 + C21)/2 at each section boundary
 
 Between lines:
- physical C12/2 between paired boundary nodes
+ physical (-C12)/2 between paired boundary nodes
  M12 / K between paired section-centered inductors
 ```
 
@@ -137,11 +151,15 @@ model = MTLCoupledRLGCSpec(
     L12 L22
   ],
   c_matrix_per_m_f=[
-    C11 -C12
-    -C12 C22
+    C11 C12
+    C12 C22
   ],
 )
 ```
+
+Here `c_matrix_per_m_f` is Maxwell form and `C12 <= 0`. The physical
+cross-capacitance density is `-C12`; the ground-shunt densities are `C11+C12`
+and `C22+C21`.
 
 Even/odd mode inputs may be converted into the same matrix representation before ladder generation.
 
@@ -152,7 +170,7 @@ Coupled-window invariants are strict:
 | Sections | every coupled segment must have explicit section parameters |
 | Boundaries | `start1`, `start2`, and `length` must resolve to generated section boundaries |
 | Section geometry | corresponding coupled sections must have matching physical length |
-| Self values | coupled sections are built with `L11`, `C11`, `L22`, and `C22` |
+| Self values | series terms use `L11` / `L22`; physical ground shunts use `C11+C12` / `C22+C21` |
 | Coupling values | `-C[1,2]` and `L[1,2]` scale by the actual coupled-section length |
 
 No silent snapping or interpolation is allowed. Builders create semantic section boundaries at physical window starts and ends so the requested physical window is preserved.
@@ -166,7 +184,12 @@ No silent snapping or interpolation is allowed. Builders create semantic section
 | `:same_direction` | `(line1[s], line2[s])` and `(line1[s+1], line2[s+1])` | positive mutual branch orientation |
 | `:opposite_direction` | `(line1[s], line2[s+1])` and `(line1[s+1], line2[s])` | negative mutual branch orientation |
 
-The RLGC physical matrix does not change with orientation. `C_matrix_F_per_m` keeps the Maxwell convention where the off-diagonal entry is non-positive and Core uses `-C[1,2]` as the positive physical mutual capacitance per meter. `L_matrix_H_per_m` keeps the positive physical mutual inductance; opposite orientation is represented by the branch current-reference sign in the lowered mutual inductive relation.
+The input matrices do not change with spatial placement. `c_matrix_per_m_f`
+keeps the Maxwell convention where the off-diagonal entry is non-positive and
+Core uses `-C[1,2]` as the positive physical mutual capacitance per meter. Core
+multiplies `L[1,2]` by the spatial orientation sign while lowering. The input
+sign itself is meaningful only with a declared producer current direction; a
+project-wide signed/unsigned $L_{12}$ artifact convention is not yet frozen.
 
 ## EngineeringGraph Relation
 
@@ -203,6 +226,6 @@ Physical generators convert physical parameters into primitive relations.
 | Quarter-wave resonator | ladder with grounded/coupled head and open tail |
 | Half-wave resonator | usually open-open or capacitively coupled at both ends |
 | Readout line + QWR | readout ladder, QWR ladder, and `couple_transmission_window!` |
-| Even/odd coupled-line specification | converted into per-unit mutual capacitance and inductance before ladder generation |
+| Even/odd coupled-line specification | converted into terminal-domain $L'$ and Maxwell $C'$ matrices before ladder generation |
 
 Notebooks may call these APIs and inspect their output. They should not hand-code CPW ladder or MTL coupled-window conventions that belong in Core.

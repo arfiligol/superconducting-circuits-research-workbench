@@ -20,6 +20,8 @@ import { Aside } from '@astrojs/starlight/components';
 
 # JosephsonCircuits hbsolve Controls
 
+Reusable harmonic-balance theory and periodic-steady-state evidence gates are owned by the SCQ_Design [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd) node. This page owns only the Julia Core mapping and whitelist for JosephsonCircuits.jl solver controls.
+
 This page defines the Julia Core contract for JosephsonCircuits.jl `hbsolve` controls. Product Runner execution should use typed first-class controls and a small whitelist of optional kwargs instead of passing arbitrary solver internals through task payloads.
 
 The initial inventory is derived from the official [JosephsonCircuits.jl reference](https://josephsoncircuits.org/stable/reference/) and official [JosephsonCircuits.jl examples](https://github.com/kpobrien/JosephsonCircuits.jl).
@@ -82,6 +84,17 @@ Julia Core should normalize product-facing frequency values from Hz to the angul
 | `returnCM` | requests commutation-relation output |
 | `sorting` | controls target node ordering behavior |
 | `keyedarrays` | controls keyed-array output shape |
+
+<Aside type="caution" title="Returned S and Z are different observable layers">
+
+For the current JosephsonCircuits target, `returnS` constructs Kurokawa power
+waves while `returnZ` reports the complete solved network, including the
+required colocated port resistors. Workbench Y helpers invert returned Z; they
+do not expose a native solver Y family. Do not run a generic `ZtoS` conversion
+on returned raw Z. The exact reconstruction and mode limits are canonical in
+SCQ_Design [Port Reference Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd).
+
+</Aside>
 
 ## Control Status Registry
 

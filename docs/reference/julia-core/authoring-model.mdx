@@ -12,7 +12,7 @@ owner: docs-team
 audience: contributor
 scope: Source-of-truth authoring model for reusable Julia Core circuit components, plans, and compiler lowering.
 version: v1.3.0
-last_updated: 2026-05-29
+last_updated: 2026-07-10
 updated_by: codex
 ---
 
@@ -25,6 +25,18 @@ Julia Core authoring starts from reusable components and plan-level relations. U
 The compiler lowers one complete Circuit Plan into the JosephsonCircuits.jl target. Component composition stays in the plan and is flattened only during global compilation.
 
 The target human authoring surface is the [Macro Authoring DSL](macro-authoring-dsl.md), which expands into the canonical functional API and records an [EngineeringGraph](engineering-graph.md). The EngineeringGraph is the human-facing semantic view; the JosephsonCircuits.jl netlist is the solver-facing view.
+
+Canonical Josephson physics:
+
+- [Josephson current, phase, energy, and inductance](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd)
+- [Josephson cosine and quantum anharmonicity](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-cosine-and-quantum-anharmonicity.qmd)
+- [dc SQUID flux tunability](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/dc-squid-flux-tunability.qmd)
+
+<Aside type="caution" title="Current Josephson boundary">
+
+The executable Core surface lowers a single `JosephsonJunction` with a Josephson-inductance binding to a nonlinear `Lj...` row. The SQUID hierarchy shown below is conceptual: Core has no dc-SQUID component, external-flux binding, asymmetry, loop endpoint, or loop-inductance lowering.
+
+</Aside>
 
 ## Docs-First Rule
 
@@ -121,7 +133,12 @@ SQUID
   = JosephsonJunction + JosephsonJunction + optional loop inductance + flux parameter
 ```
 
-These examples describe component-library definitions that use the Julia Core authoring contract.
+The hierarchy owns authoring semantics, not the underlying resonator theory.
+For the grounded topology, use SCQ_Design
+[Ideal Parallel LC Resonator](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/ideal-parallel-lc-resonator.qmd)
+for the intrinsic mode and observable-layer contract.
+
+The SQUID line describes a possible future component-library definition, not current executable Core API.
 
 ## Component Libraries
 
@@ -150,7 +167,7 @@ If code still exposes `CircuitDraft`, implementation work may rename, remove, or
 | Rule | Meaning |
 | --- | --- |
 | Components are Plan-level objects | They can expose public pins, own private nodes, contain elements, or contain subcomponents. |
-| Relations are Plan-level intents | `connect!`, `couple_capacitive!`, `couple_window!`, and related calls are not immediate netlist rows. |
+| Relations are Plan-level intents | `connect!`, `couple_capacitive!`, `couple_transmission_window!`, and related calls are not immediate netlist rows. |
 | Compiler owns lowering | JosephsonCircuits.jl-specific rows are emitted only after plan validation and endpoint resolution. |
 | Pluto and Runner share the path | Pluto should not require a special compute path; Runner execution should call the same Core authoring and compiler logic. |
 | Framework boundaries stay outside Core | Julia Core must not depend on FastAPI, Next.js, Electron, or Backend task state. |

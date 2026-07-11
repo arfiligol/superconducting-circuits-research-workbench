@@ -123,7 +123,7 @@ couple_capacitive!(
 )
 ```
 
-Do not duplicate standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `couple_inductive!`, or `couple_window!` calls with a manual `record_engineering_relation!`. Use manual recording only for extra semantic annotations or overlays that are not already captured by the physical operation.
+Do not duplicate standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `couple_inductive!`, or `couple_transmission_window!` calls with a manual `record_engineering_relation!`. Use manual recording only for extra semantic annotations or overlays that are not already captured by the physical operation.
 
 The same metadata should be available whether the plan was authored with the Macro DSL or ordinary functional calls.
 

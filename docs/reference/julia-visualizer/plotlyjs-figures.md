@@ -21,7 +21,11 @@ updated_by: codex
 
 # PlotlyJS Figures
 
-`SuperconductingCircuitsVisualizer` builds Pluto-facing `PlotlyJS.jl` figures from `HBSolveResult` data. A figure is a view of solver-produced traces; it is not a compute path, persistence path, or substitute result generator.
+`SuperconductingCircuitsVisualizer` builds Pluto-facing `PlotlyJS.jl` figures
+from supplied trace data. A figure may show solver-native data or a derived/PTC
+trace with explicit lineage; it is not a compute path, persistence path,
+lineage authority, or substitute result generator. Reusable observable meaning
+is canonical in SCQ_Design [Network Trace Views](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/network-trace-views.qmd).
 
 ## Dependency Contract
 
@@ -207,7 +211,10 @@ y_trace_figure(
 )
 ```
 
-The caller is responsible for passing solver-produced traces. The visualizer is responsible for labels, transforms, axis configuration, display/export config, and figure construction.
+The caller is responsible for passing a real solver-native trace or a derived
+trace with explicit provenance. The visualizer is responsible for labels,
+display transforms, axis configuration, display/export config, and figure
+construction; it does not make a derived or PTC trace valid.
 
 ## Pluto Policy
 

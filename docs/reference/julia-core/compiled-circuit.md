@@ -55,7 +55,7 @@ The compiled circuit record is the structured handoff between authoring and exec
 | `node_map` | mapping from plan endpoints and internal nodes to target node names |
 | `component_map` | mapping from plan components and subcomponents to emitted target rows |
 | `line_tap_map` | records line tap endpoints, inserted breakpoints, and target nodes |
-| `port_map` | maps `ExternalPort` IDs to target port indices and node names |
+| `port_map` | currently maps `ExternalPort` IDs to target port indices only |
 | `hb_intent_summary` | records pump axes, source slots, observables, and solver-control shape |
 | `source_slot_map` | maps source slot IDs to compiled ports and mode tuples |
 | `observable_request_map` | maps observable IDs to output/input mode and port extraction paths |
@@ -63,6 +63,24 @@ The compiled circuit record is the structured handoff between authoring and exec
 | `warnings` | compile warnings, physics sanity warnings, and recoverable lowering notes |
 | `provenance` | builder, transform, source, and reproducibility metadata |
 | `metadata` | target version, compiler settings, discretization settings, and auxiliary data |
+
+`netlist`, `component_values`, `node_map`, and `port_map` together contain the
+current evidence needed to interpret a returned port matrix. For the current
+JosephsonCircuits target, each external port includes a colocated resistor;
+returned Z therefore belongs to the raw compiled network. Use SCQ_Design [Port
+Reference Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd)
+before deriving Y or comparing it with returned S.
+
+**Current limitation.** `port_map` alone does not preserve the port node,
+`R_port_<index>` component ID, or resistance value. Until a structured
+compiled-port evidence record exists, a PTC consumer must inspect and preserve
+the matching `P<index>` row, resistor row, node mapping, and component value;
+the logical port index by itself does not authorize subtraction.
+
+The notebook-layer `compiled_port_shunt_evidence` helper performs that current
+distributed-field check and `apply_port_termination_compensation` requires the
+compiled artifact plus an explicit removal intent. This is an implementation
+bridge, not a replacement for a future first-class compiled-port record.
 
 ## EngineeringGraph Links
 

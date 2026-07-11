@@ -11,12 +11,17 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Endpoint abstraction for pins, line taps, spans, ground, external nodes, and loop targets in Circuit Plans.
-version: v1.1.0
-last_updated: 2026-05-28
+version: v1.1.1
+last_updated: 2026-07-10
 updated_by: codex
 ---
 
 # Endpoints
+
+Canonical dc-SQUID loop semantics live in
+[SCQ_Design: DC SQUID Flux Tunability](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/dc-squid-flux-tunability.qmd).
+Julia Core can record a generic `LoopEndpoint`, but it does not currently
+provide a dc-SQUID component or lower an external-flux coupling to the solver.
 
 Endpoint is the general attachment abstraction used by connections, couplings, shunts, and compiler transforms. Pin is one kind of endpoint; many other endpoint kinds are not pins.
 
@@ -54,10 +59,12 @@ line_span(readout; line =:main, from_m = 2.0mm, to_m = 2.5mm)
 line_tap(line_ref(readout,:main); at_m = 2.0mm)
 ground()
 external_node("drive")
-squid_loop(lc)
+loop_endpoint(lc, :squid_loop)
 ```
 
-These values are all endpoints, but only `pin(lc,:signal)` and `pin(flc,:plus)` are pins.
+These values are all endpoint shapes, but only `pin(lc,:signal)` and
+`pin(flc,:plus)` are pins. The final line records a generic semantic loop
+target; it does not instantiate or lower a SQUID.
 
 The shorthand forms `line_tap(component; at_m = ...)` and `line_span(component; from_m, to_m)` are valid only when the component has one unambiguous default line. Multi-line components must use `line =:main` or pass an explicit `line_ref(component,:main)`.
 
@@ -70,7 +77,7 @@ The shorthand forms `line_tap(component; at_m = ...)` and `line_span(component; 
 | `GroundEndpoint` | node | the canonical ground target |
 | `ExternalNodeEndpoint` | node | a named external or drive node |
 | `LineSpanEndpoint` | line span | a distributed interval on a line-like component |
-| `LoopEndpoint` | loop | a SQUID loop or other inductive coupling target |
+| `LoopEndpoint` | loop | a generic inductive or flux-coupling target; no current dc-SQUID lowering is implied |
 
 ## Constraints
 
@@ -81,7 +88,6 @@ Use endpoint category constraints to keep the API explicit:
 | `connect!` | `NodeEndpoint` <-> `NodeEndpoint` |
 | `couple_capacitive!` | `NodeEndpoint` <-> `NodeEndpoint` |
 | `shunt_capacitor!` | `NodeEndpoint` -> implicit `GroundEndpoint` |
-| `couple_window!` | `LineSpanEndpoint` <-> `LineSpanEndpoint` |
 | `couple_inductive!` | `LineTapEndpoint` or `LineSpanEndpoint` <-> `LoopEndpoint` or `InductiveTargetEndpoint` |
 
 The compiler should reject incompatible endpoint categories before emitting target netlist rows.

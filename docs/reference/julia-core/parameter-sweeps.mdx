@@ -12,7 +12,7 @@ owner: docs-team
 audience: contributor
 scope: Defines the Julia Core parameter sweep execution architecture.
 version: v1.5.1
-last_updated: 2026-05-29
+last_updated: 2026-07-10
 updated_by: codex
 ---
 
@@ -21,6 +21,18 @@ import { Aside } from '@astrojs/starlight/components';
 # Parameter Sweeps
 
 Parameter Sweep is a first-class execution model in Julia Core.
+
+Canonical Josephson and SQUID semantics:
+
+- [Josephson current, phase, energy, and inductance](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd)
+- [Josephson cosine and quantum anharmonicity](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-cosine-and-quantum-anharmonicity.qmd)
+- [dc SQUID flux tunability](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/dc-squid-flux-tunability.qmd)
+
+<Aside type="caution" title="Current Josephson boundary">
+
+Current Core sweeps may bind the implemented `josephson_inductance` of a fixed single-junction topology. `SQUID`, `junction_Ic`, and `external_flux` axes below are conceptual classification examples for a future owning component library; no dc-SQUID or external-flux lowering exists today.
+
+</Aside>
 
 A sweep explores a set of parameter points while preserving the distinction between:
 
@@ -98,12 +110,12 @@ AnalysisParameter
 | `line_tap_position` | structural | Changes breakpoint insertion and node map |
 | `line_span_start_stop` | structural | Changes distributed coupling region |
 | `boundary =:open /:short` | structural | Changes circuit connection topology |
-| `component_type = LinearInductor / SQUID` | structural | Changes component hierarchy and lowering |
+| `component_type = LinearInductor / SQUID` | structural | Conceptual component-library axis; no current Core SQUID API |
 | `capacitance_value` | numeric | Changes value binding only |
 | `inductance_value` | numeric | Changes value binding only |
 | `coupling_capacitance` | numeric if endpoints unchanged | Changes value only if the coupling relation already exists |
-| `junction_Ic` | numeric if junction topology unchanged | Changes nonlinear element parameter only |
-| `external_flux` | numeric or drive-like | Changes parameter binding, not topology |
+| `josephson_inductance` | numeric if junction topology unchanged | Changes the implemented nonlinear `Lj...` binding only |
+| `external_flux` | numeric or drive-like | Conceptual SQUID axis; no current Core lowering |
 | `pump_frequency` | drive | Changes solver input / source setting |
 | `source_current` | drive | Binds current for an existing source slot |
 | `fit_window` | analysis | Changes post-processing only |
@@ -139,7 +151,7 @@ Examples:
 - line length affects line segmentation;
 - tap location changes inserted breakpoints;
 - coupled-window span changes distributed coupling region;
-- component type changes from linear inductor to SQUID;
+- a future component-library type changes from linear inductor to SQUID;
 - boundary condition changes from open to short.
 ```
 
@@ -378,8 +390,8 @@ Effective role
 | --- | --- | --- | --- |
 | `capacitance` | Component Library | `NumericParameter` | topology key must not change |
 | `inductance` | Component Library | `NumericParameter` | topology key must not change |
-| `junction_ic` | Component Library | `NumericParameter` if junction topology is unchanged | emitted junction structure must not change |
-| `external_flux` | Component Library or Plan Builder | `NumericParameter` or `DriveParameter` | topology key must not change |
+| `josephson_inductance` | `JosephsonJunction` relation | `NumericParameter` if junction topology is unchanged | emitted `Lj...` structure must not change |
+| `external_flux` | Future Component Library or Plan Builder | `NumericParameter` or `DriveParameter` | conceptual until SQUID lowering exists |
 | `line_length_m` | Component Library or Plan Builder | usually `StructuralParameter` | line segmentation, node map, or emitted rows may change |
 | `n_sections` | Component Library | `StructuralParameter` | target netlist size changes |
 | `boundary` | Component Library | `StructuralParameter` | node connections and emitted rows may change |
@@ -446,7 +458,7 @@ Possible mappings:
 | Plan Builder knob | Maps to | Declared role |
 | --- | --- | --- |
 | `gap_um` | a capacitance model, e.g. `coupling_capacitance = f(gap_um)` | `NumericParameter` if geometry / endpoints are unchanged |
-| `window_length_um` | `line_span(... from_m, to_m ...)` and `CoupledWindowSpec.length_m` | `StructuralParameter` |
+| `window_length_um` | generated line boundaries and `MTLCoupledRLGCSpec.length_m` | `StructuralParameter` |
 | `qwr_length_mm` | distributed line length / segmentation | `StructuralParameter` if node map or emitted rows change |
 | `coupling_fF` | existing `couple_capacitive!` value | `NumericParameter` |
 
@@ -483,7 +495,7 @@ resonator_design_scale
 
 flux_bias
   maps only to SQUID external_flux binding
-  -> NumericParameter or DriveParameter
+  -> NumericParameter or DriveParameter in a future owning component library
 ```
 
 If any mapped target changes topology key, the high-level knob must be treated as structural.
@@ -504,8 +516,9 @@ gap_um
   StructuralParameter if it changes layout geometry, endpoint positions, line spans, or coupling-window geometry
 
 external_flux
-  NumericParameter / DriveParameter if SQUID topology is fixed
-  StructuralParameter if it selects a different component model or junction topology
+  Conceptual until a component library owns SQUID lowering
+  Then NumericParameter / DriveParameter if SQUID topology is fixed
+  Then StructuralParameter if it selects a different component model or junction topology
 ```
 
 Conditional roles must declare their assumptions.
@@ -824,6 +837,8 @@ summarize_sweep_result(result)
 Large batch sweeps should not run only because a slider changed.
 
 Recommended reactive single-point pattern:
+
+The `flux_phi0` names in these patterns assume a future plan builder that owns dc-SQUID and external-flux lowering; they are not accepted by the current Core `JosephsonJunction` API.
 
 ```julia
 params = (

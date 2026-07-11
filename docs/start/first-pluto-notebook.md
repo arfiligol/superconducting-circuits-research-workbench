@@ -15,6 +15,10 @@ sidebar:
 
 Confirm that the research portal is available with `notebooks/pluto/00_parallel_lc_resonator.jl`. This path calls Julia Core directly from Pluto without starting any production runtime first.
 
+Read the SCQ_Design [Ideal Parallel LC Resonator](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/ideal-parallel-lc-resonator.qmd)
+node before interpreting the traces. It separates the ideal component from the
+compiled port network and its wave observable.
+
 ## Goal
 
 Run through a grounded LC resonator notebook and verify that you can:
@@ -22,7 +26,7 @@ Run through a grounded LC resonator notebook and verify that you can:
 - Load local Julia Core packages from Pluto.
 - Create inspectable `CircuitPlan` / `EngineeringGraph` / `HBProblemSpec`.
 - Execute real JosephsonCircuits solver path.
-- See actual S/Z/Y trace figures with Visualizer.
+- See actual S/Y trace figures and inspect the raw Z trace used to derive Y.
 
 ## Fresh Checkout Path
 
@@ -50,10 +54,12 @@ notebooks/pluto/00_parallel_lc_resonator.jl
 When started for the first time, Pluto will parse the notebook environment and local packages. Please let all cells complete and then acknowledge these signals:
 
 - package import cell successfully loaded `SuperconductingCircuitsCore` and `SuperconductingCircuitsVisualizer`.
-- circuit diagram cell shows grounded LC resonator.
+- circuit diagram cell shows the ideal grounded LC component view; the compiled
+  summary separately exposes the port row and resistor.
 - `CircuitPlan`, `EngineeringGraph`, `HBIntent`, `HBProblemSpec` related cells can all produce named objects.
 - solver cell complete, not placeholder output.
-- S/Z/Y traces are displayed as Visualizer figures.
+- raw and verified-PTC Y traces plus S11 magnitude/phase are displayed as
+  Visualizer figures.
 
 ## What To Inspect
 
@@ -69,7 +75,10 @@ local teaching fixture or reusable builder
   -> Visualizer figures
 ```
 
-The useful success signal is not only "the notebook opens". You should see real S11 / impedance-style traces produced from the solver path, not placeholder curves.
+The useful success signal is not only "the notebook opens". You should see real
+S11 and admittance traces produced from the solver path, not placeholder
+curves. The notebook's analytic arrays are acceptance checks and are not plotted
+as substitute solver data.
 
 ## Why This Comes First
 
@@ -84,3 +93,4 @@ Pluto is the direct research cockpit:
 
 - [Reusable Circuit Design](reusable-circuit-design.md) - understand how component libraries, plan builders, `CircuitPlan`, schematic intent, and simulation fit together.
 - [Pluto Examples](../workflows/reusable-circuit-authoring/pluto-examples.mdx) - continue the numbered notebook learning path.
+- [SCQ_Design Port-Termination Compensation](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd) - understand why this example may remove the proven `R_port` shunt for an intrinsic comparison.

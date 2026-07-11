@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: Required fields and semantics for fitted equivalent circuit models.
-version: v1.0.0
-last_updated: 2026-06-14
+version: v1.1.0
+last_updated: 2026-07-10
 updated_by: codex
 title: Equivalent Circuit Model Contract
 description: Defines how fitted equivalent circuit models must remain reviewable and reusable.
@@ -25,13 +25,23 @@ sidebar:
 
 An equivalent circuit model is a reviewed reduction of a distributed or simulated response into a reusable parameter set. It is the meeting point between reusable CircuitPlan research and external FEM-result analysis.
 
+When the model is intended for a quantum Hamiltonian, use the canonical
+coordinate, constraint, Lagrangian, Hamiltonian, and quantization semantics:
+
+- [Canonical knowledge: Circuit Lagrangian, Hamiltonian, and Quantization](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/quantum-circuits/circuit-lagrangian-hamiltonian-quantization.qmd)
+
+When the model is a distributed line built directly from field-extracted
+matrices, use the canonical terminal-basis and lowering semantics:
+
+- [Canonical knowledge: Multiconductor RLGC Matrices](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd)
+
 ## Required Content
 
 | Field | Requirement |
 | --- | --- |
 | model family | RLC, RLGC, coupling model, mode extraction, or another named family |
 | parameters | values with explicit units and physical meaning |
-| source traces | references to the normalized S/Y/Z trace package used for fitting |
+| source evidence | references to the normalized S/Y/Z trace used for fitting or to the validated per-unit-length matrix artifact used directly |
 | fit range | frequency range and any excluded samples |
 | metrics | residual, RMSE, quality score, or another explicit fit quality measure |
 | model trace | reconstructed trace for visual comparison when available |
@@ -53,8 +63,12 @@ The model should be usable by at least one downstream consumer:
 
 - Julia Core study that compares a reusable CircuitPlan response against the fitted equivalent model
 - Python Analysis Core report that validates fit quality
-- scqubits/QuTiP/qutip-qip study that uses fitted parameters as quantum-model or dynamics input
-- QuTiP/qutip-qip or isolated Julia dynamics study that consumes explicit Hamiltonian/operator parameters
+- future quantum-model study that uses fitted circuit parameters
+- future dynamics study that consumes an explicit Hamiltonian or operator artifact
+
+The last two consumers are intended placement contracts only. The Workbench
+currently has no quantum-model package and no quantum-model notebook that
+executes either handoff.
 
 ## Related
 
