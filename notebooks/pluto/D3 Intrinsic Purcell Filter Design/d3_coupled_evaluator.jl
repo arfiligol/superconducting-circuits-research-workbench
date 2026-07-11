@@ -349,6 +349,53 @@ function _slot_frequency_grid(slot_hz, half_width_hz, step_hz)
 	return frequency_range_with_step(slot_hz - half_width_hz, slot_hz + half_width_hz, step_hz)
 end
 
+const D3_INTRINSIC_WIDE_MARGIN_HZ = 500.0e6
+
+"""
+	_intrinsic_wide_capture_grid(design, notch_target_hz, filter_loaded_bare_hz, step_hz)
+
+Build the wide intrinsic-PTC grid used only for final trace capture. The lower
+bound exposes the notch neighborhood, while the design-wide scan stop is the
+declared conservative upper bound for the no-Cext intrinsic resonator region.
+"""
+function _intrinsic_wide_capture_grid(design, notch_target_hz, filter_loaded_bare_hz, step_hz)
+	values = Float64[
+		notch_target_hz,
+		filter_loaded_bare_hz,
+		step_hz,
+		design.scan_stop_ghz,
+	]
+	all(isfinite, values) || error("Wide intrinsic capture range inputs must be finite.")
+	values[3] > 0 || error("Wide intrinsic capture frequency step must be positive.")
+
+	start_hz = values[1] - D3_INTRINSIC_WIDE_MARGIN_HZ
+	stop_hz = values[4] * D3_HZ_PER_GHZ
+	required_minimum_stop_hz = values[2] + D3_INTRINSIC_WIDE_MARGIN_HZ
+	start_hz > 0 || error("Wide intrinsic capture start must remain positive.")
+	stop_hz >= required_minimum_stop_hz || error(
+		"Design scan_stop_ghz must cover filter loaded-bare plus 500 MHz for wide intrinsic final capture.",
+	)
+	stop_hz > start_hz || error("Wide intrinsic capture stop must exceed its start.")
+
+	frequencies_hz = frequency_range_with_step(start_hz, stop_hz, values[3])
+	return (
+		frequencies_hz = frequencies_hz,
+		range_provenance = (
+			contract_id = "d3-intrinsic-wide-final-capture-v1",
+			scope = "final_capture_only",
+			start_hz = start_hz,
+			stop_hz = stop_hz,
+			frequency_step_hz = values[3],
+			notch_target_hz = values[1],
+			start_margin_below_notch_hz = D3_INTRINSIC_WIDE_MARGIN_HZ,
+			filter_loaded_bare_hz = values[2],
+			required_minimum_stop_hz = required_minimum_stop_hz,
+			declared_design_scan_stop_ghz = values[4],
+			stop_role = "conservative_no_cext_intrinsic_resonator_upper_bound",
+		),
+	)
+end
+
 """
     _frequency_grid_sha256(frequencies_hz)
 
@@ -1206,6 +1253,30 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			settings.notch_half_width_hz,
 			settings.max_notch_abs_im_z21_ohm,
 		)
+		intrinsic_wide_trace = if capture_traces
+			wide_capture = _intrinsic_wide_capture_grid(
+				design,
+				notch_target_hz,
+				filter_mode.frequency_hz,
+				settings.frequency_step_hz,
+			)
+			wide_hb = _run_candidate_hb(
+				evaluator,
+				intrinsic_plan,
+				wide_capture.frequencies_hz,
+				"intrinsic wide final capture";
+				compensate_port_indices = (1, 2),
+				removal_intent = :intrinsic_pair_probe_scaffold,
+			)
+			(
+				frequency_grid_sha256 = _frequency_grid_sha256(wide_capture.frequencies_hz),
+				frequencies_hz = wide_capture.frequencies_hz,
+				z21_ptc = ComplexF64.(wide_hb.z21_ptc),
+				range_provenance = wide_capture.range_provenance,
+			)
+		else
+			nothing
+		end
 
 		metrics = (
 			filter_loaded_bare_hz = filter_mode.frequency_hz,
@@ -1269,6 +1340,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				frequencies_hz = notch_frequencies_hz,
 				z21_ptc = ComplexF64.(intrinsic_hb.z21_ptc),
 			),
+			intrinsic_wide = intrinsic_wide_trace,
 		) : nothing
 		record = (
 			status = :valid,
