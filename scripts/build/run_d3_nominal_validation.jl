@@ -24,6 +24,8 @@ const JSON3 = SuperconductingCircuitsCore.JSON3
 include(joinpath(WORKBENCH_ROOT, "notebooks", "pluto", "includes", "hb_example_helpers.jl"))
 const zero_mode_s = HBExampleHelpers.zero_mode_s
 include(joinpath(D3_NOTEBOOK_ROOT, "d3_purcell_common.jl"))
+include(joinpath(D3_NOTEBOOK_ROOT, "d3_floating_qubit_nominal_comparison.jl"))
+using .D3FloatingQubitNominalComparison
 include(joinpath(D3_NOTEBOOK_ROOT, "d3_coupled_evaluator.jl"))
 include(joinpath(D3_NOTEBOOK_ROOT, "d3_nominal_validation.jl"))
 using .D3NominalValidation
@@ -54,6 +56,10 @@ function physical_evaluator_factory(preflight, config, conditions)
     length(matching_cases) == 1 || error("Persisted optimizer selection must resolve to exactly one current Q2D case.")
     selected_case = only(matching_cases)
     feedline = load_d3_feedline_rlgc(config)
+    qubit_input = load_floating_qubit_nominal_input(
+        workspace_path(config["floating_qubit_nominal_workspace_path"]),
+        D3FloatingQubitNominal,
+    )
 
     evaluator_kwargs = Dict(Symbol(key) => value for (key, value) in conditions["evaluator_settings"])
     evaluator_settings = D3SlotEvaluationSettings(; evaluator_kwargs...)
@@ -75,7 +81,10 @@ function physical_evaluator_factory(preflight, config, conditions)
             seed_design,
             feedline,
             hb_settings,
-            evaluator_settings;
+            evaluator_settings,
+            qubit_input.model,
+            qubit_input.input_sha256,
+            floating_qubit_coupling_off_frequency_hz(qubit_input.model);
             journal_path = nothing,
         )
         return candidate_records -> begin
@@ -108,6 +117,8 @@ function main(arguments)
         "common" => workspace_path(preflight.consumed_inventory["d3_purcell_common"]["path"]),
         "evaluator" => workspace_path(preflight.consumed_inventory["d3_coupled_evaluator"]["path"]),
         "semantic_hash" => workspace_path(preflight.consumed_inventory["d3_semantic_hash"]["path"]),
+        "qubit_input" => workspace_path(config["floating_qubit_nominal_workspace_path"]),
+        "qubit_input_loader" => workspace_path(preflight.consumed_inventory["d3_floating_qubit_input_loader"]["path"]),
         "runner" => @__FILE__,
         "nominal_runtime" => runtime_path,
     )

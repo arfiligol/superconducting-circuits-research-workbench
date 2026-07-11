@@ -26,6 +26,7 @@ function make_sources(root)
         "interference_notch_frequency" => Dict("value" => 4.5),
         "filter_loaded_bare_linewidth" => Dict("value" => 25.0),
         "readout_filter_exchange_coupling" => Dict("value" => 20.0),
+        "qubit_readout_coupling" => Dict("value" => 90.0),
         "readout_minus_filter_detuning" => Dict("value" => -2.0),
     )))
     specs = Dict(
@@ -34,15 +35,18 @@ function make_sources(root)
         "notch_hz" => Dict("scale" => 1e6, "weight" => 1.0),
         "filter_loaded_linewidth_hz" => Dict("scale" => 1e6, "weight" => 1.0),
         "j_hz" => Dict("scale" => 1e6, "weight" => 1.0),
+        "g_hz" => Dict("scale" => 1e6, "weight" => 1.0),
         "readout_minus_filter_detuning_hz" => Dict("scale" => 0.5e6, "weight" => 0.0),
     )
     paths["conditions"] = joinpath(root, "workbench", "d3_optimizer_conditions.json")
     write_test_json(paths["conditions"], Dict("metric_specs" => specs, "sol_review" => Dict("status" => "pending", "hash_framing" => SEMANTIC_HASH_FRAMING)))
-    for id in ("q2d", "seed", "common", "evaluator", "semantic_hash", "runner", "nominal_runtime")
+    for id in ("q2d", "seed", "common", "evaluator", "semantic_hash", "qubit_input_loader", "runner", "nominal_runtime")
         paths[id] = joinpath(root, "workbench", "$(id).txt")
         mkpath(dirname(paths[id]))
         write(paths[id], "synthetic $(id) source\n")
     end
+    paths["qubit_input"] = joinpath(root, "workbench", "private", "floating-qubit.json")
+    write_test_json(paths["qubit_input"], Dict("model_id" => "synthetic-floating-qubit"))
     return paths
 end
 
@@ -55,6 +59,7 @@ function make_optimizer_fixture(root, paths)
         "orpen_case_json_workspace_path" => workspace_relative(paths["q2d"], root),
         "design_csv_workspace_root" => workspace_relative(dirname(paths["seed"]), root),
         "design_csv_filename" => basename(paths["seed"]),
+        "floating_qubit_nominal_workspace_path" => workspace_relative(paths["qubit_input"], root),
     )
     source_ids = Dict(
         "target_contract" => "target",
@@ -64,6 +69,8 @@ function make_optimizer_fixture(root, paths)
         "d3_purcell_common" => "common",
         "d3_coupled_evaluator" => "evaluator",
         "d3_semantic_hash" => "semantic_hash",
+        "floating_qubit_nominal" => "qubit_input",
+        "d3_floating_qubit_input_loader" => "qubit_input_loader",
     )
     consumed = [
         Dict(
@@ -86,6 +93,10 @@ function make_optimizer_fixture(root, paths)
             "source_row" => Dict("id" => "synthetic-row"),
         ),
         "consumed_files" => consumed,
+        "floating_qubit_nominal" => Dict(
+            "model_id" => "synthetic-floating-qubit",
+            "input_sha256" => D3NominalValidation.file_sha256(paths["qubit_input"]),
+        ),
     )
     schema = "d3-slot-execution-manifest.v1"
     contract = JSON3.read(JSON3.write(contract), Dict{String,Any})
@@ -147,6 +158,7 @@ function synthetic_factory(factory_calls, evaluation_calls)
         notch_hz = 4.5e9,
         filter_loaded_linewidth_hz = 25e6,
         j_hz = 20e6,
+        g_hz = 90e6,
     )
     return () -> begin
         factory_calls[] += 1

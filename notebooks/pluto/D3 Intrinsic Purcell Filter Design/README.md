@@ -167,9 +167,9 @@ simulation.
 
 - [`d3_coupled_evaluator.jl`](d3_coupled_evaluator.jl)
   owns the real single-slot HB evaluation, loaded-bare references, complex-S21
-  $J$ fit, independent pole cross-check, notch extraction, and physical
-  rejection evidence. It reports the current model truthfully as LC-only with
-  unavailable source $R'/G'$ assumed zero for exploration.
+  $J$ fit, fixed nominal floating-qubit loading, linearized $g$ extraction,
+  independent pole cross-check, notch extraction, and physical rejection
+  evidence. Unavailable source $R'/G'$ remains zero for lossless exploration.
 
 - [`d3_coupled_optimizer.jl`](d3_coupled_optimizer.jl)
   owns the generic bounded cost accounting, exact cache, CMA-ES search,
@@ -240,23 +240,26 @@ optimizer. Failed, stale, candidate-mismatched, or source-mismatched directories
 remain visible rejected evidence and are never substituted for Final
 Validation.
 
-## Nominal Floating-Qubit Loading Comparison
+## Nominal Floating-Qubit Loading
 
-The floating-qubit loading check is separate from optimization and independent
-nominal-validation promotion. It freshly solves the same frozen Layout Specs
-twice on one frequency grid: first without the qubit, then with the reduced
-linearized qubit connected only to `readout_open_tail`. The current CLI accepts
-the frozen historical-exploration run contract and labels the result
-`historical_exploration_layout_input`; it does not turn that run into Final
-Validation.
+The original no-qubit / with-qubit comparison remains historical diagnostic
+provenance. Current optimization always connects the reduced linearized qubit
+to `readout_open_tail`; its five capacitances and per-junction $L_J$ are fixed
+private input, not optimizer variables. Each readout probe uses one Slot-local
+filter/readout grid and one qubit-local grid, then extrapolates the assigned
+pole-pair $g$ to zero probe. The local two-mode $J$ fit fails fast if the
+qubit-like pole enters its trace window.
 
 The private JSON input uses schema `d3-floating-qubit-nominal.v1` and must
 contain exactly `model_id`, `capacitance_source_id`, `C01_fF`, `C02_fF`,
 `C12_fF`, `Cr1_fF`, `Cr2_fF`, and `L_J_per_junction_nH` in addition to
-`schema_version`. All branch values are positive physical capacitances. The
-public nominal is 24 nH for each of two identical parallel small-signal
-Josephson branches; design-specific capacitances stay outside this repository's
-tracked source.
+`schema_version`. All branch values are positive physical quantities and stay
+outside this repository's tracked source. Current configuration resolves the
+ignored input at `build/private_inputs/d3_floating_qubit_nominal.json` and
+hash-binds both its bytes and the loader source into every new execution.
+
+The following CLI only reproduces the historical comparison; it is not the
+current optimizer entrypoint.
 
 Run from the Workbench root and choose a new output directory under `build/`:
 

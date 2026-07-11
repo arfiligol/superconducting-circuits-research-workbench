@@ -115,6 +115,9 @@ function main(arguments)
     feedline = load_d3_feedline_rlgc(preflight.config_snapshot)
 
     evaluator_values = listed_values(contract["evaluator_settings"])
+    get!(evaluator_values, :qubit_local_half_width_hz, 100e6)
+    get!(evaluator_values, :max_qubit_anchor_distance_hz, 50e6)
+    get!(evaluator_values, :min_g_extrapolation_r2, 0.9999)
     evaluator_settings = D3SlotEvaluationSettings(; evaluator_values...)
     hb_values = listed_values(contract["hb_settings"])
     hb_settings = D3HBSettings(
@@ -131,10 +134,19 @@ function main(arguments)
         ),
     )
     require_feedline_port_match(feedline, hb_settings)
-    evaluator = D3SlotEvaluator(selected_case, design, feedline, hb_settings, evaluator_settings; journal_path = nothing)
-
     slot_hz = Float64(design.slot_target_ghz) * D3_HZ_PER_GHZ
-    isolated_qubit_hz = floating_qubit_isolated_frequency_hz(qubit_input.model)
+    isolated_qubit_hz = floating_qubit_coupling_off_frequency_hz(qubit_input.model)
+    evaluator = D3SlotEvaluator(
+        selected_case,
+        design,
+        feedline,
+        hb_settings,
+        evaluator_settings,
+        qubit_input.model,
+        qubit_input.input_sha256,
+        isolated_qubit_hz;
+        journal_path = nothing,
+    )
     half_width_hz = evaluator_settings.pair_trace_half_width_hz
     start_hz = min(slot_hz, isolated_qubit_hz) - half_width_hz
     stop_hz = max(slot_hz, isolated_qubit_hz) + half_width_hz

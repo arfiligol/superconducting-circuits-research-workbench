@@ -842,9 +842,15 @@ function build_single_pair_feedline_plan(
 	return attach_sparameter_hb_intent!(circuit_plan; hb_settings = hb_settings)
 end
 
-function build_intrinsic_pair_plan(case, design; hb_settings)
+function build_intrinsic_pair_plan(case, design; hb_settings, floating_qubit_nominal = nothing)
 	circuit_plan = CircuitPlan("d3-intrinsic-pair-$(design.id)")
 	pair_nodes = add_mtl_pair!(circuit_plan; case = case, design = design, index = 1, hb_settings = hb_settings)
+	isnothing(floating_qubit_nominal) || add_floating_qubit_nominal!(
+		circuit_plan,
+		pair_nodes.readout_open_tail,
+		floating_qubit_nominal;
+		id_prefix = "floating_qubit_nominal_intrinsic_1",
+	)
 	external_port!(
 		circuit_plan;
 		id = :input_port,

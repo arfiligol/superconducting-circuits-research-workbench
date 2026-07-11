@@ -51,6 +51,9 @@ struct D3SlotEvaluationSettings
 	readout_probe_capacitances_fF::Vector{Float64}
 	min_readout_frequency_extrapolation_r2::Float64
 	min_readout_linewidth_extrapolation_r2::Float64
+	qubit_local_half_width_hz::Float64
+	max_qubit_anchor_distance_hz::Float64
+	min_g_extrapolation_r2::Float64
 	max_notch_abs_im_z21_ohm::Float64
 	j_bounds_hz::Tuple{Float64,Float64}
 	j_seeds_hz::Vector{Float64}
@@ -97,6 +100,9 @@ struct D3SlotEvaluationSettings
 		readout_probe_capacitances_fF,
 		min_readout_frequency_extrapolation_r2,
 		min_readout_linewidth_extrapolation_r2,
+		qubit_local_half_width_hz,
+		max_qubit_anchor_distance_hz,
+		min_g_extrapolation_r2,
 		max_notch_abs_im_z21_ohm,
 		j_bounds_hz,
 		j_seeds_hz,
@@ -133,6 +139,7 @@ struct D3SlotEvaluationSettings
 			frequency_step_hz,
 			feedline_length_um,
 			loaded_bare_half_width_hz,
+			qubit_local_half_width_hz,
 			pair_trace_half_width_hz,
 			pair_fit_half_width_hz,
 			pair_background_inner_half_width_hz,
@@ -151,6 +158,7 @@ struct D3SlotEvaluationSettings
 			max_vector_rms_error,
 			max_vector_pole_disagreement_hz,
 			max_pair_pole_center_offset_hz,
+			max_qubit_anchor_distance_hz,
 		]
 		all(value -> isfinite(value) && value >= 0, nonnegative_gate_values) ||
 			error("D3 max/min gates that admit exact equality must be finite and non-negative.")
@@ -210,6 +218,7 @@ struct D3SlotEvaluationSettings
 		r2_values = Float64[
 			min_readout_frequency_extrapolation_r2,
 			min_readout_linewidth_extrapolation_r2,
+			min_g_extrapolation_r2,
 			min_channel_calibration_complex_r2,
 			min_channel_calibration_abs_r2,
 			min_complex_r2,
@@ -244,6 +253,9 @@ struct D3SlotEvaluationSettings
 			probe_caps,
 			Float64(min_readout_frequency_extrapolation_r2),
 			Float64(min_readout_linewidth_extrapolation_r2),
+			Float64(qubit_local_half_width_hz),
+			Float64(max_qubit_anchor_distance_hz),
+			Float64(min_g_extrapolation_r2),
 			Float64(max_notch_abs_im_z21_ohm),
 			(bounds[1], bounds[2]),
 			seeds,
@@ -285,23 +297,43 @@ mutable struct D3SlotEvaluator
 	feedline::D3FeedlineRLGC
 	hb_settings::D3HBSettings
 	settings::D3SlotEvaluationSettings
+	floating_qubit_nominal::D3FloatingQubitNominal
+	floating_qubit_input_sha256::String
+	qubit_coupling_off_frequency_hz::Float64
 	reference_cache::Dict{String,Vector{ComplexF64}}
 	records::Dict{Tuple,Any}
 	journal_path::Union{Nothing,String}
 end
 
-function D3SlotEvaluator(case, seed_design, feedline, hb_settings, settings; journal_path)
+function D3SlotEvaluator(
+	case,
+	seed_design,
+	feedline,
+	hb_settings,
+	settings,
+	floating_qubit_nominal,
+	floating_qubit_input_sha256,
+	qubit_coupling_off_frequency_hz;
+	journal_path,
+)
 	selected_journal_path = isnothing(journal_path) ? nothing : String(journal_path)
 	if !isnothing(selected_journal_path)
 		isfile(selected_journal_path) && error("Refusing to overwrite D3 evaluator journal: $(selected_journal_path)")
 		mkpath(dirname(selected_journal_path))
 	end
+	input_sha256 = String(floating_qubit_input_sha256)
+	occursin(r"^[0-9a-f]{64}$", input_sha256) || error("Floating-qubit input identity must be a lowercase SHA-256.")
+	bare_frequency_hz = Float64(qubit_coupling_off_frequency_hz)
+	isfinite(bare_frequency_hz) && bare_frequency_hz > 0 || error("Floating-qubit coupling-off frequency must be finite and positive.")
 	return D3SlotEvaluator(
 		case,
 		seed_design,
 		feedline,
 		hb_settings,
 		settings,
+		floating_qubit_nominal,
+		input_sha256,
+		bare_frequency_hz,
 		Dict{String,Vector{ComplexF64}}(),
 		Dict{Tuple,Any}(),
 		selected_journal_path,
@@ -422,27 +454,33 @@ function _d3_trace_identity(
 	candidate_identity,
 	loaded_grid_sha256,
 	pair_grid_sha256,
+	qubit_grid_sha256,
+	floating_qubit_input_sha256,
 )
 	for (label, hash) in (
 		("loaded", loaded_grid_sha256),
 		("pair", pair_grid_sha256),
+		("qubit", qubit_grid_sha256),
 	)
 		occursin(r"^[0-9a-f]{64}$", String(hash)) ||
 			error("$(label) frequency-grid identity must be a lowercase SHA-256 digest.")
 	end
+	occursin(r"^[0-9a-f]{64}$", String(floating_qubit_input_sha256)) ||
+		error("Floating-qubit input identity must be a lowercase SHA-256 digest.")
 	identity = String(candidate_identity)
 	design = String(design_id)
 	case = String(case_id)
 	return (
-		reference_contract_id = "d3-reference-contract|case=$(case)|$(identity)",
+		reference_contract_id = "d3-reference-contract|case=$(case)|floating_qubit_sha256=$(floating_qubit_input_sha256)|$(identity)",
 		filter_loaded_bare_reference_id = "d3-filter-loaded-bare|grid_sha256=$(loaded_grid_sha256)|design=$(design)|$(identity)",
-		readout_loaded_bare_reference_id = "d3-readout-loaded-bare-zero-probe|grid_sha256=$(loaded_grid_sha256)|design=$(design)|$(identity)",
+		readout_loaded_bare_reference_id = "d3-qubit-loaded-readout-zero-probe|grid_sha256=$(loaded_grid_sha256)|floating_qubit_sha256=$(floating_qubit_input_sha256)|design=$(design)|$(identity)",
 		filter_only_trace_id = "d3-filter-only-hb|grid_sha256=$(loaded_grid_sha256)|design=$(design)|$(identity)",
 		loaded_empty_feedline_trace_id = "d3-empty-feedline-hb|grid_sha256=$(loaded_grid_sha256)|case=$(case)",
 		calibration_id = "d3-filter-channel|grid_sha256=$(loaded_grid_sha256)|case=$(case)|$(identity)",
 		pair_measured_trace_id = "d3-single-pair-hb|grid_sha256=$(pair_grid_sha256)|design=$(design)|$(identity)",
 		pair_empty_feedline_trace_id = "d3-empty-feedline-hb|grid_sha256=$(pair_grid_sha256)|case=$(case)",
 		pair_assignment_id = "$(design)|grid_sha256=$(pair_grid_sha256)|$(identity)",
+		qubit_frequency_grid_sha256 = String(qubit_grid_sha256),
 	)
 end
 
@@ -667,6 +705,52 @@ function _fit_readout_probe_loaded_mode(
 			filter_probe_mode = filter_probe_mode,
 		),
 	))
+end
+
+function _fit_qubit_probe_mode(frequencies_hz, normalized_s21, bare_qubit_hz, label, settings)
+	mode = _fit_single_loaded_mode(
+		frequencies_hz,
+		normalized_s21,
+		bare_qubit_hz,
+		label,
+		settings,
+		require_slot_ownership = false,
+	)
+	anchor_distance_hz = abs(mode.frequency_hz - bare_qubit_hz)
+	anchor_distance_hz <= settings.max_qubit_anchor_distance_hz || reject_d3_candidate(
+		"mode_assignment.qubit_anchor_distance",
+		"$(label) pole lies too far from the diagonal-preserving coupling-off qubit frequency.";
+		details = (
+			qubit_pole_hz = mode.frequency_hz,
+			qubit_coupling_off_frequency_hz = bare_qubit_hz,
+			anchor_distance_hz = anchor_distance_hz,
+			max_qubit_anchor_distance_hz = settings.max_qubit_anchor_distance_hz,
+		),
+	)
+	return merge(mode, (coupling_off_anchor_hz = bare_qubit_hz, anchor_distance_hz = anchor_distance_hz))
+end
+
+"""Extract real linearized g from one assigned qubit/readout pole pair."""
+function _linearized_g_hz(bare_qubit_hz, qubit_pole_hz, readout_pole_hz)
+	values = Float64[bare_qubit_hz, qubit_pole_hz, readout_pole_hz]
+	all(isfinite, values) || reject_d3_candidate(
+		"g.nonfinite_poles",
+		"Linearized g requires finite bare-qubit and assigned coupled-pole frequencies.";
+		details = (values_hz = values,),
+	)
+	lower_hz, upper_hz = extrema(values[2:3])
+	lower_hz < values[1] < upper_hz || reject_d3_candidate(
+		"g.bare_frequency_not_bracketed",
+		"The coupling-off qubit frequency must lie strictly between the assigned coupling-on qubit/readout poles.";
+		details = (bare_qubit_hz = values[1], lower_pole_hz = lower_hz, upper_pole_hz = upper_hz),
+	)
+	radicand_hz2 = (values[1] - lower_hz) * (upper_hz - values[1])
+	isfinite(radicand_hz2) && radicand_hz2 > 0 || reject_d3_candidate(
+		"g.invalid_radicand",
+		"Linearized g radicand must be finite and positive.";
+		details = (radicand_hz2 = radicand_hz2,),
+	)
+	return sqrt(radicand_hz2)
 end
 
 function _quadratic_zero_intercept(x_values, y_values, minimum_r2, label, rejection_code)
@@ -923,12 +1007,20 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			settings.frequency_step_hz,
 		)
 		pair_grid_sha256 = _frequency_grid_sha256(pair_frequencies_hz)
+		qubit_frequencies_hz = _slot_frequency_grid(
+			evaluator.qubit_coupling_off_frequency_hz,
+			settings.qubit_local_half_width_hz,
+			settings.frequency_step_hz,
+		)
+		qubit_grid_sha256 = _frequency_grid_sha256(qubit_frequencies_hz)
 		trace_identity = _d3_trace_identity(
 			evaluator.case.id,
 			design.id,
 			candidate_identity,
 			loaded_grid_sha256,
 			pair_grid_sha256,
+			qubit_grid_sha256,
+			evaluator.floating_qubit_input_sha256,
 		)
 		reference_contract_id = trace_identity.reference_contract_id
 		filter_loaded_bare_reference_id = trace_identity.filter_loaded_bare_reference_id
@@ -939,6 +1031,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		pair_measured_trace_id = trace_identity.pair_measured_trace_id
 		pair_empty_feedline_trace_id = trace_identity.pair_empty_feedline_trace_id
 		loaded_reference = _reference_trace!(evaluator, loaded_frequencies_hz)
+		qubit_reference = _reference_trace!(evaluator, qubit_frequencies_hz)
 		filter_plan = build_maxwell_diagonal_pair_feedline_plan(
 			evaluator.case,
 			design;
@@ -1020,8 +1113,10 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		)
 		readout_modes = Any[]
 		readout_captures = Any[]
+		g_values_hz = Float64[]
 		for capacitance_fF in settings.readout_probe_capacitances_fF
 			readout_probe_trace_id = "d3-readout-probe-hb|grid_sha256=$(loaded_grid_sha256)|capacitance_fF=$(bitstring(capacitance_fF))|design=$(design.id)|$(candidate_identity)"
+			qubit_probe_trace_id = "d3-qubit-probe-hb|grid_sha256=$(qubit_grid_sha256)|capacitance_fF=$(bitstring(capacitance_fF))|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
 			readout_plan = build_maxwell_diagonal_pair_feedline_plan(
 				evaluator.case,
 				design;
@@ -1030,6 +1125,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				feedline_length_um = settings.feedline_length_um,
 				feedline = evaluator.feedline,
 				hb_settings = evaluator.hb_settings,
+				floating_qubit_nominal = evaluator.floating_qubit_nominal,
 			)
 			readout_hb = _run_candidate_hb(
 				evaluator,
@@ -1051,10 +1147,49 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				"Maxwell-diagonal pair readout loaded-bare probe $(capacitance_fF) fF",
 				settings,
 			)
+			qubit_hb = _run_candidate_hb(
+				evaluator,
+				readout_plan,
+				qubit_frequencies_hz,
+				"Maxwell-diagonal pair qubit probe $(capacitance_fF) fF",
+			)
+			qubit_normalized = _normalized_s21(
+				qubit_frequencies_hz,
+				qubit_hb.s21,
+				qubit_reference,
+				settings.min_reference_magnitude,
+			)
+			qubit_mode = _fit_qubit_probe_mode(
+				qubit_frequencies_hz,
+				qubit_normalized,
+				evaluator.qubit_coupling_off_frequency_hz,
+				"Maxwell-diagonal pair qubit probe $(capacitance_fF) fF",
+				settings,
+			)
+			(first(loaded_frequencies_hz) <= qubit_mode.frequency_hz <= last(loaded_frequencies_hz)) && reject_d3_candidate(
+				"mode_assignment.qubit_inside_slot_grid",
+				"Assigned qubit-like pole lies inside the slot-local filter/readout grid.";
+				details = (
+					qubit_pole_hz = qubit_mode.frequency_hz,
+					slot_grid_start_hz = first(loaded_frequencies_hz),
+					slot_grid_stop_hz = last(loaded_frequencies_hz),
+				),
+			)
+			g_hz = _linearized_g_hz(
+				evaluator.qubit_coupling_off_frequency_hz,
+				qubit_mode.frequency_hz,
+				readout_mode.frequency_hz,
+			)
+			push!(g_values_hz, g_hz)
 			push!(readout_modes, merge(readout_mode, (
 				frequency_grid_sha256 = loaded_grid_sha256,
 				measured_trace_id = readout_probe_trace_id,
 				reference_trace_id = loaded_empty_feedline_trace_id,
+				qubit_mode = merge(qubit_mode, (
+					frequency_grid_sha256 = qubit_grid_sha256,
+					measured_trace_id = qubit_probe_trace_id,
+				)),
+				g_hz = g_hz,
 			)))
 			capture_traces && push!(readout_captures, (
 				capacitance_fF = capacitance_fF,
@@ -1064,6 +1199,11 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				frequencies_hz = loaded_frequencies_hz,
 				s21 = ComplexF64.(readout_hb.s21),
 				reference_s21 = loaded_reference,
+				qubit_frequency_grid_sha256 = qubit_grid_sha256,
+				qubit_measured_trace_id = qubit_probe_trace_id,
+				qubit_frequencies_hz = qubit_frequencies_hz,
+				qubit_s21 = ComplexF64.(qubit_hb.s21),
+				qubit_reference_s21 = qubit_reference,
 			))
 		end
 		readout_frequency_fit = _quadratic_zero_intercept(
@@ -1080,8 +1220,21 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			"readout weak-probe total loaded linewidth",
 			"readout_extrapolation.linewidth",
 		)
+		g_fit = _quadratic_zero_intercept(
+			settings.readout_probe_capacitances_fF,
+			g_values_hz,
+			settings.min_g_extrapolation_r2,
+			"linearized g weak-probe",
+			"g_extrapolation",
+		)
 		readout_frequency_hz = readout_frequency_fit.intercept
 		readout_loaded_linewidth_hz = readout_linewidth_fit.intercept
+		g_hz = g_fit.intercept
+		isfinite(g_hz) && g_hz > 0 || reject_d3_candidate(
+			"g_extrapolation.nonpositive_intercept",
+			"Zero-probe linearized g intercept must be finite and strictly positive.";
+			details = (g_fit = g_fit,),
+		)
 		abs(readout_frequency_hz - slot_hz) <= settings.loaded_bare_ownership_half_width_hz ||
 			reject_d3_candidate(
 				"loaded_bare.readout_ownership_window",
@@ -1103,6 +1256,16 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			feedline_length_um = settings.feedline_length_um,
 			feedline = evaluator.feedline,
 			hb_settings = evaluator.hb_settings,
+			floating_qubit_nominal = evaluator.floating_qubit_nominal,
+		)
+		any(mode -> first(pair_frequencies_hz) <= mode.qubit_mode.frequency_hz <= last(pair_frequencies_hz), readout_modes) && reject_d3_candidate(
+			"j_fit.qubit_pole_inside_trace_window",
+			"The assigned qubit-like pole lies inside the local two-mode J trace window.";
+			details = (
+				qubit_probe_poles_hz = [mode.qubit_mode.frequency_hz for mode in readout_modes],
+				pair_trace_start_hz = first(pair_frequencies_hz),
+				pair_trace_stop_hz = last(pair_frequencies_hz),
+			),
 		)
 		pair_hb = _run_candidate_hb(
 			evaluator,
@@ -1160,8 +1323,9 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				"empty_feedline_trace_id" => pair_empty_feedline_trace_id,
 				"filter_loaded_bare_reference_id" => filter_loaded_bare_reference_id,
 				"readout_loaded_bare_reference_id" => readout_loaded_bare_reference_id,
-				"loaded_bare_reference_topology" => "maxwell_diagonal_lc_with_zeroed_offdiagonal_entries",
-				"quantity_scope" => "lc_only",
+				"loaded_bare_reference_topology" => "maxwell_diagonal_filter_plus_nominal_floating_qubit_loaded_readout",
+				"quantity_scope" => "linearized_nominal_floating_qubit_loaded_lc",
+				"floating_qubit_input_sha256" => evaluator.floating_qubit_input_sha256,
 				"pair_assignment_id" => trace_identity.pair_assignment_id,
 				"port_plane" => port_plane,
 				"feedline_source" => evaluator.feedline.source,
@@ -1237,6 +1401,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			evaluator.case,
 			design;
 			hb_settings = evaluator.hb_settings,
+			floating_qubit_nominal = evaluator.floating_qubit_nominal,
 		)
 		intrinsic_hb = _run_candidate_hb(
 			evaluator,
@@ -1289,6 +1454,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			notch_hz = notch.frequency_hz,
 			filter_loaded_linewidth_hz = filter_loaded_linewidth_hz,
 			j_hz = Float64(j_fit["params"]["j_hz"]),
+			g_hz = g_hz,
 		)
 		diagnostics = (
 			status = "success",
@@ -1297,12 +1463,23 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			readout_probe_modes = readout_modes,
 			readout_zero_probe_frequency_fit = readout_frequency_fit,
 			readout_zero_probe_linewidth_fit = readout_linewidth_fit,
+			g_zero_probe_fit = g_fit,
 			readout_loaded_linewidth_hz = readout_loaded_linewidth_hz,
+			floating_qubit = (
+				model_id = evaluator.floating_qubit_nominal.model_id,
+				capacitance_source_id = evaluator.floating_qubit_nominal.capacitance_source_id,
+				input_sha256 = evaluator.floating_qubit_input_sha256,
+				topology_id = "d3-floating-qubit-five-capacitance-two-parallel-lj-v1",
+				coupling_off_reference = "Cr endpoint shunts retain nodal diagonals",
+				coupling_off_frequency_hz = evaluator.qubit_coupling_off_frequency_hz,
+				qubit_frequency_grid_sha256 = qubit_grid_sha256,
+			),
 			reference_contract_id = reference_contract_id,
 			filter_loaded_bare_reference_id = filter_loaded_bare_reference_id,
 			readout_loaded_bare_reference_id = readout_loaded_bare_reference_id,
 			loaded_frequency_grid_sha256 = loaded_grid_sha256,
 			pair_frequency_grid_sha256 = pair_grid_sha256,
+			qubit_frequency_grid_sha256 = qubit_grid_sha256,
 			channel_calibration = _compact_channel_calibration(channel_calibration),
 			j_fit = _compact_j_fit(j_fit),
 			vector_crosscheck_poles_hz = vector_poles_hz,

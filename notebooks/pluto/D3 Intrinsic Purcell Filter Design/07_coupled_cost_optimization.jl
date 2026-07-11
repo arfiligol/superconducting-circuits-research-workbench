@@ -49,6 +49,8 @@ begin
 	include(joinpath(@__DIR__, "..", "includes", "hb_example_helpers.jl"))
 	zero_mode_s = HBExampleHelpers.zero_mode_s
 	include(joinpath(@__DIR__, "d3_purcell_common.jl"))
+	include(joinpath(@__DIR__, "d3_floating_qubit_nominal_comparison.jl"))
+	using .D3FloatingQubitNominalComparison
 	include(joinpath(@__DIR__, "d3_coupled_evaluator.jl"))
 	include(joinpath(@__DIR__, "d3_coupled_optimizer.jl"))
 	using .D3CoupledOptimizer
@@ -83,10 +85,12 @@ begin
 		"readout_minus_filter_detuning_hz", "loaded_bare_center_hz",
 		"model_paired_pole_center_hz", "vector_paired_pole_center_hz",
 		"pair_pole_center_offset_hz", "notch_hz", "filter_loaded_linewidth_hz", "j_hz",
+		"g_hz",
 	]
 	const D3_OPTIMIZER_METRIC_IDS = [
 		"filter_loaded_bare_hz", "readout_loaded_bare_hz", "notch_hz",
 		"filter_loaded_linewidth_hz", "j_hz", "readout_minus_filter_detuning_hz",
+		"g_hz",
 	]
 	const D3_OUTPUT_FILES = Set([
 		"status.json", "condition_manifest.json", "config_snapshot.json", "hash_inventory.json",
@@ -158,6 +162,7 @@ begin
 			"notch_hz" => Float64(targets["interference_notch_frequency"]["value"]) * 1e9,
 			"filter_loaded_linewidth_hz" => Float64(targets["filter_loaded_bare_linewidth"]["value"]) * 1e6,
 			"j_hz" => Float64(targets["readout_filter_exchange_coupling"]["value"]) * 1e6,
+			"g_hz" => Float64(targets["qubit_readout_coupling"]["value"]) * 1e6,
 			"readout_minus_filter_detuning_hz" => Float64(targets["readout_minus_filter_detuning"]["value"]) * 1e6,
 		)
 	end
@@ -176,11 +181,14 @@ begin
 		[row.slot_target_ghz for row in designs] == slots || error("CSV Slot rows must exactly match the canonical ordered Slot grid.")
 		cases = [case for case in load_orpen_cases(case_path) if case.id == Symbol(case_id)]
 		length(cases) == 1 || error("The configured OrPen case must exist exactly once.")
+		qubit_path = d3_workspace_path(config["floating_qubit_nominal_workspace_path"])
+		qubit_input = load_floating_qubit_nominal_input(qubit_path, D3FloatingQubitNominal)
 		return (
 			seed_path = seed_path, case_path = case_path, case_id = case_id,
 			target_set_id = target_set_id, designs = designs, slots = slots,
 			selected_case = only(cases), csv_sha256 = d3_file_sha256(seed_path),
 			case_sha256 = d3_file_sha256(case_path),
+			qubit_input = qubit_input,
 		)
 	end
 
@@ -350,6 +358,8 @@ begin
 			pair_background_inner_half_width_hz = e["pair_background_inner_half_width_hz"], notch_half_width_hz = e["notch_half_width_hz"],
 			readout_probe_capacitances_fF = e["readout_probe_capacitances_fF"], min_readout_frequency_extrapolation_r2 = e["min_readout_frequency_extrapolation_r2"],
 			min_readout_linewidth_extrapolation_r2 = e["min_readout_linewidth_extrapolation_r2"], max_notch_abs_im_z21_ohm = e["max_notch_abs_im_z21_ohm"],
+			qubit_local_half_width_hz = e["qubit_local_half_width_hz"], max_qubit_anchor_distance_hz = e["max_qubit_anchor_distance_hz"],
+			min_g_extrapolation_r2 = e["min_g_extrapolation_r2"],
 			j_bounds_hz = e["j_bounds_hz"], j_seeds_hz = e["j_seeds_hz"], linear_ls_rcond = e["linear_ls_rcond"],
 			least_squares_max_nfev = e["least_squares_max_nfev"], least_squares_ftol = e["least_squares_ftol"], least_squares_xtol = e["least_squares_xtol"],
 			least_squares_gtol = e["least_squares_gtol"], least_squares_diff_step = e["least_squares_diff_step"],
@@ -386,6 +396,8 @@ begin
 			"case_id" => catalog.case_id, "target_set_id" => catalog.target_set_id,
 			"slot_target_ghz" => Float64(slot_ghz), "source_row_sha256" => row_sha,
 			"source_csv_sha256" => catalog.csv_sha256, "orpen_case_sha256" => catalog.case_sha256,
+			"floating_qubit_input_sha256" => catalog.qubit_input.input_sha256,
+			"floating_qubit_model_id" => catalog.qubit_input.model.model_id,
 		))
 		consumed_paths = Dict(
 			"target_contract" => contracts.target_path, "optimizer_conditions" => D3_CONDITIONS_PATH,
@@ -393,6 +405,8 @@ begin
 			"d3_semantic_hash" => joinpath(@__DIR__, "d3_semantic_hash.jl"),
 			"d3_coupled_evaluator" => joinpath(@__DIR__, "d3_coupled_evaluator.jl"),
 			"d3_coupled_optimizer" => joinpath(@__DIR__, "d3_coupled_optimizer.jl"),
+			"d3_floating_qubit_input_loader" => joinpath(@__DIR__, "d3_floating_qubit_nominal_comparison.jl"),
+			"floating_qubit_nominal" => catalog.qubit_input.input_path,
 			"notebook07" => @__FILE__, "seed_csv" => catalog.seed_path, "orpen_case_json" => catalog.case_path,
 		)
 		hash_inventory = [begin
@@ -412,6 +426,13 @@ begin
 			"target_contract" => Dict("target_id" => contracts.target["target_id"], "revision" => contracts.target["revision"], "sha256" => contracts.target_sha256, "decision_records" => contracts.target["targets"]),
 			"optimizer_conditions" => Dict("conditions_id" => contracts.conditions["conditions_id"], "sha256" => contracts.conditions_sha256, "hash_framing" => SEMANTIC_HASH_FRAMING, "sol_review" => contracts.conditions["sol_review"]),
 			"selection" => Dict("case_id" => catalog.case_id, "target_set_id" => catalog.target_set_id, "slot_target_ghz" => Float64(slot_ghz), "source_row" => source_row, "source_row_sha256" => row_sha, "source_csv_sha256" => catalog.csv_sha256),
+			"floating_qubit_nominal" => Dict(
+				"model_id" => catalog.qubit_input.model.model_id,
+				"capacitance_source_id" => catalog.qubit_input.model.capacitance_source_id,
+				"input_sha256" => catalog.qubit_input.input_sha256,
+				"topology_id" => "d3-floating-qubit-five-capacitance-two-parallel-lj-v1",
+				"coupling_off_frequency_hz" => floating_qubit_coupling_off_frequency_hz(catalog.qubit_input.model),
+			),
 			"derived_metrics" => metric_records, "derived_variables" => variable_records,
 			"execution_fingerprint_sha256" => fingerprint, "consumed_files" => hash_inventory,
 			"artifact_gate" => contracts.conditions["artifact_gate"], "output_filenames" => sort!(collect(D3_OUTPUT_FILES)),
@@ -429,6 +450,7 @@ begin
 			initial_seed_evaluation_budget = Int(contracts.conditions["optimization"]["initial_seed_evaluation_budget"]),
 			manifest = manifest, execution_sha256 = execution_sha, execution_fingerprint_sha256 = fingerprint,
 			hash_inventory = hash_inventory, approval_status = "agent_proposed",
+			floating_qubit_input = catalog.qubit_input,
 		)
 	end
 
@@ -438,7 +460,17 @@ end
 # ╔═╡ 5cf81fe5-e47b-4850-a661-b2548f5488d4
 begin
 	function d3_new_evaluator(runtime; journal_path)
-		D3SlotEvaluator(runtime.selected_case, runtime.seed_design, runtime.feedline, runtime.hb_settings, runtime.evaluator_settings; journal_path = journal_path)
+		D3SlotEvaluator(
+			runtime.selected_case,
+			runtime.seed_design,
+			runtime.feedline,
+			runtime.hb_settings,
+			runtime.evaluator_settings,
+			runtime.floating_qubit_input.model,
+			runtime.floating_qubit_input.input_sha256,
+			floating_qubit_coupling_off_frequency_hz(runtime.floating_qubit_input.model);
+			journal_path = journal_path,
+		)
 	end
 
 	function d3_optimizer_evaluation(record)

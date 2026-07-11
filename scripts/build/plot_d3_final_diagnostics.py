@@ -59,6 +59,7 @@ NOMINAL_OBJECTIVE_IDS = {
     "notch_hz",
     "filter_loaded_linewidth_hz",
     "j_hz",
+    "g_hz",
 }
 NOMINAL_VARIABLE_IDS = [
     "lc_um",
@@ -497,7 +498,7 @@ def _validate_notebook_record_shape(
     record: dict[str, Any], expected_step_hz: float | None
 ) -> None:
     """Validate the diagnostics and traces consumed by Notebook 08."""
-    mapping(record.get("metrics"), "record.metrics")
+    record_metrics = mapping(record.get("metrics"), "record.metrics")
     diagnostics = mapping(record.get("diagnostics"), "record.diagnostics")
     design = mapping(diagnostics.get("design"), "record.diagnostics.design")
     for key in ("lp_total_um", "lr_total_um", "notch_length_um"):
@@ -535,8 +536,16 @@ def _validate_notebook_record_shape(
     linewidth_fit = mapping(
         diagnostics.get("readout_zero_probe_linewidth_fit"), "readout linewidth fit"
     )
+    g_fit = (
+        mapping(diagnostics.get("g_zero_probe_fit"), "g fit")
+        if expected_step_hz is not None
+        else None
+    )
     fit_x_by_label: dict[str, np.ndarray] = {}
-    for label, fit in (("readout frequency fit", frequency_fit), ("readout linewidth fit", linewidth_fit)):
+    fits = [("readout frequency fit", frequency_fit), ("readout linewidth fit", linewidth_fit)]
+    if g_fit is not None:
+        fits.append(("g fit", g_fit))
+    for label, fit in fits:
         x_values = numeric_array(fit, "x_values", label)
         fit_x_by_label[label] = x_values
         y_values = numeric_array(fit, "y_values", label)
@@ -545,11 +554,9 @@ def _validate_notebook_record_shape(
         finite_number(fit.get("intercept"), f"{label} intercept")
         mapping(fit.get("coefficients"), f"{label} coefficients")
     require(
-        np.array_equal(
-            fit_x_by_label["readout frequency fit"],
-            fit_x_by_label["readout linewidth fit"],
-        ),
-        "Readout frequency and linewidth fits must share the probe grid.",
+        all(np.array_equal(fit_x_by_label["readout frequency fit"], values)
+            for values in fit_x_by_label.values()),
+        "Readout frequency, linewidth, and g fits must share the probe grid.",
     )
     frequency_coefficients = mapping(
         frequency_fit.get("coefficients"), "readout frequency fit coefficients"
@@ -561,6 +568,18 @@ def _validate_notebook_record_shape(
     )
     for key in ("quadratic_per_fF2", "quartic_per_fF4"):
         finite_number(linewidth_coefficients.get(key), f"readout linewidth coefficient {key}")
+    if g_fit is not None:
+        require(finite_number(record_metrics.get("g_hz"), "record.metrics.g_hz") > 0, "g_hz must be positive.")
+        require(
+            finite_number(g_fit.get("intercept"), "g fit intercept") == record_metrics["g_hz"] > 0,
+            "g fit intercept must equal the positive g_hz metric.",
+        )
+        floating_qubit = mapping(diagnostics.get("floating_qubit"), "record.diagnostics.floating_qubit")
+        require(
+            isinstance(floating_qubit.get("input_sha256"), str)
+            and HEX_SHA256.fullmatch(floating_qubit["input_sha256"]) is not None,
+            "Floating-qubit diagnostics must bind the private input SHA-256.",
+        )
 
     traces = mapping(record.get("traces"), "record.traces")
     intrinsic = mapping(traces.get("intrinsic"), "record.traces.intrinsic")
@@ -604,6 +623,7 @@ def _validate_notebook_record_shape(
     require(len(probes) == len(frequency_fit["x_values"]), "Readout probes must match fit points.")
     probe_capacitances: list[float] = []
     probe_grid_hashes: list[str | None] = []
+    qubit_probe_grid_hashes: list[str | None] = []
     for index, probe_value in enumerate(probes):
         probe = mapping(probe_value, f"record readout probe {index}")
         probe_capacitances.append(
@@ -622,6 +642,21 @@ def _validate_notebook_record_shape(
             f"record readout probe {index}", probe_frequency, probe_s21, probe_reference
         )
         require(np.all(np.abs(probe_reference) > 0), f"Record readout probe {index} reference must be nonzero.")
+        if expected_step_hz is not None:
+            qubit_frequency = numeric_array(probe, "qubit_frequencies_hz", f"record qubit probe {index}")
+            qubit_grid_hash = probe.get("qubit_frequency_grid_sha256")
+            require(
+                isinstance(qubit_grid_hash, str)
+                and qubit_grid_hash == frequency_grid_sha256(qubit_frequency),
+                f"Record qubit probe {index} grid hash is inconsistent.",
+            )
+            qubit_probe_grid_hashes.append(qubit_grid_hash)
+            qubit_s21 = complex_array(probe, "qubit_s21", f"record qubit probe {index}")
+            qubit_reference = complex_array(probe, "qubit_reference_s21", f"record qubit probe {index}")
+            require_same_length(
+                f"record qubit probe {index}", qubit_frequency, qubit_s21, qubit_reference
+            )
+            require(np.all(np.abs(qubit_reference) > 0), f"Record qubit probe {index} reference must be nonzero.")
     require(
         np.array_equal(
             np.asarray(probe_capacitances), fit_x_by_label["readout frequency fit"]
@@ -638,6 +673,13 @@ def _validate_notebook_record_shape(
             diagnostics.get("pair_frequency_grid_sha256") == pair_grid_hash,
             "Pair trace grid must match diagnostics.pair_frequency_grid_sha256.",
         )
+        if expected_step_hz is not None:
+            qubit_grid_hash = diagnostics.get("qubit_frequency_grid_sha256")
+            require(
+                isinstance(qubit_grid_hash, str)
+                and all(value == qubit_grid_hash for value in qubit_probe_grid_hashes),
+                "Qubit probe grids must match diagnostics.qubit_frequency_grid_sha256.",
+            )
         for trace_label, trace, grid_hash in (
             ("filter", filter_trace, filter_grid_hash),
             ("pair", pair_trace, pair_grid_hash),
@@ -667,6 +709,14 @@ def _validate_notebook_record_shape(
                 _require_trace_id_grid_link(
                     probe.get(identity_key), filter_grid_hash, f"readout probe {index} {identity_key}"
                 )
+            if expected_step_hz is not None:
+                qubit_mode = mapping(mode.get("qubit_mode"), f"record qubit mode {index}")
+                require(
+                    qubit_mode.get("frequency_grid_sha256") == probe.get("qubit_frequency_grid_sha256")
+                    and qubit_mode.get("measured_trace_id") == probe.get("qubit_measured_trace_id"),
+                    f"Qubit mode {index} and trace identities disagree.",
+                )
+                require(finite_number(mode.get("g_hz"), f"finite-probe g {index}") > 0, f"Finite-probe g {index} must be positive.")
         for diagnostic_id in (
             "filter_loaded_bare_reference_id",
             "readout_loaded_bare_reference_id",
@@ -831,7 +881,7 @@ def validate_nominal_artifacts(
         source_path_by_id[source_id] = current_path
         source_relative_by_id[source_id] = normalized_source_path
     require(
-        source_ids == {"target", "conditions", "config_snapshot", "q2d", "seed", "common", "evaluator", "semantic_hash", "runner", "nominal_runtime"},
+        source_ids == {"target", "conditions", "config_snapshot", "q2d", "seed", "common", "evaluator", "semantic_hash", "qubit_input", "qubit_input_loader", "runner", "nominal_runtime"},
         "Nominal source inventory must bind the exact production source set.",
     )
 
@@ -843,6 +893,8 @@ def validate_nominal_artifacts(
         "d3_purcell_common",
         "d3_coupled_evaluator",
         "d3_semantic_hash",
+        "floating_qubit_nominal",
+        "d3_floating_qubit_input_loader",
     }
     require(
         required_optimizer_sources <= set(optimizer_inventory),
@@ -869,6 +921,8 @@ def validate_nominal_artifacts(
         "common": optimizer_inventory["d3_purcell_common"]["path"],
         "evaluator": optimizer_inventory["d3_coupled_evaluator"]["path"],
         "semantic_hash": optimizer_inventory["d3_semantic_hash"]["path"],
+        "qubit_input": optimizer_config.get("floating_qubit_nominal_workspace_path"),
+        "qubit_input_loader": optimizer_inventory["d3_floating_qubit_input_loader"]["path"],
     }
     try:
         config_snapshot_relative = (
@@ -935,12 +989,24 @@ def validate_nominal_artifacts(
         "common": "d3_purcell_common",
         "evaluator": "d3_coupled_evaluator",
         "semantic_hash": "d3_semantic_hash",
+        "qubit_input": "floating_qubit_nominal",
+        "qubit_input_loader": "d3_floating_qubit_input_loader",
     }.items():
         require(
             source_hash_by_id[nominal_id] == optimizer_inventory[optimizer_id]["sha256"],
             f"Nominal source {nominal_id!r} hash disagrees with the selected optimizer binding.",
         )
     bound_identities = mapping(contract.get("bound_identities"), "nominal contract.bound_identities")
+    qubit_payload = load_json(source_path_by_id["qubit_input"].parent, source_path_by_id["qubit_input"].name)
+    qubit_contract = mapping(
+        optimizer_contract.get("floating_qubit_nominal"),
+        "current optimizer floating_qubit_nominal",
+    )
+    require(
+        source_hash_by_id["qubit_input"] == qubit_contract.get("input_sha256")
+        and qubit_payload.get("model_id") == qubit_contract.get("model_id"),
+        "Floating-qubit private input bytes/model identity disagree with the optimizer contract.",
+    )
     expected_bound_identities = {
         "target_sha256": source_hash_by_id["target"],
         "conditions_contract_sha256": semantic_value_sha256(conditions_contract),
@@ -948,6 +1014,9 @@ def validate_nominal_artifacts(
         "config_snapshot_sha256": source_hash_by_id["config_snapshot"],
         "q2d_sha256": source_hash_by_id["q2d"],
         "seed_sha256": source_hash_by_id["seed"],
+        "floating_qubit_input_sha256": source_hash_by_id["qubit_input"],
+        "floating_qubit_loader_sha256": source_hash_by_id["qubit_input_loader"],
+        "floating_qubit_model_id": qubit_payload["model_id"],
         "layout_specs_raw_sha256": optimizer_identity["layout_specs_raw_sha256"],
         "candidate_sha256": optimizer_identity["candidate_sha256"],
         "optimizer_identity_sha256": optimizer_identity["optimizer_identity_sha256"],
@@ -1033,9 +1102,13 @@ def validate_nominal_artifacts(
             mapping(target_values.get("readout_filter_exchange_coupling"), "J target").get("value"),
             "J target",
         ) * 1.0e6,
+        "g_hz": finite_number(
+            mapping(target_values.get("qubit_readout_coupling"), "g target").get("value"),
+            "g target",
+        ) * 1.0e6,
     }
     operands = sequence(summary.get("objective_operands"), "validation_summary.objective_operands")
-    require(len(operands) == len(NOMINAL_OBJECTIVE_IDS), "Nominal summary must contain the five objective operands.")
+    require(len(operands) == len(NOMINAL_OBJECTIVE_IDS), "Nominal summary must contain the six objective operands.")
     operand_ids: set[str] = set()
     for index, value in enumerate(operands):
         operand = mapping(value, f"objective_operands[{index}]")
@@ -1256,6 +1329,7 @@ def validate_artifacts(
     optimization = artifacts["optimization_result.json"]
     manifest = artifacts["condition_manifest.json"]
     inventory = artifacts["hash_inventory.json"]
+    config_snapshot = artifacts["config_snapshot.json"]
 
     require(status.get("state") == "completed", "status.json state must be 'completed'.")
     require(final.get("state") == "captured", "final diagnostics state must be 'captured'.")
@@ -1311,8 +1385,9 @@ def validate_artifacts(
         )
         optimizer_inventory = _optimizer_inventory_by_id(inventory)
         require(
-            "optimizer_conditions" in optimizer_inventory,
-            "Current optimizer inventory must bind optimizer_conditions.",
+            {"optimizer_conditions", "floating_qubit_nominal", "d3_floating_qubit_input_loader"}
+            <= set(optimizer_inventory),
+            "Current optimizer inventory must bind conditions, floating-qubit input, and its loader.",
         )
         conditions_relative = optimizer_inventory["optimizer_conditions"]["path"]
         candidate_roots = (
@@ -1355,6 +1430,44 @@ def validate_artifacts(
                 "current conditions.evaluator_settings",
             ).get("frequency_step_hz"),
             "current evaluator frequency step",
+        )
+        qubit_relative = optimizer_inventory["floating_qubit_nominal"]["path"]
+        require(
+            qubit_relative == config_snapshot.get("floating_qubit_nominal_workspace_path"),
+            "Current config and inventory floating-qubit paths disagree.",
+        )
+        matching_qubit_inputs = [
+            root / qubit_relative
+            for root in candidate_roots
+            if (root / qubit_relative).is_file()
+        ]
+        require(len(matching_qubit_inputs) == 1, "Current floating-qubit input must resolve exactly once.")
+        qubit_path = matching_qubit_inputs[0]
+        require(
+            file_sha256(qubit_path) == optimizer_inventory["floating_qubit_nominal"]["sha256"],
+            "Current floating-qubit input bytes disagree with the inventory binding.",
+        )
+        qubit_payload = load_json(qubit_path.parent, qubit_path.name)
+        loader_relative = optimizer_inventory["d3_floating_qubit_input_loader"]["path"]
+        matching_loaders = [
+            root / loader_relative
+            for root in candidate_roots
+            if (root / loader_relative).is_file()
+        ]
+        require(len(matching_loaders) == 1, "Current floating-qubit loader must resolve exactly once.")
+        require(
+            file_sha256(matching_loaders[0])
+            == optimizer_inventory["d3_floating_qubit_input_loader"]["sha256"],
+            "Current floating-qubit loader bytes disagree with the inventory binding.",
+        )
+        qubit_contract = mapping(
+            manifest_contract.get("floating_qubit_nominal"),
+            "current contract.floating_qubit_nominal",
+        )
+        require(
+            qubit_contract.get("input_sha256") == optimizer_inventory["floating_qubit_nominal"]["sha256"]
+            and qubit_contract.get("model_id") == qubit_payload.get("model_id"),
+            "Current floating-qubit bytes/model identity disagree with the manifest.",
         )
         selection = mapping(manifest_contract.get("selection"), "current contract.selection")
         source_row = mapping(selection.get("source_row"), "current contract.selection.source_row")

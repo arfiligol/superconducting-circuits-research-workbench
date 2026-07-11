@@ -5,9 +5,10 @@
   "prior_simulation_evidence_status": "invalidated_by_50ohm_feedline_correction",
   "selected_case_id": "height7",
   "target_set_id": "d3",
+  "floating_qubit_nominal_workspace_path": "superconducting-circuits-research-workbench/build/private_inputs/d3_floating_qubit_nominal.json",
   "target_contract": {
     "workspace_relative_path": "docs/design-targets/contracts/d3-intrinsic-interferometric-purcell-filter.v1.json",
-    "expected_sha256": "0b0c410cc02126d5a2cdaf0df61bbd714570f62b86900a4e7b32ae6d79d9c31b",
+    "expected_sha256": "c155cc5c46bbf1aefd0096e4ab986d0dee86a97b3217e9cf1df1bae7c158cf92",
     "expected_target_id": "d3-intrinsic-interferometric-purcell-filter",
     "expected_revision": 1
   },

@@ -18,7 +18,7 @@ CONDITIONS_PATH = REPO_ROOT / (
     "notebooks/pluto/D3 Intrinsic Purcell Filter Design/d3_optimizer_conditions.json"
 )
 EXPECTED_ACTUAL_CONDITIONS_SHA256 = (
-    "02c41c5048c6b48af801ccf065217cfbefb5cb12b4eae93b79acf96d1a4bc76f"
+    "56d10e9f39d2a78b43a703411ef9c5793bd1aeb2b01ece7cf7007f4cabecea19"
 )
 
 spec = importlib.util.spec_from_file_location("d3_semantic_hash_consumer", VALIDATOR_PATH)

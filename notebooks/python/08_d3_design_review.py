@@ -35,6 +35,7 @@
 # - [D3 Design Target](https://github.com/arfiligol/SCQ_Design/blob/main/docs/design-targets/d3-intrinsic-interferometric-purcell-filter.qmd)
 # - [Loaded-Bare References](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/loaded-bare-readout-filter-references.qmd)
 # - [Readout-Filter Complex-S21 J Fit](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/readout-filter-s21-j-fit.qmd)
+# - [Bare vs Hybridized Readout / Filter Modes](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/bare-vs-hybridized-readout-filter-modes.qmd)
 # - [Port-Termination Compensation](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd)
 # - [Auditable Scientific Optimization](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/auditable-scientific-optimization.qmd)
 
@@ -369,6 +370,33 @@ display(
     )
 )
 
+# %%
+qubit_inventory = next(
+    (
+        item
+        for item in artifacts["hash_inventory.json"]["files"]
+        if item["id"] == "floating_qubit_nominal"
+    ),
+    None,
+)
+if qubit_inventory is None:
+    display(Markdown("> **Fixed nominal floating qubit:** unavailable in this historical run."))
+else:
+    qubit_path = inventory_source_path(qubit_inventory)
+    if not qubit_path.is_file() or hashlib.sha256(qubit_path.read_bytes()).hexdigest() != qubit_inventory["expected_sha256"]:
+        raise ValueError("The hash-bound private floating-qubit input is missing or stale.")
+    qubit_input = read_json(qubit_path)
+    qubit_rows = [
+        (name, qubit_input[name], "nH" if name == "L_J_per_junction_nH" else "fF")
+        for name in ("C01_fF", "C02_fF", "C12_fF", "Cr1_fF", "Cr2_fF", "L_J_per_junction_nH")
+    ]
+    display(
+        pd.DataFrame(
+            qubit_rows,
+            columns=["Fixed qubit input", "Value", "Unit"],
+        ).style.hide(axis="index").format({"Value": "{:.6f}"})
+    )
+
 # The immutable run must have used the same numerical Design Target.
 expected_metric_targets = {
     "filter_loaded_bare_hz": (selected_slot_ghz + targets["filter_loaded_bare_offset"]["value"] / 1e3) * 1e9,
@@ -476,6 +504,7 @@ evidence_kind = {
     "notch_hz": "extracted",
     "filter_loaded_linewidth_hz": "fitted",
     "j_hz": "fitted",
+    "g_hz": "fitted",
     "readout_minus_filter_detuning_hz": "calculated",
 }
 performance_rows = []
@@ -527,7 +556,14 @@ physical_parameter_rows = [
     ("f_n", "interference notch", metrics["notch_hz"] / 1e9, "GHz", "extracted", "PTC zero crossing"),
     ("kappa_p,LB / 2pi", "loaded filter linewidth", metrics["filter_loaded_linewidth_hz"] / 1e6, "MHz", "fitted", "filter-only complex response"),
     ("J / 2pi", "readout-filter exchange coupling", metrics["j_hz"] / 1e6, "MHz", "fitted", "fixed-reference complex S21 fit"),
-    ("g / 2pi", "qubit-readout coupling", None, "MHz", "unavailable", "no qubit model in this run"),
+    (
+        "g / 2pi",
+        "linearized qubit-readout coupling",
+        metrics.get("g_hz", float("nan")) / 1e6,
+        "MHz",
+        "fitted" if "g_hz" in metrics else "unavailable",
+        "finite-probe q/r poles → zero-probe quadratic intercept" if "g_hz" in metrics else "no qubit model in this historical run",
+    ),
     ("tilde f lower", "lower hybridized model pole", model_poles[0]["frequency_hz"] / 1e9, "GHz", "calculated", "J-fit pole; mode ownership not assigned"),
     ("tilde f upper", "upper hybridized model pole", model_poles[1]["frequency_hz"] / 1e9, "GHz", "calculated", "J-fit pole; mode ownership not assigned"),
     ("tilde f_r^g / tilde f_p^g", "readout-like / filter-like owned frequencies", None, "GHz", "unavailable", "pair poles persisted without mode-ownership labels"),
@@ -724,17 +760,26 @@ display(
 # %%
 frequency_fit = diagnostics["readout_zero_probe_frequency_fit"]
 linewidth_fit = diagnostics["readout_zero_probe_linewidth_fit"]
+g_fit = diagnostics.get("g_zero_probe_fit")
+regression_rows = [
+    ("Readout frequency intercept", frequency_fit["intercept"] / 1e9, "GHz", "fitted", "quadratic in probe capacitance"),
+    ("Frequency linear coefficient", frequency_fit["coefficients"]["linear_per_fF"] / 1e6, "MHz/fF", "fitted", "stored coefficient"),
+    ("Frequency quadratic coefficient", frequency_fit["coefficients"]["quadratic_per_fF2"] / 1e6, "MHz/fF²", "fitted", "stored coefficient"),
+    ("Readout linewidth intercept", linewidth_fit["intercept"] / 1e6, "MHz", "calculated", "constrained to zero by model"),
+    ("Linewidth quadratic coefficient", linewidth_fit["coefficients"]["quadratic_per_fF2"] / 1e6, "MHz/fF²", "fitted", "stored coefficient"),
+    ("Linewidth quartic coefficient", linewidth_fit["coefficients"]["quartic_per_fF4"] / 1e6, "MHz/fF⁴", "fitted", "stored coefficient"),
+    ("Filter vector-fit RMS", diagnostics["filter_loaded_bare"]["vector_rms_error"], "complex response", "fitted", "filter-only vector fit"),
+    ("J multi-seed spread", j_fit["diagnostics"]["j_seed_spread_hz"], "Hz", "calculated", "three successful seeds"),
+]
+if g_fit is not None:
+    regression_rows.extend(
+        [
+            ("g intercept", g_fit["intercept"] / 1e6, "MHz", "fitted", "zero-probe quadratic intercept"),
+            ("g extrapolation R²", g_fit["r2"], "fraction", "calculated", "configured Sol gate"),
+        ]
+    )
 regression_table = pd.DataFrame(
-    [
-        ("Readout frequency intercept", frequency_fit["intercept"] / 1e9, "GHz", "fitted", "quadratic in probe capacitance"),
-        ("Frequency linear coefficient", frequency_fit["coefficients"]["linear_per_fF"] / 1e6, "MHz/fF", "fitted", "stored coefficient"),
-        ("Frequency quadratic coefficient", frequency_fit["coefficients"]["quadratic_per_fF2"] / 1e6, "MHz/fF²", "fitted", "stored coefficient"),
-        ("Readout linewidth intercept", linewidth_fit["intercept"] / 1e6, "MHz", "calculated", "constrained to zero by model"),
-        ("Linewidth quadratic coefficient", linewidth_fit["coefficients"]["quadratic_per_fF2"] / 1e6, "MHz/fF²", "fitted", "stored coefficient"),
-        ("Linewidth quartic coefficient", linewidth_fit["coefficients"]["quartic_per_fF4"] / 1e6, "MHz/fF⁴", "fitted", "stored coefficient"),
-        ("Filter vector-fit RMS", diagnostics["filter_loaded_bare"]["vector_rms_error"], "complex response", "fitted", "filter-only vector fit"),
-        ("J multi-seed spread", j_fit["diagnostics"]["j_seed_spread_hz"], "Hz", "calculated", "three successful seeds"),
-    ],
+    regression_rows,
     columns=["Quantity", "Value", "Unit", "Evidence state", "Meaning"],
 )
 display(regression_table.style.hide(axis="index").format({"Value": "{:.8g}"}))
@@ -1083,37 +1128,26 @@ linewidth_curve = (
     + linewidth_quartic * fit_x**4
 )
 axis = axes[2, 1]
-axis.scatter(
-    linewidth_x,
-    linewidth_y / 1e6,
-    color=BLUE,
-    s=36,
-    zorder=3,
-    label="Simulated finite-probe linewidths",
-)
-axis.plot(
-    fit_x,
-    linewidth_curve / 1e6,
-    color=ORANGE,
-    linewidth=1.5,
-    label="Stored C²+C⁴ fit",
-)
-axis.scatter(
-    [0.0],
-    [0.0],
-    facecolors="white",
-    edgecolors=ORANGE,
-    linewidths=1.5,
-    s=55,
-    zorder=4,
-    label="Constrained zero intercept",
-)
-axis.axhline(0.0, color=INK, linewidth=0.9, alpha=0.8)
-axis.set(
-    title="Readout linewidth extrapolation",
-    xlabel="Probe capacitance (fF)",
-    ylabel="Linewidth (MHz)",
-)
+if g_fit is None:
+    axis.scatter(linewidth_x, linewidth_y / 1e6, color=BLUE, s=36, zorder=3, label="Simulated finite-probe linewidths")
+    axis.plot(fit_x, linewidth_curve / 1e6, color=ORANGE, linewidth=1.5, label="Stored C²+C⁴ fit")
+    axis.scatter([0.0], [0.0], facecolors="white", edgecolors=ORANGE, linewidths=1.5, s=55, zorder=4, label="Constrained zero intercept")
+    axis.axhline(0.0, color=INK, linewidth=0.9, alpha=0.8)
+    axis.set(title="Readout linewidth extrapolation", xlabel="Probe capacitance (fF)", ylabel="Linewidth (MHz)")
+else:
+    g_x = np.asarray(g_fit["x_values"], dtype=float)
+    g_y = np.asarray(g_fit["y_values"], dtype=float)
+    g_coefficients = g_fit["coefficients"]
+    g_curve = (
+        float(g_coefficients["intercept"])
+        + float(g_coefficients["linear_per_fF"]) * fit_x
+        + float(g_coefficients["quadratic_per_fF2"]) * fit_x**2
+    )
+    axis.scatter(g_x, g_y / 1e6, color=BLUE, s=36, zorder=3, label="Simulated finite-probe g")
+    axis.plot(fit_x, g_curve / 1e6, color=ORANGE, linewidth=1.5, label="Stored quadratic fit")
+    axis.scatter([0.0], [g_fit["intercept"] / 1e6], facecolors="white", edgecolors=ORANGE, linewidths=1.5, s=55, zorder=4, label="C → 0 intercept")
+    axis.axhline(metric_breakdown["g_hz"]["target"] / 1e6, color=GREY, linestyle="--", linewidth=1.2, label="Target g")
+    axis.set(title="Qubit-readout g extrapolation", xlabel="Probe capacitance (fF)", ylabel="g / 2π (MHz)")
 axis.legend(loc="best", fontsize=8, frameon=False)
 
 evidence_identity = (
@@ -1125,7 +1159,8 @@ figure.suptitle(
     f"D3 design review — {evidence_heading}\n"
     f"evidence {evidence_identity[:12]} | "
     f"kappa_p,LB {metrics['filter_loaded_linewidth_hz'] / 1e6:.6f} MHz | "
-    f"J {metrics['j_hz'] / 1e6:.6f} MHz",
+    f"J {metrics['j_hz'] / 1e6:.6f} MHz"
+    + (f" | g {metrics['g_hz'] / 1e6:.6f} MHz" if "g_hz" in metrics else ""),
     fontsize=13,
     y=0.99,
 )

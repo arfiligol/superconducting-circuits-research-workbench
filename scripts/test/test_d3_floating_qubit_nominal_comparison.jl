@@ -11,6 +11,7 @@ const D3_ROOT = joinpath(@__DIR__, "..", "..", "notebooks", "pluto", "D3 Intrins
 include(joinpath(D3_ROOT, "d3_purcell_common.jl"))
 include(joinpath(D3_ROOT, "d3_floating_qubit_nominal_comparison.jl"))
 using .D3FloatingQubitNominalComparison
+include(joinpath(D3_ROOT, "d3_coupled_evaluator.jl"))
 
 function write_test_json(path, value)
     open(path, "w") do io
@@ -40,7 +41,13 @@ end
         loaded = load_floating_qubit_nominal_input(input_path, D3FloatingQubitNominal)
         @test loaded.model.L_J_per_junction_nH == 24.0
         @test occursin(r"^[0-9a-f]{64}$", loaded.input_sha256)
-        @test floating_qubit_isolated_frequency_hz(loaded.model) > 0
+        expected_cg1 = (60.0 + 10.0) * 1e-15
+        expected_cg2 = (70.0 + 1.0) * 1e-15
+        expected_ceff = 30.0e-15 + expected_cg1 * expected_cg2 / (expected_cg1 + expected_cg2)
+        expected_frequency = 1 / (2π * sqrt(12e-9 * expected_ceff))
+        @test floating_qubit_coupling_off_frequency_hz(loaded.model) ≈ expected_frequency
+        @test _linearized_g_hz(5.0e9, 4.99e9, 5.81e9) ≈ 90e6
+        @test_throws D3CandidateRejected _linearized_g_hz(5.0e9, 5.01e9, 5.81e9)
 
         plan = CircuitPlan("synthetic-floating-qubit")
         readout_open_tail = external_node("readout_open_tail")
@@ -105,6 +112,13 @@ end
         )
         @test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_1_"), baseline_plan.relations) == 0
         @test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_1_"), variant_plan.relations) == 7
+        intrinsic_plan = build_intrinsic_pair_plan(
+            case,
+            design;
+            hb_settings = hb_settings,
+            floating_qubit_nominal = loaded.model,
+        )
+        @test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_intrinsic_1_"), intrinsic_plan.relations) == 7
 
         invalid = synthetic_input()
         invalid["unexpected"] = true

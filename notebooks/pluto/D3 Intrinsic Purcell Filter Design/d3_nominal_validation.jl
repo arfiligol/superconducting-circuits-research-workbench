@@ -63,6 +63,7 @@ const EVALUATOR_METRIC_IDS = [
     "notch_hz",
     "filter_loaded_linewidth_hz",
     "j_hz",
+    "g_hz",
 ]
 
 file_sha256(path) = open(path, "r") do io
@@ -285,6 +286,7 @@ function target_values(target, slot_ghz)
         "notch_hz" => Float64(targets["interference_notch_frequency"]["value"]) * 1e9,
         "filter_loaded_linewidth_hz" => Float64(targets["filter_loaded_bare_linewidth"]["value"]) * 1e6,
         "j_hz" => Float64(targets["readout_filter_exchange_coupling"]["value"]) * 1e6,
+        "g_hz" => Float64(targets["qubit_readout_coupling"]["value"]) * 1e6,
         "readout_minus_filter_detuning_hz" => Float64(targets["readout_minus_filter_detuning"]["value"]) * 1e6,
     )
 end
@@ -331,7 +333,8 @@ function bind_current_sources(preflight, source_paths, workspace_root)
     preflight.is_current || error("Nominal execution requires the current per-Slot optimizer manifest; legacy runs are preflight-only.")
     required_sources = Set([
         "target", "conditions", "config_snapshot", "q2d", "seed",
-        "common", "evaluator", "semantic_hash", "runner", "nominal_runtime",
+        "common", "evaluator", "semantic_hash", "qubit_input", "qubit_input_loader",
+        "runner", "nominal_runtime",
     ])
     Set(String.(keys(source_paths))) == required_sources || error("Nominal validation source hash inventory is not exact.")
     for path in values(source_paths)
@@ -343,14 +346,16 @@ function bind_current_sources(preflight, source_paths, workspace_root)
     target_path = resolve_declared_path(config["target_contract"]["workspace_relative_path"], workspace_root)
     q2d_path = resolve_declared_path(config["orpen_case_json_workspace_path"], workspace_root)
     seed_path = resolve_declared_path(joinpath(String(config["design_csv_workspace_root"]), String(config["design_csv_filename"])), workspace_root)
+    qubit_path = resolve_declared_path(config["floating_qubit_nominal_workspace_path"], workspace_root)
     inventory = preflight.consumed_inventory
-    for id in ("target_contract", "optimizer_conditions", "seed_csv", "orpen_case_json", "d3_purcell_common", "d3_coupled_evaluator", "d3_semantic_hash")
+    for id in ("target_contract", "optimizer_conditions", "seed_csv", "orpen_case_json", "d3_purcell_common", "d3_coupled_evaluator", "d3_semantic_hash", "floating_qubit_nominal", "d3_floating_qubit_input_loader")
         haskey(inventory, id) || error("Persisted optimizer inventory is missing $(id).")
     end
     conditions_path = resolve_declared_path(inventory["optimizer_conditions"]["path"], workspace_root)
     common_path = resolve_declared_path(inventory["d3_purcell_common"]["path"], workspace_root)
     evaluator_path = resolve_declared_path(inventory["d3_coupled_evaluator"]["path"], workspace_root)
     semantic_hash_path = resolve_declared_path(inventory["d3_semantic_hash"]["path"], workspace_root)
+    qubit_loader_path = resolve_declared_path(inventory["d3_floating_qubit_input_loader"]["path"], workspace_root)
     expected_paths = Dict(
         "target" => target_path,
         "conditions" => conditions_path,
@@ -360,6 +365,8 @@ function bind_current_sources(preflight, source_paths, workspace_root)
         "common" => common_path,
         "evaluator" => evaluator_path,
         "semantic_hash" => semantic_hash_path,
+        "qubit_input" => qubit_path,
+        "qubit_input_loader" => qubit_loader_path,
     )
     for (id, expected_path) in expected_paths
         abspath(source_paths[id]) == abspath(expected_path) || error("Nominal source $(id) does not match the persisted optimizer selection.")
@@ -383,12 +390,21 @@ function bind_current_sources(preflight, source_paths, workspace_root)
     file_sha256(common_path) == inventory["d3_purcell_common"]["sha256"] || error("Persisted common-runtime source hash is inconsistent.")
     file_sha256(evaluator_path) == inventory["d3_coupled_evaluator"]["sha256"] || error("Persisted evaluator source hash is inconsistent.")
     file_sha256(semantic_hash_path) == inventory["d3_semantic_hash"]["sha256"] || error("Persisted semantic-hash source identity is inconsistent.")
+    qubit_sha = file_sha256(qubit_path)
+    qubit_sha == inventory["floating_qubit_nominal"]["sha256"] || error("Persisted floating-qubit input hash is inconsistent.")
+    file_sha256(qubit_loader_path) == inventory["d3_floating_qubit_input_loader"]["sha256"] || error("Persisted floating-qubit loader source hash is inconsistent.")
+    qubit_payload = JSON3.read(read(qubit_path, String), Dict{String,Any})
+    qubit_contract = contract["floating_qubit_nominal"]
+    qubit_sha == String(qubit_contract["input_sha256"]) || error("Floating-qubit manifest identity disagrees with the selected private input bytes.")
+    String(qubit_payload["model_id"]) == String(qubit_contract["model_id"]) || error("Floating-qubit model identity disagrees with the selected private input.")
     file_sha256(source_paths["config_snapshot"]) == preflight.config_snapshot_sha256 || error("Persisted config snapshot hash is inconsistent.")
     return (
         target = JSON3.read(read(target_path, String), Dict{String,Any}),
         conditions = conditions,
         target_sha256 = target_sha,
         conditions_contract_sha256 = conditions_contract_sha,
+        floating_qubit_input_sha256 = qubit_sha,
+        floating_qubit_model_id = String(qubit_payload["model_id"]),
     )
 end
 
@@ -457,6 +473,9 @@ function run_nominal_validation(
             "config_snapshot_sha256" => preflight.config_snapshot_sha256,
             "q2d_sha256" => source_hash_by_id["q2d"],
             "seed_sha256" => source_hash_by_id["seed"],
+            "floating_qubit_input_sha256" => bound.floating_qubit_input_sha256,
+            "floating_qubit_loader_sha256" => source_hash_by_id["qubit_input_loader"],
+            "floating_qubit_model_id" => bound.floating_qubit_model_id,
             "layout_specs_raw_sha256" => preflight.layout_raw_sha256,
             "candidate_sha256" => preflight.candidate_sha256,
             "optimizer_identity_sha256" => preflight.optimizer_identity_sha256,

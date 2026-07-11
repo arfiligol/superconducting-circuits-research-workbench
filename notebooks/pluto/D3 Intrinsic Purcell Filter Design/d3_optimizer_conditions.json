@@ -33,6 +33,9 @@
     "readout_probe_capacitances_fF": [2.0, 5.0, 10.0, 20.0],
     "min_readout_frequency_extrapolation_r2": 0.9999,
     "min_readout_linewidth_extrapolation_r2": 0.9999,
+    "qubit_local_half_width_hz": 100000000.0,
+    "max_qubit_anchor_distance_hz": 50000000.0,
+    "min_g_extrapolation_r2": 0.9999,
     "max_notch_abs_im_z21_ohm": 0.01,
     "j_bounds_hz": [1000000.0, 60000000.0],
     "j_seeds_hz": [5000000.0, 20000000.0, 40000000.0],
@@ -82,13 +85,14 @@
     "notch_hz": {"scale": 1000000.0, "weight": 1.0, "role": "cost_objective"},
     "filter_loaded_linewidth_hz": {"scale": 1000000.0, "weight": 1.0, "role": "cost_objective"},
     "j_hz": {"scale": 1000000.0, "weight": 1.0, "role": "cost_objective"},
+    "g_hz": {"scale": 1000000.0, "weight": 1.0, "role": "cost_objective"},
     "readout_minus_filter_detuning_hz": {"scale": 500000.0, "weight": 0.0, "role": "promotion_condition"}
   },
   "optimization": {
     "initial_seed_evaluation_budget": 1,
     "cma": {"base_seed": 20260710, "sigma": 0.05, "popsize": 12, "maxiter": 20, "maxfevals": 240, "ftol": 1e-6, "xtol": 0.0001},
     "nelder_mead": {"maxiter": 200, "maxfevals": 400, "ftol": 1e-6, "xtol": 0.0001, "rejection_carrier_cost": 1000000000000.0, "simplex_logit_offset": 0.05, "simplex_logit_multiplier": 0.1},
-    "promotion": {"max_cost": 5.0, "max_abs_normalized_residual": 1.0, "required_review_state": "human_approved", "required_local_stage": "converged"}
+    "promotion": {"max_cost": 6.0, "max_abs_normalized_residual": 1.0, "required_review_state": "human_approved", "required_local_stage": "converged"}
   },
   "outputs": {
     "output_root": "superconducting-circuits-research-workbench/build/research/d3_coupled_optimizer_v1",
@@ -104,15 +108,14 @@
     "status": "sol_reviewed",
     "reviewer_role": "Sol_or_higher",
     "reviewer_identity": "Codex Sol semantic/physics/contract reviewer",
-    "reviewed_at_utc": "2026-07-11T04:58:25Z",
-    "rationale": "Sol semantic review approves the generic Slot-independent evaluator, fit, HB, optimizer, and promotion conditions for D3 exploration. The 200 kHz grid resolves the 1 MHz objective scale and 25 MHz linewidth; the nested loaded, paired, and calibration windows; 115 MHz ownership window within 240 MHz Slot spacing; 1–60 MHz J bounds with seeds bracketing the Human-decided 20 MHz target; fit and pole-consistency gates; 0.5 MHz zero-weight detuning scale; non-compensating residual gate; local convergence requirement; Human-only promotion; and LC-artifact ineligibility form an auditable physical and engineering v1. Tolerance remains condition_required outside the Cost Function.",
+    "reviewed_at_utc": "2026-07-11T14:06:22Z",
+    "rationale": "Sol review approves the fixed nominal floating-qubit input, diagonal-preserving coupling-off frequency, separate 100 MHz qubit-local and Slot-local grids, 50 MHz qubit-pole anchor gate, 0.9999 g-extrapolation R2 gate, hard rejection when the qubit pole enters the local two-mode J window, and g as a 1 MHz-scale positive-weight objective at the Human-decided 90 MHz target. Six positive objectives use max_cost 6 with a non-compensating unit normalized-residual limit; the six existing Layout variables remain the only search variables. Human-only promotion and LC-artifact ineligibility remain unchanged.",
     "evidence": [
-      "Semantic framing d3-semantic-value-sha256-v1 and the real conditions payload were verified by the Julia golden suite 28/28 and the Python semantic/current/nominal schema suite 11/11.",
-      "Julia analytical optimizer contract passed 77/77 without HB.",
-      "Julia synthetic nominal-validation identity contract passed 28/28 without HB.",
-      "Julia intrinsic-wide grid contract passed 9/9 without HB; Python feedline contract passed 1/1.",
-      "Notebook 08 rendered 41 cells with zero errors in read-only historical mode; no real HB, optimizer, or nominal execution was performed during review."
+      "Julia floating-qubit topology and g contract passed 20/20; optimizer analytical, nominal identity, and semantic-hash suites passed 77/77, 28/28, and 28/28.",
+      "Python semantic/current/nominal review and schema suites passed 12 tests with 40 subtests; Notebook 07 no-HB load and Notebook 08 historical read-only execution passed.",
+      "One real no-write 6 GHz candidate with only lr_open shortened by 110 um reached the complete valid metric path: readout 5.982454852 GHz, J 20.612853 MHz, g 103.899382 MHz, and finite cost 501.005328. The result is implementation evidence, not a target-satisfying candidate.",
+      "The uncorrected no-qubit seed rejected at the existing readout ownership gate, demonstrating that nominal qubit loading is active rather than bypassed."
     ],
-    "approved_conditions_sha256": "02c41c5048c6b48af801ccf065217cfbefb5cb12b4eae93b79acf96d1a4bc76f"
+    "approved_conditions_sha256": "56d10e9f39d2a78b43a703411ef9c5793bd1aeb2b01ece7cf7007f4cabecea19"
   }
 }

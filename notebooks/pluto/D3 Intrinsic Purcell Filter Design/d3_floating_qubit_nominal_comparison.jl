@@ -11,7 +11,7 @@ using SuperconductingCircuitsCore
 const JSON3 = SuperconductingCircuitsCore.JSON3
 
 export COMPARISON_OUTPUT_FILES, load_floating_qubit_nominal_input,
-    floating_qubit_isolated_frequency_hz, write_comparison_outputs
+    floating_qubit_coupling_off_frequency_hz, write_comparison_outputs
 
 const COMPARISON_OUTPUT_FILES = Set([
     "status.json",
@@ -100,13 +100,20 @@ function load_floating_qubit_nominal_input(path, constructor)
     return (model = model, input_path = input_path, input_sha256 = file_sha256(input_path))
 end
 
-function floating_qubit_isolated_frequency_hz(qubit)
+"""Return the diagonal-preserving coupling-off floating-qubit frequency.
+
+Each removed readout coupling branch becomes one equal shunt at each endpoint,
+so the qubit-island ground capacitances retain `Cr1` and `Cr2` loading.
+"""
+function floating_qubit_coupling_off_frequency_hz(qubit)
     c01 = Float64(qubit.C01_fF) * 1e-15
     c02 = Float64(qubit.C02_fF) * 1e-15
     c12 = Float64(qubit.C12_fF) * 1e-15
     cr1 = Float64(qubit.Cr1_fF) * 1e-15
     cr2 = Float64(qubit.Cr2_fF) * 1e-15
-    effective_capacitance = c12 + c01 * c02 / (c01 + c02) + cr1 * cr2 / (cr1 + cr2)
+    cg1 = c01 + cr1
+    cg2 = c02 + cr2
+    effective_capacitance = c12 + cg1 * cg2 / (cg1 + cg2)
     effective_inductance = Float64(qubit.L_J_per_junction_nH) * 1e-9 / 2
     return 1 / (2π * sqrt(effective_inductance * effective_capacitance))
 end

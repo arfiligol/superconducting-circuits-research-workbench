@@ -59,6 +59,17 @@ def current_optimizer_fixture(workspace: Path) -> Path:
     shutil.copytree(LEGACY_RUN, optimizer_run)
 
     layout = read_json(optimizer_run / "layout_specs.json")
+    layout["breakdown"]["metrics"].append(
+        {
+            "normalized_residual": 0.0,
+            "name": "g_hz",
+            "weight": 1.0,
+            "contribution": 0.0,
+            "target": 90.0e6,
+            "observed": 90.0e6,
+            "scale": 1.0e6,
+        }
+    )
     layout_metrics = {item["name"]: item for item in layout["breakdown"]["metrics"]}
     target = {
         "target_id": "synthetic-d3-target",
@@ -75,6 +86,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
             "readout_filter_exchange_coupling": {
                 "value": layout_metrics["j_hz"]["target"] / 1.0e6
             },
+            "qubit_readout_coupling": {"value": 90.0},
         },
     }
     target_path = workspace / "docs/target.json"
@@ -113,6 +125,14 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         "d3_purcell_common": workspace_file(workspace, "workbench/runtime/common.jl", "# common\n"),
         "d3_coupled_evaluator": workspace_file(workspace, "workbench/runtime/evaluator.jl", "# evaluator\n"),
         "d3_semantic_hash": workspace_file(workspace, "workbench/runtime/d3_semantic_hash.jl", "# semantic hash\n"),
+        "floating_qubit_nominal": workspace_file(
+            workspace,
+            "workbench/private/floating-qubit.json",
+            '{"model_id":"synthetic-floating-qubit"}\n',
+        ),
+        "d3_floating_qubit_input_loader": workspace_file(
+            workspace, "workbench/runtime/floating_qubit_loader.jl", "# qubit loader\n"
+        ),
     }
     inventory_rows = [
         {
@@ -134,6 +154,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         "orpen_case_json_workspace_path": source_paths["orpen_case_json"].relative_to(workspace).as_posix(),
         "design_csv_workspace_root": source_paths["seed_csv"].parent.relative_to(workspace).as_posix(),
         "design_csv_filename": source_paths["seed_csv"].name,
+        "floating_qubit_nominal_workspace_path": source_paths["floating_qubit_nominal"].relative_to(workspace).as_posix(),
     }
     write_json(optimizer_run / "config_snapshot.json", config)
 
@@ -159,6 +180,10 @@ def current_optimizer_fixture(workspace: Path) -> Path:
             "source_row_sha256": validator.semantic_value_sha256(source_row),
         },
         "consumed_files": inventory_rows,
+        "floating_qubit_nominal": {
+            "model_id": "synthetic-floating-qubit",
+            "input_sha256": validator.file_sha256(source_paths["floating_qubit_nominal"]),
+        },
     }
     current_contract = json3_roundtrip(current_contract)
     execution_hash = validator.semantic_value_sha256(
@@ -189,16 +214,45 @@ def current_optimizer_fixture(workspace: Path) -> Path:
     optimization = read_json(optimizer_run / "optimization_result.json")
     optimization["condition_manifest_sha256"] = execution_hash
     optimization["condition_manifest_id"] = optimizer_id
+    selected_record = next(
+        record for record in optimization["history"]
+        if record["record_id"] == layout["candidate_record_id"]
+    )
+    selected_record["evaluation"]["metrics"]["g_hz"] = 90.0e6
+    selected_record["breakdown"]["metrics"].append(copy.deepcopy(layout["breakdown"]["metrics"][-1]))
     write_json(optimizer_run / "optimization_result.json", optimization)
 
     final_diagnostics = read_json(optimizer_run / "final_diagnostics.json")
     final_diagnostics["analysis_kind"] = "optimizer_internal_final_reproduction"
     final_diagnostics["independent_validation"] = False
     record = final_diagnostics["record"]
+    record["metrics"]["g_hz"] = 90.0e6
     loaded_grid = [5.5e9, 6.0e9, 6.5e9]
     pair_grid = [5.5e9, 6.0e9, 6.5e9]
     loaded_hash = validator.frequency_grid_sha256(loaded_grid)
     pair_hash = validator.frequency_grid_sha256(pair_grid)
+    qubit_grid = [4.95e9, 5.05e9, 5.15e9]
+    qubit_hash = validator.frequency_grid_sha256(qubit_grid)
+    input_hash = validator.file_sha256(source_paths["floating_qubit_nominal"])
+    record["diagnostics"]["qubit_frequency_grid_sha256"] = qubit_hash
+    record["diagnostics"]["floating_qubit"] = {
+        "model_id": "synthetic-floating-qubit",
+        "input_sha256": input_hash,
+    }
+    frequency_fit = record["diagnostics"]["readout_zero_probe_frequency_fit"]
+    x_values = frequency_fit["x_values"]
+    g_values = [90.0e6 + 100.0 * value + value**2 for value in x_values]
+    record["diagnostics"]["g_zero_probe_fit"] = {
+        "x_values": x_values,
+        "y_values": g_values,
+        "fitted_y_values": g_values,
+        "intercept": 90.0e6,
+        "coefficients": {
+            "intercept": 90.0e6,
+            "linear_per_fF": 100.0,
+            "quadratic_per_fF2": 1.0,
+        },
+    }
 
     def complex_values(count: int, scale: float) -> list[dict[str, float]]:
         return [
@@ -228,6 +282,22 @@ def current_optimizer_fixture(workspace: Path) -> Path:
                 "reference_s21": complex_values(len(loaded_grid), 0.001),
             }
         )
+        probe.update(
+            {
+                "qubit_frequency_grid_sha256": qubit_hash,
+                "qubit_measured_trace_id": f"synthetic-qubit-{index}|grid_sha256={qubit_hash}",
+                "qubit_frequencies_hz": qubit_grid,
+                "qubit_s21": complex_values(len(qubit_grid), 0.02 + index * 0.001),
+                "qubit_reference_s21": complex_values(len(qubit_grid), 0.001),
+            }
+        )
+        mode = record["diagnostics"]["readout_probe_modes"][index]
+        mode["g_hz"] = g_values[index]
+        mode["qubit_mode"] = {
+            "frequency_hz": 5.0e9,
+            "frequency_grid_sha256": qubit_hash,
+            "measured_trace_id": probe["qubit_measured_trace_id"],
+        }
     pair_trace = record["traces"]["pair"]
     pair_trace.update(
         {
@@ -284,6 +354,8 @@ def nominal_payload(workspace: Path, optimizer_run: Path) -> dict[str, dict]:
         "common": inventory_by_id["d3_purcell_common"]["path"],
         "evaluator": inventory_by_id["d3_coupled_evaluator"]["path"],
         "semantic_hash": inventory_by_id["d3_semantic_hash"]["path"],
+        "qubit_input": inventory_by_id["floating_qubit_nominal"]["path"],
+        "qubit_input_loader": inventory_by_id["d3_floating_qubit_input_loader"]["path"],
         "runner": workspace_file(workspace, "workbench/runtime/runner.jl", "# runner\n").relative_to(workspace).as_posix(),
         "nominal_runtime": workspace_file(workspace, "workbench/runtime/nominal.jl", "# nominal\n").relative_to(workspace).as_posix(),
     }
@@ -337,6 +409,9 @@ def nominal_payload(workspace: Path, optimizer_run: Path) -> dict[str, dict]:
             "config_snapshot_sha256": source_by_id["config_snapshot"]["sha256"],
             "q2d_sha256": source_by_id["q2d"]["sha256"],
             "seed_sha256": source_by_id["seed"]["sha256"],
+            "floating_qubit_input_sha256": source_by_id["qubit_input"]["sha256"],
+            "floating_qubit_loader_sha256": source_by_id["qubit_input_loader"]["sha256"],
+            "floating_qubit_model_id": "synthetic-floating-qubit",
             "layout_specs_raw_sha256": identity["layout_specs_raw_sha256"],
             "candidate_sha256": identity["candidate_sha256"],
             "optimizer_identity_sha256": identity["optimizer_identity_sha256"],
