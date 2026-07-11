@@ -3,7 +3,7 @@
 using Pkg
 
 const REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
-const LOCAL_DEV_TOOLS = ["Revise"]
+const LOCAL_DEV_TOOLS = ["Revise", "Pluto", "PlutoUI"]
 const LOCAL_PACKAGES = [
     (
         name = "SuperconductingCircuitsCore",

@@ -1,0 +1,32 @@
+{
+  "active_design_variant_id": "mismatch_loaded_bare_filter_plus1mhz_kappa25_j20_lc_tuned_notch4500",
+  "source_design_variant_id": "mismatch_loaded_bare_filter_plus1mhz_kappa25_lc160_notch4500",
+  "design_csv_filename": "d3_selected_resonator_lengths__mismatch_loaded_bare_filter_plus1mhz_kappa25_j20_lc_tuned_notch4500.csv",
+  "source_design_csv_filename": "d3_selected_resonator_lengths__mismatch_loaded_bare_filter_plus1mhz_kappa25_lc160_notch4500.csv",
+  "design_csv_role": "optimizer_seed_only",
+  "prior_simulation_evidence_status": "invalidated_by_50ohm_feedline_correction",
+  "selected_case_id": "height7",
+  "target_set_id": "d3",
+  "slot_targets_ghz": [5.52, 5.76, 6.0, 6.24, 6.48],
+  "notch_target_ghz": 4.5,
+  "loaded_bare_center_policy": "slot_target",
+  "filter_loaded_bare_offset_mhz": 1.0,
+  "readout_loaded_bare_offset_mhz": -1.0,
+  "readout_minus_filter_detuning_mhz": -2.0,
+  "shared_readout_hook_spacing_um": 200.0,
+  "shared_readout_feedline_margin_um": 100.0,
+  "feedline_rlgc": {
+    "source": "Ansys Q2D 2024 R2, Flip Chip 6-7-6 single trace covered by ground, gap 8.0 um",
+    "extraction_frequency_ghz": 6.0,
+    "l_per_m_h": 3.8383846e-7,
+    "c_per_m_f": 1.5291443e-10,
+    "r_per_m_ohm": 0.0,
+    "g_per_m_s": 0.0,
+    "r_status": "unavailable_in_source",
+    "g_status": "unavailable_in_source",
+    "loss_assumption": "r_and_g_assumed_zero_for_lossless_exploration_only",
+    "target_impedance_ohm": 50.0,
+    "max_abs_impedance_error_ohm": 0.25,
+    "max_abs_impedance_error_role": "mismatch_screening_only"
+  }
+}

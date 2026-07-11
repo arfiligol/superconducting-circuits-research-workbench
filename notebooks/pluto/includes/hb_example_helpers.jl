@@ -1,3 +1,10 @@
+# This module owns notebook-facing labels and extraction helpers for compiled HB
+# result families. It does not define harmonic-balance or network-observable
+# semantics; those remain canonical in the Super Repo:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/network-trace-views.qmd
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd
+
 module HBExampleHelpers
 
 using LinearAlgebra
@@ -46,6 +53,7 @@ function _trace_value(result, family::Symbol, label::String)
     return traces[label]
 end
 
+"""Return the solver-returned zero-mode S trace without converting another family."""
 function zero_mode_s(result, output_port::Integer, input_port::Integer)
     return _trace_value(result, :zero_mode_s, "S$(Int(output_port))$(Int(input_port))")
 end
@@ -67,6 +75,7 @@ function mode_trace(
     return _trace_value(result, family, label)
 end
 
+"""Return the solver-returned zero-mode Z trace for the raw compiled network."""
 function zero_mode_z(result, output_port::Integer, input_port::Integer)
     return mode_trace(
         result,
@@ -127,6 +136,7 @@ function zero_mode_z_matrix(result; ports=nothing)
     )
 end
 
+"""Derive raw zero-mode Y by inverting returned Z; this is not S-to-Y conversion or PTC."""
 function zero_mode_y_matrix(result; ports=nothing)
     z = zero_mode_z_matrix(result; ports=ports)
     port_count = length(z.ports)
