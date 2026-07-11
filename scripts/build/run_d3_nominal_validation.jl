@@ -7,7 +7,7 @@
 import Pkg
 Pkg.activate(joinpath(first(DEPOT_PATH), "environments", "v1.12"); io = devnull)
 
-const WORKBENCH_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
+const WORKBENCH_ROOT = dirname(dirname(abspath(@__DIR__)))
 const WORKSPACE_ROOT = dirname(WORKBENCH_ROOT)
 const D3_NOTEBOOK_ROOT = joinpath(WORKBENCH_ROOT, "notebooks", "pluto", "D3 Intrinsic Purcell Filter Design")
 const BRIDGE_PYTHON = joinpath(WORKBENCH_ROOT, ".venv", "bin", "python")
@@ -40,6 +40,17 @@ function workspace_path(relative_path)
     return resolved
 end
 
+function preflight_workspace_paths(preflight)
+    isdir(WORKBENCH_ROOT) || error("Computed Workbench root does not exist: $(WORKBENCH_ROOT)")
+    isdir(WORKSPACE_ROOT) || error("Computed workspace root does not exist: $(WORKSPACE_ROOT)")
+    dirname(WORKBENCH_ROOT) == WORKSPACE_ROOT || error("Workbench and workspace roots are not parent/child.")
+    conditions_item = preflight.consumed_inventory["optimizer_conditions"]
+    conditions_path = workspace_path(conditions_item["path"])
+    isfile(conditions_path) || error("Optimizer conditions inventory path does not resolve: $(conditions_path)")
+    D3NominalValidation.file_sha256(conditions_path) == conditions_item["sha256"] || error("Optimizer conditions inventory hash disagrees with the resolved file.")
+    return (workbench_root = WORKBENCH_ROOT, workspace_root = WORKSPACE_ROOT, conditions_path = conditions_path)
+end
+
 function physical_evaluator_factory(preflight, config, conditions)
     seed_path = workspace_path(joinpath(String(config["design_csv_workspace_root"]), String(config["design_csv_filename"])))
     designs = read_design_csv(seed_path; case_id = preflight.selection.case_id)
@@ -62,7 +73,7 @@ function physical_evaluator_factory(preflight, config, conditions)
     )
     target_path = workspace_path(config["target_contract"]["workspace_relative_path"])
     target = JSON3.read(read(target_path, String), Dict{String,Any})
-    target_sha256 = file_sha256(target_path)
+    target_sha256 = D3NominalValidation.file_sha256(target_path)
     target_sha256 == config["target_contract"]["expected_sha256"] || error("Current canonical target bytes disagree with the optimizer snapshot.")
     f01_record = target["targets"]["qubit_transition_frequency"]
     lj_record = target["targets"]["qubit_junction_inductance"]
@@ -111,9 +122,17 @@ function physical_evaluator_factory(preflight, config, conditions)
 end
 
 function main(arguments)
+    if length(arguments) == 2 && arguments[1] == "--check-workspace-paths"
+        paths = preflight_workspace_paths(preflight_optimizer_run(abspath(arguments[2])))
+        println("WORKBENCH_ROOT=$(paths.workbench_root)")
+        println("WORKSPACE_ROOT=$(paths.workspace_root)")
+        println("OPTIMIZER_CONDITIONS=$(paths.conditions_path)")
+        return nothing
+    end
     length(arguments) == 1 || error("Usage: julia scripts/build/run_d3_nominal_validation.jl <persisted_optimizer_run_directory>")
     optimizer_run = abspath(arguments[1])
     preflight = preflight_optimizer_run(optimizer_run)
+    preflight_workspace_paths(preflight)
     preflight.is_current || error("Legacy optimizer runs are preflight-only; nominal execution requires a current per-Slot manifest.")
     config_snapshot_path = joinpath(optimizer_run, "config_snapshot.json")
     config = preflight.config_snapshot

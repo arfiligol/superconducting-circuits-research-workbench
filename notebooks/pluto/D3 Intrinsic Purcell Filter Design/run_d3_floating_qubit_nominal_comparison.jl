@@ -6,7 +6,7 @@
 import Pkg
 Pkg.activate(joinpath(first(DEPOT_PATH), "environments", "v1.12"); io = devnull)
 
-const WORKBENCH_ROOT = normpath(joinpath(@__DIR__, "..", "..", ".."))
+const WORKBENCH_ROOT = dirname(dirname(dirname(abspath(@__DIR__))))
 const WORKSPACE_ROOT = dirname(WORKBENCH_ROOT)
 const BRIDGE_PYTHON = joinpath(WORKBENCH_ROOT, ".venv", "bin", "python")
 if !haskey(ENV, "JULIA_PYTHONCALL_EXE") && isfile(BRIDGE_PYTHON) && (uperm(BRIDGE_PYTHON) & 0o111 != 0)
@@ -54,6 +54,14 @@ function inventory_source_path(preflight, id)
     return path
 end
 
+function preflight_workspace_paths(preflight)
+    isdir(WORKBENCH_ROOT) || error("Computed Workbench root does not exist: $(WORKBENCH_ROOT)")
+    isdir(WORKSPACE_ROOT) || error("Computed workspace root does not exist: $(WORKSPACE_ROOT)")
+    dirname(WORKBENCH_ROOT) == WORKSPACE_ROOT || error("Workbench and workspace roots are not parent/child.")
+    conditions_path = inventory_source_path(preflight, "optimizer_conditions")
+    return (workbench_root = WORKBENCH_ROOT, workspace_root = WORKSPACE_ROOT, conditions_path = conditions_path)
+end
+
 function historical_design(preflight)
     preflight.is_current && error(
         "This comparison CLI currently accepts the frozen historical-exploration D3 run contract only; use the independent nominal workflow for current-schema promotion evidence.",
@@ -98,6 +106,13 @@ model_row(id, no_qubit, with_qubit, unit, meaning, source) = Dict(
 )
 
 function main(arguments)
+    if length(arguments) == 2 && arguments[1] == "--check-workspace-paths"
+        paths = preflight_workspace_paths(preflight_optimizer_run(abspath(arguments[2])))
+        println("WORKBENCH_ROOT=$(paths.workbench_root)")
+        println("WORKSPACE_ROOT=$(paths.workspace_root)")
+        println("OPTIMIZER_CONDITIONS=$(paths.conditions_path)")
+        return nothing
+    end
     length(arguments) == 3 || error(
         "Usage: julia --startup-file=no notebooks/pluto/D3\\ Intrinsic\\ Purcell\\ Filter\\ Design/run_d3_floating_qubit_nominal_comparison.jl <frozen_optimizer_run_directory> <private_floating_qubit_json> <new_output_directory>",
     )
@@ -105,6 +120,7 @@ function main(arguments)
     qubit_input = load_floating_qubit_nominal_input(arguments[2], D3FloatingQubitNominal)
     output_directory = abspath(arguments[3])
     preflight = preflight_optimizer_run(optimizer_run)
+    preflight_workspace_paths(preflight)
     design = historical_design(preflight)
     contract = preflight.optimizer_contract
 	 target_path = inventory_source_path(preflight, "target_contract")
