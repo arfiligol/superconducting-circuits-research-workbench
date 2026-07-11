@@ -240,6 +240,40 @@ optimizer. Failed, stale, candidate-mismatched, or source-mismatched directories
 remain visible rejected evidence and are never substituted for Final
 Validation.
 
+## Nominal Floating-Qubit Loading Comparison
+
+The floating-qubit loading check is separate from optimization and independent
+nominal-validation promotion. It freshly solves the same frozen Layout Specs
+twice on one frequency grid: first without the qubit, then with the reduced
+linearized qubit connected only to `readout_open_tail`. The current CLI accepts
+the frozen historical-exploration run contract and labels the result
+`historical_exploration_layout_input`; it does not turn that run into Final
+Validation.
+
+The private JSON input uses schema `d3-floating-qubit-nominal.v1` and must
+contain exactly `model_id`, `capacitance_source_id`, `C01_fF`, `C02_fF`,
+`C12_fF`, `Cr1_fF`, `Cr2_fF`, and `L_J_per_junction_nH` in addition to
+`schema_version`. All branch values are positive physical capacitances. The
+public nominal is 24 nH for each of two identical parallel small-signal
+Josephson branches; design-specific capacitances stay outside this repository's
+tracked source.
+
+Run from the Workbench root and choose a new output directory under `build/`:
+
+```bash
+julia --startup-file=no \
+  "notebooks/pluto/D3 Intrinsic Purcell Filter Design/run_d3_floating_qubit_nominal_comparison.jl" \
+  <frozen_optimizer_run_directory> \
+  <private_floating_qubit_json> \
+  <new_build_output_directory>
+```
+
+The output contains `model_inputs.csv`/`.json`,
+`metric_comparison.csv`/`.json`, the fresh common-grid raw and normalized
+`s21_traces.csv`, fit details, identities, and run status. The readout-response
+shift is explicitly a paired-pole proximity diagnostic; it is not mislabeled
+as loaded-bare mode ownership or a Condition Threshold decision.
+
 ## Running another Slot
 
 1. Start Pluto and open `07_coupled_cost_optimization.jl`.

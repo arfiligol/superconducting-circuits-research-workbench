@@ -17,6 +17,102 @@ import DelimitedFiles
 const D3_METERS_PER_UM = 1.0e-6
 const D3_HZ_PER_GHZ = 1.0e9
 const D3_FARADS_PER_FF = 1.0e-15
+const D3_HENRIES_PER_NH = 1.0e-9
+
+"""Reduced passive small-signal model for one symmetric floating qubit.
+
+The five capacitances are positive physical branch values, not signed Maxwell
+matrix entries. `L_J_per_junction_nH` is the inductance of each of two
+identical parallel linearized Josephson branches. This type intentionally does
+not model flux, junction asymmetry, loop inductance, or omitted matrix terms.
+"""
+struct D3FloatingQubitNominal
+	model_id::String
+	capacitance_source_id::String
+	C01_fF::Float64
+	C02_fF::Float64
+	C12_fF::Float64
+	Cr1_fF::Float64
+	Cr2_fF::Float64
+	L_J_per_junction_nH::Float64
+
+	function D3FloatingQubitNominal(;
+		model_id,
+		capacitance_source_id,
+		C01_fF,
+		C02_fF,
+		C12_fF,
+		Cr1_fF,
+		Cr2_fF,
+		L_J_per_junction_nH,
+	)
+		model = strip(String(model_id))
+		source = strip(String(capacitance_source_id))
+		isempty(model) && error("Floating-qubit nominal model_id must be nonempty.")
+		isempty(source) && error("Floating-qubit capacitance_source_id must be nonempty.")
+		values = Float64[C01_fF, C02_fF, C12_fF, Cr1_fF, Cr2_fF, L_J_per_junction_nH]
+		all(value -> isfinite(value) && value > 0, values) || error(
+			"Floating-qubit capacitances and per-junction L_J must be finite and positive.",
+		)
+		return new(model, source, values...)
+	end
+end
+
+function add_floating_qubit_nominal!(circuit_plan, readout_open_tail, qubit::D3FloatingQubitNominal; id_prefix = "floating_qubit")
+	prefix = strip(String(id_prefix))
+	isempty(prefix) && error("Floating-qubit id_prefix must be nonempty.")
+	island1 = external_node("$(prefix)_island_1")
+	island2 = external_node("$(prefix)_island_2")
+	shunt_capacitor!(
+		circuit_plan;
+		id = "$(prefix)_C01",
+		at = island1,
+		capacitance = qubit.C01_fF * D3_FARADS_PER_FF,
+		role = :floating_qubit_island_ground_capacitance,
+	)
+	shunt_capacitor!(
+		circuit_plan;
+		id = "$(prefix)_C02",
+		at = island2,
+		capacitance = qubit.C02_fF * D3_FARADS_PER_FF,
+		role = :floating_qubit_island_ground_capacitance,
+	)
+	couple_capacitive!(
+		circuit_plan;
+		id = "$(prefix)_C12",
+		from = island1,
+		to = island2,
+		capacitance = qubit.C12_fF * D3_FARADS_PER_FF,
+		role = :floating_qubit_island_mutual_capacitance,
+	)
+	for junction_index in 1:2
+		series_inductor!(
+			circuit_plan;
+			id = "$(prefix)_LJ_$(junction_index)",
+			from = island1,
+			to = island2,
+			inductance = qubit.L_J_per_junction_nH * D3_HENRIES_PER_NH,
+			role = :floating_qubit_linearized_josephson_inductance,
+		)
+	end
+	couple_capacitive!(
+		circuit_plan;
+		id = "$(prefix)_Cr1",
+		from = readout_open_tail,
+		to = island1,
+		capacitance = qubit.Cr1_fF * D3_FARADS_PER_FF,
+		role = :readout_to_floating_qubit_capacitance,
+	)
+	couple_capacitive!(
+		circuit_plan;
+		id = "$(prefix)_Cr2",
+		from = readout_open_tail,
+		to = island2,
+		capacitance = qubit.Cr2_fF * D3_FARADS_PER_FF,
+		role = :readout_to_floating_qubit_capacitance,
+	)
+	return (island1 = island1, island2 = island2, readout_attachment = readout_open_tail)
+end
 
 struct D3FeedlineRLGC
 	source::String
@@ -706,7 +802,15 @@ function build_feedline_reference_plan(feedline; feedline_length_um, breakpoints
 	return attach_sparameter_hb_intent!(circuit_plan; hb_settings = hb_settings)
 end
 
-function build_single_pair_feedline_plan(case, design; capacitance_fF, feedline_length_um, feedline, hb_settings)
+function build_single_pair_feedline_plan(
+	case,
+	design;
+	capacitance_fF,
+	feedline_length_um,
+	feedline,
+	hb_settings,
+	floating_qubit_nominal = nothing,
+)
 	circuit_plan = CircuitPlan("d3-single-pair-$(design.id)-$(get(design, :variant_id, :baseline))")
 	actual_capacitance_fF = Float64(capacitance_fF)
 	isfinite(actual_capacitance_fF) && actual_capacitance_fF > 0 ||
@@ -721,6 +825,12 @@ function build_single_pair_feedline_plan(case, design; capacitance_fF, feedline_
 		breakpoints_m = [coupling_position_m],
 	)
 	pair_nodes = add_mtl_pair!(circuit_plan; case = case, design = design, index = 1, hb_settings = hb_settings)
+	isnothing(floating_qubit_nominal) || add_floating_qubit_nominal!(
+		circuit_plan,
+		pair_nodes.readout_open_tail,
+		floating_qubit_nominal;
+		id_prefix = "floating_qubit_nominal_1",
+	)
 	couple_capacitive!(
 		circuit_plan;
 		id = :filter_to_readout_line_1,
@@ -823,6 +933,7 @@ function build_maxwell_diagonal_pair_feedline_plan(
 	feedline_length_um,
 	feedline,
 	hb_settings,
+	floating_qubit_nominal = nothing,
 )
 	filter_capacitance = Float64(filter_capacitance_fF)
 	isfinite(filter_capacitance) && filter_capacitance > 0 ||
@@ -849,6 +960,12 @@ function build_maxwell_diagonal_pair_feedline_plan(
 		design = design,
 		index = 1,
 		hb_settings = hb_settings,
+	)
+	isnothing(floating_qubit_nominal) || add_floating_qubit_nominal!(
+		circuit_plan,
+		pair_nodes.readout_open_tail,
+		floating_qubit_nominal;
+		id_prefix = "floating_qubit_nominal_diagonal_reference_1",
 	)
 	feedline_tap = node_at_distance(readout_line, coupling_position_m)
 	couple_capacitive!(
