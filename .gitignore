@@ -69,6 +69,7 @@ mkdocs_structure.txt
 *.jl.*.mem
 *.ji
 *.zwc
+.CondaPkg/
 
 # --- System / OS ---
 .DS_Store
