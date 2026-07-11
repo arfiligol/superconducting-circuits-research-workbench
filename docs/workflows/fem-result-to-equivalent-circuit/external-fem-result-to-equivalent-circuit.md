@@ -9,12 +9,12 @@ tags:
 status: stable
 owner: docs-team
 audience: user
-scope: Workflow for turning upstream FEM or simulation result artifacts into normalized traces and equivalent circuit fits.
-version: v1.0.0
-last_updated: 2026-06-14
+scope: Workflow for turning upstream FEM traces or labeled per-unit-length matrices into reviewable equivalent-circuit inputs.
+version: v1.1.0
+last_updated: 2026-07-10
 updated_by: codex
 title: External FEM Result To Equivalent Circuit
-description: Normalize trace tables, Touchstone files, or Zarr packages and fit equivalent circuit parameters.
+description: Normalize external traces or validate per-unit-length matrix artifacts before equivalent-circuit use.
 sidebar:
  label: External FEM Result To Equivalent Circuit
  order: 60
@@ -26,24 +26,28 @@ Use this workflow when the source data was generated outside this repo. The upst
 
 ## Inputs
 
-All three input forms should be treated as valid route entrances:
+All four input forms should be treated as valid route entrances:
 
 | Input | Use it when |
 | --- | --- |
 | trace table | the data already has frequency and complex trace columns |
 | Touchstone | the result is an RF network export such as `.s1p`, `.s2p`, or `.sNp` |
 | Zarr package | the result was already normalized into the workbench package shape |
+| per-unit-length matrix artifact | Q2D/FEM already exported labeled terminal-domain matrices rather than a network trace |
 
-The workflow should preserve source metadata, units, port labels, frequency axis, trace family, and provenance. A fitted equivalent circuit without source trace references is not reviewable enough for this docs lane.
+The workflow should preserve source metadata, units, terminal/port labels,
+frequency, representation, quantity availability, and provenance. A fitted
+equivalent circuit without source evidence is not reviewable enough for this
+docs lane.
 
 ## Flow
 
 ```text
 source artifact
-  -> normalize frequency axis and complex traces
-  -> derive or validate S/Y/Z matrix family
-  -> choose fit family
-  -> fit RLC, RLGC, coupling, or mode parameters
+  -> classify trace package versus per-unit-length matrix artifact
+  -> normalize S/Y/Z traces, or validate matrix basis and eligibility
+  -> choose fit family or supported direct matrix consumer
+  -> fit parameters, or lower the validated matrix model
   -> store fit metrics and model trace
   -> hand off to reusable circuit or quantum model workflow
 ```
@@ -56,6 +60,13 @@ source artifact
 | RLGC | distributed line parameters and sectioning assumptions |
 | coupling model | mutual capacitance, mutual inductance, or coupling-window parameters |
 | mode extraction | mode frequency, loss, linewidth, participation-style descriptors when available |
+
+For a direct matrix handoff, apply the eligibility fields in
+[External FEM Result Contract](../../reference/research-contracts/external-fem-result-contract.md#per-unit-length-matrix-artifact)
+and interpret them with
+[SCQ_Design: Multiconductor RLGC Matrices](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd).
+The current coupled-line consumer is LC-only; absent $R/G$ must not be treated
+as extracted zero-loss evidence.
 
 ## Surface Choice
 

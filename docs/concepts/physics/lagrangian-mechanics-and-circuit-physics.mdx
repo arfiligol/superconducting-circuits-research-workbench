@@ -8,68 +8,32 @@ tags:
 status: draft
 owner: docs-team
 audience: user
-scope: Explain how Lagrangian mechanics maps to superconducting circuits
-version: v0.1.0
-last_updated: 2026-02-16
-updated_by: team
+scope: Handoff from Workbench circuit-model context to canonical SCQ_Design Lagrangian, Hamiltonian, and quantization knowledge
+version: v0.2.0
+last_updated: 2026-07-10
+updated_by: codex
 sidebar:
  label: Lagrangian Mechanics and Circuits
  order: 90
 ---
 
-import { Aside } from '@astrojs/starlight/components';
-
 # How is Lagrangian mechanics combined with circuit physics?
 
-## Questions answered in this chapter
+The reusable circuit-coordinate, Lagrangian, Legendre-transform, Hamiltonian,
+constraint, and canonical-quantization semantics are owned by the SCQ_Design
+Knowledge Base:
 
-Why can we write a circuit system into the same Lagrangian as a particle system and further quantize it?
+- [Canonical knowledge: Circuit Lagrangian, Hamiltonian, and Quantization](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/quantum-circuits/circuit-lagrangian-hamiltonian-quantization.qmd)
 
-## Prerequisite knowledge comparison
+Use the canonical node for the distinction between node flux and dimensionless
+phase, capacitance-matrix singularities, constrained coordinates, conjugate
+charge, and the conditions required before quantization.
 
-- Classical: Lagrange equation and generalized coordinates
-- Electromagnetic: capacitive energy storage and inductive energy storage
-- Quantum: regular quantization
+This repository retains only the tool and artifact handoff:
 
-## Physics Core
+- [Equivalent Circuit To Hamiltonian](../quantum-modeling/equivalent-circuit-to-hamiltonian.md)
+- [Equivalent Circuit To Quantum Model](../../workflows/equivalent-circuit-to-quantum-model/index.md)
+- [Quantum Model Boundary](../../reference/research-contracts/quantum-model-boundary.md)
 
-Under the nodal flux variable `\phi_i`, a common form is
-
-$$
-\mathcal{L}(\{\phi_i\},\{\dot\phi_i\}) = T(\dot\phi) - U(\phi),
-$$
-
-in
-
-- `T` comes from the capacitor network (corresponding to kinetic energy)
-- `U` comes from inductance and Josephson potential energy (corresponding to potential energy)
-
-Then by the conjugate momentum
-
-$$
-q_i = \frac{\partial \mathcal{L}}{\partial \dot\phi_i}
-$$
-
-By establishing the Hamiltonian and quantizing it, the quantum model of the circuit can be obtained.
-
-<Aside type="note" title="Historical context">
-
-Write the circuit in Lagrangian/Hamiltonian form so that "circuit design" and "quantum system modeling" can use the same theoretical language.
-
-</Aside>
-
-## Project mapping
-
-- Equivalent parameters (C, L, EJ) enter the model directly and are connected to the measurement frequency and coupling strength.
-- Coordinate selection (node ​​flux / loop flux) will affect model simplicity and numerical stability.
-
-## Limitations and approximations
-
-- The lumped element approximation requires that the element size is much smaller than the relevant wavelength.
-- Dispersion parameters and packaging effects require additional processing at high frequencies or large sizes.
-
-## Cross-file navigation
-
-- Preface: [Why does nonlinearity make the energy level spacing inconsistent? ](why-nonlinearity-makes-unequal-level-spacing.mdx)
-- Next step: [Why can SQUID control non-linear inductance values? ](squid-controls-nonlinear-inductance.mdx)
-- Task-oriented: [SQUID Fitting](../../workflows/fem-result-to-equivalent-circuit/squid-fitting.mdx)
+No executable quantum-model package or quantum-model notebook currently
+implements this handoff in the Workbench.

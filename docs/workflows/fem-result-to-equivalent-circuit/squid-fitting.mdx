@@ -10,10 +10,10 @@ tags:
 status: stable
 owner: team
 audience: user
-scope: "How to fit SQUID circuit parameters (Ls, C) from Admittance data"
-version: v1.1.0
-last_updated: 2026-01-31
-updated_by: team
+scope: "How to fit the current ideal two-junction LC surrogate parameters (Ls, C) from resonance data"
+version: v1.2.0
+last_updated: 2026-07-10
+updated_by: codex
 sidebar:
  label: SQUID Fitting
  order: 30
@@ -21,10 +21,22 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-# Fitting SQUID Models
+# Fitting the Current Two-Junction LC Surrogate
 
-This guide describes the execution boundaries of LC-SQUID fitting in the study path.
-Reusable fitting belongs to Python Analysis Core; exploratory setup belongs in Pluto or Python notebooks.
+This guide describes the execution boundary of the current ideal symmetric
+two-junction LC surrogate. Reusable fitting belongs to Python Analysis Core;
+exploratory setup belongs in Pluto or Python notebooks.
+
+## Canonical Knowledge
+
+- [Josephson Current, Phase, Energy, and Inductance](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd)
+- [DC-SQUID Flux Tunability](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/dc-squid-flux-tunability.qmd)
+
+The current Python model accepts `L_jun` as the small-signal inductance of each
+of two identical junctions and uses `L_sq = L_jun / 2` before adding `Ls_nH`.
+It does not compute `L_jun` from flux, critical current, junction asymmetry,
+bias phase, or loop self-inductance. A full flux-tunable DC-SQUID model is not
+implemented.
 
 <Aside type="note" title="Preconditions">
 
@@ -74,15 +86,20 @@ Move to fitting only after the trace family, port definition, and target resonan
 
 ---
 
-## Select fitting strategy
+## Select Fitting Strategy
 
-Choose the appropriate fitting mode based on your circuit design and data characteristics:
+Choose the fitting strategy that matches the reviewed fixed parameters:
 
-| Mode | Applicable Scenario | Input |
+| Strategy | Applicable scenario | Python Analysis Core entry point |
 |------|----------|------------|
-| **Standard (With Ls)** | In general, $L_s$ and $C$ need to be determined at the same time | `mode = "standard"` |
-| **Fixed Capacitance** | The accurate capacitance value measured or designed is known and only needs to be optimized $L_s$ | `fixed_capacitance` |
-| **Ideal LC (No Ls)** | Ignore the series inductance and only fit pure LC resonance (less used) | `mode = "ideal_lc"` |
+| Fit $L_s$ and $C$ | Both parameters are unknown | `fit_squid_model_with_Ls` |
+| Fix $C$, fit $L_s$ | A reviewed capacitance is available | `fit_squid_model_with_Ls_fixed_C` |
+| Fix $L_s = 0$, fit $C$ | The series inductance is intentionally omitted | `fit_squid_model` |
+
+These functions live in
+`superconducting_circuits_analysis.application.analysis.fitting.modes`. They
+fit resonance frequency versus supplied per-junction `L_jun`; they do not fit
+external flux.
 
 ---
 
@@ -96,7 +113,7 @@ Move shared model fitting code into Python Analysis Core when it is used by more
 
 <Aside type="note" title="Fitting execution boundary">
 
-LC-SQUID fitting belongs to either direct research execution in Pluto or reusable Python Analysis Core code.
+The ideal two-junction LC surrogate fit belongs to either direct research execution in Pluto or reusable Python Analysis Core code.
 Keep notebook-only glue out of package code; keep reusable fitting functions covered by package tests.
 
 </Aside>
@@ -108,7 +125,7 @@ Keep notebook-only glue out of package code; keep reusable fitting functions cov
 After the fitting is completed, the study results should be recorded:
 
 1. source trace path or notebook cell provenance
-2. fitting mode and fixed parameters
+2. fitting entry point and fixed parameters
 3. fitted values and uncertainty/error metrics
 4. plots or tables used in the analysis report
 5. figure generation code and table-generation code needed to reproduce the report evidence
@@ -121,3 +138,4 @@ After the fitting is completed, the study results should be recorded:
 - [Research Evidence](research-data-evidence.mdx)
 - [Notebook Interface](../../reference/notebooks/index.md)
 - [Python Core](../../reference/core/python-core.mdx)
+- [Flux Dependence Analysis](flux-analysis.md)

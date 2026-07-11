@@ -9,25 +9,37 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "Workflow-supporting knowledge base for physics, circuit authoring, equivalent-circuit modeling, quantum modeling, pulse simulation, and GDSFactory-compatible artifacts."
-version: v2.0.0
-last_updated: 2026-06-14
+scope: "Repository-local implementation concepts and handoffs to the canonical SCQ_Design Physics and Engineering Knowledge Base."
+version: v2.1.0
+last_updated: 2026-07-10
 updated_by: codex
 title: Concepts
-description: Choose this section when you need to understand the model behind the workflows and contracts.
+description: Find Workbench-specific mental models and handoffs to canonical SCQ_Design knowledge.
 sidebar:
  label: Overview
  order: 10
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-This area answers "why". It is the workflow knowledge base for the four research routes. Pure physics stays in Physics Foundations; engineering and research-method knowledge lives beside the route it supports. Formal contracts still live in Reference owner pages.
+This area explains repository-local implementation mental models for the four
+research routes. Reusable physics, engineering, mathematics, and algorithm
+semantics are owned by the SCQ_Design Super Repo; formal Workbench API,
+workflow, and artifact contracts remain in Reference.
+
+<Aside type="note" title="Canonical cross-repo knowledge">
+
+Start from the SCQ_Design
+[Physics and Engineering Knowledge Base](https://github.com/arfiligol/SCQ_Design/tree/main/docs/knowledge).
+Pages here either explain Workbench-specific structure or hand off to an exact
+canonical node. Do not duplicate the reusable explanation in both repos.
+
+</Aside>
 
 <CardGrid>
- <LinkCard title="Physics Foundations" href="./physics/" description="Superconducting-circuit principles that support every route." />
+ <LinkCard title="Physics Foundations" href="./physics/" description="Workbench handoffs to canonical superconducting-circuit principles." />
  <LinkCard title="Circuit Authoring Model" href="./circuit-authoring-model/" description="Reusable components, systems, CircuitPlan, and compiler mental model." />
- <LinkCard title="Equivalent Circuit Modeling" href="./equivalent-circuit-modeling/" description="S/Y/Z traces, poles, residues, vector fitting, passivity, and model-family choice." />
+ <LinkCard title="Equivalent Circuit Modeling" href="./equivalent-circuit-modeling/" description="Implementation-specific context and handoffs for network-modeling methods." />
  <LinkCard title="Quantum Modeling" href="./quantum-modeling/" description="Equivalent-circuit parameters to Hamiltonians, scqubits-style models, and quantization boundaries." />
  <LinkCard title="Quantum Dynamics & Pulse Simulation" href="./quantum-dynamics-pulse-simulation/" description="Time evolution, open-system simulation, and pulse-level route boundaries." />
  <LinkCard title="GDSFactory-Compatible Artifacts" href="./gdsfactory-compatible-artifacts/" description="Artifact compatibility with gsim, gplugins, SAX, and JAX-style downstream use." />

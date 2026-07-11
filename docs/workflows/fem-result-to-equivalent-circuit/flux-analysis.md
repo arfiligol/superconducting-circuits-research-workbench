@@ -7,9 +7,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: The process of magnetic flux scanning analysis under notebook research and Python Analysis Core
-version: v0.2.1
-last_updated: 2026-05-29
+scope: Review workflow for externally supplied flux or bias sweeps; no flux-tunable SQUID model is implemented
+version: v0.3.0
+last_updated: 2026-07-10
 updated_by: codex
 sidebar:
  label: Flux Dependence Analysis
@@ -18,8 +18,15 @@ sidebar:
 
 # Flux Dependence Analysis
 
-Flux analysis visualizes how resonance changes with external flux or bias current.
-Use notebooks for exploratory flux maps, axis validation, resonance picking, and report figures.
+Flux analysis visualizes how measured or simulated resonance changes with an
+externally supplied flux or bias-current axis. Use notebooks for exploratory
+maps, axis validation, resonance picking, and report figures.
+
+## Canonical Knowledge
+
+- [Fluxoid and Flux Quantization](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/superconductivity/fluxoid-and-flux-quantization.qmd)
+- [DC-SQUID Flux Tunability](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/dc-squid-flux-tunability.qmd)
+- [Josephson Current, Phase, Energy, and Inductance](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd)
 
 ## Workflow
 
@@ -30,16 +37,17 @@ flowchart LR
   Notebook --> Core["Reusable Analysis Helper"]
 ```
 
-## Physics Check
+## Model Boundary
 
-SQUID inductance is periodic in flux:
+Do not infer a junction or SQUID inductance from flux using an unreviewed scalar
+formula in this workflow. The current Python surrogate accepts `L_jun` as each
+junction's supplied small-signal inductance and uses two identical junctions in
+parallel, `L_sq = L_jun / 2`. It does not implement a flux-to-inductance map or
+a full flux-tunable DC-SQUID model.
 
-```text
-L_jun(Phi) = Phi0 / (2*pi*Ic*abs(cos(pi*Phi/Phi0)))
-```
-
-As inductance changes, resonance frequency shifts.
-The expected map usually shows periodic arches or sweet spots where frequency is less sensitive to flux.
+Any conversion from bias current to applied flux, or from flux to Josephson
+parameters, must state its calibration, units, periodic branch, symmetry, loop-
+inductance, and operating-phase assumptions and link the canonical nodes above.
 
 ## Usage
 
@@ -62,3 +70,4 @@ Tracked analysis should record:
 
 - [Notebook Interface](../../reference/notebooks/index.md)
 - [Python Core](../../reference/core/python-core.mdx)
+- [SQUID Fitting](squid-fitting.mdx)

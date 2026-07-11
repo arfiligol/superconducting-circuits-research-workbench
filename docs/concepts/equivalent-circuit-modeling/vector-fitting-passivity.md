@@ -8,9 +8,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Why rational equivalent models need vector fitting, stability, passivity, and residual checks.
-version: v1.0.0
-last_updated: 2026-06-14
+scope: Handoff from Workbench vector-fitting implementations to the canonical SCQ_Design Vector Fitting and Passivity node.
+version: v1.2.0
+last_updated: 2026-07-10
 updated_by: codex
 title: Vector Fitting And Passivity
 sidebar:
@@ -20,24 +20,37 @@ sidebar:
 
 # Vector Fitting And Passivity
 
-Vector fitting is the practical route when a broadband or multiport network cannot be captured by one compact RLC feature. It approximates frequency-domain responses with poles, residues, and direct terms that can be inspected, exported, and compared.
+The reusable vector-fitting and passivity explanation is owned by the
+SCQ_Design knowledge base:
 
-## Why Passivity Matters
+- [Canonical knowledge: Vector Fitting And Passivity](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/vector-fitting-passivity.qmd)
 
-A fitted network can match samples and still be unsafe as a connected model. If a macromodel is non-passive, it can inject energy into a downstream simulator. That is why passivity, stability, reciprocity, and residual checks are part of the modeling workflow, not optional polish.
+This repository owns only the concrete implementation and workflow entry
+points:
 
-## Fit Review Checklist
+- [`domain/math/s_parameters.py`](https://github.com/arfiligol/superconducting-circuits-research-workbench/blob/main/core/python/analysis/superconducting_circuits_analysis/superconducting_circuits_analysis/domain/math/s_parameters.py)
+  owns the scikit-rf-backed `MultiResonanceVectorFitter` implementation.
+- [`application/analysis/fitting/s_parameters.py`](https://github.com/arfiligol/superconducting-circuits-research-workbench/blob/main/core/python/analysis/superconducting_circuits_analysis/superconducting_circuits_analysis/application/analysis/fitting/s_parameters.py)
+  owns validation and the `fit_complex_s21_vector` application contract.
+- [`SuperconductingCircuitsAnalysisBridge.jl`](https://github.com/arfiligol/superconducting-circuits-research-workbench/blob/main/core/julia/SuperconductingCircuitsAnalysisBridge/src/SuperconductingCircuitsAnalysisBridge.jl)
+  owns the Julia-to-Python bridge used by repository notebooks.
 
-- Fit S, Y, or Z according to the physical question, then cross-check in another domain when possible.
-- Inspect pole locations and residues, not only RMSE.
-- Check per-port and cross-port residuals over the full frequency range.
-- Check passivity before using the model in a connected simulation.
-- Record the selected pole count and why the residuals justify it.
+The current contract fits one scalar complex `S21` response. Its internal
+one-response scikit-rf `Network` is an algebraic carrier, not a physical
+one-port or a fabricated two-port. The result is labeled
+`scalar_s21_vector`, records the caller's fit settings, and reports the RMS of
+that scalar complex response only.
 
-## References
+`n_resonators`, `bg_poles`, and `min_q` are required inputs. The first two set
+the starting model order; `min_q` classifies promoted resonances versus low-Q
+fit artifacts: only `Ql > min_q` is promoted, while equality remains in the
+artifact bucket. The caller—and ultimately the Human reviewer—owns those
+choices, including the comparator. This repository must not hide a default
+pole count or condition threshold.
 
-- [SINTEF Vector Fitting](https://www.sintef.no/en/software/vector-fitting/)
-- [Gustavsen and Semlyen, Rational approximation of frequency domain responses by vector fitting](https://www.sintef.no/globalassets/project/vectfit/vector_fitting_1999.pdf)
-- [scikit-rf Vector Fitting tutorial](https://scikit-rf.readthedocs.io/en/latest/tutorials/VectorFitting.html)
-- [scikit-rf vector_fit API](https://scikit-rf.readthedocs.io/en/latest/api/generated/skrf.vectorFitting.VectorFitting.vector_fit.html)
-- [scikit-rf passivity_enforce API](https://scikit-rf.readthedocs.io/en/latest/api/generated/skrf.vectorFitting.VectorFitting.passivity_enforce.html)
+These entry points do not accept a complete port-labeled network and do not
+implement passivity or reciprocity checking or enforcement. Do not export
+their result as a connected network macromodel.
+
+Do not duplicate vector-fitting or passivity theory here; update the canonical
+page and keep only repository-specific behavior at these entry points.

@@ -8,62 +8,28 @@ tags:
 status: draft
 owner: docs-team
 audience: user
-scope: Explain how Josephson nonlinearity leads to non-equally spaced energy levels
-version: v0.1.0
-last_updated: 2026-02-16
-updated_by: team
+scope: Handoff from Workbench nonlinear-circuit context to canonical SCQ_Design Josephson-energy and anharmonicity nodes
+version: v0.2.0
+last_updated: 2026-07-10
+updated_by: codex
 sidebar:
  label: Nonlinearity and Level Spacing
  order: 50
 ---
 
-import { Aside } from '@astrojs/starlight/components';
-
 # Why does nonlinearity make the energy level spacing inconsistent?
 
-## Questions answered in this chapter
+The reusable derivation from the Josephson cosine to unequal quantum level
+spacing is owned by the SCQ_Design Knowledge Base:
 
-Why does the Josephson nonlinearity in superconducting circuits make the energy level difference between `|0\rangle\to|1\rangle` and `|1\rangle\to|2\rangle` no longer the same?
+- [Canonical knowledge: Josephson Cosine and Quantum Anharmonicity](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-cosine-and-quantum-anharmonicity.qmd)
+- [Prerequisite: Josephson Current, Phase, Energy, and Inductance](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd)
 
-## Prerequisite knowledge comparison
+Use those nodes for the cosine expansion, the sign of the quartic correction,
+the quantization assumptions, and the engineering meaning of anharmonicity.
 
-- Quantum: quantized oscillator, perturbation concept
-- Classical: Potential energy curvature and small oscillations
-- Electromagnetism: capacitive energy and inductive energy
+This repository currently consumes Josephson nonlinearity in Julia Core circuit
+authoring and harmonic-balance workflows. It does not currently provide a
+quantum-model package or a quantum-model notebook that computes energy levels.
 
-## Physics Core
-
-Linear LC oscillators approximate quadratic potential energy, so the energy levels are equally spaced. Josephson element potential energy
-
-$$
-U_J(\varphi) = -E_J\cos\varphi
-$$
-
-After expansion near the equilibrium point, in addition to the quadratic terms, there are also fourth-order and higher-order terms, forming an anharmonic oscillator:
-
-$$
-U(\varphi) \approx \frac{1}{2}k\varphi^2 + \alpha\varphi^4 + \cdots
-$$
-
-The non-quadratic terms make the energy corrections of different quantum numbers different, so the energy level spacing is no longer consistent (anhamonicity).
-
-<Aside type="note" title="Historical context">
-
-Discernible non-equally spaced energy levels allow superconducting circuits to be used as controllable two-energy level systems, which is one of the cores of the feasibility of superconducting qubits.
-
-</Aside>
-
-## Project mapping
-
-- Non-equal spacing determines the selective driving capability of the qubit.
-- If the nonlinearity is too small, it will cause leakage; if it is too large, it may increase sensitivity and noise coupling.
-
-## Limitations and approximations
-
-- Small amplitude expansion is only true near the equilibrium point.
-- High-order terms and multi-energy level effects need to be considered under strong driving.
-
-## Cross-file navigation
-
-- Preface: [Why is magnetic flux quantized? ](why-flux-is-quantized.mdx)
-- Next step: [How is Lagrangian mechanics combined with circuit physics? ](lagrangian-mechanics-and-circuit-physics.mdx)
+Do not duplicate reusable Josephson or quantum-anharmonicity theory here.

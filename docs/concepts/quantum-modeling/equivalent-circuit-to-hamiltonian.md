@@ -9,9 +9,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: How equivalent-circuit parameters become Hamiltonian inputs without expanding Julia Core.
-version: v1.0.0
-last_updated: 2026-06-14
+scope: Workbench tool and artifact handoff from equivalent-circuit parameters to canonical SCQ_Design circuit-quantization knowledge.
+version: v1.1.0
+last_updated: 2026-07-10
 updated_by: codex
 title: Equivalent Circuit To Hamiltonian
 sidebar:
@@ -21,9 +21,21 @@ sidebar:
 
 # Equivalent Circuit To Hamiltonian
 
-An equivalent circuit is useful for quantum modeling only when its variables, units, topology, and assumptions are explicit enough to become Hamiltonian inputs. This page supports Route 3, where fitted or authored circuit parameters become scqubits-style models.
+The reusable derivation from circuit coordinates to a quantum Hamiltonian is
+owned by the SCQ_Design Knowledge Base:
 
-## Handoff Shape
+- [Canonical knowledge: Circuit Lagrangian, Hamiltonian, and Quantization](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/quantum-circuits/circuit-lagrangian-hamiltonian-quantization.qmd)
+
+This Workbench page owns only the intended tool placement and the information
+that an equivalent-circuit artifact must carry before that handoff.
+
+## Current Capability
+
+There is currently no Workbench quantum-model package and no quantum-model
+notebook that executes this route. The shape below is an intended workflow, not
+an executable capability.
+
+## Intended Handoff Shape
 
 ```text
 equivalent circuit model
@@ -43,7 +55,11 @@ equivalent circuit model
 
 ## Placement Rule
 
-The Hamiltonian handoff does not change Julia Core ownership. Julia Core can produce reusable circuit plans and response outputs. scqubits modeling belongs in Python notebooks first, then a future Python quantum package if the repeated helper surface becomes stable.
+The Hamiltonian handoff does not change Julia Core ownership. Julia Core can
+produce reusable circuit plans and response outputs. If an executable
+scqubits-based study is added, it belongs in a Python notebook first; a Python
+quantum package is justified only after a repeated helper surface becomes
+stable.
 
 ## References
 
@@ -51,6 +67,3 @@ The Hamiltonian handoff does not change Julia Core ownership. Julia Core can pro
 - [scqubits custom circuit guide](https://scqubits.readthedocs.io/en/latest/guide/circuit/ipynb/custom_circuit_define.html)
 - [scqubits Circuit API](https://scqubits.readthedocs.io/en/latest/api-doc/_autosummary/scqubits.core.circuit.Circuit.html)
 - [scqubits HilbertSpace guide](https://scqubits.readthedocs.io/en/v4.1/guide/hilbertspace/ipynb/hilbertspace.html)
-- [Koch et al., Charge-insensitive qubit design derived from the Cooper pair box](https://arxiv.org/abs/cond-mat/0703002)
-- [Nigg et al., Black-box superconducting circuit quantization](https://link.aps.org/doi/10.1103/PhysRevLett.108.240502)
-- [Minev et al., Energy-participation quantization of Josephson circuits](https://www.nature.com/articles/s41534-021-00461-8)

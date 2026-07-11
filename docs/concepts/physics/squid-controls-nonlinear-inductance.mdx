@@ -8,61 +8,35 @@ tags:
 status: draft
 owner: docs-team
 audience: user
-scope: Explain how SQUID can control the equivalent Josephson inductor
-version: v0.1.0
-last_updated: 2026-02-16
-updated_by: team
+scope: Handoff from Workbench SQUID surrogates and workflows to canonical SCQ_Design DC-SQUID tunability knowledge
+version: v0.2.0
+last_updated: 2026-07-10
+updated_by: codex
 sidebar:
  label: SQUID Nonlinear Inductance
  order: 60
 ---
 
-import { Aside } from '@astrojs/starlight/components';
-
 # Why can SQUID control nonlinear inductance values?
 
-## Questions answered in this chapter
+The reusable DC-SQUID phase constraint, effective Josephson energy, small-signal
+inductance, asymmetry, and loop-inductance limits are owned by the SCQ_Design
+Knowledge Base:
 
-Why can the equivalent inductance and nonlinear strength of SQUID be changed only by applying an external magnetic flux bias under a fixed geometric structure?
+- [Canonical knowledge: DC-SQUID Flux Tunability](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/dc-squid-flux-tunability.qmd)
+- [Prerequisite: Josephson Current, Phase, Energy, and Inductance](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd)
+- [Prerequisite: Fluxoid and Flux Quantization](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/superconductivity/fluxoid-and-flux-quantization.qmd)
 
-## Prerequisite knowledge comparison
+The current Python fitting surrogate does **not** implement flux-tunable
+DC-SQUID physics. It accepts `L_jun` as the small-signal inductance of each of
+two identical junctions and uses their parallel combination,
+`L_sq = L_jun / 2`.
 
-- Quantum: phase difference and single value of wave function
-- Electromagnetic: external magnetic flux and loop constraints
-- Classical: equivalent parameters and small signal linearization
+Workbench-specific consumers are:
 
-## Physics Core
+- [SQUID Fitting](../../workflows/fem-result-to-equivalent-circuit/squid-fitting.mdx)
+- [Flux Dependence Analysis](../../workflows/fem-result-to-equivalent-circuit/flux-analysis.md)
+- [Notebook Interface](../../reference/notebooks/index.md)
 
-A symmetric SQUID can be written as the effective Josephson energy under common approximations
-
-$$
-E_J^{\mathrm{eff}}(\Phi_{\mathrm{ext}}) \approx 2E_{J0}\cos\left(\pi\frac{\Phi_{\mathrm{ext}}}{\Phi_0}\right).
-$$
-
-The Josephson inductance is approximately inversely proportional to the energy scale, so the equivalent inductance can be continuously controlled by `\Phi_{\mathrm{ext}}`:
-
-$$
-L_J^{\mathrm{eff}} \propto \frac{1}{E_J^{\mathrm{eff}}}.
-$$
-
-<Aside type="note" title="Historical context">
-
-Tunable inductors allow a single chip to switch between different operating points, leading to the rapid development of tunable qubits, parametric amplifiers and reconfigurable coupling architectures.
-
-</Aside>
-
-## Project mapping
-
-- Adjustable frequency, nonlinearity and coupling strength using flux bias.
-- Design requires a trade-off between adjustable range, sensitivity and noise.
-
-## Limitations and approximations
-
-- When symmetrical and small loops approximate failure, asymmetry and self-induction effects need to be included.
-- Near the `E_J^{\mathrm{eff}} \to 0` region, the model is more sensitive to noise and higher-order effects.
-
-## Cross-file navigation
-
-- Preface: [How does Lagrangian mechanics combine with circuit physics? ](lagrangian-mechanics-and-circuit-physics.mdx)
-- Task-oriented: [SQUID Fitting](../../workflows/fem-result-to-equivalent-circuit/squid-fitting.mdx)
-- Task-oriented: [Notebook Interface](../../reference/notebooks/index.md)
+Do not infer flux, critical current, junction asymmetry, bias phase, or loop
+self-inductance from that surrogate. Use the canonical node for those semantics.

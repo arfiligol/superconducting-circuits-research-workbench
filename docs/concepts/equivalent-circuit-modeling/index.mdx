@@ -8,12 +8,12 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Workflow knowledge base for S/Y/Z traces, poles, residues, vector fitting, passivity, and equivalent-circuit model choice.
-version: v1.0.0
-last_updated: 2026-06-14
+scope: Workbench implementation handoffs to canonical SCQ_Design network-modeling knowledge.
+version: v1.3.0
+last_updated: 2026-07-11
 updated_by: codex
 title: Equivalent Circuit Modeling
-description: Research-method concepts behind Route 2 and the equivalent-circuit handoff.
+description: Find Workbench implementations and their canonical SCQ_Design network-modeling nodes.
 sidebar:
  label: Overview
  order: 10
@@ -21,21 +21,18 @@ sidebar:
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-This knowledge base supports Route 2, where upstream network traces become equivalent circuits. It focuses on research method: what the traces mean, how poles and residues guide model choice, and what checks are needed before a fitted model is used downstream.
+This area supports Route 2 by locating Workbench implementations and handing
+reusable theory to the canonical SCQ_Design Knowledge Base. Pages here keep API,
+workflow, and implementation ownership; they do not duplicate cross-repo
+network-modeling explanations.
 
 <CardGrid>
- <LinkCard title="Network Trace Views" href="./network-trace-views/" description="How S, Y, and Z matrices expose different physical and numerical views of the same network." />
- <LinkCard title="Poles, Zeros, And Residues" href="./poles-zeros-residues/" description="How modal structure and residues guide equivalent-circuit topology selection." />
- <LinkCard title="Vector Fitting And Passivity" href="./vector-fitting-passivity/" description="Why rational macromodels need stability, passivity, and residual checks." />
- <LinkCard title="Resonance Poles And Circle Fit" href="./resonance-poles-and-circle-fit/" description="Compact resonance fitting knowledge used by the analysis workflows." />
- <LinkCard title="Kron Reduction" href="./kron-reduction/" description="Network reduction concepts used when ports and internal nodes are eliminated." />
- <LinkCard title="Coupled Transmission Lines" href="./coupled-transmission-lines-even-odd-maxwell-mutual/" description="Even/odd-mode and distributed-line intuition for equivalent model choice." />
+ <LinkCard title="Network Trace Views" href="./network-trace-views/" description="Canonical knowledge handoff and exact S-parameter implementation entrypoints." />
+ <LinkCard title="Poles, Zeros, And Residues" href="./poles-zeros-residues/" description="Canonical interpretation handoff and vector-fit API ownership." />
+ <LinkCard title="Vector Fitting And Passivity" href="./vector-fitting-passivity/" description="Canonical fitting safeguards and the Workbench implementation boundary." />
+ <LinkCard title="Notch Resonator Complex S21 Fit" href="./resonance-poles-and-circle-fit/" description="Canonical single-notch fit semantics and the direct nonlinear fit entrypoints." />
+ <LinkCard title="D3 Readout-Filter S21 Fit API" href="./d3-readout-filter-s21-fit-api/" description="Canonical physics handoff plus the exact calibrated J-fit, failure, and replay contracts." />
+ <LinkCard title="Kron Reduction" href="./kron-reduction/" description="Canonical Schur-complement handoff and exact Workbench reduction entrypoints." />
+ <LinkCard title="Floating-Mode Admittance Workflow" href="./floating-qubit-admittance-extraction/" description="Workbench-local PTC, coordinate-transform, and Kron route with unresolved conventions kept explicit." />
+ <LinkCard title="Coupled Transmission Lines" href="./coupled-transmission-lines-even-odd-maxwell-mutual/" description="Canonical matrix-physics handoff plus the exact LC-only Julia lowering contract." />
 </CardGrid>
-
-## References
-
-- [Touchstone 2.1 specification](https://ibis.org/touchstone_ver2.1/)
-- [scikit-rf Networks tutorial](https://scikit-rf.readthedocs.io/en/latest/tutorials/Networks.html)
-- [SINTEF Vector Fitting](https://www.sintef.no/en/software/vector-fitting/)
-- [Gustavsen and Semlyen, Rational approximation of frequency domain responses by vector fitting](https://www.sintef.no/globalassets/project/vectfit/vector_fitting_1999.pdf)
-- [scikit-rf Vector Fitting tutorial](https://scikit-rf.readthedocs.io/en/latest/tutorials/VectorFitting.html)

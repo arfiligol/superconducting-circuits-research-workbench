@@ -9,12 +9,12 @@ tags:
 status: stable
 owner: docs-team
 audience: user
-scope: Workflow for using fitted equivalent circuit parameters as quantum-model and Hamiltonian inputs.
-version: v1.0.0
-last_updated: 2026-06-14
+scope: Intended Workbench workflow from fitted equivalent-circuit artifacts to canonical circuit-quantization semantics and isolated quantum tools.
+version: v1.1.0
+last_updated: 2026-07-10
 updated_by: codex
 title: Equivalent Circuit To Quantum Model
-description: Hand equivalent circuit parameters to scqubits or another isolated quantum-model lane.
+description: Define the intended handoff from equivalent-circuit parameters to an isolated quantum-model lane.
 sidebar:
  label: Equivalent Circuit To Quantum Model
  order: 10
@@ -22,29 +22,47 @@ sidebar:
 
 # Equivalent Circuit To Quantum Model
 
-Use this workflow after a distributed or simplified circuit has been reduced into an explicit equivalent circuit model. The upstream source can be a Julia Core `CircuitPlan` response or an external FEM/simulation result. This workflow stops at quantum-model construction and Hamiltonian handoff; time evolution and pulse studies are Route 4.
+Use the canonical SCQ_Design node for the reusable circuit-coordinate,
+Lagrangian, Hamiltonian, constraint, and quantization semantics:
 
-## Main Python Route
+- [Canonical knowledge: Circuit Lagrangian, Hamiltonian, and Quantization](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/quantum-circuits/circuit-lagrangian-hamiltonian-quantization.qmd)
 
-The Python route is canonical for scqubits-style superconducting-qubit modeling:
+This Workbench page defines the intended Route 3 handoff after a distributed or
+simplified circuit has been reduced into an explicit equivalent-circuit model.
+It stops before Route 4 time evolution and pulse studies.
+
+## Current Capability
+
+There is currently no quantum-model package and no quantum-model notebook in
+this repository. The route below is a prose contract for future implementation,
+not an executable workflow.
+
+## Intended Python Route
+
+If implemented, use this isolated Python shape for scqubits-style
+superconducting-qubit modeling:
 
 ```text
-EquivalentCircuitFit
+reviewed equivalent-circuit artifact
   -> scqubits circuit, subsystem, or custom circuit inputs
   -> Hamiltonian, spectra, matrix elements, coherence estimates
   -> HilbertSpace or exported operator data for dynamics
 ```
 
-Use this route when the work needs scqubits custom circuit YAML, qubit classes, parameter sweeps, matrix elements, coherence estimates, or QuTiP interop. In this repo, that belongs in Python notebooks first and a future separate Python quantum package if the API stabilizes.
+Start in a Python notebook. Add a separate Python quantum package only if a
+repeated, reviewed helper surface becomes stable.
 
 ## Optional Julia Operator Route
 
-Julia packages such as QuantumToolbox.jl or QuantumOptics.jl can be useful for operator-level experiments or Pluto-visible studies. They are not scqubits replacements, and they should not be added to Julia Core.
+Julia packages such as QuantumToolbox.jl or QuantumOptics.jl may be evaluated
+for operator-level experiments or Pluto-visible studies. They are not scqubits
+replacements, are not current Workbench capabilities, and must not be added to
+Julia Core.
 
 The safe placement is:
 
 ```text
-EquivalentCircuitFit
+reviewed equivalent-circuit artifact
   -> explicit Hamiltonian/operator spec
   -> isolated Julia quantum notebook or future separate Julia quantum package
   -> result package or report evidence
@@ -58,9 +76,6 @@ The quantum model layer consumes equivalent-circuit parameters. It does not chan
 
 - [scqubits documentation](https://scqubits.readthedocs.io/)
 - [scqubits custom circuit guide](https://scqubits.readthedocs.io/en/latest/guide/circuit/ipynb/custom_circuit_define.html)
-- [Koch et al., Charge-insensitive qubit design derived from the Cooper pair box](https://arxiv.org/abs/cond-mat/0703002)
-- [Nigg et al., Black-box superconducting circuit quantization](https://link.aps.org/doi/10.1103/PhysRevLett.108.240502)
-- [Minev et al., Energy-participation quantization of Josephson circuits](https://www.nature.com/articles/s41534-021-00461-8)
 
 ## Related
 
