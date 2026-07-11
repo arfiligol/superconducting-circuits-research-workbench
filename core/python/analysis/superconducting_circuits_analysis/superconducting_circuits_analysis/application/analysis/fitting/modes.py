@@ -1,3 +1,15 @@
+"""Fit mode frequencies to the ideal symmetric SQUID-LC approximation.
+
+The delegated physics model treats ``L_jun`` as each junction's small-signal
+inductance and uses ``L_jun / 2`` for two identical parallel branches. These
+fits do not infer flux dependence, asymmetry, loop inductance, or a quantum
+model.
+
+Canonical Knowledge:
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/dc-squid-flux-tunability.qmd
+"""
+
 from __future__ import annotations
 
 import logging

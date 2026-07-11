@@ -1,3 +1,15 @@
+"""Fit Y11 to the ideal symmetric two-junction small-signal model.
+
+The delegated admittance model treats ``L_jun`` as each junction's
+small-signal inductance and uses ``L_jun / 2`` for two identical parallel
+branches. This fit does not infer flux dependence, asymmetry, loop inductance,
+or a quantum model.
+
+Canonical Knowledge:
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/dc-squid-flux-tunability.qmd
+"""
+
 from __future__ import annotations
 
 from typing import cast
