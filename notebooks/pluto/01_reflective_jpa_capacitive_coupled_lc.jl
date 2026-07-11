@@ -39,6 +39,10 @@ md"""
 # 01 Reflective JPA: Capacitively Coupled LC
 
 This notebook adds a nonlinear Josephson element to the same one-port authoring flow. A port couples through a capacitor into a resonator node with a shunt capacitor and Josephson junction.
+
+Reusable harmonic-balance theory and periodic-steady-state evidence gates are canonical in [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd); this notebook owns only the circuit-specific executable workflow and evidence.
+
+Interpret returned S/Z with [Port Reference Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd).
 """
 
 # ╔═╡ f281bf9f-c353-5f2c-85da-bb7e064826fe
@@ -48,6 +52,13 @@ md"""
 - Reflective JPA topology with capacitive input coupling.
 - Josephson junction as a nonlinear Core primitive.
 - Pumped HB intent and real S11 traces.
+
+Canonical semantics:
+
+- [Josephson current, phase, energy, and inductance](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd)
+- [Josephson cosine and quantum anharmonicity](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-cosine-and-quantum-anharmonicity.qmd)
+
+Implementation boundary: this notebook lowers one nonlinear Josephson junction to a JosephsonCircuits `Lj...` row. It does not instantiate a dc SQUID or model external flux, junction asymmetry, or loop inductance.
 """
 
 # ╔═╡ b4b5301b-0394-57ad-9fb4-64eee1b5d8d4

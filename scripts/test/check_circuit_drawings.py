@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 
@@ -115,6 +116,18 @@ def _check_existing_paths(paths: list[str], field_name: str) -> list[str]:
     return failures
 
 
+def _check_canonical_physics_urls(urls: list[str]) -> list[str]:
+    """Validate root-owned Knowledge references without requiring a parent checkout."""
+    failures: list[str] = []
+    for url in urls:
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or not parsed.netloc:
+            failures.append(f"canonical_physics_urls must contain absolute HTTPS URLs: {url}")
+        if not parsed.path.endswith(".qmd"):
+            failures.append(f"canonical_physics_urls must target a .qmd Knowledge node: {url}")
+    return failures
+
+
 def _manifest_outputs(
     manifest: dict[str, Any],
     manifest_rel: Path,
@@ -197,6 +210,9 @@ def _check_manifest(manifest_path: Path, expected_diagram_id: str) -> list[str]:
         physical_model_refs = _as_string_list(
             manifest.get("physical_model_refs"), "physical_model_refs"
         )
+        canonical_physics_urls = _as_string_list(
+            manifest.get("canonical_physics_urls", []), "canonical_physics_urls"
+        )
         implementation_refs = _as_string_list(
             manifest.get("implementation_refs"), "implementation_refs"
         )
@@ -204,6 +220,7 @@ def _check_manifest(manifest_path: Path, expected_diagram_id: str) -> list[str]:
         failures.append(f"{manifest_rel}: {exc}")
         owning_docs = []
         physical_model_refs = []
+        canonical_physics_urls = []
         implementation_refs = []
 
     semantics = manifest.get("julia_core_semantics")
@@ -224,6 +241,7 @@ def _check_manifest(manifest_path: Path, expected_diagram_id: str) -> list[str]:
 
     failures.extend(_check_existing_paths(owning_docs, "owning_docs"))
     failures.extend(_check_existing_paths(physical_model_refs, "physical_model_refs"))
+    failures.extend(_check_canonical_physics_urls(canonical_physics_urls))
     failures.extend(_check_existing_paths(implementation_refs, "implementation_refs"))
     failures.extend(_check_existing_paths(semantics_docs, "julia_core_semantics.docs"))
     failures.extend(_check_existing_paths(semantics_sources, "julia_core_semantics.source_refs"))

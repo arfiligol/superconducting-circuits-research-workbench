@@ -39,6 +39,13 @@ md"""
 # 06 Readout Purcell Filter With Hanging QWR MTL
 
 This notebook combines the previous ideas: input CPW, middle Purcell/filter CPW, output CPW, localized coupling capacitors, and a QWR coupled to the middle CPW by a finite MTL window.
+
+Reusable harmonic-balance theory and periodic-steady-state evidence gates are canonical in [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd); this notebook owns only the circuit-specific executable workflow and evidence.
+
+Interpret returned S/Z with [Port Reference Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd).
+
+Read the canonical [Multiconductor RLGC Matrices: Basis, Modes, and Physical Meaning](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd)
+before interpreting the terminal matrices or the lowered ladder.
 """
 
 # ╔═╡ 78e4e6eb-b954-536b-bf86-c5fab6b25245

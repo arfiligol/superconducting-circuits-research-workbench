@@ -39,6 +39,10 @@ md"""
 # 04 Readout Line With Purcell Filter
 
 This notebook builds a three-CPW readout chain with localized coupling capacitors into a half-wave Purcell/filter resonator. The coupling elements here are lumped capacitors.
+
+Reusable harmonic-balance theory and periodic-steady-state evidence gates are canonical in [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd); this notebook owns only the circuit-specific executable workflow and evidence.
+
+Interpret returned S/Z with [Port Reference Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd).
 """
 
 # ╔═╡ 805e52b6-2d9d-5285-b3af-cde211b816ab

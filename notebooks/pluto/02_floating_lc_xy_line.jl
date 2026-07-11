@@ -14,6 +14,7 @@ begin
     import Pkg
     Pkg.activate(joinpath(first(DEPOT_PATH), "environments", "v1.12"); io=devnull)
 
+    using LinearAlgebra
     using Revise
     using PlutoUI
     using SuperconductingCircuitsCore
@@ -31,6 +32,7 @@ begin
     include(joinpath(@__DIR__, "includes", "port_matrix_post_processing.jl"))
     using .HBExampleHelpers: zero_mode_z
     using .PortMatrixPostProcessing: zero_mode_y_matrix_stack,
+        compiled_port_shunt_evidence,
         apply_port_termination_compensation,
         common_differential_transform,
         apply_coordinate_transform,
@@ -45,6 +47,8 @@ md"""
 # 02 Floating LC Coupled To XY Node
 
 This notebook models a floating LC resonator with two islands and one XY environment node. The circuit has three physical ports: Pad1, Pad2, and XY.
+
+Reusable harmonic-balance theory and periodic-steady-state evidence gates are canonical in [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd); this notebook owns only the circuit-specific executable workflow and evidence.
 """
 
 # ╔═╡ 76da6a39-f791-5aac-948e-deaf925a2b7d
@@ -54,6 +58,16 @@ md"""
 - Three-node floating LC plus XY coupling capacitances.
 - Explicit probe-port loading and visible post-processing.
 - PTC, weighted common/differential transform, and Kron reduction from real solver output.
+
+Canonical semantics:
+
+- [Network Trace Views](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/network-trace-views.qmd)
+- [Port Reference Impedance](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd)
+- [Port-Termination Compensation](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd)
+- [Admittance Coordinate Transforms](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/admittance-coordinate-transforms.qmd)
+- [Schur Complement and Kron Reduction](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/schur-complement-kron-reduction.qmd)
+
+Implementation boundary: the two resonator branches below are ordinary `series_inductor!` relations. This notebook contains no `JosephsonJunction` or SQUID model; `compile_to_josephson` names the target compiler, not the branch physics.
 """
 
 # ╔═╡ 8d7c8662-893f-5808-8b36-c33c37ab49b9
@@ -76,7 +90,7 @@ begin
     c_xy1_f = 0.1742182638751523e-15
     c_xy2_f = 0.7451414067385129e-15
     c_xy_ground_f = 627.8043424559959e-15
-    l_jun_h = 24.0e-9
+    l_branch_h = 24.0e-9
     port_resistance = 50.0
 
     start_frequency = 2.0e9
@@ -101,7 +115,7 @@ begin
     beta = w2_f / (w1_f + w2_f)
     c_d_xy_f = (c_g1_f * c_xy2_f - c_g2_f * c_xy1_f) / (w1_f + w2_f)
     c_eff_q_f = c_q_f + (c_g1_f * c_g2_f) / (c_g1_f + c_g2_f) + (c_xy1_f * c_xy2_f) / (c_xy1_f + c_xy2_f)
-    l_eff_h = l_jun_h / 2
+    l_eff_h = l_branch_h / 2
     f0_estimate = 1 / (2π * sqrt(l_eff_h * c_eff_q_f))
 end
 
@@ -113,14 +127,20 @@ parameter_table = [
     (name="Cxy1", value=c_xy1_f, unit="F", meaning="Pad1 to XY node"),
     (name="Cxy2", value=c_xy2_f, unit="F", meaning="Pad2 to XY node"),
     (name="Cxy_ground", value=c_xy_ground_f, unit="F", meaning="diagnostic only; not inserted as a shunt"),
-    (name="Lj", value=l_jun_h, unit="H", meaning="each parallel junction branch"),
+    (name="Lbranch", value=l_branch_h, unit="H", meaning="each parallel linear-inductor branch"),
 ]
 
 # ╔═╡ b5d445b9-fb30-583a-9701-6159eefd565b
 md"""
 ## Reusable Component
 
-The component exposes three pins: two floating pads and the XY node. The two probe ports are physical 50 ohm ports declared by the system circuit; their loading is removed later by an explicit matrix operation.
+The component exposes three pins: two floating pads and the XY node. Ports 1
+and 2 are compiled probe ports with explicit 50 ohm adapter shunts. For this
+declared floating-mode observable those two shunts are solver scaffold; their
+compiled rows and values are proven below before an explicit matrix operation
+removes them. Port 3's compiled adapter shunt is retained as declared XY-port
+loading for this workflow; whether that loading represents the physical
+environment remains a Human/model decision.
 """
 
 # ╔═╡ 9b3d4f31-e0dc-5fde-8041-10d693fc2503
@@ -134,13 +154,13 @@ floating_lc_xy! = @circuit_component "floating_lc_xy" begin
     parameter(:c_q_f; unit="F")
     parameter(:c_xy1_f; unit="F")
     parameter(:c_xy2_f; unit="F")
-    parameter(:l_jun_h; unit="H")
+    parameter(:l_branch_h; unit="H")
 
     shunt_capacitor!(id=:c_g1, at=pin(:pad1), capacitance=c_g1_f, role=:pad_ground_capacitance, label="Cg1")
     shunt_capacitor!(id=:c_g2, at=pin(:pad2), capacitance=c_g2_f, role=:pad_ground_capacitance, label="Cg2")
     couple_capacitive!(id=:c_q, from=pin(:pad1), to=pin(:pad2), capacitance=c_q_f, role=:floating_capacitance, label="Cq")
-    series_inductor!(id=:l_q1, from=pin(:pad1), to=pin(:pad2), inductance=l_jun_h, role=:floating_inductance, label="Lq1")
-    series_inductor!(id=:l_q2, from=pin(:pad1), to=pin(:pad2), inductance=l_jun_h, role=:floating_inductance, label="Lq2")
+    series_inductor!(id=:l_q1, from=pin(:pad1), to=pin(:pad2), inductance=l_branch_h, role=:floating_inductance, label="Lq1")
+    series_inductor!(id=:l_q2, from=pin(:pad1), to=pin(:pad2), inductance=l_branch_h, role=:floating_inductance, label="Lq2")
     couple_capacitive!(id=:c_xy1, from=pin(:pad1), to=pin(:xy_node), capacitance=c_xy1_f, role=:xy_coupling_capacitance, label="Cxy1")
     couple_capacitive!(id=:c_xy2, from=pin(:pad2), to=pin(:xy_node), capacitance=c_xy2_f, role=:xy_coupling_capacitance, label="Cxy2")
 end
@@ -162,7 +182,7 @@ begin
             c_q_f=c_q_f,
             c_xy1_f=c_xy1_f,
             c_xy2_f=c_xy2_f,
-            l_jun_h=l_jun_h,
+            l_branch_h=l_branch_h,
         )
 
         port(:pad1_port) do
@@ -311,11 +331,34 @@ export_summary = (
 compiled_circuit = compile_to_josephson(circuit_plan)
 
 # ╔═╡ 1dfe47cf-2fa9-5514-91c3-de42761694bf
-compiled_summary = (
-    netlist_rows=length(compiled_circuit.netlist),
-    port_ids=sort(collect(keys(compiled_circuit.port_map)); by=string),
-    warning_count=length(compiled_circuit.warnings),
-)
+begin
+    compiled_port_rows = filter(
+        row -> startswith(string(first(row)), "P") || startswith(string(first(row)), "R_port_"),
+        compiled_circuit.netlist,
+    )
+    compiled_probe_shunt_evidence = compiled_port_shunt_evidence(
+        compiled_circuit;
+        port_indices=(1, 2),
+    )
+    retained_xy_load_evidence = compiled_port_shunt_evidence(
+        compiled_circuit;
+        port_indices=(3,),
+    )[3]
+
+    compiled_summary = (
+        netlist_rows=length(compiled_circuit.netlist),
+        port_ids=sort(collect(keys(compiled_circuit.port_map)); by=string),
+        port_rows=compiled_port_rows,
+        probe_shunt_evidence=compiled_probe_shunt_evidence,
+        ptc_removal_intent=:floating_mode_probe_scaffold,
+        retained_xy_load=(
+            role=:retained_xy_port_shunt,
+            retention_intent=:declared_xy_port_loading_for_this_workflow,
+            evidence=retained_xy_load_evidence,
+        ),
+        warning_count=length(compiled_circuit.warnings),
+    )
+end
 
 # ╔═╡ 4fb75516-ee94-5a91-ba8b-460cc2e4f500
 begin
@@ -345,41 +388,46 @@ trace_families = sort(collect(keys(result.traces)); by=string)
 md"""
 ## Post-Processing: Port-Termination Compensation
 
-Ports 1 and 2 are artificial island probes. Their 50 ohm shunts are part of the raw solved network, so remove their shunt admittance before reading the floating mode:
-
-```math
-Y^{\mathrm{comp}}_{ii}(\omega) = Y^{\mathrm{raw}}_{ii}(\omega) - \frac{1}{Z_0}, \qquad i\in\{1,2\}.
-```
+Ports 1 and 2 are declared island probes. Their explicit compiled adapter
+shunts are part of the raw solved network. The canonical
+[Port-Termination Compensation](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd)
+node owns the operation and evidence gates. Here the local removal intent is
+`floating_mode_probe_scaffold`; the declared port-3 adapter shunt remains in the
+matrix before the coordinate transform and Kron reduction. Whether it models
+the physical XY environment remains a Human/model decision.
 """
 
 # ╔═╡ 907d69fb-ef1b-58cf-8c28-210852c89786
 md"""
 ## Post-Processing: Weighted Common/Differential Coordinates
 
-The raw Pad1/Pad2 basis is not the floating-mode basis. Q0 capacitances define the weights:
+This workflow uses the local capacitance-derived weights below and defines the
+differential voltage as ``V_{dm}=V_1-V_2``:
 
 ```math
-\Phi_{\mathrm{cm}} = \alpha \Phi_1 + \beta \Phi_2, \qquad
-\Phi_{\mathrm{dm}} = \Phi_1 - \Phi_2.
+V_{cm}=\alpha V_1+\beta V_2, \qquad V_{dm}=V_1-V_2,
 ```
 
 ```math
 \alpha = \frac{C_{g1}+C_{xy1}}{C_{g1}+C_{xy1}+C_{g2}+C_{xy2}}, \qquad
 \beta = 1-\alpha.
 ```
+
+The exact voltage and power-conjugate current transforms used by this run are
+published in `coordinate_contract`. The canonical coordinate-transform page
+linked above owns the reusable derivation.
 """
 
 # ╔═╡ 8d937c1c-1b72-523c-8b16-781ebd08447c
 md"""
 ## Post-Processing: Kron Reduction
 
-After transforming coordinates, eliminate the common mode and XY environment to obtain the effective differential-mode admittance:
-
-```math
-Y_{\mathrm{eff}} = Y_{aa} - Y_{ab}Y_{bb}^{-1}Y_{ba},
-```
-
-where ``a`` is the kept differential mode and ``b`` contains the eliminated coordinates.
+This run keeps transformed index 2 (`differential`) and eliminates indices 1
+and 3 (`common`, `xy`) with zero external current injection at those eliminated
+coordinates. The compiled port-3 resistor remains inside the supplied
+admittance as declared XY-port loading for this workflow; it is not claimed as
+a proven physical environment. The canonical Kron page linked above owns the
+generic derivation.
 """
 
 # ╔═╡ 4cece3fe-1e36-50b0-b7de-00f2db701e28
@@ -387,8 +435,10 @@ raw_y_stack = zero_mode_y_matrix_stack(result; ports=[1, 2, 3])
 
 # ╔═╡ 2fb7f994-4f0a-5e6b-9fae-9b9e163c0440
 compensated_y_stack = apply_port_termination_compensation(
-    raw_y_stack;
-    resistance_ohm_by_port=Dict(1 => port_resistance, 2 => port_resistance),
+    raw_y_stack,
+    compiled_circuit;
+    compensate_port_indices=(1, 2),
+    removal_intent=compiled_summary.ptc_removal_intent,
 )
 
 # ╔═╡ df3fb84a-4ef0-5d6b-8b09-e862a3d8cba9
@@ -401,25 +451,153 @@ coordinate_transform = common_differential_transform(
 )
 
 # ╔═╡ 0ca42d23-ad1b-5bb5-b226-9a50028723f7
-transformed_y_stack = apply_coordinate_transform(
-    compensated_y_stack,
-    coordinate_transform;
-    labels=["common", "differential", "xy"],
-)
+begin
+    transformed_y_stack = apply_coordinate_transform(
+        compensated_y_stack,
+        coordinate_transform;
+        labels=["common", "differential", "xy"],
+    )
+    coordinate_contract = (
+        alpha=alpha,
+        beta=beta,
+        voltage_transform_A=copy(coordinate_transform),
+        current_transform_A_inverse_transpose=ComplexF64[
+            1 1 0
+            beta -alpha 0
+            0 0 1
+        ],
+        voltage_convention=(
+            common="V_common = alpha * V_pad1 + beta * V_pad2",
+            differential="V_differential = V_pad1 - V_pad2",
+            xy="V_xy = V_xy_port",
+        ),
+        current_convention=(
+            common="I_common = I_pad1 + I_pad2",
+            differential="I_differential = beta * I_pad1 - alpha * I_pad2",
+            xy="I_xy = I_xy_port",
+        ),
+        quantity_lineage=(
+            raw=raw_y_stack.quantity_kind,
+            compensated=compensated_y_stack.quantity_kind,
+            transformed=transformed_y_stack.quantity_kind,
+        ),
+        source_lineage=(
+            raw=raw_y_stack.source_kind,
+            compensated=compensated_y_stack.source_kind,
+            transformed=transformed_y_stack.source_kind,
+        ),
+        input_labels=copy(compensated_y_stack.labels),
+        output_labels=copy(transformed_y_stack.labels),
+    )
+end
 
 # ╔═╡ f9ddfebd-390b-5de8-9e94-838d3fcfca89
-reduced_y_stack = kron_reduce(transformed_y_stack; keep_indices=[2])
+begin
+    kron_keep_indices = [2]
+    kron_drop_indices = [1, 3]
+    kron_boundary = (
+        keep_indices=copy(kron_keep_indices),
+        keep_labels=transformed_y_stack.labels[kron_keep_indices],
+        drop_indices=copy(kron_drop_indices),
+        drop_labels=transformed_y_stack.labels[kron_drop_indices],
+        eliminated_external_current=:zero,
+        retained_load=compiled_summary.retained_xy_load,
+    )
+    reduced_y_stack = kron_reduce(transformed_y_stack; keep_indices=kron_keep_indices)
+    kron_boundary
+end
 
 # ╔═╡ 419e2dbf-09da-5a0f-a4bf-ce46aa06f245
-y_eff = vec(reduced_y_stack.values[1, 1, :])
+begin
+    y_eff = vec(reduced_y_stack.values[1, 1, :])
+    eliminated_current_residuals = Float64[]
+    retained_response_residuals = Float64[]
+    y_dd_condition_numbers = Float64[]
+    unit_retained_voltage = ComplexF64[1]
+    for frequency_index in axes(transformed_y_stack.values, 3)
+        y = transformed_y_stack.values[:, :, frequency_index]
+        y_kk = y[kron_keep_indices, kron_keep_indices]
+        y_kd = y[kron_keep_indices, kron_drop_indices]
+        y_dk = y[kron_drop_indices, kron_keep_indices]
+        y_dd = y[kron_drop_indices, kron_drop_indices]
+        eliminated_voltage = -(y_dd \ (y_dk * unit_retained_voltage))
+        eliminated_current = y_dk * unit_retained_voltage + y_dd * eliminated_voltage
+        retained_current = y_kk * unit_retained_voltage + y_kd * eliminated_voltage
+        reduced_current = reduced_y_stack.values[:, :, frequency_index] * unit_retained_voltage
+        push!(
+            eliminated_current_residuals,
+            norm(eliminated_current) /
+            max(norm(y_dk * unit_retained_voltage), norm(y_dd * eliminated_voltage), eps(Float64)),
+        )
+        push!(
+            retained_response_residuals,
+            norm(retained_current - reduced_current) /
+            max(norm(retained_current), norm(reduced_current), eps(Float64)),
+        )
+        push!(y_dd_condition_numbers, cond(y_dd))
+    end
+    worst_condition_index = argmax(y_dd_condition_numbers)
+    kron_reconstruction_evidence = (
+        frequency_point_count=length(y_dd_condition_numbers),
+        condition_number_definition=:spectral_2_norm,
+        numeric_type=ComplexF64,
+        eliminated_basis_labels=copy(kron_boundary.drop_labels),
+        y_dd_condition_numbers=y_dd_condition_numbers,
+        y_dd_condition_range=(
+            minimum=minimum(y_dd_condition_numbers),
+            maximum=maximum(y_dd_condition_numbers),
+        ),
+        worst_condition_frequency_hz=transformed_y_stack.frequencies_hz[worst_condition_index],
+        conditioning_decision=:human_review_required,
+        normalized_eliminated_current_residuals=eliminated_current_residuals,
+        maximum_normalized_eliminated_current_residual=maximum(eliminated_current_residuals),
+        normalized_retained_response_residuals=retained_response_residuals,
+        maximum_normalized_retained_response_residual=maximum(retained_response_residuals),
+    )
+end
 
 # ╔═╡ c359fd3b-5c32-5d28-b9f9-724c4b2e02a1
-sanity = (
-    point_count_matches=length(result.frequencies_hz) == point_count,
-    finite_y_eff=all(isfinite, real.(y_eff)) && all(isfinite, imag.(y_eff)),
-    resonance_in_span=start_frequency <= f0_estimate <= stop_frequency,
-    hb_intent_ok=!has_errors(hb_validation_report),
-)
+begin
+    residual_tolerance = sqrt(eps(Float64))
+    sanity = (
+        point_count_matches=length(result.frequencies_hz) == point_count,
+        finite_y_eff=all(isfinite, real.(y_eff)) && all(isfinite, imag.(y_eff)),
+        resonance_in_span=start_frequency <= f0_estimate <= stop_frequency,
+        hb_intent_ok=!has_errors(hb_validation_report),
+        quantity_contract_ok=coordinate_contract.quantity_lineage == (
+            raw=:admittance,
+            compensated=:admittance,
+            transformed=:admittance,
+        ) && reduced_y_stack.quantity_kind == :admittance,
+        coordinate_labels_ok=coordinate_contract.input_labels == ["1", "2", "3"] &&
+            coordinate_contract.output_labels == ["common", "differential", "xy"] &&
+            kron_boundary.keep_labels == ["differential"] &&
+            kron_boundary.drop_labels == ["common", "xy"],
+        source_lineage_ok=coordinate_contract.source_lineage == (
+            raw=:z_inverse,
+            compensated=:ptc_z_inverse,
+            transformed=:coordinate_transform_ptc_z_inverse,
+        ) && reduced_y_stack.source_kind == :kron_reduction_coordinate_transform_ptc_z_inverse,
+        real_transform_ok=all(isreal, coordinate_contract.voltage_transform_A) &&
+            all(isreal, coordinate_contract.current_transform_A_inverse_transpose),
+        current_transform_ok=coordinate_contract.current_transform_A_inverse_transpose ≈
+            transpose(
+                coordinate_contract.voltage_transform_A \
+                Matrix{ComplexF64}(I, size(coordinate_contract.voltage_transform_A)...),
+            ),
+        alpha_beta_ok=isapprox(coordinate_contract.alpha + coordinate_contract.beta, 1.0; atol=eps(Float64), rtol=0.0),
+        retained_port3_evidence_ok=compiled_summary.retained_xy_load.role == :retained_xy_port_shunt &&
+            compiled_summary.retained_xy_load.retention_intent == :declared_xy_port_loading_for_this_workflow &&
+            compiled_summary.retained_xy_load.evidence.port_id == :xy_port &&
+            compiled_summary.retained_xy_load.evidence.port_index == 3 &&
+            compiled_summary.retained_xy_load.evidence.resistor_id == "R_port_3" &&
+            compiled_summary.retained_xy_load.evidence.resistance_ohm == port_resistance,
+        condition_evidence_finite=all(isfinite, kron_reconstruction_evidence.y_dd_condition_numbers) &&
+            kron_reconstruction_evidence.conditioning_decision == :human_review_required,
+        zero_injection_residual_ok=kron_reconstruction_evidence.maximum_normalized_eliminated_current_residual <= residual_tolerance,
+        retained_response_residual_ok=kron_reconstruction_evidence.maximum_normalized_retained_response_residual <= residual_tolerance,
+    )
+end
 
 # ╔═╡ 10af70df-bab0-58dc-8399-665fc4b7ad07
 sanity

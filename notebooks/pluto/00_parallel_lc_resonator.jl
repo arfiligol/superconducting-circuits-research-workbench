@@ -4,7 +4,7 @@
 #> [frontmatter]
 #> title = "00 Grounded LC Resonator"
 #> tags = ["julia-core", "pluto", "hb", "parallel-lc"]
-#> description = "Macro DSL tutorial for a one-port parallel LC resonator and real HB admittance traces."
+#> description = "Macro DSL tutorial for a one-port parallel LC resonator, explicit port semantics, and real HB traces."
 
 using Markdown
 using InteractiveUtils
@@ -28,7 +28,11 @@ begin
     )
 
     include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
-    using .HBExampleHelpers: zero_mode_s, zero_mode_z
+    include(joinpath(@__DIR__, "includes", "port_matrix_post_processing.jl"))
+    using .HBExampleHelpers: zero_mode_s
+    using .PortMatrixPostProcessing: zero_mode_y_matrix_stack,
+        compiled_port_shunt_evidence,
+        apply_port_termination_compensation
 end
 
 # ╔═╡ dbd30a94-62de-54a8-ac42-f8bbc3594c88
@@ -40,6 +44,8 @@ md"""
 
 This notebook studies a one-port parallel LC resonator. A 50 ohm port drives one node, and the capacitor and inductor are both shunted from that node to ground.
 
+The reusable physics and observable layers are canonical in [Ideal Parallel LC Resonator](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/ideal-parallel-lc-resonator.qmd). [Port Reference Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd) and [Port-Termination Compensation](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd) explain why the raw solver trace differs from the intrinsic tank. Reusable solver theory and evidence gates are canonical in [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd).
+
 The authoring path is the Core SoT flow: define a reusable component, instantiate it with `@circuit`, declare solver intent with `@hbintent`, inspect semantic graph and schematic export, compile, run HB, then plot real solver traces.
 """
 
@@ -47,31 +53,36 @@ The authoring path is the Core SoT flow: define a reusable component, instantiat
 md"""
 ## Owns
 
-- Grounded LC resonator physics.
-- Admittance interpretation of a one-port resonator.
-- Minimal pump-off HB workflow using `@circuit_component`, `@circuit`, and `@hbintent`.
+- A local, executable Macro DSL teaching fixture for the grounded LC topology.
+- The explicit compile, pump-off HB, extraction, and visualization workflow.
+- Numerical checks that map real solver traces back to the canonical LC and port contracts.
+
+This notebook does not own the reusable LC derivation or generic port semantics.
 """
 
 # ╔═╡ 9b7f1ff5-8378-5874-893c-896642fedd35
 LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "circuit_draw", "pluto_examples", "grounded_lc_resonator", "diagram.light.svg"))
 
+# ╔═╡ 2fd7a1a0-8f05-4db5-8ea5-e8f643b4c6d1
+md"""
+The drawing is the **component view** of the ideal ``L\parallel C`` tank. The compiled solver view also contains the declared port row and its explicit ``R_{\mathrm{port}}`` shunt; inspect `compiled_summary.port_rows` below before interpreting raw ``Z`` or ``Y``.
+"""
+
 # ╔═╡ ccd34d3a-7df7-5497-bd1d-0f35522f00f6
 md"""
-## Physics
+## Knowledge Handoff And Expected Check
 
-For a parallel LC at angular frequency ``\omega``,
+The canonical [Port-Termination Compensation](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd)
+node owns the generic operation and authorization gates. This notebook applies
+that contract to one concrete compiled artifact.
 
-```math
-Y_{LC}(\omega) = j\omega C + \frac{1}{j\omega L}.
-```
+For this explicitly declared intrinsic-tank comparison, `R_port` is treated as
+solver scaffold. The shared helper proves the exact port row, resistor row,
+grounded branch, logical mapping, and compiled value before subtraction.
+`Y_PTC` must agree with the analytic ideal-tank check; it is not a fabricated
+replacement for solver output.
 
-The ideal resonance occurs when the capacitive and inductive susceptances cancel:
-
-```math
-f_0 = \frac{1}{2\pi\sqrt{LC}}.
-```
-
-Because this is a shunt resonator, admittance is the natural quantity to inspect.
+At the configured ``f_0`` the expected signatures are ``Y_{\mathrm{PTC}}\approx0``, ``Z_{\mathrm{raw}}\approx R_{\mathrm{port}}``, and ``S_{11}\approx+1``. A reflection-magnitude dip is not expected for this lossless direct-shunt topology.
 """
 
 # ╔═╡ 1779d63b-0581-584c-b3de-63f5bfb1bcf0
@@ -98,7 +109,7 @@ end
 parameter_table = [
     (name="C", value=capacitance, unit="F", meaning="parallel capacitance"),
     (name="L", value=inductance, unit="H", meaning="parallel inductance"),
-    (name="Z0", value=port_resistance, unit="ohm", meaning="port resistance"),
+    (name="R_port", value=port_resistance, unit="ohm", meaning="explicit compiled shunt; this fixture also uses the same value as Z0"),
     (name="frequency span", value=(start_frequency, stop_frequency), unit="Hz", meaning="HB sweep"),
 ]
 
@@ -256,11 +267,22 @@ export_summary = (
 compiled_circuit = compile_to_josephson(circuit_plan)
 
 # ╔═╡ a2dc1188-3746-5b63-b2f9-ecdf9f44a83e
-compiled_summary = (
-    netlist_rows=length(compiled_circuit.netlist),
-    port_ids=sort(collect(keys(compiled_circuit.port_map)); by=string),
-    warning_count=length(compiled_circuit.warnings),
-)
+begin
+    port_shunt_evidence = compiled_port_shunt_evidence(
+        compiled_circuit;
+        port_indices=(1,),
+    )
+    compiled_summary = (
+        netlist_rows=length(compiled_circuit.netlist),
+        port_ids=sort(collect(keys(compiled_circuit.port_map)); by=string),
+        port_rows=filter(
+            row -> startswith(string(first(row)), "P") || startswith(string(first(row)), "R_port_"),
+            compiled_circuit.netlist,
+        ),
+        port_shunt_evidence=port_shunt_evidence,
+        warning_count=length(compiled_circuit.warnings),
+    )
+end
 
 # ╔═╡ 1a0328f5-f32d-5679-8851-11b3b2e17105
 begin
@@ -288,14 +310,42 @@ trace_families = sort(collect(keys(result.traces)); by=string)
 
 # ╔═╡ d834a02a-a42e-5003-834d-6376a55ad823
 begin
-    z11 = zero_mode_z(result, 1, 1)
-    y11 = 1 ./ z11
+    s11 = zero_mode_s(result, 1, 1)
+    raw_y_stack = zero_mode_y_matrix_stack(result; ports=(1,))
+    ptc_y_stack = apply_port_termination_compensation(
+        raw_y_stack,
+        compiled_circuit;
+        compensate_port_indices=(1,),
+        removal_intent=:ideal_lc_probe_scaffold,
+    )
+    y11_raw = vec(raw_y_stack.values[1, 1, :])
+    y11_ptc = vec(ptc_y_stack.values[1, 1, :])
+
+    angular_frequencies = 2π .* result.frequencies_hz
+    y_lc_expected = im .* (
+        angular_frequencies .* capacitance .-
+        1 ./ (angular_frequencies .* inductance)
+    )
+    s11_expected = (
+        1 .- port_resistance .* y_lc_expected
+    ) ./ (
+        1 .+ port_resistance .* y_lc_expected
+    )
 end
 
 # ╔═╡ a33fb5f5-b5e5-599c-8ace-9190213ac952
 sanity = (
     point_count_matches=length(result.frequencies_hz) == point_count,
-    finite_y_trace=all(isfinite, real.(y11)) && all(isfinite, imag.(y11)),
+	compiled_port_shunt_proven=(
+		haskey(compiled_summary.port_shunt_evidence, 1) &&
+		compiled_summary.port_shunt_evidence[1].resistance_ohm == port_resistance
+	),
+    finite_raw_y_trace=all(isfinite, real.(y11_raw)) && all(isfinite, imag.(y11_raw)),
+    finite_ptc_y_trace=all(isfinite, real.(y11_ptc)) && all(isfinite, imag.(y11_ptc)),
+    raw_shunt_matches_compiled_port=all(isapprox.(real.(y11_raw), inv(port_resistance); rtol=1e-8, atol=1e-11)),
+    ptc_matches_intrinsic_lc=all(isapprox.(y11_ptc, y_lc_expected; rtol=1e-8, atol=1e-11)),
+    s11_matches_intrinsic_lc=all(isapprox.(s11, s11_expected; rtol=1e-8, atol=1e-10)),
+    lossless_reflection=all(isapprox.(abs.(s11), 1.0; rtol=1e-8, atol=1e-10)),
     resonance_in_span=start_frequency <= f0_estimate <= stop_frequency,
     hb_intent_ok=!has_errors(hb_validation_report),
 )
@@ -307,8 +357,31 @@ sanity
 begin
     y_trace_figure(
         result.frequencies_hz,
-        ["Y11" => y11];
-        title="Grounded LC Input Admittance",
+        [
+            "Y11 raw (includes R_port)" => y11_raw,
+            "YLC after verified PTC" => y11_ptc,
+        ];
+        title="Raw And Port-Compensated One-Port Admittance",
+        config=figure_config,
+    )
+end |> wide_figure_cell
+
+# ╔═╡ 60e19ca7-4e21-49d5-b811-120e528e08cd
+begin
+    s_parameter_abs_magnitude_figure(
+        result.frequencies_hz,
+        ["S11" => s11];
+        title="Ideal One-Port S11 Magnitude",
+        config=figure_config,
+    )
+end |> wide_figure_cell
+
+# ╔═╡ 43fdfdce-21a0-40ca-9f9e-f42de3f08113
+begin
+    s_parameter_phase_figure(
+        result.frequencies_hz,
+        ["S11" => s11];
+        title="Ideal One-Port S11 Phase",
         config=figure_config,
     )
 end |> wide_figure_cell
@@ -319,6 +392,7 @@ end |> wide_figure_cell
 # ╟─7b464e61-ff9e-5113-b753-aeefd1116a04
 # ╟─c6c8d380-bb0f-57dc-88d9-4e8abfe13c7e
 # ╠═9b7f1ff5-8378-5874-893c-896642fedd35
+# ╟─2fd7a1a0-8f05-4db5-8ea5-e8f643b4c6d1
 # ╟─ccd34d3a-7df7-5497-bd1d-0f35522f00f6
 # ╠═1779d63b-0581-584c-b3de-63f5bfb1bcf0
 # ╠═3cec03d7-4422-57cf-9c82-edbcd40a315f
@@ -345,3 +419,5 @@ end |> wide_figure_cell
 # ╠═a33fb5f5-b5e5-599c-8ace-9190213ac952
 # ╠═a296f796-4254-5479-a43a-f9e7f05815dc
 # ╠═4aab55d3-0e73-515d-906a-74d7afe36186
+# ╠═60e19ca7-4e21-49d5-b811-120e528e08cd
+# ╠═43fdfdce-21a0-40ca-9f9e-f42de3f08113

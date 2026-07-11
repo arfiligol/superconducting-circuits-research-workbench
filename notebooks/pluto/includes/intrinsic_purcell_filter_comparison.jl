@@ -1,3 +1,8 @@
+"""Shared LC-matrix comparison helpers for intrinsic Purcell notebooks.
+
+Canonical terminal-basis, Maxwell, modal, and artifact-eligibility semantics:
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd
+"""
 module IntrinsicPurcellFilterComparison
 
 using SuperconductingCircuitsCore
@@ -12,7 +17,7 @@ export matrix_line_values, run_rlgc_matrix_case
 
 function matrix_line_values(c_matrix_f_per_m, l_matrix_h_per_m)
     line1_c = c_matrix_f_per_m[1, 1] + c_matrix_f_per_m[1, 2]
-    line2_c = c_matrix_f_per_m[2, 2] + c_matrix_f_per_m[1, 2]
+    line2_c = c_matrix_f_per_m[2, 2] + c_matrix_f_per_m[2, 1]
     line1_l = l_matrix_h_per_m[1, 1]
     line2_l = l_matrix_h_per_m[2, 2]
     line1_v = 1 / sqrt(line1_l * line1_c)
@@ -44,7 +49,6 @@ function run_rlgc_matrix_case(
     pump_current,
     optional_hb_kwargs,
     port_resistance_ohm,
-    ptc_resistance_ohm_by_port,
     coupling_orientation = :same_direction,
     short_label = nothing,
 )
@@ -263,10 +267,12 @@ function run_rlgc_matrix_case(
     case_result = run_hb_problem(case_hb_problem)
 
     case_raw_y_stack = zero_mode_y_matrix_stack(case_result; ports = [1, 2])
-    case_ptc_y_stack = apply_port_termination_compensation(
-        case_raw_y_stack;
-        resistance_ohm_by_port = ptc_resistance_ohm_by_port,
-    )
+	case_ptc_y_stack = apply_port_termination_compensation(
+		case_raw_y_stack,
+		case_compiled_circuit;
+		compensate_port_indices = (1, 2),
+		removal_intent = :intrinsic_pair_probe_scaffold,
+	)
     case_ptc_z_stack = invert_port_matrix_stack(
         case_ptc_y_stack;
         source_kind = :ptc_z_from_y,

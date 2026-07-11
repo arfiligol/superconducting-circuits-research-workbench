@@ -39,6 +39,10 @@ md"""
 # 03 Transmission Line Circuit Model
 
 This notebook teaches the Core transmission-line generator directly. A CPW/RLGC line is sectioned into an LC ladder with a head endpoint, a tail endpoint, and ordered sections.
+
+Reusable harmonic-balance theory and periodic-steady-state evidence gates are canonical in [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd); this notebook owns only the circuit-specific executable workflow and evidence.
+
+Interpret returned S/Z with [Port Reference Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd).
 """
 
 # ╔═╡ 27f0ccb6-1fdd-524d-a4c7-4ceaad6f9700

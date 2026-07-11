@@ -22,10 +22,12 @@ julia_core_semantics:
     - core/julia/SuperconductingCircuitsCore/src/examples/pluto_examples.jl
 physical_model_refs:
   - docs/workflows/reusable-circuit-authoring/pluto-examples.mdx
+canonical_physics_urls:
+  - https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/ideal-parallel-lc-resonator.qmd
 implementation_refs:
   - notebooks/pluto/00_parallel_lc_resonator.jl
 review:
   status: accepted
   verified_by: docs-team
   verified_at: "2026-06-12"
-  notes: Migrated current stable docs asset; not a machine-verification contract.
+  notes: Component-only ideal LC view; physical_model_refs keeps the standalone child-doc adapter, canonical_physics_urls names the Super Repo authority, and compiled P1/R_port_1 rows remain visible in notebook evidence.

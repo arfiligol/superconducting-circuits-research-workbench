@@ -39,6 +39,13 @@ md"""
 # 05 Readout Line Hanging QWR With MTL Coupling
 
 This notebook models a pure readout CPW coupled to a grounded-head/open-tail quarter-wave resonator by a finite MTL window.
+
+Reusable harmonic-balance theory and periodic-steady-state evidence gates are canonical in [Harmonic Balance: Periodic Steady State and Mode Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/harmonic-balance-periodic-steady-state.qmd); this notebook owns only the circuit-specific executable workflow and evidence.
+
+Interpret returned S/Z with [Port Reference Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd).
+
+Read the canonical [Multiconductor RLGC Matrices: Basis, Modes, and Physical Meaning](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd)
+before interpreting the terminal matrices or the lowered ladder.
 """
 
 # ╔═╡ 46fe8430-f7c1-5559-a1d5-63b766f2147b
@@ -77,12 +84,19 @@ v_p = \frac{1}{\sqrt{L'C'}},
 
 This is an isolated-resonator estimate. The simulated notch is loaded by the through readout line, the finite MTL coupling window, and the distributed ladder discretization.
 
-For each coupled section,
+For each coupled section, the physical cross-line capacitance is obtained from
+the off-diagonal entry of the declared Maxwell capacitance matrix $C^M$:
 
 ```math
-C_{12,\mathrm{sec}} = C'_{12}\Delta x, \qquad
+C_{\mathrm{cross,sec}} = -C^M_{12}\Delta x, \qquad
 M_{12,\mathrm{sec}} = L'_m\Delta x.
 ```
+
+For a reciprocal passive pair, $C^M_{12}\le 0$, so
+$C_{\mathrm{cross,sec}}\ge 0$. In the pi lowering used here, that cross
+capacitance is divided equally between the two section boundaries: each boundary
+receives $-C^M_{12}\Delta x/2$. This sign and boundary split follow the
+[canonical multiconductor RLGC lowering](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd#4-lower-a-lossless-two-line-matrix-into-a-pi-ladder).
 """
 
 # ╔═╡ 10bffd4c-ab29-5687-83f3-d838361a516b
