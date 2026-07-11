@@ -10,8 +10,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: Codex-managed subagent work lanes, main-thread ownership, integrated delivery, and verification expectations.
-version: v4.2.0
-last_updated: 2026-06-12
+version: v4.2.1
+last_updated: 2026-07-10
 updated_by: codex
 ---
 
@@ -19,9 +19,9 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Codex Subagent Coordination
 
-Codex may open and coordinate subagents internally. Treat subagents as optional work lanes under one main thread, not as permanent project teams or fixed agent identities.
+Codex coordinates reusable Sol, Terra, and Luna agent archetypes. Each spawned instance is a temporary worker assigned to one bounded repo lane, not a permanent project team.
 
-The main thread owns integration, final architecture consistency, validation, and the final report.
+The Sol Main Agent owns Human communication, semantics, contracts, work decomposition, integration, final architecture consistency, validation, and the final report. Terra is the default repo-aware implementer, while Luna executes narrow contract-bounded work.
 
 <Aside type="caution" title="Single visible owner">
 
@@ -33,28 +33,31 @@ Even if Codex uses multiple subagents, the delivered change must read as one coh
 
 | Concern | Rule |
 | --- | --- |
-| Main thread | owns goal, SoT loading, lane selection, integration, conflict resolution, validation, and final report |
-| Subagent work lanes | optional delegation scopes chosen by Codex when they reduce real coordination cost |
-| Fixed agent families | not required; do not document work as named permanent agent roles |
+| Sol Main Agent | owns Human communication, semantics, contracts, lane selection, integration, conflict resolution, validation, and final report |
+| Terra | default repo-aware implementer for established contracts and non-trivial repository work |
+| Luna | narrow executor for explicit, mechanically verifiable work packages |
+| Spawned instances | temporary lane workers created from reusable Sol, Terra, or Luna archetypes; use the smallest pool that covers separable work |
 | `Plans/` coordination files | retired; do not create new active plan artifacts |
 | Direct `develop` work | allowed when the working tree stays coherent and touched-area checks are run |
-| Final accountability | current conversation owns the integrated result |
+| Final accountability | Sol and the current conversation own the integrated result |
 
-## Main Thread Responsibilities
+## Sol Main Agent Responsibilities
 
-The main thread must:
+Sol must:
 
 - read the relevant SoT before assigning or doing work;
-- define the current vertical slice and success criteria;
-- choose whether subagent work lanes are useful;
+- define the current vertical slice, product semantics, contracts, and success criteria;
+- choose whether Terra or Luna work lanes are useful;
 - keep subagents inside folder structure and owner-boundary rules;
 - reconcile cross-lane conflicts;
 - run or account for touched-area validation;
 - produce the final integrated report.
 
+Sol does not perform the main feature implementation by default. Sol may write contract documents and scaffolds, and may implement feature logic directly only when the Human explicitly requests it or when implementation cannot yet be separated safely from unsettled semantics.
+
 ## Subagent Work Lanes
 
-Use these lanes as optional delegation scopes. They describe where a subagent may focus; they are not permanent ownership teams.
+Map Terra or Luna instances to these repo lanes. The archetype identifies the worker's capability; the lane identifies its temporary repo scope. Use the smallest pool that covers separable work.
 
 | Lane | Typical surfaces | Responsibilities |
 | --- | --- | --- |
@@ -70,27 +73,36 @@ Use these lanes as optional delegation scopes. They describe where a subagent ma
 Subagents must:
 
 - stay inside the assigned surface and owner boundary;
+- have one primary owner for every modified path, with explicit allowed and forbidden paths;
+- not coordinate directly with other subagents;
 - avoid redefining architecture or product semantics;
-- report findings, changed surfaces, validation, and risks back to the main thread;
+- report `inspected_files`, `changed_files`, `produced_artifacts`, `validation`, and `blockers` back to Sol;
 - escalate cross-boundary conflicts instead of patching around them;
 - avoid creating persistent prompt bundles or committed lane handoffs.
 
-Subagents may recommend follow-up work, but the main thread decides whether it belongs in the current vertical slice.
+Do not let two implementers modify the same path unless Sol explicitly sequences their work. Subagents may recommend follow-up work, but Sol decides whether it belongs in the current vertical slice.
+
+## Escalation
+
+- Luna escalates to Terra if its scope expands, a new dependency or public API change appears necessary, or a failure exposes implementation uncertainty.
+- Terra escalates to Sol and the Human when product semantics, public contracts, data or state ownership, or architecture boundaries are undefined.
+- Sol returns unclear design decisions or acceptance semantics to the Human instead of inventing behavior.
 
 ## Vertical Slice Rule
 
 A product feature may span several lanes. For example, a real frequency-sweep workflow touches async contracts, Backend/Runner integration, Application Workbench, and Docs/SoT consistency.
 
-Do not let each lane independently define its own version of the workflow. The main thread owns the end-to-end contract and validates the integrated result.
+Do not let each lane independently define its own version of the workflow. Sol owns the end-to-end contract and validates the integrated result.
 
 ## Handoff
 
 Prefer concise in-thread summaries over committed planning files:
 
-- changed files or surfaces;
-- validation commands and results;
-- known risks or skipped checks;
-- remaining follow-up if it is concrete.
+- `inspected_files`;
+- `changed_files`;
+- `produced_artifacts`;
+- `validation` commands and results;
+- `blockers`, including known risks or skipped checks.
 
 Long-term decisions belong in `docs/reference/**`, not in temporary planning artifacts.
 
@@ -105,9 +117,11 @@ Long-term decisions belong in `docs/reference/**`, not in temporary planning art
 ## Agent Rule
 ```markdown
 ## Codex Subagent Coordination
-- The main thread owns goal definition, SoT loading, lane selection, integration, conflict resolution, validation, and final reporting.
-- Subagent work lanes are optional delegation scopes, not permanent ownership teams or fixed named agent roles.
-- Use subagents only when they reduce real coordination cost.
+- The Sol Main Agent owns Human communication, product semantics, architecture and ownership boundaries, contract design, work decomposition, acceptance criteria, integration, validation, and final decisions.
+- Sol does not perform the main feature implementation by default. Sol may write contract documents and scaffolds, and may implement feature logic directly only when the Human explicitly requests it or implementation cannot yet be separated safely from unsettled semantics.
+- Terra is the default repo-aware implementer for established contracts and non-trivial repository work.
+- Luna executes narrow, explicit, contract-bounded, mechanically verifiable work packages.
+- Sol, Terra, and Luna are reusable archetypes; each spawned instance is a temporary lane worker. Use the smallest pool that covers separable work.
 - Recommended lanes are:
   - Julia Core + Pluto Research
   - Product Async Contracts
@@ -115,10 +129,13 @@ Long-term decisions belong in `docs/reference/**`, not in temporary planning art
   - Application Workbench
   - Python Notebook / Data Inspection
   - Docs / SoT Consistency
-- Subagents must stay inside assigned folder structure and owner-boundary rules, avoid redefining architecture, and report findings/changes/risks back to the main thread.
-- Cross-lane conflicts are resolved by the main thread against the relevant SoT.
+- Assign one primary owner per modified path and give every instance explicit owned, allowed, and forbidden paths.
+- Subagents must stay inside assigned folder structure and owner-boundary rules, avoid redefining architecture, and must not coordinate directly with other subagents.
+- Luna escalates expanded scope, new dependencies or public APIs, and implementation uncertainty to Terra. Terra escalates undefined semantics, contracts, ownership, or architecture to Sol and the Human.
+- Each subagent reports `inspected_files`, `changed_files`, `produced_artifacts`, `validation`, and `blockers` to Sol.
+- Cross-lane conflicts are resolved by Sol against the relevant SoT.
 - Do not create new active `Plans/` coordination artifacts or committed lane handoffs.
 - Direct `develop` updates are allowed when the working tree stays coherent and touched-area checks are run.
 - Long-term decisions belong in `docs/reference/**`, not temporary planning files.
-- Final reports should summarize changed surfaces, validation, risks, and any skipped checks.
+- Final reports should summarize inspected and changed files, produced artifacts, validation, blockers, risks, and any skipped checks.
 ```

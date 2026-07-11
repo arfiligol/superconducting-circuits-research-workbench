@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the site/app/core/notebooks/scripts/docs canonical surfaces, direct-develop iteration, and migration residue boundaries of the current platform.
-version: v4.8.0
-last_updated: 2026-06-12
+version: v4.9.0
+last_updated: 2026-07-10
 updated_by: codex
 ---
 
@@ -240,7 +240,11 @@ This page retains the complete target layout because the folder boundary itself 
 - **Starlight source layout** uses `docs/start/`, `docs/workflows/`, `docs/concepts/`, `docs/app/`, `docs/reference/`, and `docs/contribute/`; Diataxis stays in metadata, not top-level directories.
 - **Start Here** is notebook-first and should lead with Pluto research setup, not Product App setup.
 - **Workflows** are route-first lanes: Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
-- **Concepts** are a workflow-supporting knowledge base for Physics Foundations, Circuit Authoring Model, Equivalent Circuit Modeling, Quantum Modeling, Quantum Dynamics & Pulse Simulation, and GDSFactory-Compatible Artifacts.
+- **Concepts** are repository-local implementation mental models and handoffs
+  for Physics Foundations, Circuit Authoring Model, Equivalent Circuit
+  Modeling, Quantum Modeling, Quantum Dynamics & Pulse Simulation, and
+  GDSFactory-Compatible Artifacts. Reusable cross-repo theory belongs in the
+  SCQ_Design Super Repo `docs/knowledge/` tree.
 - **Circuit research route contracts** go to `docs/reference/research-contracts/`.
 - **Product App docs** go to `docs/app/`; do not bury active app contracts under `docs/reference/app/`, `docs/start/`, `docs/workflows/`, or `docs/concepts/`.
 - **Legacy App-specific tutorials** go to `docs/app/archive/` with an explicit legacy-reference notice.

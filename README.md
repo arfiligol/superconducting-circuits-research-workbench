@@ -227,8 +227,11 @@ the notebook examples first.
 - Start with the Pluto notebooks under `notebooks/pluto/`.
 - Use the Julia Core reference when you need the current authoring and compiler
   contracts: `docs/reference/julia-core/`.
-- Use the physics concepts when you need the S/Y/Z, equivalent-circuit, or
-  modeling context: `docs/concepts/physics/`.
+- Use the canonical SCQ_Design
+  [Physics and Engineering Knowledge Base](https://github.com/arfiligol/SCQ_Design/tree/main/docs/knowledge)
+  for reusable S/Y/Z, equivalent-circuit, physics, mathematics, and algorithm
+  semantics. This repo's `docs/concepts/` pages keep implementation-specific
+  mental models or short handoffs to those canonical nodes.
 
 Run Pluto notebooks:
 

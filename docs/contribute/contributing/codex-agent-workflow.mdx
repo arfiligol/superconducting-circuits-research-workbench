@@ -9,9 +9,9 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Use Codex as an integrator for a SoT-first, direct implementation, verification and reporting workflow.
-version: v1.0.0
-last_updated: 2026-05-28
+scope: Use Codex with Sol-led contracts and integration, Terra or Luna implementation, verification, and reporting.
+version: v1.0.1
+last_updated: 2026-07-10
 updated_by: codex
 sidebar:
  label: Codex Agent Workflow
@@ -22,7 +22,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Collaborative workflow using Codex
 
-This how-to explains how to make Codex complete a reviewable change in this repo: first read the relevant SoT, then directly implement it, and finally verify and report the remaining risks.
+This how-to explains how Codex completes a reviewable change in this repo: Sol reads the relevant SoT and establishes the contract, Terra implements repo-aware work with Luna handling narrow tasks when useful, and Sol integrates the validated result and reports remaining risks.
 
 <Aside type="note" title="This is not the SoT of branch policy">
 
@@ -50,19 +50,20 @@ If the product semantics itself is not clear, update the owner SoT of `docs/refe
 
 ```mermaid
 flowchart TD
-A["Confirm requirements"] --> B["Load related SoT/guardrails"]
-B --> C["Implementation or file update"]
+A["Confirm Human intent"] --> B["Sol loads SoT and establishes contracts"]
+B --> C["Terra implementation<br/>Luna for narrow work"]
 C --> D["Perform touched-area verification"]
-D --> E["Report changed surfaces / validation / residual risk"]
+D --> E["Sol integrates and reports validation / residual risk"]
 ```
 
 ## Operation rules
 
 1. Read the guardrails and owner docs related to the task first.
-2. Modify directly on the appropriate canonical source surface.
-3. Codex can use subagents on its own, but the final integration and return is the responsibility of the current dialogue.
-4. Committed planning artifacts are not created; long-term decisions must be written back to `docs/reference/**`.
-5. The verification is based on the touched area, and the final response indicates whether the check has been run or not.
+2. Sol clarifies semantics, contracts, ownership, acceptance criteria, and the appropriate canonical source surface.
+3. Terra is the default repo-aware implementer. Luna handles narrow contract-bounded work; Sol implements feature logic only when the Human explicitly requests it or semantics cannot yet be separated safely.
+4. Spawned instances are temporary workers. Sol owns integration, resolves conflicts against the SoT, and returns the final result to the Human.
+5. Committed planning artifacts are not created; long-term decisions must be written back to `docs/reference/**`.
+6. Verification follows the touched area, and the final response states the commands run, results, blockers, and skipped checks.
 
 ## Common requests
 

@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "Define the order of adjudication for Product App docs, reference docs, Julia Core authoring, Julia Runner, Backend, adapter and retired surfaces"
-version: v3.2.0
-last_updated: 2026-06-12
+scope: "Define concern ownership across the SCQ_Design Knowledge Base, Workbench reference docs, Julia Core, Runner, Backend, adapters, and retired surfaces."
+version: v3.3.0
+last_updated: 2026-07-10
 updated_by: codex
 ---
 
@@ -34,6 +34,8 @@ First determine which concern this issue belongs to, and then return to the owne
 If descriptions of the same ability conflict with each other, the decision shall be made in the following order:
 
 1. Reference file corresponding to concern owner:
+- Reusable cross-repo physics, engineering, mathematics, and algorithm
+  semantics: SCQ_Design Super Repo `docs/knowledge/*`
 - Product App collaboration / session / auth / workspace / task runtime / audit / common error contract:
    `docs/app/shared/*` + `docs/app/backend/*`
 - Product persisted payload / storage schema / field semantics:
@@ -59,6 +61,7 @@ If descriptions of the same ability conflict with each other, the decision shall
 
 | Layer | What it owns |
 | --- | --- |
+| SCQ_Design Super Repo `docs/knowledge/*` | Reusable cross-repo physics, engineering, mathematics, algorithms, assumptions, limits, and evidence expectations. |
 | `docs/app/shared/*` |app-level shared semantics, workspace/resource/auth/task runtime/audit/error families|
 | `docs/app/backend/*` |app-facing authority surfaces, request/response contract, mutation/read model|
 | `docs/app/data-contracts/*` |product persisted record shape, field semantics, storage payload contract|
@@ -89,6 +92,9 @@ If descriptions of the same ability conflict with each other, the decision shall
 
 - **Owner-first, not consumer-first**:
 Page spec, notebook docs, scripts and architecture registry are all important consumers, but they cannot overwrite the owner contract.
+- **Knowledge-first for reusable semantics**:
+Workbench concepts, workflows, code, and notebooks must link to the exact
+SCQ_Design Knowledge node instead of redefining cross-repo theory locally.
 - **Reference-first**:
 If the reference file conflicts with the implementation behavior, the reference file takes precedence by default.
 - **Implementation is not silent law**:
@@ -119,6 +125,7 @@ This document does not stand alone. If a cross-layer conflict occurs, the follow
 ```markdown
 ## Source of Truth Order
 - Resolve conflicts by concern owner first:
+  - reusable cross-repo physics/engineering/mathematics/algorithms -> SCQ_Design Super Repo `docs/knowledge/*`
   - app collaboration/session/auth/workspace/task runtime/audit/error -> `docs/app/shared/*` + `docs/app/backend/*`
   - product persisted payload/schema fields -> `docs/app/data-contracts/*`
   - Julia Core authoring invariants -> `docs/reference/julia-core/*`
