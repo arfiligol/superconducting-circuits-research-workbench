@@ -386,7 +386,7 @@ else:
     if not qubit_path.is_file() or hashlib.sha256(qubit_path.read_bytes()).hexdigest() != qubit_inventory["expected_sha256"]:
         raise ValueError("The hash-bound private floating-qubit input is missing or stale.")
     qubit_input = read_json(qubit_path)
-    qubit_contract = optimizer_contract["floating_qubit_nominal"]
+    qubit_contract = contract["floating_qubit_nominal"]
     if qubit_contract.get("schema_version") == "d3-floating-qubit-maxwell.v1":
         branches = qubit_contract["mapped_branches_fF"]
         qubit_rows = [(name, branches[name], "fF") for name in ("C01_fF", "C02_fF", "C12_fF", "Cr1_fF", "Cr2_fF")]
@@ -437,6 +437,7 @@ expected_metric_targets = {
     "notch_hz": targets["interference_notch_frequency"]["value"] * 1e9,
     "filter_loaded_linewidth_hz": targets["filter_loaded_bare_linewidth"]["value"] * 1e6,
     "j_hz": targets["readout_filter_exchange_coupling"]["value"] * 1e6,
+    "g_hz": targets["qubit_readout_coupling"]["value"] * 1e6,
     "readout_minus_filter_detuning_hz": targets["readout_minus_filter_detuning"]["value"] * 1e6,
 }
 run_metric_targets = {
@@ -724,18 +725,24 @@ display(pd.DataFrame(stage_rows).style.hide(axis="index"))
 
 # %%
 comparison_rows = []
-initial_metrics = initial_record["evaluation"]["metrics"]
+initial_metrics = initial_record["evaluation"].get("metrics")
 final_metrics = final_record_history["evaluation"]["metrics"]
 for metric_id in optimizer_metric_fields:
-    initial_value, unit = display_frequency(float(initial_metrics[metric_id]), metric_id)
     final_value, _ = display_frequency(float(final_metrics[metric_id]), metric_id)
-    comparison_rows.append((metric_id, initial_value, final_value, final_value - initial_value, unit))
+    if initial_metrics is None:
+        initial_value, change = float("nan"), float("nan")
+        _, unit = display_frequency(float(final_metrics[metric_id]), metric_id)
+    else:
+        initial_value, unit = display_frequency(float(initial_metrics[metric_id]), metric_id)
+        change = final_value - initial_value
+    comparison_rows.append((metric_id, initial_value, final_value, change, unit))
+initial_cost = float("nan") if initial_record["cost"] is None else initial_record["cost"]
 comparison_rows.append(
     (
         "weighted cost",
-        initial_record["cost"],
+        initial_cost,
         final_record_history["cost"],
-        final_record_history["cost"] - initial_record["cost"],
+        float("nan") if math.isnan(initial_cost) else final_record_history["cost"] - initial_cost,
         "normalized squared cost",
     )
 )
