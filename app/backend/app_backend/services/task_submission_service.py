@@ -136,6 +136,21 @@ class TaskSubmissionService:
                 category="validation",
                 message="Simulation tasks require simulation_setup.",
             )
+        if (
+            draft.kind == "simulation"
+            and draft.simulation_setup is not None
+            and draft.simulation_setup.ptc is not None
+            and draft.simulation_setup.ptc.enabled
+        ):
+            raise service_error(
+                422,
+                code="simulation_ptc_unsupported",
+                category="validation",
+                message=(
+                    "Port-termination compensation cannot be enabled until the simulation "
+                    "runtime produces an evidence-backed PTC artifact."
+                ),
+            )
         if draft.kind in {"post_processing", "characterization"} and resolved_dataset_id is None:
             raise service_error(
                 422,

@@ -1,3 +1,16 @@
+"""Persisted result-bundle loading and mechanical trace-view construction.
+
+This module owns the current Backend implementation for reading persisted bundle
+records, selecting matrix elements, and constructing supported result views. It
+does not own reusable S/Y/Z physics, port-reference meaning, or the evidence
+required to accept a PTC artifact.
+
+Canonical semantics:
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/network-trace-views.qmd
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd
+"""
+
 from __future__ import annotations
 
 import ast

@@ -267,7 +267,7 @@ def _build_downstream_source_capabilities_response(
             "available": task.kind == "simulation",
         },
         "ptc": {
-            "available": ptc.enabled if ptc is not None else False,
+            "available": False,
             "enabled": ptc.enabled if ptc is not None else False,
             "mode": ptc.mode if ptc is not None else None,
             "compensate_ports": list(ptc.compensate_ports) if ptc is not None else [],

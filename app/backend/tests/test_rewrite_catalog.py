@@ -1,4 +1,5 @@
 from dataclasses import replace
+from typing import Any
 
 import pytest
 from app_backend.domain.datasets import (
@@ -76,6 +77,24 @@ def app_state_repository() -> InMemoryRewriteAppStateRepository:
 @pytest.fixture
 def catalog_repository() -> InMemoryRewriteCatalogRepository:
     return InMemoryRewriteCatalogRepository()
+
+
+def test_in_memory_result_trace_publication_requires_durable_storage(
+    catalog_repository: InMemoryRewriteCatalogRepository,
+) -> None:
+    unused: Any = object()
+
+    with pytest.raises(
+        ValueError,
+        match=r"^Result trace publication requires durable persisted storage\.$",
+    ):
+        catalog_repository.publish_result_trace(
+            task=unused,
+            basis_task=unused,
+            dataset=unused,
+            design=unused,
+            draft=unused,
+        )
 
 
 @pytest.fixture

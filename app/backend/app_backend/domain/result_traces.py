@@ -1,3 +1,15 @@
+"""Result-trace selection and identity mechanics for Workbench result surfaces.
+
+This module owns selector validation, trace keys, and port-option projection. It
+does not define reusable S/Y/Z meaning, establish wave-reference semantics, or
+prove that a named PTC source removed a valid explicit shunt.
+
+Canonical semantics:
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/network-trace-views.qmd
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd
+"""
+
 from __future__ import annotations
 
 import ast
@@ -131,12 +143,6 @@ def build_trace_id(
     return base
 
 
-def available_sources_for_family(task: TaskDetail, family: str) -> tuple[str, ...]:
-    if family in {"y_matrix", "z_matrix"} and ptc_available(task):
-        return ("raw", "ptc")
-    return ("raw",)
-
-
 def resolve_port_options(
     task: TaskDetail,
     *,
@@ -148,14 +154,6 @@ def resolve_port_options(
     if len(port_indices) == 0:
         port_indices = (1,)
     return {index: f"Port {index}" for index in port_indices}
-
-
-def ptc_available(task: TaskDetail) -> bool:
-    return (
-        task.simulation_setup is not None
-        and task.simulation_setup.ptc is not None
-        and task.simulation_setup.ptc.enabled
-    )
 
 
 def _parse_positive_int(value: str | None, *, field: str) -> int:

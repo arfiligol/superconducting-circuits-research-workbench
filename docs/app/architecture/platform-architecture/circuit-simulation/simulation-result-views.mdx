@@ -20,7 +20,19 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Simulation Result Views
 
-The current implementation is not a single view, but three result nodes coexisting:
+<Aside type="caution" title="PTC is target architecture, not current Runner support">
+
+The current Runner publishes solver-native S traces and does not produce a
+persisted PTC bundle; post-processing execution remains fail-fast, and new
+simulation submissions with `ptc.enabled=true` are rejected before persistence.
+The PTC flow below describes the intended result-view boundary. Request
+configuration must not be presented as artifact availability. See SCQ_Design [Port Reference
+Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd)
+and [Port-Termination Compensation](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd).
+
+</Aside>
+
+The target architecture separates three result nodes:
 
 1. `Simulation Results` (Raw run)
 2. `Post Processing Results` (CT/Kron after)
@@ -55,7 +67,7 @@ Raw and Post-Processed use the same:
 
 This allows users to maintain consistent operations on different data nodes without having to re-learn a UI.
 
-## Critical Semantics (Current)
+## Critical Semantics (Target)
 
 1. `S` family must maintain solver-native raw `S` in Raw view
 2. PTC mainly works on the `Y/Z` path and should not silently rewrite Raw `S` into another semantic meaning.

@@ -76,7 +76,6 @@ from app_backend.domain.datasets import (
     TraceUpdateDraft,
     TraceUpdateResult,
 )
-from app_backend.domain.result_traces import ResultTraceSelection, build_trace_parameter
 from app_backend.domain.tasks import TaskDetail
 from app_backend.domain.trace_ingestion import (
     build_ingested_trace_id,
@@ -94,8 +93,6 @@ from app_backend.infrastructure.persistence.research_data_publication_repository
     SqliteResearchDataPublicationRepository,
 )
 from app_backend.infrastructure.simulation_result_publication_materializer import (
-    build_result_trace_publication_detail,
-    build_result_trace_publication_summary,
     build_simulation_publication_key,
     build_simulation_publication_traces,
 )
@@ -700,81 +697,7 @@ class InMemoryRewriteCatalogRepository:
                 design=design,
                 draft=draft,
             )
-        selections = tuple(
-            ResultTraceSelection.from_trace_key(trace_key) for trace_key in draft.trace_keys
-        )
-        if len(selections) == 0:
-            raise ValueError("result trace publication requires at least one trace_key")
-        selection = selections[0]
-        publication_key = build_simulation_publication_key(
-            task_id=task.task_id,
-            dataset_id=dataset.dataset_id,
-            design_id=design.design_id,
-        )
-        trace_rows = list(self._trace_summaries.get((dataset.dataset_id, design.design_id), ()))
-        result_summaries: list[TraceMetadataSummary] = []
-        any_published = False
-        for selection_index, selection in enumerate(selections):
-            saved_parameter = (
-                draft.parameter_name
-                if len(selections) == 1
-                else (
-                    f"{draft.parameter_name or build_trace_parameter(selection)} "
-                    f"{selection_index + 1}"
-                )
-            )
-            detail = build_result_trace_publication_detail(
-                task=task,
-                basis_task=basis_task,
-                dataset_id=dataset.dataset_id,
-                design_id=design.design_id,
-                selection=selection,
-                parameter_name=saved_parameter,
-            )
-            summary = build_result_trace_publication_summary(
-                task=task,
-                detail=detail,
-                selection=selection,
-                parameter_name=saved_parameter,
-            )
-            already_published = any(row.trace_id == detail.trace_id for row in trace_rows)
-            any_published = any_published or not already_published
-            self._trace_details[(dataset.dataset_id, design.design_id, detail.trace_id)] = detail
-            trace_rows = [row for row in trace_rows if row.trace_id != detail.trace_id]
-            trace_rows.append(summary)
-            result_summaries.append(summary)
-        self._trace_summaries[(dataset.dataset_id, design.design_id)] = tuple(
-            sorted(trace_rows, key=lambda row: row.trace_id)
-        )
-        design_rows = list(self._designs.get(dataset.dataset_id, ()))
-        source_coverage = _build_source_coverage(
-            self._trace_summaries[(dataset.dataset_id, design.design_id)]
-        )
-        design_row = DesignBrowseRow(
-            design_id=design.design_id,
-            dataset_id=dataset.dataset_id,
-            name=design.name,
-            source_coverage=source_coverage,
-            compare_readiness=_compare_readiness_for(source_coverage),
-            trace_count=len(self._trace_summaries[(dataset.dataset_id, design.design_id)]),
-            updated_at="2026-03-20T00:00:00Z",
-        )
-        design_rows = [row for row in design_rows if row.design_id != design.design_id]
-        design_rows.append(design_row)
-        self._designs[dataset.dataset_id] = tuple(
-            sorted(design_rows, key=lambda row: row.design_id)
-        )
-        updated_dataset = replace(dataset, updated_at="2026-03-20T00:00:00Z")
-        self._datasets[dataset.dataset_id] = updated_dataset
-        return ResultTracePublicationResult(
-            state="published" if any_published else "already_published",
-            publication_key=publication_key,
-            published_at="2026-03-20T00:00:00Z",
-            dataset=updated_dataset,
-            design=design_row,
-            trace_keys=draft.trace_keys,
-            traces=tuple(result_summaries),
-        )
+        raise ValueError("Result trace publication requires durable persisted storage.")
 
     def update_dataset_profile(
         self,

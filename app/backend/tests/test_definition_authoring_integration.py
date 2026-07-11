@@ -242,3 +242,35 @@ def test_simulation_submit_rejects_numeric_definition_id() -> None:
     assert payload["error"]["message"] == "definition_id must be a non-empty string or null."
     visible = client.get(f"/circuit-definitions/{LOCAL_SPACE_RESONATOR_DEFINITION_ID}")
     assert visible.status_code == 200
+
+
+def test_simulation_submit_rejects_ptc_without_an_artifact_producer() -> None:
+    switch_response = client.patch("/session/runtime-mode", json={"runtime_mode": "local"})
+    assert switch_response.status_code == 200
+    before_task_ids = {
+        row["task_id"] for row in client.get("/tasks").json()["data"]["rows"]
+    }
+    simulation_setup = _simulation_setup_payload()
+    simulation_setup["ptc"] = {
+        "enabled": True,
+        "mode": "auto",
+        "compensate_ports": ["port_1"],
+    }
+
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
+            "simulation_setup": simulation_setup,
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["error"]["code"] == "simulation_ptc_unsupported"
+    assert payload["error"]["category"] == "validation"
+    after_task_ids = {
+        row["task_id"] for row in client.get("/tasks").json()["data"]["rows"]
+    }
+    assert after_task_ids == before_task_ids
