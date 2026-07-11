@@ -1,0 +1,22 @@
+{
+  "schema_version": "d3-semantic-hash-vectors.v1",
+  "semantic_hash_framing": "d3-semantic-value-sha256-v1",
+  "vectors": [
+    {"name": "null", "value": null, "expected_sha256": "b53d45d40aa507df9a2321d7b466440b828fb1af8939fe8d052f941a90cf56dd"},
+    {"name": "false", "value": false, "expected_sha256": "de75c1fc31cdd6d79d2fc679934de424ccc7b5edd400e45243201a898e54a526"},
+    {"name": "true", "value": true, "expected_sha256": "2b305d4e0ee3e58528a6aa9a08678f1a2ce2c02d3e99e8c8f6f0004ae7199224"},
+    {"name": "integer", "value": -42, "expected_sha256": "9901a966f1d2c67a038c76a25df58482a263456771cf605b28351eb22552904f"},
+    {"name": "integer_zero", "value": 0, "expected_sha256": "2c8bb57e74fd8441010356d7dca80d45a6850249fe6b44d6d3c6fb21700f78f7"},
+    {"name": "integer_one", "value": 1, "expected_sha256": "ee1f987ce97a7522e359f886b51d543834dbb7bb2e0d1afa1101a0d2d9b5bda1"},
+    {"name": "float_one", "float64_hex_bits": "3ff0000000000000", "expected_sha256": "ee1f987ce97a7522e359f886b51d543834dbb7bb2e0d1afa1101a0d2d9b5bda1"},
+    {"name": "integer_1e8", "value": 100000000, "expected_sha256": "7192b3725fef7cd524392cbd3d95a8ef46fd400a0ac3f783760c7826a6b72127"},
+    {"name": "float_1e8", "float64_hex_bits": "4197d78400000000", "expected_sha256": "7192b3725fef7cd524392cbd3d95a8ef46fd400a0ac3f783760c7826a6b72127"},
+    {"name": "float_1e_minus_8", "value": 1e-8, "expected_sha256": "c79d6c33715ab371a99a708a695b0eaa391fb38ac25f36d01a761cb4bcbcc18e"},
+    {"name": "negative_zero", "float64_hex_bits": "8000000000000000", "expected_sha256": "2c8bb57e74fd8441010356d7dca80d45a6850249fe6b44d6d3c6fb21700f78f7"},
+    {"name": "nonintegral_2p5", "float64_hex_bits": "4004000000000000", "expected_sha256": "82fa16b0ab7fcb6a5a03212098862643bbd815339756d57ae6b22bebe02736c4"},
+    {"name": "unicode", "value": "量子⚛", "expected_sha256": "d66ac8ae87ebbfbceb466d89541be4a5b41f16b8699d7f2f98bb4dd5d6ca6924"},
+    {"name": "list", "value": [null, true, 7, 0.5, "µ"], "expected_sha256": "599bbba7d945ef129d2050b90726ccbb367bcf33f3585f257b526019c37d01ed"},
+    {"name": "nested_mapping", "value": {"z": [1, 2.5], "a": {"ok": false, "text": "量"}}, "expected_sha256": "86532169112999575ad3973eab2e60f9ecd28c4e38086b093f02c1452df7488a"}
+  ],
+  "actual_conditions_without_sol_review_expected_sha256": "02c41c5048c6b48af801ccf065217cfbefb5cb12b4eae93b79acf96d1a4bc76f"
+}

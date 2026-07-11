@@ -2,10 +2,15 @@
 
 import json
 import math
+import sys
 from pathlib import Path
 
 
 def test_d3_feedline_is_independent_50_ohm_spec() -> None:
+    # Bind the test to the same canonical target loader used by Python notebooks.
+    sys.path.insert(0, str(Path(__file__).parents[1] / "notebooks" / "python"))
+    from d3_design_config import load_d3_target_contract
+
     config_path = (
         Path(__file__).parents[1]
         / "notebooks"
@@ -25,7 +30,10 @@ def test_d3_feedline_is_independent_50_ohm_spec() -> None:
     impedance = math.sqrt(feedline["l_per_m_h"] / feedline["c_per_m_f"])
     assert abs(impedance - 50.0) <= feedline["max_abs_impedance_error_ohm"]
     assert feedline["max_abs_impedance_error_role"] == "mismatch_screening_only"
-    assert config["readout_minus_filter_detuning_mhz"] == -2.0
+    target = load_d3_target_contract()
+    assert target["targets"]["readout_minus_filter_detuning"]["value"] == -2.0
+    assert target["targets"]["readout_minus_filter_detuning"]["unit"] == "MHz"
+    assert "readout_minus_filter_detuning_mhz" not in config
     assert "filter_minus_readout_detuning_mhz" not in config
     assert config["design_csv_role"] == "optimizer_seed_only"
     assert config["prior_simulation_evidence_status"] == "invalidated_by_50ohm_feedline_correction"

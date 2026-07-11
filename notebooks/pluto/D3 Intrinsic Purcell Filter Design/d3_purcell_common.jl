@@ -303,6 +303,34 @@ end
 read_float(row, columns, name) = parse(Float64, row[columns[name]])
 read_optional_float(row, columns, name, default) = haskey(columns, name) ? parse(Float64, row[columns[name]]) : default
 
+"""Read every CSV field as source text so one complete row can be identity-hashed.
+
+This helper deliberately preserves the serialized source values instead of
+silently normalizing columns that the circuit model does not consume.  The
+typed `read_design_csv` path remains the execution model; this path owns only
+full-row provenance.
+"""
+function read_csv_source_rows(path)
+	isfile(path) || error("Missing CSV source: $(path)")
+	data, header = DelimitedFiles.readdlm(path, ',', String; header = true)
+	names = vec(String.(header))
+	length(unique(names)) == length(names) || error("CSV source contains duplicate column names: $(path)")
+	return [Dict(name => String(row[index]) for (index, name) in enumerate(names)) for row in eachrow(data)]
+end
+
+function select_d3_source_row(path; case_id, target_set_id, slot_target_ghz)
+	matches = [
+		row for row in read_csv_source_rows(path)
+		if row["case_id"] == String(case_id) &&
+			row["target_set_id"] == String(target_set_id) &&
+			parse(Float64, row["slot_target_ghz"]) == Float64(slot_target_ghz)
+	]
+	length(matches) == 1 || error(
+		"Expected exactly one CSV row for case=$(case_id), target_set=$(target_set_id), slot=$(slot_target_ghz) GHz; found $(length(matches)).",
+	)
+	return only(matches)
+end
+
 function read_design_csv(path; case_id = nothing)
 	isfile(path) || error("Missing Python design CSV. Run notebooks/python/01_resonator_length_estimate.py first: $(path)")
 	data, header = DelimitedFiles.readdlm(path, ',', String; header = true)

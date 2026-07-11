@@ -1,18 +1,19 @@
 {
   "active_design_variant_id": "mismatch_loaded_bare_filter_plus1mhz_kappa25_j20_lc_tuned_notch4500",
-  "source_design_variant_id": "mismatch_loaded_bare_filter_plus1mhz_kappa25_lc160_notch4500",
   "design_csv_filename": "d3_selected_resonator_lengths__mismatch_loaded_bare_filter_plus1mhz_kappa25_j20_lc_tuned_notch4500.csv",
-  "source_design_csv_filename": "d3_selected_resonator_lengths__mismatch_loaded_bare_filter_plus1mhz_kappa25_lc160_notch4500.csv",
   "design_csv_role": "optimizer_seed_only",
   "prior_simulation_evidence_status": "invalidated_by_50ohm_feedline_correction",
   "selected_case_id": "height7",
   "target_set_id": "d3",
-  "slot_targets_ghz": [5.52, 5.76, 6.0, 6.24, 6.48],
-  "notch_target_ghz": 4.5,
-  "loaded_bare_center_policy": "slot_target",
-  "filter_loaded_bare_offset_mhz": 1.0,
-  "readout_loaded_bare_offset_mhz": -1.0,
-  "readout_minus_filter_detuning_mhz": -2.0,
+  "target_contract": {
+    "workspace_relative_path": "docs/design-targets/contracts/d3-intrinsic-interferometric-purcell-filter.v1.json",
+    "expected_sha256": "0b0c410cc02126d5a2cdaf0df61bbd714570f62b86900a4e7b32ae6d79d9c31b",
+    "expected_target_id": "d3-intrinsic-interferometric-purcell-filter",
+    "expected_revision": 1
+  },
+  "orpen_case_json_workspace_path": "orpen_sc_pdk/build/simulation/circuit/intrinsic_purcell_filter/orpen_q2d_rlgc_cases.json",
+  "design_csv_workspace_root": "orpen_sc_pdk/build/simulation/circuit/intrinsic_purcell_filter/d3_intrinsic_purcell_filter_design/design_inputs",
+  "output_root_workspace_path": "superconducting-circuits-research-workbench/build/research/d3_coupled_optimizer_v1",
   "shared_readout_hook_spacing_um": 200.0,
   "shared_readout_feedline_margin_um": 100.0,
   "feedline_rlgc": {
