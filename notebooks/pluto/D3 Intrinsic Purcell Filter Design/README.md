@@ -26,11 +26,11 @@ The child [D3 Readout-Filter S21 Fit API](../../../docs/concepts/equivalent-circ
 lists only the concrete Python/Julia entrypoints, payloads, failures, and replay
 requirements.
 Notebook 07 is the sole review and run entrypoint for the physical evaluator
-and the bounded CMA-ES → Nelder-Mead workflow. Opening the notebook does not
-start a run: execution requires an explicit call bound to the displayed
-condition-manifest id and SHA-256. An `agent_proposed` or `sol_reviewed`
-manifest may produce clearly labeled exploration evidence; only a
-`human_approved` manifest can make promotion evaluable.
+and bounded CMA-ES → Nelder-Mead workflow. It reads the canonical Super Repo
+target JSON, the generic `d3_optimizer_conditions.json`, and exactly one CSV
+row for the selected Slot. Users select a Slot and click an action; they never
+edit a manifest hash. Opening the notebook or changing the selector does not
+start a run.
 
 ## Design Target
 
@@ -177,10 +177,86 @@ simulation.
   does not own D3 physics or threshold decisions.
 
 - [`07_coupled_cost_optimization.jl`](07_coupled_cost_optimization.jl)
-  renders the complete hash-bound
-  [`d3_condition_manifest.json`](d3_condition_manifest.json), adapts the
-  evaluator evidence into the exact objective schema, and exposes the explicit
-  run function. It never auto-runs when opened.
+  displays all five canonical Slots, defaults to the first unfinished Slot,
+  derives the selected seed, targets, bounds, full-row hash, and execution
+  manifest, and exposes two explicit buttons. Completed target-satisfying Slots
+  are reusable view-only evidence and cannot be rerun. Failed Slots may retry.
+
+- [`d3_optimizer_conditions.json`](d3_optimizer_conditions.json)
+  owns Slot-independent evaluator gates, seed-relative bounds, metric scales
+  and weights, HB settings, CMA-ES/Nelder-Mead budgets, promotion conditions,
+  and exact-eight output filenames. It contains no selected Slot or seed row.
+
+- [`../../python/08_d3_design_review.ipynb`](../../python/08_d3_design_review.ipynb)
+  is the final Human review handoff. It separates optimizer-time history from
+  independent nominal validation, then ends with the frozen
+  `layout_specs.json`. Opening or executing it is read-only by default; it never
+  runs optimization.
+
+## Optimizer To Validation Handoff
+
+The review sequence has four explicit boundaries:
+
+1. Notebook 07 runs CMA-ES → Nelder–Mead and persists optimizer evidence.
+2. The selected `layout_specs.json` freezes exactly six Layout variables. Search
+   history and cost remain provenance; they are not Final Validation.
+3. A fresh process may evaluate that frozen candidate exactly once and persist
+   the independent exact-six nominal-validation artifact set. Only a completed,
+   matching, non-stale nominal record backed by the current
+   `d3-slot-execution-manifest.v1` optimizer schema may be labeled **Final
+   Validation**. Legacy optimizer runs remain historical reproduction only and
+   cannot back an independent nominal-validation claim.
+4. Fabrication tolerance is a future, separate final check. Its perturbation
+   contract and Condition Threshold require Human or Sol-level review and stay
+   outside the Cost Function. No nominal result implies a tolerance pass.
+
+Current optimizer and nominal semantic identities use
+`d3-semantic-value-sha256-v1`: values are type-framed across Julia and Python,
+while source-file identities remain raw byte SHA-256. Integral finite Float64
+values normalize to the same integer framing across a JSON write/read boundary;
+non-integral Float64 values retain their exact IEEE-754 bits.
+
+To review without writes, set `DESIGN_TARGET_JSON` and
+`OPTIMIZER_RUN_DIRECTORY` in Notebook 08, leave
+`NOMINAL_VALIDATION_DIRECTORY=None` and `RUN_NOMINAL_VALIDATION=False`, then run
+all cells. Zero matching nominal directories is reported as `not_performed`;
+one may be selected automatically; more than one requires an explicit
+`NOMINAL_VALIDATION_DIRECTORY`. Nominal directories for other optimizer runs or
+Slots are counted as unrelated and ignored, while invalid directories that
+claim the selected run remain visible as rejected evidence.
+
+To request the single fresh nominal evaluation from the command line, run from
+this Workbench root:
+
+```bash
+julia --startup-file=no scripts/build/run_d3_nominal_validation.jl <persisted_optimizer_run_directory>
+```
+
+The equivalent Notebook 08 action is to set `RUN_NOMINAL_VALIDATION=True` and
+execute only the clearly marked **Explicit nominal-validation action
+(guarded)** cell, then return the flag to `False` and run the read-only review
+cells. The guarded action calls the nominal runner only; it cannot invoke the
+optimizer. Failed, stale, candidate-mismatched, or source-mismatched directories
+remain visible rejected evidence and are never substituted for Final
+Validation.
+
+## Running another Slot
+
+1. Start Pluto and open `07_coupled_cost_optimization.jl`.
+2. Confirm the status table. The selector defaults to the first unfinished
+   Slot (currently 5.52 GHz); the existing target-satisfying 6.0 GHz result is
+   labeled `completed`, `unapproved_exploration`, and `view-only`.
+3. Select one unfinished or failed Slot and inspect the derived target, exact
+   CSV seed row, seed-relative bounds, and execution SHA.
+4. Click **Evaluate selected seed — no writes** to isolate the real
+   Simulation → evaluator → cost path.
+5. Click **Run selected Slot optimization** only when the preview is correct.
+   The notebook rechecks existing evidence immediately before creating a run
+   and writes exactly eight files, including the generated
+   `condition_manifest.json` snapshot and final `layout_specs.json`.
+6. Open the Python review notebook for plots and Human judgment. Do not rerun a
+   completed Slot merely because CMA-ES or Nelder-Mead reported
+   `not_converged`; the target evidence and Human decision are separate.
 
 ## Plot And Fit Conventions
 
@@ -196,11 +272,12 @@ Notebook 07 owns the exact metric-selection adapter and review boundary.
 ## Optimization Integration Boundary
 
 The physical evaluator and optimizer are real implementation, but approval is
-not inferred from successful execution. Conditions move through
-`agent_proposed → sol_reviewed → human_approved`; every review is bound to the
-canonical manifest hash. Proposed and Sol-reviewed conditions support explicit
-exploration, and all resulting artifacts remain unapproved. Only Human approval
-allows Notebook 07 to evaluate promotion.
+not inferred from successful execution. Generic conditions may move from
+`pending` to a hash-bound `sol_reviewed` state and authorize exploration.
+Every generated per-Slot execution manifest remains `agent_proposed`, and all
+current outputs remain `unapproved_exploration`. Human promotion stays outside
+Notebook 07 and is impossible while the consumed LC artifact declares
+`promotion_eligible=false`.
 
 The present exploration consumes an LC-only Q2D envelope. Missing source
 $R'/G'$ values remain explicitly unavailable and are assumed zero only for the
@@ -216,8 +293,8 @@ known optimum, a promotion-only condition, and an expected rejected region. A
 passing result isolates the generic cost, cache, CMA-ES, Nelder-Mead, and
 structured-outcome machinery without loading HB.
 
-Notebook 07 then exposes two separate explicit actions. `evaluate_d3_seed_cost()`
+Notebook 07 then exposes two separate explicit actions. `evaluate_d3_seed_cost(runtime)`
 runs one real Simulation → evaluator → metric projection → cost path without an
-optimizer. `run_d3_coupled_exploration()` runs the full simulation-backed search.
+optimizer. `run_d3_slot_optimization(runtime)` runs the selected Slot's full simulation-backed search.
 This order distinguishes optimizer defects from circuit, artifact, fitting, or
 adapter failures before an expensive exploration is started.
