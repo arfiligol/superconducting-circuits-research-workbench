@@ -30,6 +30,7 @@
     "pair_fit_half_width_hz": 180000000.0,
     "pair_background_inner_half_width_hz": 230000000.0,
     "notch_half_width_hz": 300000000.0,
+    "min_notch_assignment_margin_hz": 1000000.0,
     "readout_probe_capacitances_fF": [2.0, 5.0, 10.0, 20.0],
     "min_readout_frequency_extrapolation_r2": 0.9999,
     "min_readout_linewidth_extrapolation_r2": 0.9999,
@@ -108,14 +109,13 @@
     "status": "sol_reviewed",
     "reviewer_role": "Sol_or_higher",
     "reviewer_identity": "Codex Sol semantic/physics/contract reviewer",
-    "reviewed_at_utc": "2026-07-11T14:06:22Z",
-    "rationale": "Sol review approves the fixed nominal floating-qubit input, diagonal-preserving coupling-off frequency, separate 100 MHz qubit-local and Slot-local grids, 50 MHz qubit-pole anchor gate, 0.9999 g-extrapolation R2 gate, hard rejection when the qubit pole enters the local two-mode J window, and g as a 1 MHz-scale positive-weight objective at the Human-decided 90 MHz target. Six positive objectives use max_cost 6 with a non-compensating unit normalized-residual limit; the six existing Layout variables remain the only search variables. Human-only promotion and LC-artifact ineligibility remain unchanged.",
+    "reviewed_at_utc": "2026-07-11T17:40:31Z",
+    "rationale": "Sol review approves replacing the reduced-five-capacitance private input with a labeled full Maxwell matrix, eliminating exactly four disconnected floating Coupler pads by Schur-complement linear solve, retaining only the two qubit islands and readout attachment, and keeping the reduced readout diagonal as provenance because the distributed resonator owns readout self-capacitance. Per-junction inductance and qubit f01 flow exclusively from the canonical Design Target; the private input must match its inductance record. Qubit f01 remains diagnostic rather than a Layout objective, while g remains a positive-weight objective. Loaded-notch ownership is the root nearest the unique no-qubit intrinsic reference with the reviewed assignment margin. Existing J, kappa, frequency targets, six Layout variables, thresholds, Human-only promotion, and LC-artifact ineligibility remain unchanged.",
     "evidence": [
-      "Julia floating-qubit topology and g contract passed 20/20; optimizer analytical, nominal identity, and semantic-hash suites passed 77/77, 28/28, and 28/28.",
-      "Python semantic/current/nominal review and schema suites passed 12 tests with 40 subtests; Notebook 07 no-HB load and Notebook 08 historical read-only execution passed.",
-      "One real no-write 6 GHz candidate with only lr_open shortened by 110 um reached the complete valid metric path: readout 5.982454852 GHz, J 20.612853 MHz, g 103.899382 MHz, and finite cost 501.005328. The result is implementation evidence, not a target-satisfying candidate.",
-      "The uncorrected no-qubit seed rejected at the existing readout ownership gate, demonstrating that nominal qubit loading is active rather than bypassed."
+      "The approved implementation contract requires synthetic Schur-equivalence, role-partition, no-readout-shunt, f01, invalid-input, and multi-root notch-ownership checks.",
+      "The exact private full matrix must reduce near the reviewed diagnostic values without copying those private values into tracked source or tests.",
+      "A fresh no-write candidate evaluation is required before the economic Luna optimizer run; no historical optimizer artifact is relabeled."
     ],
-    "approved_conditions_sha256": "56d10e9f39d2a78b43a703411ef9c5793bd1aeb2b01ece7cf7007f4cabecea19"
+    "approved_conditions_sha256": "dfcf6342da6ac283458c5827b1b753e08024ec23e6d5b11711f8036bd7a1633b"
   }
 }

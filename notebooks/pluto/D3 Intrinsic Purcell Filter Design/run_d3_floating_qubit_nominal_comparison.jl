@@ -107,6 +107,16 @@ function main(arguments)
     preflight = preflight_optimizer_run(optimizer_run)
     design = historical_design(preflight)
     contract = preflight.optimizer_contract
+	 target_path = inventory_source_path(preflight, "target_contract")
+	 target = JSON3.read(read(target_path, String), Dict{String,Any})
+	 target_sha256 = raw_file_sha256(target_path)
+	 f01_record = target["targets"]["qubit_transition_frequency"]
+	 lj_record = target["targets"]["qubit_junction_inductance"]
+	 f01_record["unit"] == "GHz" || error("Frozen qubit transition target must use GHz.")
+	 lj_record["unit"] == "nH_per_junction" || error("Frozen qubit junction target must use nH_per_junction.")
+	 Int(lj_record["parallel_junction_count"]) == 2 || error("Frozen D3 qubit target must declare two parallel junctions.")
+	 f01_target_hz = Float64(f01_record["value"]) * 1e9
+	 expected_lj_nH = Float64(lj_record["value"])
 
     q2d_path = inventory_source_path(preflight, "orpen_case_json")
     matching_cases = [case for case in load_orpen_cases(q2d_path) if String(case.id) == preflight.selection.case_id]
@@ -145,6 +155,10 @@ function main(arguments)
         qubit_input.model,
         qubit_input.input_sha256,
         isolated_qubit_hz;
+		qubit_f01_target_hz = f01_target_hz,
+		expected_L_J_per_junction_nH = expected_lj_nH,
+		qubit_target_contract_id = target["target_id"],
+		qubit_target_contract_sha256 = target_sha256,
         journal_path = nothing,
     )
     half_width_hz = evaluator_settings.pair_trace_half_width_hz
@@ -265,9 +279,10 @@ function main(arguments)
         model_row("C12", nothing, qubit.C12_fF, "fF", "mutual capacitance between qubit islands", qubit.capacitance_source_id),
         model_row("Cr1", nothing, qubit.Cr1_fF, "fF", "readout_open_tail to qubit island 1", qubit.capacitance_source_id),
         model_row("Cr2", nothing, qubit.Cr2_fF, "fF", "readout_open_tail to qubit island 2", qubit.capacitance_source_id),
-        model_row("L_J_per_junction", nothing, qubit.L_J_per_junction_nH, "nH", "each of two identical parallel small-signal Josephson branches", "public nominal input"),
-        model_row("isolated_reduced_qubit_frequency_estimate", nothing, isolated_qubit_hz, "Hz", "LC estimate used only to include the qubit feature in the common scan", "five-branch reduced model"),
-        model_row("omitted_capacitances", "not_applicable", "all matrix branches outside C01,C02,C12,Cr1,Cr2", "scope", "intentional reduced-model omission; not absorbed into another value", "canonical D3 loading-check contract"),
+        model_row("L_J_per_junction", nothing, qubit.L_J_per_junction_nH, "nH", "each of two identical parallel small-signal Josephson branches", qubit_input.input_path),
+        model_row("isolated_reduced_qubit_frequency_estimate", nothing, isolated_qubit_hz, "Hz", "LC estimate used only to include the qubit feature in the common scan", "Kron-reduced five-branch model"),
+        model_row("floating_coupler_pad_reduction", "not_applicable", qubit.electrostatic_reduction.reduction_method, "method", "exactly four disconnected Coupler pads eliminated with Q_f=0", qubit.capacitance_source_id),
+        model_row("readout_reduced_diagonal_instantiated", "not_applicable", qubit.electrostatic_reduction.readout_diagonal_instantiated, "boolean", "false because the distributed resonator owns readout self-capacitance", qubit.capacitance_source_id),
     ]
     for item in preflight.candidate_records
         push!(model_rows, model_row(
@@ -322,6 +337,13 @@ function main(arguments)
             "raw_sha256" => qubit_input.input_sha256,
             "model_id" => qubit.model_id,
             "capacitance_source_id" => qubit.capacitance_source_id,
+            "reduction" => floating_qubit_reduction_evidence(
+				qubit;
+				f01_target_hz = f01_target_hz,
+				expected_L_J_per_junction_nH = expected_lj_nH,
+				target_contract_id = target["target_id"],
+				target_contract_sha256 = target_sha256,
+			),
         ),
         "common_execution" => Dict(
             "fresh_no_qubit_solve" => true,

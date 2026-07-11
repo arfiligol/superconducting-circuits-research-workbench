@@ -23,8 +23,10 @@ const D3_HENRIES_PER_NH = 1.0e-9
 
 The five capacitances are positive physical branch values, not signed Maxwell
 matrix entries. `L_J_per_junction_nH` is the inductance of each of two
-identical parallel linearized Josephson branches. This type intentionally does
-not model flux, junction asymmetry, loop inductance, or omitted matrix terms.
+identical parallel linearized Josephson branches. `electrostatic_reduction`
+preserves the exact full-matrix partition and Schur-complement evidence that
+produced those branches; the readout diagonal is evidence only and is never
+instantiated because the distributed resonator owns that self-capacitance.
 """
 struct D3FloatingQubitNominal
 	model_id::String
@@ -35,6 +37,7 @@ struct D3FloatingQubitNominal
 	Cr1_fF::Float64
 	Cr2_fF::Float64
 	L_J_per_junction_nH::Float64
+	electrostatic_reduction
 
 	function D3FloatingQubitNominal(;
 		model_id,
@@ -45,6 +48,7 @@ struct D3FloatingQubitNominal
 		Cr1_fF,
 		Cr2_fF,
 		L_J_per_junction_nH,
+		electrostatic_reduction,
 	)
 		model = strip(String(model_id))
 		source = strip(String(capacitance_source_id))
@@ -54,7 +58,7 @@ struct D3FloatingQubitNominal
 		all(value -> isfinite(value) && value > 0, values) || error(
 			"Floating-qubit capacitances and per-junction L_J must be finite and positive.",
 		)
-		return new(model, source, values...)
+		return new(model, source, values..., electrostatic_reduction)
 	end
 end
 

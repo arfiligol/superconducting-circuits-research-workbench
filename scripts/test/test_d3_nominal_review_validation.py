@@ -87,6 +87,12 @@ def current_optimizer_fixture(workspace: Path) -> Path:
                 "value": layout_metrics["j_hz"]["target"] / 1.0e6
             },
             "qubit_readout_coupling": {"value": 90.0},
+            "qubit_transition_frequency": {"value": 4.7, "unit": "GHz"},
+            "qubit_junction_inductance": {
+                "value": 23.0,
+                "unit": "nH_per_junction",
+                "parallel_junction_count": 2,
+            },
         },
     }
     target_path = workspace / "docs/target.json"
@@ -103,7 +109,10 @@ def current_optimizer_fixture(workspace: Path) -> Path:
             }
             for metric_id, item in layout_metrics.items()
         },
-        "evaluator_settings": {"frequency_step_hz": 500.0e6},
+        "evaluator_settings": {
+            "frequency_step_hz": 500.0e6,
+            "min_notch_assignment_margin_hz": 1.0e6,
+        },
         "sol_review": {
             "status": "synthetic-test-only",
             "hash_framing": validator.SEMANTIC_HASH_FRAMING,
@@ -128,7 +137,12 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         "floating_qubit_nominal": workspace_file(
             workspace,
             "workbench/private/floating-qubit.json",
-            '{"model_id":"synthetic-floating-qubit"}\n',
+            json.dumps({
+                "schema_version": "d3-floating-qubit-maxwell.v1",
+                "model_id": "synthetic-floating-qubit",
+                "readout_self_capacitance_ownership": "distributed_resonator_owns_self_capacitance",
+                "L_J_per_junction_nH": 23.0,
+            }) + "\n",
         ),
         "d3_floating_qubit_input_loader": workspace_file(
             workspace, "workbench/runtime/floating_qubit_loader.jl", "# qubit loader\n"
@@ -181,8 +195,19 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         },
         "consumed_files": inventory_rows,
         "floating_qubit_nominal": {
+            "schema_version": "d3-floating-qubit-maxwell.v1",
             "model_id": "synthetic-floating-qubit",
             "input_sha256": validator.file_sha256(source_paths["floating_qubit_nominal"]),
+            "readout_self_capacitance_ownership": "distributed_resonator_owns_self_capacitance",
+            "readout_diagonal_instantiated": False,
+            "L_J_per_junction_nH": 23.0,
+            "canonical_targets": {
+                "target_contract_id": target["target_id"],
+                "target_contract_sha256": target_hash,
+                "qubit_transition_frequency": {"value": 4.7e9, "unit": "Hz"},
+                "qubit_junction_inductance": {"value": 23.0, "unit": "nH_per_junction"},
+            },
+            "physics_diagnostics": {"human_target_f01_hz": 4.7e9},
         },
     }
     current_contract = json3_roundtrip(current_contract)
@@ -238,6 +263,42 @@ def current_optimizer_fixture(workspace: Path) -> Path:
     record["diagnostics"]["floating_qubit"] = {
         "model_id": "synthetic-floating-qubit",
         "input_sha256": input_hash,
+        "electrostatic_reduction": {
+            "partition": {
+                "floating_labels": ["pad-a", "pad-b", "pad-c", "pad-d"],
+                "retained_labels": ["island-a", "island-b", "readout"],
+                "reference_label": "ground",
+            },
+            "reduced_maxwell_matrix_fF": [
+                [90.0, -30.0, -10.0],
+                [-30.0, 101.0, -1.0],
+                [-10.0, -1.0, 200.0],
+            ],
+            "readout_self_capacitance_ownership": "distributed_resonator_owns_self_capacitance",
+            "readout_diagonal_instantiated": False,
+            "physics_diagnostics": {
+                "first_order_transmon_f01_hz": 4.7e9,
+                "human_target_f01_hz": 4.7e9,
+                "first_order_transmon_f01_residual_hz": 0.0,
+            },
+        },
+    }
+    notch_hz = record["metrics"]["notch_hz"]
+    synthetic_root = {"frequency_hz": notch_hz, "sampled_abs_im_z21_ohm": 0.0}
+    record["diagnostics"]["reference_notch"] = {
+        **synthetic_root,
+        "all_roots": [synthetic_root],
+        "ownership": "unique_no_qubit_intrinsic_reference",
+        "trace_id": "synthetic-reference-notch",
+    }
+    record["diagnostics"]["notch"] = {
+        **synthetic_root,
+        "all_roots": [synthetic_root],
+        "ownership": "nearest_unique_no_qubit_intrinsic_reference",
+        "reference_notch_hz": notch_hz,
+        "assignment_margin_hz": 600.0e6,
+        "trace_id": "synthetic-loaded-notch",
+        "reference_trace_id": "synthetic-reference-notch",
     }
     frequency_fit = record["diagnostics"]["readout_zero_probe_frequency_fit"]
     x_values = frequency_fit["x_values"]
@@ -309,6 +370,15 @@ def current_optimizer_fixture(workspace: Path) -> Path:
             "reference_s21": complex_values(len(pair_grid), 0.001),
         }
     )
+    intrinsic = record["traces"]["intrinsic"]
+    intrinsic_hash = validator.frequency_grid_sha256(intrinsic["frequencies_hz"])
+    intrinsic["frequency_grid_sha256"] = intrinsic_hash
+    intrinsic["trace_id"] = f"synthetic-loaded-notch|grid_sha256={intrinsic_hash}"
+    record["diagnostics"]["notch"]["trace_id"] = intrinsic["trace_id"]
+    record["traces"]["intrinsic_reference"] = copy.deepcopy(intrinsic)
+    record["traces"]["intrinsic_reference"]["trace_id"] = f"synthetic-reference-notch|grid_sha256={intrinsic_hash}"
+    record["diagnostics"]["reference_notch"]["trace_id"] = record["traces"]["intrinsic_reference"]["trace_id"]
+    record["diagnostics"]["notch"]["reference_trace_id"] = record["traces"]["intrinsic_reference"]["trace_id"]
     diagnostics = record["diagnostics"]
     diagnostics["loaded_frequency_grid_sha256"] = loaded_hash
     diagnostics["pair_frequency_grid_sha256"] = pair_hash

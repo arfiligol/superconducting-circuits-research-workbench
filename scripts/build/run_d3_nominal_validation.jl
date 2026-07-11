@@ -60,6 +60,17 @@ function physical_evaluator_factory(preflight, config, conditions)
         workspace_path(config["floating_qubit_nominal_workspace_path"]),
         D3FloatingQubitNominal,
     )
+    target_path = workspace_path(config["target_contract"]["workspace_relative_path"])
+    target = JSON3.read(read(target_path, String), Dict{String,Any})
+    target_sha256 = file_sha256(target_path)
+    target_sha256 == config["target_contract"]["expected_sha256"] || error("Current canonical target bytes disagree with the optimizer snapshot.")
+    f01_record = target["targets"]["qubit_transition_frequency"]
+    lj_record = target["targets"]["qubit_junction_inductance"]
+    f01_record["unit"] == "GHz" || error("Canonical qubit transition target must use GHz.")
+    lj_record["unit"] == "nH_per_junction" || error("Canonical qubit junction target must use nH_per_junction.")
+    Int(lj_record["parallel_junction_count"]) == 2 || error("Canonical D3 qubit target must declare two parallel junctions.")
+    f01_target_hz = Float64(f01_record["value"]) * 1e9
+    expected_lj_nH = Float64(lj_record["value"])
 
     evaluator_kwargs = Dict(Symbol(key) => value for (key, value) in conditions["evaluator_settings"])
     evaluator_settings = D3SlotEvaluationSettings(; evaluator_kwargs...)
@@ -85,6 +96,10 @@ function physical_evaluator_factory(preflight, config, conditions)
             qubit_input.model,
             qubit_input.input_sha256,
             floating_qubit_coupling_off_frequency_hz(qubit_input.model);
+            qubit_f01_target_hz = f01_target_hz,
+            expected_L_J_per_junction_nH = expected_lj_nH,
+            qubit_target_contract_id = target["target_id"],
+            qubit_target_contract_sha256 = target_sha256,
             journal_path = nothing,
         )
         return candidate_records -> begin

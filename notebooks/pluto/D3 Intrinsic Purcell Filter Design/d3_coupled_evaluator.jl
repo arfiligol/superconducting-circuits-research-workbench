@@ -48,6 +48,7 @@ struct D3SlotEvaluationSettings
 	pair_fit_half_width_hz::Float64
 	pair_background_inner_half_width_hz::Float64
 	notch_half_width_hz::Float64
+	min_notch_assignment_margin_hz::Float64
 	readout_probe_capacitances_fF::Vector{Float64}
 	min_readout_frequency_extrapolation_r2::Float64
 	min_readout_linewidth_extrapolation_r2::Float64
@@ -97,6 +98,7 @@ struct D3SlotEvaluationSettings
 		pair_fit_half_width_hz,
 		pair_background_inner_half_width_hz,
 		notch_half_width_hz,
+		min_notch_assignment_margin_hz,
 		readout_probe_capacitances_fF,
 		min_readout_frequency_extrapolation_r2,
 		min_readout_linewidth_extrapolation_r2,
@@ -152,6 +154,7 @@ struct D3SlotEvaluationSettings
 			loaded_bare_ownership_half_width_hz,
 			max_filter_anchor_distance_hz,
 			min_filter_assignment_margin_hz,
+			min_notch_assignment_margin_hz,
 			max_notch_abs_im_z21_ohm,
 			max_seed_spread_hz,
 			vector_min_q,
@@ -250,6 +253,7 @@ struct D3SlotEvaluationSettings
 			Float64(pair_fit_half_width_hz),
 			Float64(pair_background_inner_half_width_hz),
 			Float64(notch_half_width_hz),
+			Float64(min_notch_assignment_margin_hz),
 			probe_caps,
 			Float64(min_readout_frequency_extrapolation_r2),
 			Float64(min_readout_linewidth_extrapolation_r2),
@@ -300,6 +304,10 @@ mutable struct D3SlotEvaluator
 	floating_qubit_nominal::D3FloatingQubitNominal
 	floating_qubit_input_sha256::String
 	qubit_coupling_off_frequency_hz::Float64
+	qubit_f01_target_hz::Float64
+	expected_L_J_per_junction_nH::Float64
+	qubit_target_contract_id::String
+	qubit_target_contract_sha256::String
 	reference_cache::Dict{String,Vector{ComplexF64}}
 	records::Dict{Tuple,Any}
 	journal_path::Union{Nothing,String}
@@ -314,6 +322,10 @@ function D3SlotEvaluator(
 	floating_qubit_nominal,
 	floating_qubit_input_sha256,
 	qubit_coupling_off_frequency_hz;
+	qubit_f01_target_hz,
+	expected_L_J_per_junction_nH,
+	qubit_target_contract_id,
+	qubit_target_contract_sha256,
 	journal_path,
 )
 	selected_journal_path = isnothing(journal_path) ? nothing : String(journal_path)
@@ -325,6 +337,17 @@ function D3SlotEvaluator(
 	occursin(r"^[0-9a-f]{64}$", input_sha256) || error("Floating-qubit input identity must be a lowercase SHA-256.")
 	bare_frequency_hz = Float64(qubit_coupling_off_frequency_hz)
 	isfinite(bare_frequency_hz) && bare_frequency_hz > 0 || error("Floating-qubit coupling-off frequency must be finite and positive.")
+	f01_target_hz = Float64(qubit_f01_target_hz)
+	isfinite(f01_target_hz) && f01_target_hz > 0 || error("Canonical qubit f01 target must be finite and positive.")
+	expected_lj = Float64(expected_L_J_per_junction_nH)
+	isfinite(expected_lj) && expected_lj > 0 || error("Canonical per-junction L_J target must be finite and positive.")
+	Float64(floating_qubit_nominal.L_J_per_junction_nH) == expected_lj || error(
+		"Private floating-qubit L_J disagrees with the canonical per-junction target.",
+	)
+	target_contract_id = strip(String(qubit_target_contract_id))
+	isempty(target_contract_id) && error("Canonical qubit target contract id must be nonempty.")
+	target_contract_sha256 = String(qubit_target_contract_sha256)
+	occursin(r"^[0-9a-f]{64}$", target_contract_sha256) || error("Canonical qubit target contract SHA-256 is invalid.")
 	return D3SlotEvaluator(
 		case,
 		seed_design,
@@ -334,6 +357,10 @@ function D3SlotEvaluator(
 		floating_qubit_nominal,
 		input_sha256,
 		bare_frequency_hz,
+		f01_target_hz,
+		expected_lj,
+		target_contract_id,
+		target_contract_sha256,
 		Dict{String,Vector{ComplexF64}}(),
 		Dict{Tuple,Any}(),
 		selected_journal_path,
@@ -851,7 +878,7 @@ function _zero_constrained_linewidth_fit(x_values, y_values, minimum_r2, label, 
 	)
 end
 
-function _owned_notch_zero(frequencies_hz, signed_imag_z21, target_hz, half_width_hz, maximum_value)
+function _notch_zero_roots(frequencies_hz, signed_imag_z21, target_hz, half_width_hz)
 	indexes = findall(abs.(frequencies_hz .- target_hz) .<= half_width_hz)
 	length(indexes) >= 3 || reject_d3_candidate(
 		"notch.insufficient_samples",
@@ -883,9 +910,14 @@ function _owned_notch_zero(frequencies_hz, signed_imag_z21, target_hz, half_widt
 		frequency_hz = frequencies_hz[indexes[end]],
 		sampled_abs_im_z21_ohm = 0.0,
 	))
+	return roots
+end
+
+function _owned_reference_notch_zero(frequencies_hz, signed_imag_z21, target_hz, half_width_hz, maximum_value)
+	roots = _notch_zero_roots(frequencies_hz, signed_imag_z21, target_hz, half_width_hz)
 	length(roots) == 1 || reject_d3_candidate(
 		"notch.zero_crossing_count",
-		"Notch window must contain exactly one Im(Z21 PTC) zero crossing; found $(length(roots)).";
+		"No-qubit reference notch window must contain exactly one Im(Z21 PTC) zero crossing; found $(length(roots)).";
 		details = (roots = roots,),
 	)
 	notch = only(roots)
@@ -898,7 +930,54 @@ function _owned_notch_zero(frequencies_hz, signed_imag_z21, target_hz, half_widt
 				max_abs_im_z21_ohm = maximum_value,
 			),
 		)
-	return notch
+	return merge(notch, (all_roots = roots, ownership = "unique_no_qubit_intrinsic_reference"))
+end
+
+
+function _owned_loaded_notch_zero(
+	frequencies_hz,
+	signed_imag_z21,
+	target_hz,
+	half_width_hz,
+	maximum_value,
+	reference_notch_hz,
+	minimum_assignment_margin_hz,
+)
+	roots = _notch_zero_roots(frequencies_hz, signed_imag_z21, target_hz, half_width_hz)
+	isempty(roots) && reject_d3_candidate(
+		"notch.loaded_zero_crossing_count",
+		"Qubit-loaded notch window contains no Im(Z21 PTC) zero crossing.";
+		details = (roots = roots, reference_notch_hz = reference_notch_hz),
+	)
+	ordered = sort(roots; by = root -> abs(root.frequency_hz - reference_notch_hz))
+	selected = first(ordered)
+	assignment_margin_hz = length(ordered) == 1 ? 2 * half_width_hz :
+		abs(ordered[2].frequency_hz - reference_notch_hz) - abs(selected.frequency_hz - reference_notch_hz)
+	assignment_margin_hz >= minimum_assignment_margin_hz || reject_d3_candidate(
+		"notch.loaded_assignment_ambiguous",
+		"Qubit-loaded notch ownership margin $(assignment_margin_hz) Hz is below $(minimum_assignment_margin_hz) Hz.";
+		details = (
+			roots = roots,
+			reference_notch_hz = reference_notch_hz,
+			assignment_margin_hz = assignment_margin_hz,
+			min_notch_assignment_margin_hz = minimum_assignment_margin_hz,
+		),
+	)
+	selected.sampled_abs_im_z21_ohm <= maximum_value || reject_d3_candidate(
+		"notch.sampled_magnitude_gate",
+		"Owned loaded-notch sampled |Im(Z21 PTC)| $(selected.sampled_abs_im_z21_ohm) Ohm exceeds $(maximum_value) Ohm.";
+		details = (
+			observed_abs_im_z21_ohm = selected.sampled_abs_im_z21_ohm,
+			max_abs_im_z21_ohm = maximum_value,
+		),
+	)
+	return merge(selected, (
+		all_roots = roots,
+		reference_notch_hz = Float64(reference_notch_hz),
+		assignment_margin_hz = Float64(assignment_margin_hz),
+		assignment_margin_is_scan_lower_bound = length(ordered) == 1,
+		ownership = "nearest_unique_no_qubit_intrinsic_reference",
+	))
 end
 
 function _d3_plain_data(value)
@@ -1397,6 +1476,33 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			settings.notch_half_width_hz,
 			settings.frequency_step_hz,
 		)
+		notch_grid_sha256 = _frequency_grid_sha256(notch_frequencies_hz)
+		reference_notch_trace_id = "d3-intrinsic-no-qubit-reference-notch|grid_sha256=$(notch_grid_sha256)|design=$(design.id)|$(candidate_identity)"
+		loaded_notch_trace_id = "d3-intrinsic-qubit-loaded-notch|grid_sha256=$(notch_grid_sha256)|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
+		reference_intrinsic_plan = build_intrinsic_pair_plan(
+			evaluator.case,
+			design;
+			hb_settings = evaluator.hb_settings,
+		)
+		reference_intrinsic_hb = _run_candidate_hb(
+			evaluator,
+			reference_intrinsic_plan,
+			notch_frequencies_hz,
+			"no-qubit intrinsic reference notch";
+			compensate_port_indices = (1, 2),
+			removal_intent = :intrinsic_pair_probe_scaffold,
+		)
+		reference_notch = _owned_reference_notch_zero(
+			notch_frequencies_hz,
+			imag.(reference_intrinsic_hb.z21_ptc),
+			notch_target_hz,
+			settings.notch_half_width_hz,
+			settings.max_notch_abs_im_z21_ohm,
+		)
+		reference_notch = merge(reference_notch, (
+			trace_id = reference_notch_trace_id,
+			frequency_grid_sha256 = notch_grid_sha256,
+		))
 		intrinsic_plan = build_intrinsic_pair_plan(
 			evaluator.case,
 			design;
@@ -1411,13 +1517,20 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			compensate_port_indices = (1, 2),
 			removal_intent = :intrinsic_pair_probe_scaffold,
 		)
-		notch = _owned_notch_zero(
+		notch = _owned_loaded_notch_zero(
 			notch_frequencies_hz,
 			imag.(intrinsic_hb.z21_ptc),
 			notch_target_hz,
 			settings.notch_half_width_hz,
 			settings.max_notch_abs_im_z21_ohm,
+			reference_notch.frequency_hz,
+			settings.min_notch_assignment_margin_hz,
 		)
+		notch = merge(notch, (
+			trace_id = loaded_notch_trace_id,
+			frequency_grid_sha256 = notch_grid_sha256,
+			reference_trace_id = reference_notch_trace_id,
+		))
 		intrinsic_wide_trace = if capture_traces
 			wide_capture = _intrinsic_wide_capture_grid(
 				design,
@@ -1469,10 +1582,17 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				model_id = evaluator.floating_qubit_nominal.model_id,
 				capacitance_source_id = evaluator.floating_qubit_nominal.capacitance_source_id,
 				input_sha256 = evaluator.floating_qubit_input_sha256,
-				topology_id = "d3-floating-qubit-five-capacitance-two-parallel-lj-v1",
+				topology_id = "d3-floating-qubit-kron-reduced-five-branch-two-parallel-lj-v1",
 				coupling_off_reference = "Cr endpoint shunts retain nodal diagonals",
 				coupling_off_frequency_hz = evaluator.qubit_coupling_off_frequency_hz,
 				qubit_frequency_grid_sha256 = qubit_grid_sha256,
+				electrostatic_reduction = floating_qubit_reduction_evidence(
+					evaluator.floating_qubit_nominal;
+					f01_target_hz = evaluator.qubit_f01_target_hz,
+					expected_L_J_per_junction_nH = evaluator.expected_L_J_per_junction_nH,
+					target_contract_id = evaluator.qubit_target_contract_id,
+					target_contract_sha256 = evaluator.qubit_target_contract_sha256,
+				),
 			),
 			reference_contract_id = reference_contract_id,
 			filter_loaded_bare_reference_id = filter_loaded_bare_reference_id,
@@ -1484,6 +1604,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			j_fit = _compact_j_fit(j_fit),
 			vector_crosscheck_poles_hz = vector_poles_hz,
 			notch = notch,
+			reference_notch = reference_notch,
 		)
 		j_fit_trace = j_fit["fit_trace"]
 		traces = capture_traces ? (
@@ -1514,8 +1635,16 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				),
 			),
 			intrinsic = (
+				frequency_grid_sha256 = notch_grid_sha256,
+				trace_id = loaded_notch_trace_id,
 				frequencies_hz = notch_frequencies_hz,
 				z21_ptc = ComplexF64.(intrinsic_hb.z21_ptc),
+			),
+			intrinsic_reference = (
+				frequency_grid_sha256 = notch_grid_sha256,
+				trace_id = reference_notch_trace_id,
+				frequencies_hz = notch_frequencies_hz,
+				z21_ptc = ComplexF64.(reference_intrinsic_hb.z21_ptc),
 			),
 			intrinsic_wide = intrinsic_wide_trace,
 		) : nothing

@@ -20,13 +20,15 @@ end
 function make_sources(root)
     paths = Dict{String,String}()
     paths["target"] = joinpath(root, "docs", "target.json")
-    write_test_json(paths["target"], Dict("targets" => Dict(
+    write_test_json(paths["target"], Dict("target_id" => "synthetic-target", "targets" => Dict(
         "filter_loaded_bare_offset" => Dict("value" => 1.0),
         "readout_loaded_bare_offset" => Dict("value" => -1.0),
         "interference_notch_frequency" => Dict("value" => 4.5),
         "filter_loaded_bare_linewidth" => Dict("value" => 25.0),
         "readout_filter_exchange_coupling" => Dict("value" => 20.0),
         "qubit_readout_coupling" => Dict("value" => 90.0),
+        "qubit_transition_frequency" => Dict("value" => 4.7, "unit" => "GHz"),
+        "qubit_junction_inductance" => Dict("value" => 23.0, "unit" => "nH_per_junction", "parallel_junction_count" => 2),
         "readout_minus_filter_detuning" => Dict("value" => -2.0),
     )))
     specs = Dict(
@@ -46,7 +48,12 @@ function make_sources(root)
         write(paths[id], "synthetic $(id) source\n")
     end
     paths["qubit_input"] = joinpath(root, "workbench", "private", "floating-qubit.json")
-    write_test_json(paths["qubit_input"], Dict("model_id" => "synthetic-floating-qubit"))
+    write_test_json(paths["qubit_input"], Dict(
+        "schema_version" => "d3-floating-qubit-maxwell.v1",
+        "model_id" => "synthetic-floating-qubit",
+        "readout_self_capacitance_ownership" => "distributed_resonator_owns_self_capacitance",
+        "L_J_per_junction_nH" => 23.0,
+    ))
     return paths
 end
 
@@ -94,8 +101,18 @@ function make_optimizer_fixture(root, paths)
         ),
         "consumed_files" => consumed,
         "floating_qubit_nominal" => Dict(
+            "schema_version" => "d3-floating-qubit-maxwell.v1",
             "model_id" => "synthetic-floating-qubit",
             "input_sha256" => D3NominalValidation.file_sha256(paths["qubit_input"]),
+            "readout_self_capacitance_ownership" => "distributed_resonator_owns_self_capacitance",
+            "readout_diagonal_instantiated" => false,
+            "L_J_per_junction_nH" => 23.0,
+            "canonical_targets" => Dict(
+                "target_contract_id" => "synthetic-target",
+                "target_contract_sha256" => D3NominalValidation.file_sha256(paths["target"]),
+                "qubit_transition_frequency" => Dict("value" => 4.7e9, "unit" => "Hz"),
+                "qubit_junction_inductance" => Dict("value" => 23.0, "unit" => "nH_per_junction"),
+            ),
         ),
     )
     schema = "d3-slot-execution-manifest.v1"

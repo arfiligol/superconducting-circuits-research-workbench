@@ -1,6 +1,6 @@
-# This focused test freezes the reduced floating-qubit topology, private-input
-# validation, and two-table/trace output contract without running HB or using
-# design-specific capacitance values.
+# This focused test freezes the full-Maxwell Coupler-pad reduction, reduced
+# floating-qubit topology, private-input validation, and output contract without
+# running HB or using design-specific capacitance values.
 
 using LinearAlgebra
 using Test
@@ -21,16 +21,32 @@ function write_test_json(path, value)
 end
 
 function synthetic_input()
+    cff = Matrix(Diagonal([10.0, 11.0, 12.0, 13.0]))
+    crf = [-1.0 -2.0 -1.0 -2.0; -2.0 -1.0 -2.0 -1.0; -0.5 -0.5 -0.5 -0.5]
+    reduced = [90.0 -30.0 -10.0; -30.0 101.0 -1.0; -10.0 -1.0 200.0]
+    crr = reduced + crf * (cff \ transpose(crf))
+    matrix = zeros(8, 8)
+    matrix[1:4, 1:4] = cff
+    matrix[1:4, 6:8] = transpose(crf)
+    matrix[6:8, 1:4] = crf
+    matrix[6:8, 6:8] = crr
+    matrix[5, 5] = 300.0
     return Dict(
-        "schema_version" => "d3-floating-qubit-nominal.v1",
+        "schema_version" => "d3-floating-qubit-maxwell.v1",
         "model_id" => "synthetic-structural-test",
-        "capacitance_source_id" => "synthetic-positive-branches",
-        "C01_fF" => 60.0,
-        "C02_fF" => 70.0,
-        "C12_fF" => 30.0,
-        "Cr1_fF" => 10.0,
-        "Cr2_fF" => 1.0,
-        "L_J_per_junction_nH" => 24.0,
+        "capacitance_source_id" => "synthetic-full-maxwell",
+        "capacitance_unit" => "fF",
+        "conductor_labels" => ["pad_a", "pad_b", "pad_c", "pad_d", "ground", "island_a", "island_b", "readout"],
+        "maxwell_capacitance_matrix_fF" => [collect(row) for row in eachrow(matrix)],
+        "role_mapping" => Dict(
+            "reference_conductor" => "ground",
+            "floating_coupler_pads" => ["pad_a", "pad_b", "pad_c", "pad_d"],
+            "qubit_island_1" => "island_a",
+            "qubit_island_2" => "island_b",
+            "readout_attachment" => "readout",
+        ),
+        "readout_self_capacitance_ownership" => "distributed_resonator_owns_self_capacitance",
+        "L_J_per_junction_nH" => 23.0,
     )
 end
 
@@ -39,13 +55,41 @@ end
         input_path = joinpath(root, "private-qubit.json")
         write_test_json(input_path, synthetic_input())
         loaded = load_floating_qubit_nominal_input(input_path, D3FloatingQubitNominal)
-        @test loaded.model.L_J_per_junction_nH == 24.0
+        @test loaded.model.L_J_per_junction_nH == 23.0
         @test occursin(r"^[0-9a-f]{64}$", loaded.input_sha256)
-        expected_cg1 = (60.0 + 10.0) * 1e-15
+        @test loaded.model.electrostatic_reduction.reduced_maxwell_matrix_fF ≈ [
+            [90.0, -30.0, -10.0], [-30.0, 101.0, -1.0], [-10.0, -1.0, 200.0],
+        ]
+        @test loaded.model.C01_fF ≈ 50.0
+        @test loaded.model.C02_fF ≈ 70.0
+        @test loaded.model.C12_fF ≈ 30.0
+        @test loaded.model.Cr1_fF ≈ 10.0
+        @test loaded.model.Cr2_fF ≈ 1.0
+        expected_cg1 = (50.0 + 10.0) * 1e-15
         expected_cg2 = (70.0 + 1.0) * 1e-15
         expected_ceff = 30.0e-15 + expected_cg1 * expected_cg2 / (expected_cg1 + expected_cg2)
-        expected_frequency = 1 / (2π * sqrt(12e-9 * expected_ceff))
+        expected_frequency = 1 / (2π * sqrt(11.5e-9 * expected_ceff))
         @test floating_qubit_coupling_off_frequency_hz(loaded.model) ≈ expected_frequency
+        physics = floating_qubit_physics_diagnostics(loaded.model; f01_target_hz = 4.7e9)
+        @test physics.effective_differential_coupling_off_capacitance_fF ≈ expected_ceff * 1e15
+        @test physics.first_order_transmon_f01_hz == physics.linearized_lc_frequency_hz - physics.ec_over_h_hz
+        @test physics.first_order_transmon_f01_residual_hz == physics.first_order_transmon_f01_hz - 4.7e9
+        evidence = floating_qubit_reduction_evidence(
+            loaded.model;
+            f01_target_hz = 4.7e9,
+            expected_L_J_per_junction_nH = 23.0,
+            target_contract_id = "synthetic-target",
+            target_contract_sha256 = repeat("a", 64),
+        )
+        @test evidence["readout_diagonal_instantiated"] === false
+        @test evidence["readout_self_capacitance_ownership"] == "distributed_resonator_owns_self_capacitance"
+        @test_throws ErrorException floating_qubit_reduction_evidence(
+            loaded.model;
+            f01_target_hz = 4.7e9,
+            expected_L_J_per_junction_nH = 24.0,
+            target_contract_id = "synthetic-target",
+            target_contract_sha256 = repeat("a", 64),
+        )
         @test _linearized_g_hz(5.0e9, 4.99e9, 5.81e9) ≈ 90e6
         @test_throws D3CandidateRejected _linearized_g_hz(5.0e9, 5.01e9, 5.81e9)
 
@@ -56,7 +100,7 @@ end
         @test count(relation -> relation isa ShuntCapacitor, plan.relations) == 2
         @test count(relation -> relation isa CapacitiveCoupling, plan.relations) == 3
         @test count(relation -> relation isa SeriesInductor, plan.relations) == 2
-        @test count(relation -> relation isa SeriesInductor && isapprox(relation.inductance, 24e-9), plan.relations) == 2
+        @test count(relation -> relation isa SeriesInductor && isapprox(relation.inductance, 23e-9), plan.relations) == 2
         @test any(
             relation -> relation isa CapacitiveCoupling &&
                 (relation.from == readout_open_tail || relation.to == readout_open_tail),
@@ -124,6 +168,17 @@ end
         invalid["unexpected"] = true
         write_test_json(input_path, invalid)
         @test_throws ErrorException load_floating_qubit_nominal_input(input_path, D3FloatingQubitNominal)
+        invalid = synthetic_input()
+        invalid["readout_self_capacitance_ownership"] = "instantiate_as_shunt"
+        write_test_json(input_path, invalid)
+        @test_throws ErrorException load_floating_qubit_nominal_input(input_path, D3FloatingQubitNominal)
+        invalid = synthetic_input()
+        invalid["maxwell_capacitance_matrix_fF"][1][1] = 0.0
+        invalid["maxwell_capacitance_matrix_fF"][2][2] = 0.0
+        invalid["maxwell_capacitance_matrix_fF"][3][3] = 0.0
+        invalid["maxwell_capacitance_matrix_fF"][4][4] = 0.0
+        write_test_json(input_path, invalid)
+        @test_throws ErrorException load_floating_qubit_nominal_input(input_path, D3FloatingQubitNominal)
         @test_throws ErrorException D3FloatingQubitNominal(
             model_id = "invalid",
             capacitance_source_id = "synthetic",
@@ -132,7 +187,23 @@ end
             C12_fF = 1.0,
             Cr1_fF = 1.0,
             Cr2_fF = 1.0,
-            L_J_per_junction_nH = 24.0,
+            L_J_per_junction_nH = 23.0,
+            electrostatic_reduction = nothing,
+        )
+
+        frequencies = collect(4.48e9:10e6:4.54e9)
+        reference_values = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        reference_notch = _owned_reference_notch_zero(frequencies, reference_values, 4.5e9, 40e6, 0.01)
+        loaded_values = [-1.0, 1.0, -1.0, 1.0, 2.0, 3.0, 4.0]
+        loaded_notch = _owned_loaded_notch_zero(
+            frequencies, loaded_values, 4.5e9, 40e6, 1.0,
+            reference_notch.frequency_hz, 1e6,
+        )
+        @test length(loaded_notch.all_roots) == 3
+        @test loaded_notch.frequency_hz == 4.485e9
+        @test_throws D3CandidateRejected _owned_loaded_notch_zero(
+            frequencies, loaded_values, 4.5e9, 40e6, 1.0,
+            4.49e9, 1e6,
         )
 
         output = joinpath(root, "comparison")
@@ -143,7 +214,7 @@ end
         model_rows = [Dict(
             "id" => "C01",
             "no_qubit" => nothing,
-            "with_qubit" => 60.0,
+            "with_qubit" => 50.0,
             "unit" => "fF",
             "meaning" => "synthetic branch",
             "source" => "synthetic",

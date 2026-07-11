@@ -154,6 +154,20 @@ end
 
 # ╔═╡ 7b915116-d455-4cb3-bb06-1577aee8f7cd
 begin
+	function d3_qubit_targets(target)
+		targets = target["targets"]
+		f01_record = targets["qubit_transition_frequency"]
+		lj_record = targets["qubit_junction_inductance"]
+		f01_record["unit"] == "GHz" || error("Canonical qubit transition target must use GHz.")
+		lj_record["unit"] == "nH_per_junction" || error("Canonical qubit junction-inductance target must use nH_per_junction.")
+		Int(lj_record["parallel_junction_count"]) == 2 || error("D3 floating qubit requires the canonical two-parallel-junction target.")
+		f01_hz = Float64(f01_record["value"]) * 1e9
+		lj_nH = Float64(lj_record["value"])
+		isfinite(f01_hz) && f01_hz > 0 || error("Canonical qubit transition target must be finite and positive.")
+		isfinite(lj_nH) && lj_nH > 0 || error("Canonical per-junction L_J target must be finite and positive.")
+		return (f01_hz = f01_hz, L_J_per_junction_nH = lj_nH)
+	end
+
 	function d3_target_values(target, slot_ghz)
 		targets = target["targets"]
 		return Dict(
@@ -183,12 +197,16 @@ begin
 		length(cases) == 1 || error("The configured OrPen case must exist exactly once.")
 		qubit_path = d3_workspace_path(config["floating_qubit_nominal_workspace_path"])
 		qubit_input = load_floating_qubit_nominal_input(qubit_path, D3FloatingQubitNominal)
+		qubit_targets = d3_qubit_targets(contracts.target)
+		qubit_input.model.L_J_per_junction_nH == qubit_targets.L_J_per_junction_nH || error(
+			"Private floating-qubit L_J disagrees with the canonical per-junction target.",
+		)
 		return (
 			seed_path = seed_path, case_path = case_path, case_id = case_id,
 			target_set_id = target_set_id, designs = designs, slots = slots,
 			selected_case = only(cases), csv_sha256 = d3_file_sha256(seed_path),
 			case_sha256 = d3_file_sha256(case_path),
-			qubit_input = qubit_input,
+			qubit_input = qubit_input, qubit_targets = qubit_targets,
 		)
 	end
 
@@ -356,6 +374,7 @@ begin
 			max_filter_anchor_distance_hz = e["max_filter_anchor_distance_hz"], min_filter_assignment_margin_hz = e["min_filter_assignment_margin_hz"],
 			pair_trace_half_width_hz = e["pair_trace_half_width_hz"], pair_fit_half_width_hz = e["pair_fit_half_width_hz"],
 			pair_background_inner_half_width_hz = e["pair_background_inner_half_width_hz"], notch_half_width_hz = e["notch_half_width_hz"],
+			min_notch_assignment_margin_hz = e["min_notch_assignment_margin_hz"],
 			readout_probe_capacitances_fF = e["readout_probe_capacitances_fF"], min_readout_frequency_extrapolation_r2 = e["min_readout_frequency_extrapolation_r2"],
 			min_readout_linewidth_extrapolation_r2 = e["min_readout_linewidth_extrapolation_r2"], max_notch_abs_im_z21_ohm = e["max_notch_abs_im_z21_ohm"],
 			qubit_local_half_width_hz = e["qubit_local_half_width_hz"], max_qubit_anchor_distance_hz = e["max_qubit_anchor_distance_hz"],
@@ -419,6 +438,14 @@ begin
 			)
 		end for (id, path) in sort!(collect(consumed_paths); by = pair -> first(pair))]
 		metric_records = [Dict("id" => id, "value" => target_values[id], "unit" => "Hz", "scale" => contracts.conditions["metric_specs"][id]["scale"], "weight" => contracts.conditions["metric_specs"][id]["weight"], "role" => contracts.conditions["metric_specs"][id]["role"], "status" => "derived_from_canonical_target") for id in D3_OPTIMIZER_METRIC_IDS]
+		qubit_evidence = floating_qubit_reduction_evidence(
+			catalog.qubit_input.model;
+			f01_target_hz = catalog.qubit_targets.f01_hz,
+			expected_L_J_per_junction_nH = catalog.qubit_targets.L_J_per_junction_nH,
+			target_contract_id = contracts.target["target_id"],
+			target_contract_sha256 = contracts.target_sha256,
+		)
+		qubit_evidence["input_sha256"] = catalog.qubit_input.input_sha256
 		contract = Dict(
 			"manifest_id" => "d3-coupled-optimization-slot-$(replace(string(slot_ghz), "." => "p"))ghz-v1",
 			"status" => "agent_proposed", "purpose" => "single_slot_layout_search_exploration",
@@ -426,13 +453,7 @@ begin
 			"target_contract" => Dict("target_id" => contracts.target["target_id"], "revision" => contracts.target["revision"], "sha256" => contracts.target_sha256, "decision_records" => contracts.target["targets"]),
 			"optimizer_conditions" => Dict("conditions_id" => contracts.conditions["conditions_id"], "sha256" => contracts.conditions_sha256, "hash_framing" => SEMANTIC_HASH_FRAMING, "sol_review" => contracts.conditions["sol_review"]),
 			"selection" => Dict("case_id" => catalog.case_id, "target_set_id" => catalog.target_set_id, "slot_target_ghz" => Float64(slot_ghz), "source_row" => source_row, "source_row_sha256" => row_sha, "source_csv_sha256" => catalog.csv_sha256),
-			"floating_qubit_nominal" => Dict(
-				"model_id" => catalog.qubit_input.model.model_id,
-				"capacitance_source_id" => catalog.qubit_input.model.capacitance_source_id,
-				"input_sha256" => catalog.qubit_input.input_sha256,
-				"topology_id" => "d3-floating-qubit-five-capacitance-two-parallel-lj-v1",
-				"coupling_off_frequency_hz" => floating_qubit_coupling_off_frequency_hz(catalog.qubit_input.model),
-			),
+			"floating_qubit_nominal" => qubit_evidence,
 			"derived_metrics" => metric_records, "derived_variables" => variable_records,
 			"execution_fingerprint_sha256" => fingerprint, "consumed_files" => hash_inventory,
 			"artifact_gate" => contracts.conditions["artifact_gate"], "output_filenames" => sort!(collect(D3_OUTPUT_FILES)),
@@ -451,6 +472,7 @@ begin
 			manifest = manifest, execution_sha256 = execution_sha, execution_fingerprint_sha256 = fingerprint,
 			hash_inventory = hash_inventory, approval_status = "agent_proposed",
 			floating_qubit_input = catalog.qubit_input,
+			qubit_targets = catalog.qubit_targets,
 		)
 	end
 
@@ -469,6 +491,10 @@ begin
 			runtime.floating_qubit_input.model,
 			runtime.floating_qubit_input.input_sha256,
 			floating_qubit_coupling_off_frequency_hz(runtime.floating_qubit_input.model);
+			qubit_f01_target_hz = runtime.qubit_targets.f01_hz,
+			expected_L_J_per_junction_nH = runtime.qubit_targets.L_J_per_junction_nH,
+			qubit_target_contract_id = runtime.manifest["contract"]["target_contract"]["target_id"],
+			qubit_target_contract_sha256 = runtime.manifest["contract"]["target_contract"]["sha256"],
 			journal_path = journal_path,
 		)
 	end
@@ -619,6 +645,8 @@ TableOfContents()
 # ╔═╡ b144ce59-d130-4d23-a5fe-1e42af2dd7e9
 begin
 	function d3_preview(runtime)
+		qubit = runtime.manifest["contract"]["floating_qubit_nominal"]
+		qubit_physics = qubit["physics_diagnostics"]
 		rows = [
 			"## Selected Slot preview", "",
 			"- Slot: **$(runtime.slot_ghz) GHz**",
@@ -626,6 +654,9 @@ begin
 			"- Execution manifest: `$(runtime.execution_sha256)`",
 			"- Per-Slot state: **agent_proposed**",
 			"- Generic Sol review: **$(d3_contracts.conditions["sol_review"]["status"])**",
+			"- Floating Coupler pads eliminated: **$(length(qubit["partition"]["floating_labels"]))** by `$(qubit["reduction_method"])`",
+			"- Per-junction L_J: **$(qubit["L_J_per_junction_nH"]) nH**; first-order f01: **$(qubit_physics["first_order_transmon_f01_hz"] / 1e9) GHz**",
+			"- Readout self-capacitance: `$(qubit["readout_self_capacitance_ownership"])`; reduced diagonal instantiated: **$(qubit["readout_diagonal_instantiated"])**",
 			"", "### Derived targets", "", "| Metric | Target | Scale | Weight | Role |", "|---|---:|---:|---:|---|",
 		]
 		for record in runtime.metric_records

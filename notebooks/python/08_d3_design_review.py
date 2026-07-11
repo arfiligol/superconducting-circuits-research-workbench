@@ -386,10 +386,43 @@ else:
     if not qubit_path.is_file() or hashlib.sha256(qubit_path.read_bytes()).hexdigest() != qubit_inventory["expected_sha256"]:
         raise ValueError("The hash-bound private floating-qubit input is missing or stale.")
     qubit_input = read_json(qubit_path)
-    qubit_rows = [
-        (name, qubit_input[name], "nH" if name == "L_J_per_junction_nH" else "fF")
-        for name in ("C01_fF", "C02_fF", "C12_fF", "Cr1_fF", "Cr2_fF", "L_J_per_junction_nH")
-    ]
+    qubit_contract = optimizer_contract["floating_qubit_nominal"]
+    if qubit_contract.get("schema_version") == "d3-floating-qubit-maxwell.v1":
+        branches = qubit_contract["mapped_branches_fF"]
+        qubit_rows = [(name, branches[name], "fF") for name in ("C01_fF", "C02_fF", "C12_fF", "Cr1_fF", "Cr2_fF")]
+        qubit_rows.append(("L_J_per_junction_nH", qubit_contract["L_J_per_junction_nH"], "nH"))
+        partition = qubit_contract["partition"]
+        display(
+            pd.DataFrame(
+                [
+                    ("Reference", partition["reference_label"]),
+                    ("Eliminated floating Coupler pads", partition["floating_labels"]),
+                    ("Retained order", partition["retained_labels"]),
+                    ("Readout self-capacitance owner", qubit_contract["readout_self_capacitance_ownership"]),
+                    ("Readout diagonal instantiated", qubit_contract["readout_diagonal_instantiated"]),
+                ],
+                columns=["Kron reduction", "Value"],
+            ).style.hide(axis="index")
+        )
+        display(
+            pd.DataFrame(
+                qubit_contract["reduced_maxwell_matrix_fF"],
+                index=partition["retained_labels"],
+                columns=partition["retained_labels"],
+            ).style.format("{:.6f}").set_caption("Kron-reduced Maxwell matrix (fF)")
+        )
+        physics = qubit_contract["physics_diagnostics"]
+        display(
+            pd.DataFrame(
+                [(name, value, "fF" if "capacitance" in name else "Hz") for name, value in physics.items()],
+                columns=["Fixed-qubit diagnostic", "Value", "Unit"],
+            ).style.hide(axis="index").format({"Value": "{:.6f}"})
+        )
+    else:
+        qubit_rows = [
+            (name, qubit_input[name], "nH" if name == "L_J_per_junction_nH" else "fF")
+            for name in ("C01_fF", "C02_fF", "C12_fF", "Cr1_fF", "Cr2_fF", "L_J_per_junction_nH")
+        ]
     display(
         pd.DataFrame(
             qubit_rows,
@@ -582,6 +615,22 @@ display(
         {"Value": lambda value: "—" if pd.isna(value) else f"{value:.6f}"}
     )
 )
+
+# %%
+if "reference_notch" in diagnostics:
+    reference_notch = diagnostics["reference_notch"]
+    loaded_notch = diagnostics["notch"]
+    display(
+        pd.DataFrame(
+            [
+                ("No-qubit intrinsic reference", reference_notch["frequency_hz"] / 1e9, len(reference_notch["all_roots"]), reference_notch["ownership"], None),
+                ("Qubit-loaded owned notch", loaded_notch["frequency_hz"] / 1e9, len(loaded_notch["all_roots"]), loaded_notch["ownership"], loaded_notch["assignment_margin_hz"] / 1e6),
+            ],
+            columns=["Notch evidence", "Frequency (GHz)", "Roots retained", "Ownership", "Assignment margin (MHz)"],
+        ).style.hide(axis="index").format(
+            {"Frequency (GHz)": "{:.9f}", "Assignment margin (MHz)": lambda value: "—" if pd.isna(value) else f"{value:.6f}"}
+        )
+    )
 
 # %% [markdown]
 # ## Calculated engineering parameters
@@ -818,6 +867,11 @@ def validated_trace(
 ptc_trace_name = "intrinsic_wide" if "intrinsic_wide" in traces else "intrinsic"
 ptc_frequency_hz, ptc_z21 = validated_trace(traces[ptc_trace_name], "z21_ptc", ptc_trace_name)
 wide_evidence_available = ptc_trace_name == "intrinsic_wide"
+reference_ptc = (
+    validated_trace(traces["intrinsic_reference"], "z21_ptc", "intrinsic_reference")
+    if "intrinsic_reference" in traces
+    else None
+)
 
 filter_frequency_hz, filter_s21 = validated_trace(traces["filter"], "s21", "filter")
 filter_reference = complex_array(traces["filter"]["reference_s21"], "filter.reference_s21")
@@ -846,8 +900,7 @@ linewidth_y = np.asarray(linewidth_fit["y_values"], dtype=float)
 linewidth_coefficients = linewidth_fit["coefficients"]
 linewidth_quadratic = float(linewidth_coefficients["quadratic_per_fF2"])
 linewidth_quartic = float(linewidth_coefficients["quartic_per_fF4"])
-coverage_table = pd.DataFrame(
-    [
+coverage_rows = [
         (
             ptc_trace_name,
             ptc_frequency_hz[0] / 1e9,
@@ -876,7 +929,17 @@ coverage_table = pd.DataFrame(
             len(frequency_fit["x_values"]),
             "x-axis is probe capacitance in fF",
         ),
-    ],
+    ]
+if reference_ptc is not None:
+    coverage_rows.append((
+        "intrinsic_reference",
+        reference_ptc[0][0] / 1e9,
+        reference_ptc[0][-1] / 1e9,
+        len(reference_ptc[0]),
+        "narrow no-qubit notch ownership reference",
+    ))
+coverage_table = pd.DataFrame(
+    coverage_rows,
     columns=["Trace", "Start", "Stop", "Samples", "Coverage / caveat"],
 )
 display(
@@ -955,6 +1018,15 @@ axis.plot(
     linewidth=1.5,
     label=f"Simulated |Im(Z21 PTC)| — {ptc_trace_name}",
 )
+if reference_ptc is not None:
+    axis.plot(
+        reference_ptc[0] / 1e9,
+        np.maximum(np.abs(reference_ptc[1].imag), np.finfo(float).tiny),
+        color=GREY,
+        linestyle="--",
+        linewidth=1.2,
+        label="No-qubit intrinsic notch reference",
+    )
 axis.set_yscale("log")
 reference_line(axis, metric_breakdown["notch_hz"]["target"], "Target notch", GREY, "--")
 reference_line(axis, metrics["notch_hz"], "Found notch", ORANGE, ":")

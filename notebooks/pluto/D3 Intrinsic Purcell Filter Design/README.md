@@ -244,19 +244,29 @@ Validation.
 
 The original no-qubit / with-qubit comparison remains historical diagnostic
 provenance. Current optimization always connects the reduced linearized qubit
-to `readout_open_tail`; its five capacitances and per-junction $L_J$ are fixed
-private input, not optimizer variables. Each readout probe uses one Slot-local
+to `readout_open_tail`; its five reduced branches and per-junction $L_J$ are
+fixed private input, not optimizer variables. Each readout probe uses one Slot-local
 filter/readout grid and one qubit-local grid, then extrapolates the assigned
 pole-pair $g$ to zero probe. The local two-mode $J$ fit fails fast if the
 qubit-like pole enters its trace window.
 
-The private JSON input uses schema `d3-floating-qubit-nominal.v1` and must
-contain exactly `model_id`, `capacitance_source_id`, `C01_fF`, `C02_fF`,
-`C12_fF`, `Cr1_fF`, `Cr2_fF`, and `L_J_per_junction_nH` in addition to
-`schema_version`. All branch values are positive physical quantities and stay
-outside this repository's tracked source. Current configuration resolves the
-ignored input at `build/private_inputs/d3_floating_qubit_nominal.json` and
-hash-binds both its bytes and the loader source into every new execution.
+The private JSON uses schema `d3-floating-qubit-maxwell.v1`. It carries the
+labeled full Maxwell matrix, a reference conductor, exactly four disconnected
+floating Coupler-pad labels, ordered qubit-island/readout roles, the explicit
+`distributed_resonator_owns_self_capacitance` ownership, and the per-junction
+inductance measured by the canonical Design Target. The loader fixes the reference voltage and eliminates
+only the four pads with $Q_f=0$ by a Schur-complement linear solve. It maps the
+retained 3x3 matrix to $C_{01},C_{02},C_{12},C_{r1},C_{r2}$; the retained
+readout diagonal is persisted as provenance and is never added as a shunt.
+The ignored input remains at `build/private_inputs/d3_floating_qubit_nominal.json`,
+and every run hash-binds its bytes and loader source.
+
+The canonical-target first-order transmon $f_{01}$ and residual are diagnostics because
+the six Layout variables cannot change the fixed qubit model. The intrinsic
+notch first requires a unique no-qubit reference root. The qubit-loaded result
+then owns the root nearest that reference, preserves every loaded root, and
+rejects an assignment margin below 1 MHz. It never chooses a root merely because
+it is nearest the Human notch target.
 
 The following CLI only reproduces the historical comparison; it is not the
 current optimizer entrypoint.

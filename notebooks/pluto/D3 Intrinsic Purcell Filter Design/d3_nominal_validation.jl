@@ -393,13 +393,30 @@ function bind_current_sources(preflight, source_paths, workspace_root)
     qubit_sha = file_sha256(qubit_path)
     qubit_sha == inventory["floating_qubit_nominal"]["sha256"] || error("Persisted floating-qubit input hash is inconsistent.")
     file_sha256(qubit_loader_path) == inventory["d3_floating_qubit_input_loader"]["sha256"] || error("Persisted floating-qubit loader source hash is inconsistent.")
+    target = JSON3.read(read(target_path, String), Dict{String,Any})
+    f01_record = target["targets"]["qubit_transition_frequency"]
+    lj_record = target["targets"]["qubit_junction_inductance"]
+    f01_record["unit"] == "GHz" || error("Canonical qubit transition target must use GHz.")
+    lj_record["unit"] == "nH_per_junction" || error("Canonical qubit junction target must use nH_per_junction.")
+    Int(lj_record["parallel_junction_count"]) == 2 || error("Canonical D3 qubit target must declare two parallel junctions.")
+    f01_target_hz = Float64(f01_record["value"]) * 1e9
+    expected_lj_nH = Float64(lj_record["value"])
     qubit_payload = JSON3.read(read(qubit_path, String), Dict{String,Any})
     qubit_contract = contract["floating_qubit_nominal"]
     qubit_sha == String(qubit_contract["input_sha256"]) || error("Floating-qubit manifest identity disagrees with the selected private input bytes.")
     String(qubit_payload["model_id"]) == String(qubit_contract["model_id"]) || error("Floating-qubit model identity disagrees with the selected private input.")
+    qubit_payload["schema_version"] == qubit_contract["schema_version"] == "d3-floating-qubit-maxwell.v1" || error("Floating-qubit full-Maxwell schema is inconsistent.")
+    qubit_payload["readout_self_capacitance_ownership"] == qubit_contract["readout_self_capacitance_ownership"] == "distributed_resonator_owns_self_capacitance" || error("Floating-qubit readout self-capacitance ownership is inconsistent.")
+    qubit_contract["readout_diagonal_instantiated"] === false || error("Reduced readout diagonal must not be instantiated.")
+    Float64(qubit_payload["L_J_per_junction_nH"]) == Float64(qubit_contract["L_J_per_junction_nH"]) == expected_lj_nH || error("Floating-qubit junction inductance disagrees with the canonical target.")
+    qubit_targets = qubit_contract["canonical_targets"]
+    qubit_targets["target_contract_id"] == target["target_id"] || error("Floating-qubit target contract id is inconsistent.")
+    qubit_targets["target_contract_sha256"] == target_sha || error("Floating-qubit target contract SHA-256 is inconsistent.")
+    Float64(qubit_targets["qubit_transition_frequency"]["value"]) == f01_target_hz || error("Floating-qubit f01 target is inconsistent.")
+    Float64(qubit_targets["qubit_junction_inductance"]["value"]) == expected_lj_nH || error("Floating-qubit L_J target is inconsistent.")
     file_sha256(source_paths["config_snapshot"]) == preflight.config_snapshot_sha256 || error("Persisted config snapshot hash is inconsistent.")
     return (
-        target = JSON3.read(read(target_path, String), Dict{String,Any}),
+        target = target,
         conditions = conditions,
         target_sha256 = target_sha,
         conditions_contract_sha256 = conditions_contract_sha,

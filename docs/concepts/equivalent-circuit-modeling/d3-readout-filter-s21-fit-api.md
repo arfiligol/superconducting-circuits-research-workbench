@@ -37,8 +37,8 @@ failure, and artifact boundaries.
 - Julia `SuperconductingCircuitsAnalysisBridge.calibrate_d3_channel_residue_s21`
   and `fit_d3_through_line_s21` are transport-only wrappers around those Python
   functions.
-- `d3_coupled_evaluator.jl` is the retained physical caller. The blocked
-  Notebook 07 readiness page does not include or execute it.
+- `d3_coupled_evaluator.jl` is the retained physical caller. Notebook 07 loads
+  it and only executes HB after an explicit user action.
 
 ## Required caller contract
 
@@ -96,6 +96,14 @@ artifact below its declared integrity floor is an execution failure. Declared
 resonance-count, artifact-pole, vector-fit RMS, ownership, fit-quality, and
 stability conditions may reject a physical candidate without converting an
 execution failure into evidence about that candidate.
+
+For the qubit-loaded intrinsic notch, the evaluator first requires one unique
+no-qubit reference crossing on the same candidate and grid. It assigns the
+loaded root nearest that reference, preserves all loaded crossings, and rejects
+an assignment margin below the configured 1 MHz condition. The private full
+Maxwell input eliminates exactly four floating Coupler pads by linear solve;
+the reduced readout diagonal is evidence only because the distributed resonator
+owns readout self-capacitance.
 
 Stable fit rejection codes are:
 

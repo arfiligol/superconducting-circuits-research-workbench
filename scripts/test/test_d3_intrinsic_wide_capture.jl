@@ -5,6 +5,7 @@ using Test
 
 struct D3FeedlineRLGC end
 struct D3HBSettings end
+struct D3FloatingQubitNominal end
 
 const D3_HZ_PER_GHZ = 1.0e9
 

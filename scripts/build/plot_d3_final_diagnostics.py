@@ -141,6 +141,22 @@ def finite_number(value: Any, label: str) -> float:
     return result
 
 
+def canonical_qubit_targets(target: dict[str, Any]) -> tuple[float, float]:
+    """Read Workbench qubit values only from the canonical Design Target."""
+    targets = mapping(target.get("targets"), "canonical target.targets")
+    f01 = mapping(targets.get("qubit_transition_frequency"), "qubit transition target")
+    lj = mapping(targets.get("qubit_junction_inductance"), "qubit junction target")
+    require(f01.get("unit") == "GHz", "Canonical qubit transition target must use GHz.")
+    require(
+        lj.get("unit") == "nH_per_junction" and lj.get("parallel_junction_count") == 2,
+        "Canonical qubit junction target must use nH_per_junction and declare two parallel junctions.",
+    )
+    f01_hz = finite_number(f01.get("value"), "canonical qubit transition target") * 1.0e9
+    lj_nh = finite_number(lj.get("value"), "canonical per-junction L_J target")
+    require(f01_hz > 0 and lj_nh > 0, "Canonical qubit targets must be positive.")
+    return f01_hz, lj_nh
+
+
 def numeric_array(container: dict[str, Any], key: str, label: str) -> np.ndarray:
     values = sequence(container.get(key), f"{label}.{key}")
     require(values, f"{label}.{key} must not be empty.")
@@ -580,6 +596,54 @@ def _validate_notebook_record_shape(
             and HEX_SHA256.fullmatch(floating_qubit["input_sha256"]) is not None,
             "Floating-qubit diagnostics must bind the private input SHA-256.",
         )
+        reduction = mapping(
+            floating_qubit.get("electrostatic_reduction"),
+            "record.diagnostics.floating_qubit.electrostatic_reduction",
+        )
+        require(
+            reduction.get("readout_self_capacitance_ownership")
+            == "distributed_resonator_owns_self_capacitance"
+            and reduction.get("readout_diagonal_instantiated") is False,
+            "Reduced readout self-capacitance must remain owned by the distributed resonator.",
+        )
+        partition = mapping(reduction.get("partition"), "floating-qubit reduction partition")
+        require(
+            len(sequence(partition.get("floating_labels"), "floating Coupler-pad labels")) == 4
+            and len(sequence(partition.get("retained_labels"), "retained qubit labels")) == 3,
+            "Floating-qubit reduction must eliminate four pads and retain three ordered nodes.",
+        )
+        reduced_matrix = sequence(reduction.get("reduced_maxwell_matrix_fF"), "reduced Maxwell matrix")
+        require(len(reduced_matrix) == 3, "Reduced Maxwell matrix must have three rows.")
+        for row_index, row_value in enumerate(reduced_matrix):
+            row = sequence(row_value, f"reduced Maxwell row {row_index}")
+            require(len(row) == 3, "Reduced Maxwell matrix must be 3x3.")
+            for column_index, value in enumerate(row):
+                finite_number(value, f"reduced Maxwell[{row_index},{column_index}]")
+        physics = mapping(reduction.get("physics_diagnostics"), "floating-qubit physics diagnostics")
+        f01 = finite_number(physics.get("first_order_transmon_f01_hz"), "qubit f01")
+        f01_target = finite_number(physics.get("human_target_f01_hz"), "qubit f01 target")
+        f01_residual = finite_number(physics.get("first_order_transmon_f01_residual_hz"), "qubit f01 residual")
+        require(
+            math.isclose(f01 - f01_target, f01_residual, rel_tol=1e-12, abs_tol=1e-6),
+            "Qubit f01 residual is inconsistent.",
+        )
+
+        reference_notch = mapping(diagnostics.get("reference_notch"), "no-qubit reference notch")
+        loaded_notch = mapping(diagnostics.get("notch"), "qubit-loaded notch")
+        reference_roots = sequence(reference_notch.get("all_roots"), "reference notch roots")
+        loaded_roots = sequence(loaded_notch.get("all_roots"), "loaded notch roots")
+        require(
+            reference_notch.get("ownership") == "unique_no_qubit_intrinsic_reference"
+            and len(reference_roots) == 1,
+            "No-qubit intrinsic reference notch must retain unique-root ownership.",
+        )
+        require(
+            loaded_notch.get("ownership") == "nearest_unique_no_qubit_intrinsic_reference"
+            and len(loaded_roots) >= 1
+            and loaded_notch.get("reference_notch_hz") == reference_notch.get("frequency_hz")
+            and finite_number(loaded_notch.get("assignment_margin_hz"), "loaded-notch assignment margin") > 0,
+            "Loaded-notch ownership must bind the unique no-qubit reference with a positive margin.",
+        )
 
     traces = mapping(record.get("traces"), "record.traces")
     intrinsic = mapping(traces.get("intrinsic"), "record.traces.intrinsic")
@@ -587,6 +651,47 @@ def _validate_notebook_record_shape(
     intrinsic_z21 = complex_array(intrinsic, "z21_ptc", "record.traces.intrinsic")
     require_same_length("record intrinsic trace", intrinsic_frequency, intrinsic_z21)
     require_increasing(intrinsic_frequency, "record intrinsic frequency grid")
+    if expected_step_hz is not None:
+        intrinsic_grid_hash = frequency_grid_sha256(intrinsic_frequency)
+        require(
+            intrinsic.get("frequency_grid_sha256") == intrinsic_grid_hash,
+            "Loaded intrinsic-notch grid hash is inconsistent.",
+        )
+        _require_trace_id_grid_link(
+            intrinsic.get("trace_id"), intrinsic_grid_hash, "loaded intrinsic-notch trace_id"
+        )
+        intrinsic_reference = mapping(
+            traces.get("intrinsic_reference"), "record.traces.intrinsic_reference"
+        )
+        intrinsic_reference_frequency = numeric_array(
+            intrinsic_reference, "frequencies_hz", "record.traces.intrinsic_reference"
+        )
+        intrinsic_reference_z21 = complex_array(
+            intrinsic_reference, "z21_ptc", "record.traces.intrinsic_reference"
+        )
+        require_same_length(
+            "record intrinsic reference trace", intrinsic_reference_frequency, intrinsic_reference_z21
+        )
+        require(
+            np.array_equal(intrinsic_reference_frequency, intrinsic_frequency),
+            "Loaded and no-qubit reference notch traces must share the exact grid.",
+        )
+        require(
+            intrinsic_reference.get("frequency_grid_sha256") == intrinsic_grid_hash,
+            "No-qubit reference-notch grid hash is inconsistent.",
+        )
+        _require_trace_id_grid_link(
+            intrinsic_reference.get("trace_id"),
+            intrinsic_grid_hash,
+            "no-qubit intrinsic reference trace_id",
+        )
+        require(
+            diagnostics["notch"].get("trace_id") == intrinsic.get("trace_id")
+            and diagnostics["notch"].get("reference_trace_id")
+            == diagnostics["reference_notch"].get("trace_id")
+            == intrinsic_reference.get("trace_id"),
+            "Notch diagnostic and captured trace identities disagree.",
+        )
 
     filter_trace = mapping(traces.get("filter"), "record.traces.filter")
     filter_frequency, filter_grid_hash = _validate_declared_frequency_grid(
@@ -1002,10 +1107,30 @@ def validate_nominal_artifacts(
         optimizer_contract.get("floating_qubit_nominal"),
         "current optimizer floating_qubit_nominal",
     )
+    expected_f01_hz, expected_lj_nh = canonical_qubit_targets(target_payload)
     require(
         source_hash_by_id["qubit_input"] == qubit_contract.get("input_sha256")
         and qubit_payload.get("model_id") == qubit_contract.get("model_id"),
         "Floating-qubit private input bytes/model identity disagree with the optimizer contract.",
+    )
+    require(
+        qubit_payload.get("schema_version") == qubit_contract.get("schema_version")
+        == "d3-floating-qubit-maxwell.v1"
+        and qubit_payload.get("readout_self_capacitance_ownership")
+        == qubit_contract.get("readout_self_capacitance_ownership")
+        == "distributed_resonator_owns_self_capacitance"
+        and qubit_contract.get("readout_diagonal_instantiated") is False
+        and qubit_payload.get("L_J_per_junction_nH")
+        == qubit_contract.get("L_J_per_junction_nH") == expected_lj_nh,
+        "Floating-qubit full-Maxwell schema, readout ownership, or canonical junction contract is inconsistent.",
+    )
+    qubit_targets = mapping(qubit_contract.get("canonical_targets"), "floating-qubit canonical targets")
+    require(
+        qubit_targets.get("target_contract_id") == target_payload.get("target_id")
+        and qubit_targets.get("target_contract_sha256") == source_hash_by_id["target"]
+        and mapping(qubit_targets.get("qubit_transition_frequency"), "manifest qubit f01 target").get("value") == expected_f01_hz
+        and mapping(qubit_targets.get("qubit_junction_inductance"), "manifest qubit L_J target").get("value") == expected_lj_nh,
+        "Floating-qubit manifest target identities/values disagree with the canonical Design Target.",
     )
     expected_bound_identities = {
         "target_sha256": source_hash_by_id["target"],
@@ -1055,6 +1180,17 @@ def validate_nominal_artifacts(
         "conditions evaluator frequency step",
     )
     _validate_notebook_record_shape(record, bound_frequency_step_hz)
+    record_qubit_physics = mapping(
+        mapping(
+            mapping(record["diagnostics"]["floating_qubit"], "nominal floating-qubit diagnostics").get("electrostatic_reduction"),
+            "nominal floating-qubit reduction",
+        ).get("physics_diagnostics"),
+        "nominal floating-qubit physics",
+    )
+    require(
+        record_qubit_physics.get("human_target_f01_hz") == expected_f01_hz,
+        "Nominal candidate diagnostics do not use the canonical qubit f01 target.",
+    )
     metrics = mapping(record.get("metrics"), "nominal_evaluation.record.metrics")
     layout_breakdown = mapping(
         optimizer_identity["layout_specs"].get("breakdown"), "optimizer layout breakdown"
@@ -1385,7 +1521,7 @@ def validate_artifacts(
         )
         optimizer_inventory = _optimizer_inventory_by_id(inventory)
         require(
-            {"optimizer_conditions", "floating_qubit_nominal", "d3_floating_qubit_input_loader"}
+            {"target_contract", "optimizer_conditions", "floating_qubit_nominal", "d3_floating_qubit_input_loader"}
             <= set(optimizer_inventory),
             "Current optimizer inventory must bind conditions, floating-qubit input, and its loader.",
         )
@@ -1395,6 +1531,20 @@ def validate_artifacts(
             if workspace_root is not None
             else [run_directory.resolve(), *run_directory.resolve().parents]
         )
+        target_relative = optimizer_inventory["target_contract"]["path"]
+        matching_targets = [
+            root / target_relative
+            for root in candidate_roots
+            if (root / target_relative).is_file()
+        ]
+        require(len(matching_targets) == 1, "Current canonical target must resolve exactly once.")
+        target_path = matching_targets[0]
+        require(
+            file_sha256(target_path) == optimizer_inventory["target_contract"]["sha256"],
+            "Current canonical target bytes disagree with the inventory binding.",
+        )
+        target_payload = load_json(target_path.parent, target_path.name)
+        expected_f01_hz, expected_lj_nh = canonical_qubit_targets(target_payload)
         matching_conditions = [
             root / conditions_relative
             for root in candidate_roots
@@ -1469,6 +1619,25 @@ def validate_artifacts(
             and qubit_contract.get("model_id") == qubit_payload.get("model_id"),
             "Current floating-qubit bytes/model identity disagree with the manifest.",
         )
+        require(
+            qubit_payload.get("schema_version") == qubit_contract.get("schema_version")
+            == "d3-floating-qubit-maxwell.v1"
+            and qubit_payload.get("readout_self_capacitance_ownership")
+            == qubit_contract.get("readout_self_capacitance_ownership")
+            == "distributed_resonator_owns_self_capacitance"
+            and qubit_contract.get("readout_diagonal_instantiated") is False
+            and qubit_payload.get("L_J_per_junction_nH")
+            == qubit_contract.get("L_J_per_junction_nH") == expected_lj_nh,
+            "Current floating-qubit full-Maxwell schema, readout ownership, or canonical junction value is inconsistent.",
+        )
+        qubit_targets = mapping(qubit_contract.get("canonical_targets"), "current floating-qubit canonical targets")
+        require(
+            qubit_targets.get("target_contract_id") == target_payload.get("target_id")
+            and qubit_targets.get("target_contract_sha256") == optimizer_inventory["target_contract"]["sha256"]
+            and mapping(qubit_targets.get("qubit_transition_frequency"), "current manifest qubit f01 target").get("value") == expected_f01_hz
+            and mapping(qubit_targets.get("qubit_junction_inductance"), "current manifest qubit L_J target").get("value") == expected_lj_nh,
+            "Current floating-qubit manifest target identities/values disagree with the canonical Design Target.",
+        )
         selection = mapping(manifest_contract.get("selection"), "current contract.selection")
         source_row = mapping(selection.get("source_row"), "current contract.selection.source_row")
         require(
@@ -1522,6 +1691,18 @@ def validate_artifacts(
             )
 
     _validate_notebook_record_shape(final_record, expected_trace_step_hz)
+    if manifest_schema == SLOT_EXECUTION_MANIFEST_SCHEMA:
+        current_qubit_physics = mapping(
+            mapping(
+                mapping(final_record["diagnostics"]["floating_qubit"], "current floating-qubit diagnostics").get("electrostatic_reduction"),
+                "current floating-qubit reduction",
+            ).get("physics_diagnostics"),
+            "current floating-qubit physics",
+        )
+        require(
+            current_qubit_physics.get("human_target_f01_hz") == expected_f01_hz,
+            "Current candidate diagnostics do not use the canonical qubit f01 target.",
+        )
 
     history = sequence(optimization.get("history"), "optimization_result.history")
     selected_id = layout.get("candidate_record_id")
