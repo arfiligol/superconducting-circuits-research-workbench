@@ -53,6 +53,7 @@ LEGACY_MANIFEST_SCHEMA = "d3-condition-manifest.v1"
 SLOT_EXECUTION_MANIFEST_SCHEMA = "d3-slot-execution-manifest.v1"
 NOMINAL_MANIFEST_SCHEMA = "d3-nominal-validation-manifest.v1"
 SEMANTIC_HASH_FRAMING = "d3-semantic-value-sha256-v1"
+D3_EXTRACTION_CONTRACT = "d3-three-circuit-model-physical-vs-reduced-eligibility.v3"
 NOMINAL_OBJECTIVE_IDS = {
     "filter_loaded_bare_hz",
     "readout_loaded_bare_hz",
@@ -77,6 +78,75 @@ NOMINAL_VARIABLE_UNITS = {
     "lr_open_um": "um",
     "filter_to_line_capacitance_fF": "fF",
 }
+FINAL_VALIDATION_FREQUENCY_ROWS = (
+    (
+        "fqB_hz", "bare", "Bare Qubit Component",
+        "isolated_closed_generalized_eigenmode", "qubit_component", "context_only",
+    ),
+    (
+        "frB_hz", "bare", "Bare Readout Component",
+        "isolated_distributed_readout_generalized_eigenmode", "readout_component", "context_only",
+    ),
+    (
+        "fpB_hz", "bare", "Bare Filter Component",
+        "isolated_distributed_filter_generalized_eigenmode", "filter_component", "context_only",
+    ),
+    (
+        "fqLB_hz", "loaded_bare", "System A Coupling Off",
+        "closed_generalized_eigenmode_after_common_coordinate_reduction",
+        "qubit_loaded_bare_by_majority_inductive_participation", "fixed_reference_not_cost",
+    ),
+    (
+        "frLB_hz", "loaded_bare", "System A Coupling Off",
+        "closed_generalized_eigenmode_after_common_coordinate_reduction",
+        "readout_loaded_bare_by_majority_inductive_participation_and_slot_anchor", "objective",
+    ),
+    (
+        "fpLB_hz", "loaded_bare", "System B Filter Only",
+        "finite_Cext_filter_HB_vector_fit", "filter_loaded_bare", "objective",
+    ),
+    (
+        "system_a_q_like_hz", "hybridized", "System A Physical On",
+        "exact_closed_physical_generalized_eigenmode",
+        "qubit_like_by_inductive_participation_within_assigned_pair",
+        "physical_validation_diagnostic",
+    ),
+    (
+        "system_a_r_like_hz", "hybridized", "System A Physical On",
+        "exact_closed_physical_generalized_eigenmode",
+        "readout_like_by_complementary_inductive_participation_within_assigned_pair",
+        "physical_validation_diagnostic",
+    ),
+    (
+        "system_b_lower_pole_hz", "hybridized", "System B Physical Pair",
+        "observed_pair_window_independent_vector_fit",
+        "lower_pole_order_only_readout_filter_ownership_unassigned",
+        "physical_validation_diagnostic",
+    ),
+    (
+        "system_b_upper_pole_hz", "hybridized", "System B Physical Pair",
+        "observed_pair_window_independent_vector_fit",
+        "upper_pole_order_only_readout_filter_ownership_unassigned",
+        "physical_validation_diagnostic",
+    ),
+    (
+        "system_c_q_window_pole_hz", "hybridized", "System C Physical Full",
+        "observed_qubit_window_HB_vector_fit", "qubit_like_by_qubit_window_anchor",
+        "physical_validation_diagnostic",
+    ),
+    (
+        "system_c_pair_lower_pole_hz", "hybridized", "System C Physical Full",
+        "observed_pair_window_HB_vector_fit",
+        "lower_pole_order_only_readout_filter_ownership_unassigned",
+        "physical_validation_diagnostic",
+    ),
+    (
+        "system_c_pair_upper_pole_hz", "hybridized", "System C Physical Full",
+        "observed_pair_window_HB_vector_fit",
+        "upper_pole_order_only_readout_filter_ownership_unassigned",
+        "physical_validation_diagnostic",
+    ),
+)
 INK = "#20242b"
 BLUE = "#2764a5"
 ORANGE = "#d67828"
@@ -518,8 +588,32 @@ def _validate_notebook_record_shape(
     diagnostics = mapping(record.get("diagnostics"), "record.diagnostics")
     if expected_step_hz is not None:
         require(
-            diagnostics.get("extraction_contract") == "d3-three-circuit-model-zero-probe-slot-ownership.v1",
+            diagnostics.get("extraction_contract") == D3_EXTRACTION_CONTRACT,
             "Current D3 evidence must use the three-circuit-model extraction contract; incompatible historical artifacts are rejected.",
+        )
+        require(
+            record.get("physical_evaluation_status")
+            == diagnostics.get("physical_evaluation_status")
+            == "valid",
+            "Current D3 evidence must distinguish a valid physical evaluation from reduced-model eligibility.",
+        )
+        reduced_eligibility = mapping(
+            record.get("reduced_model_eligibility"), "record.reduced_model_eligibility"
+        )
+        require(
+            reduced_eligibility == diagnostics.get("reduced_model_eligibility"),
+            "Record and diagnostics reduced-model eligibility must be identical.",
+        )
+        reduced_failure_reasons = sequence(
+            reduced_eligibility.get("failure_reasons"), "reduced-model failure reasons"
+        )
+        reduced_eligible = reduced_eligibility.get("eligible")
+        require(
+            isinstance(reduced_eligible, bool)
+            and reduced_eligibility.get("status")
+            == ("eligible" if reduced_eligible else "ineligible")
+            and (not reduced_failure_reasons if reduced_eligible else bool(reduced_failure_reasons)),
+            "Top-level reduced-model eligibility status and reasons are inconsistent.",
         )
         common_readout = mapping(
             diagnostics.get("common_readout_loaded_bare"),
@@ -538,7 +632,7 @@ def _validate_notebook_record_shape(
         endpoint_shunts = sequence(
             common_readout.get("readout_endpoint_shunts"), "common readout endpoint shunts"
         )
-        require(len(endpoint_shunts) == 2, "Common readout reference must retain separate Cr1 and Cr2 shunts.")
+        require(len(endpoint_shunts) == 1, "Common readout reference must retain one Schur-reduced attachment shunt.")
         shunts_by_id = {
             mapping(value, "common readout endpoint shunt").get("id"): mapping(
                 value, "common readout endpoint shunt"
@@ -546,12 +640,169 @@ def _validate_notebook_record_shape(
             for value in endpoint_shunts
         }
         require(
-            set(shunts_by_id) == {"Cr1_readout_diagonal", "Cr2_readout_diagonal"}
+            set(shunts_by_id) == {"Cr_attachment_LB"}
             and all(
                 finite_number(value.get("capacitance_fF"), "common readout shunt capacitance") > 0
                 for value in shunts_by_id.values()
             ),
-            "Common readout Cr1/Cr2 shunts must be separately named and positive.",
+            "Common readout Schur-reduced attachment shunt must be named and positive.",
+        )
+        frequency_layers = mapping(diagnostics.get("frequency_layers"), "frequency layers")
+        for key in (
+            "fqB_hz", "frB_hz", "fpB_hz", "fqLB_hz", "frLB_hz", "fpLB_hz",
+            "physical_qubit_like_hz", "physical_readout_like_hz",
+        ):
+            require(
+                finite_number(frequency_layers.get(key), f"frequency_layers.{key}") > 0,
+                f"{key} must be positive.",
+            )
+        require(
+            frequency_layers["frLB_hz"] == record_metrics.get("readout_loaded_bare_hz")
+            and frequency_layers["fpLB_hz"] == record_metrics.get("filter_loaded_bare_hz"),
+            "Frequency-layer loaded-bare values must own the public metrics.",
+        )
+        frequency_rows = sequence(
+            diagnostics.get("final_validation_frequency_rows"),
+            "record.diagnostics.final_validation_frequency_rows",
+        )
+        expected_frequency_ids = [contract[0] for contract in FINAL_VALIDATION_FREQUENCY_ROWS]
+        require(
+            len(frequency_rows) == len(FINAL_VALIDATION_FREQUENCY_ROWS)
+            and [mapping(row, "final-validation frequency row").get("quantity_id") for row in frequency_rows]
+            == expected_frequency_ids,
+            "Final-validation frequency rows must contain the exact ordered v3 frequency-layer contract.",
+        )
+        system_b_observed_poles = [
+            finite_number(value, f"System B observed pole {index}")
+            for index, value in enumerate(
+                sequence(
+                    diagnostics.get("vector_crosscheck_poles_hz"),
+                    "record.diagnostics.vector_crosscheck_poles_hz",
+                )
+            )
+        ]
+        require(
+            len(system_b_observed_poles) == 2
+            and system_b_observed_poles == sorted(system_b_observed_poles),
+            "System B final-validation observations must contain ordered lower/upper poles.",
+        )
+        system_c_physical_observations = mapping(
+            mapping(
+                diagnostics.get("system_c_closure"),
+                "record.diagnostics.system_c_closure",
+            ).get("physical_observed_poles"),
+            "System C physical observed poles",
+        )
+        system_c_qubit_window_hz = finite_number(
+            system_c_physical_observations.get("qubit_window_pole_hz"),
+            "System C qubit-window observed pole",
+        )
+        system_c_pair_observed_poles = [
+            finite_number(value, f"System C pair-window observed pole {index}")
+            for index, value in enumerate(
+                sequence(
+                    system_c_physical_observations.get("pair_window_poles_hz"),
+                    "System C pair-window observed poles",
+                )
+            )
+        ]
+        require(
+            len(system_c_pair_observed_poles) == 2
+            and system_c_pair_observed_poles == sorted(system_c_pair_observed_poles),
+            "System C final-validation pair observations must contain ordered lower/upper poles.",
+        )
+        expected_frequency_values = {
+            "fqB_hz": frequency_layers["fqB_hz"],
+            "frB_hz": frequency_layers["frB_hz"],
+            "fpB_hz": frequency_layers["fpB_hz"],
+            "fqLB_hz": frequency_layers["fqLB_hz"],
+            "frLB_hz": frequency_layers["frLB_hz"],
+            "fpLB_hz": frequency_layers["fpLB_hz"],
+            "system_a_q_like_hz": frequency_layers["physical_qubit_like_hz"],
+            "system_a_r_like_hz": frequency_layers["physical_readout_like_hz"],
+            "system_b_lower_pole_hz": system_b_observed_poles[0],
+            "system_b_upper_pole_hz": system_b_observed_poles[1],
+            "system_c_q_window_pole_hz": system_c_qubit_window_hz,
+            "system_c_pair_lower_pole_hz": system_c_pair_observed_poles[0],
+            "system_c_pair_upper_pole_hz": system_c_pair_observed_poles[1],
+        }
+        frequency_row_fields = {
+            "layer", "quantity_id", "system_tag", "frequency_hz", "source_method",
+            "ownership_label", "cost_function_role",
+        }
+        for index, (row_value, contract) in enumerate(
+            zip(frequency_rows, FINAL_VALIDATION_FREQUENCY_ROWS, strict=True)
+        ):
+            row = mapping(row_value, f"final-validation frequency row {index}")
+            quantity_id, layer, system_tag, source_method, ownership_label, cost_role = contract
+            require(
+                set(row) == frequency_row_fields
+                and row.get("quantity_id") == quantity_id
+                and row.get("layer") == layer
+                and row.get("system_tag") == system_tag
+                and row.get("source_method") == source_method
+                and row.get("ownership_label") == ownership_label
+                and row.get("cost_function_role") == cost_role,
+                f"Final-validation frequency row {quantity_id} has incompatible source or ownership metadata.",
+            )
+            observed_frequency_hz = finite_number(
+                row.get("frequency_hz"), f"final-validation frequency row {quantity_id}"
+            )
+            require(
+                observed_frequency_hz > 0
+                and math.isclose(
+                    observed_frequency_hz,
+                    expected_frequency_values[quantity_id],
+                    rel_tol=1e-12,
+                    abs_tol=1e-6,
+                ),
+                f"Final-validation frequency row {quantity_id} does not match its owning artifact.",
+            )
+        closed_modal = mapping(diagnostics.get("closed_modal_projection"), "closed modal projection")
+        projection = mapping(closed_modal.get("projection"), "closed modal projection.projection")
+        require(
+            projection.get("contract_id") == "d3-closed-modal-projection-eligibility.v3",
+            "Primitive g must come from the complete closed off-mode basis.",
+        )
+        require(
+            finite_number(closed_modal.get("g_hz"), "closed modal g_hz")
+            == finite_number(record_metrics.get("g_hz"), "record.metrics.g_hz") > 0,
+            "Closed modal projection must own the positive g_hz metric.",
+        )
+        full_basis = mapping(
+            projection.get("full_basis_reconstruction"), "full-basis modal reconstruction"
+        )
+        require(
+            finite_number(full_basis.get("maximum_bdg_residual_hz"), "full-basis BdG residual") >= 0,
+            "Complete-basis reconstruction residual must be non-negative.",
+        )
+        two_mode = mapping(
+            projection.get("two_mode_reduced_closure"), "two-mode reduced closure"
+        )
+        gate_hz = finite_number(two_mode.get("maximum_residual_gate_hz"), "modal residual gate")
+        modal_bdg_residual_hz = finite_number(
+            two_mode.get("maximum_bdg_residual_hz"), "two-mode BdG residual"
+        )
+        modal_rwa_residual_hz = finite_number(
+            two_mode.get("maximum_rwa_minus_bdg_hz"), "two-mode RWA/BdG residual"
+        )
+        modal_eligible = modal_bdg_residual_hz <= gate_hz and modal_rwa_residual_hz <= gate_hz
+        modal_failure_reasons = sequence(
+            two_mode.get("failure_reasons"), "two-mode reduced closure failure reasons"
+        )
+        require(
+            two_mode.get("reduced_model_eligible") is modal_eligible
+            and two_mode.get("status") == ("eligible" if modal_eligible else "ineligible")
+            and (not modal_failure_reasons if modal_eligible else bool(modal_failure_reasons)),
+            "Two-mode residuals must classify reduced-model eligibility without changing physical validity.",
+        )
+        system_a_eligibility = mapping(
+            mapping(reduced_eligibility.get("system_a"), "System-A eligibility"),
+            "System-A eligibility",
+        )
+        require(
+            system_a_eligibility.get("eligible") is modal_eligible,
+            "Top-level System-A eligibility must match the two-mode closure classification.",
         )
         systems = mapping(diagnostics.get("systems"), "record.diagnostics.systems")
         require(set(systems) == {"A", "B", "C"}, "Diagnostics must contain exactly Systems A, B, and C.")
@@ -605,11 +856,6 @@ def _validate_notebook_record_shape(
     linewidth_fit = mapping(
         diagnostics.get("readout_zero_probe_linewidth_fit"), "readout linewidth fit"
     )
-    g_fit = (
-        mapping(diagnostics.get("g_zero_probe_fit"), "g fit")
-        if expected_step_hz is not None
-        else None
-    )
     coupling_off_frequency_fit = (
         mapping(
             diagnostics.get("readout_coupling_off_zero_probe_frequency_fit"),
@@ -632,8 +878,6 @@ def _validate_notebook_record_shape(
         fits.append(("readout coupling-off frequency fit", coupling_off_frequency_fit))
     if qubit_frequency_fit is not None:
         fits.append(("qubit frequency fit", qubit_frequency_fit))
-    if g_fit is not None:
-        fits.append(("g fit", g_fit))
     for label, fit in fits:
         x_values = numeric_array(fit, "x_values", label)
         fit_x_by_label[label] = x_values
@@ -645,14 +889,13 @@ def _validate_notebook_record_shape(
     require(
         all(np.array_equal(fit_x_by_label["readout frequency fit"], values)
             for values in fit_x_by_label.values()),
-        "Readout, qubit, linewidth, and g fits must share the weak-probe grid.",
+        "Readout, qubit, and linewidth fits must share the weak-probe grid.",
     )
     if coupling_off_frequency_fit is not None:
         require(
-            coupling_off_frequency_fit.get("intercept")
-            == diagnostics["common_readout_loaded_bare"].get("frequency_hz")
+            diagnostics["common_readout_loaded_bare"].get("frequency_hz")
             == record_metrics.get("readout_loaded_bare_hz"),
-            "Common readout loaded-bare value must be the coupling-off zero-probe intercept and may be charged only once.",
+            "Common readout loaded-bare value must be owned by the closed modal reference.",
         )
     frequency_coefficients = mapping(
         frequency_fit.get("coefficients"), "readout frequency fit coefficients"
@@ -664,12 +907,7 @@ def _validate_notebook_record_shape(
     )
     for key in ("quadratic_per_fF2", "quartic_per_fF4"):
         finite_number(linewidth_coefficients.get(key), f"readout linewidth coefficient {key}")
-    if g_fit is not None:
-        require(finite_number(record_metrics.get("g_hz"), "record.metrics.g_hz") > 0, "g_hz must be positive.")
-        require(
-            finite_number(g_fit.get("intercept"), "g fit intercept") == record_metrics["g_hz"] > 0,
-            "g fit intercept must equal the positive g_hz metric.",
-        )
+    if expected_step_hz is not None:
         floating_qubit = mapping(diagnostics.get("floating_qubit"), "record.diagnostics.floating_qubit")
         coupling_off_qubit_hz = finite_number(
             floating_qubit.get("coupling_off_frequency_hz"),
@@ -969,7 +1207,20 @@ def _validate_notebook_record_shape(
                 fr0_hz = finite_number(coupling_off_mode.get("frequency_hz"), f"finite-probe f_r0 {index}")
                 frq_hz = finite_number(mode.get("frequency_hz"), f"finite-probe f_rq {index}")
                 readout_shift_hz = finite_number(mode.get("readout_shift_hz"), f"finite-probe readout shift {index}")
-                g_hz = finite_number(mode.get("g_hz"), f"finite-probe g {index}")
+                shift_g = mapping(
+                    mode.get("shift_derived_g_diagnostic"),
+                    f"finite-probe shift-derived g diagnostic {index}",
+                )
+                require(
+                    shift_g.get("role") == "finite_open_s21_diagnostic_not_gate",
+                    f"Finite-probe shift-derived g {index} must remain diagnostic-only.",
+                )
+                shift_radicand_hz2 = finite_number(
+                    shift_g.get("radicand_hz2"), f"finite-probe g radicand {index}"
+                )
+                shift_g_hz = shift_g.get("g_hz")
+                if shift_g_hz is not None:
+                    shift_g_hz = finite_number(shift_g_hz, f"finite-probe shift-derived g {index}")
                 predicted_qubit_hz = finite_number(
                     mode.get("predicted_qubit_pole_hz"), f"predicted lower pole {index}"
                 )
@@ -984,11 +1235,20 @@ def _validate_notebook_record_shape(
                     and "qubit_crosscheck_maximum_residual_hz" not in mode,
                     f"Finite-probe lower-pole residual {index} must be diagnostic-only and carry no gate.",
                 )
-                require(fr0_hz > coupling_off_qubit_hz and readout_shift_hz > 0 and g_hz > 0,
-                        f"Finite-probe readout-shift inversion {index} must have positive detuning, shift, and g.")
                 require(
                     math.isclose(frq_hz - fr0_hz, readout_shift_hz, rel_tol=1e-12, abs_tol=1e-6)
-                    and math.isclose(g_hz**2, readout_shift_hz * (frq_hz - coupling_off_qubit_hz), rel_tol=1e-12, abs_tol=1e-3)
+                    and math.isclose(
+                        shift_radicand_hz2,
+                        readout_shift_hz * (frq_hz - coupling_off_qubit_hz),
+                        rel_tol=1e-12,
+                        abs_tol=1e-3,
+                    )
+                    and (
+                        (shift_radicand_hz2 > 0 and shift_g_hz is not None and math.isclose(
+                            shift_g_hz**2, shift_radicand_hz2, rel_tol=1e-12, abs_tol=1e-3
+                        ))
+                        or (shift_radicand_hz2 <= 0 and shift_g_hz is None)
+                    )
                     and math.isclose(predicted_qubit_hz, coupling_off_qubit_hz + fr0_hz - frq_hz, rel_tol=1e-12, abs_tol=1e-6)
                     and math.isclose(residual_hz, fitted_qubit_hz - predicted_qubit_hz, rel_tol=1e-12, abs_tol=1e-6),
                     f"Finite-probe readout-shift inversion or diagnostic lower-pole residual {index} is inconsistent.",
@@ -1009,23 +1269,24 @@ def _validate_notebook_record_shape(
             zero_probe_residual_hz = finite_number(
                 zero_probe_crosscheck.get("residual_hz"), "zero-probe lower-pole residual"
             )
-            zero_probe_gate_hz = finite_number(
-                zero_probe_crosscheck.get("maximum_residual_gate_hz"),
-                "zero-probe lower-pole residual gate",
+            zero_probe_comparison_scale_hz = finite_number(
+                zero_probe_crosscheck.get("comparison_scale_hz"),
+                "zero-probe lower-pole diagnostic scale",
             )
             require(
-                zero_probe_crosscheck.get("status") == "pass"
-                and zero_probe_crosscheck.get("role") == "zero_probe_hard_gate"
+                zero_probe_crosscheck.get("status")
+                in {"within_comparison_scale", "outside_comparison_scale"}
+                and zero_probe_crosscheck.get("role") == "finite_open_s21_diagnostic_not_gate"
                 and zero_probe_crosscheck.get("fqLB_hz") == coupling_off_qubit_hz
                 and zero_probe_crosscheck.get("frLB_zero_probe_hz")
-                == coupling_off_frequency_fit.get("intercept")
+                == diagnostics["common_readout_loaded_bare"].get("frequency_hz")
                 and zero_probe_crosscheck.get("fr_coupling_on_zero_probe_hz")
                 == frequency_fit.get("intercept")
                 and observed_zero_probe_hz == qubit_frequency_fit.get("intercept")
                 and math.isclose(
                     predicted_zero_probe_hz,
                     coupling_off_qubit_hz
-                    + coupling_off_frequency_fit["intercept"]
+                    + diagnostics["common_readout_loaded_bare"]["frequency_hz"]
                     - frequency_fit["intercept"],
                     rel_tol=1e-12,
                     abs_tol=1e-6,
@@ -1036,19 +1297,14 @@ def _validate_notebook_record_shape(
                     rel_tol=1e-12,
                     abs_tol=1e-6,
                 )
-                and abs(zero_probe_residual_hz) <= zero_probe_gate_hz,
-                "Only the zero-probe lower-pole cross-check may be gated, and its persisted values are inconsistent.",
+                and zero_probe_comparison_scale_hz >= 0,
+                "Finite/open zero-probe diagnostic values are inconsistent.",
             )
         for diagnostic_id in ("filter_loaded_bare_reference_id",):
             _require_trace_id_grid_link(
                 diagnostics.get(diagnostic_id), filter_grid_hash, f"diagnostics.{diagnostic_id}"
             )
         if expected_step_hz is not None:
-            _require_trace_id_grid_link(
-                diagnostics.get("common_readout_loaded_bare_reference_id"),
-                filter_grid_hash,
-                "diagnostics.common_readout_loaded_bare_reference_id",
-            )
             require(
                 diagnostics.get("common_readout_loaded_bare_reference_id")
                 == diagnostics["common_readout_loaded_bare"].get("reference_contract_id")
@@ -1057,32 +1313,88 @@ def _validate_notebook_record_shape(
             )
             closure = mapping(diagnostics.get("system_c_closure"), "record.diagnostics.system_c_closure")
             require(
-                closure.get("status") == "success"
+                closure.get("physical_extraction_status") == "valid"
                 and closure.get("direct_qubit_filter_coupling_hz") == 0.0,
-                "System C must close with fixed pair couplings and zero direct qubit-filter coupling.",
+                "System C must preserve valid physical extraction and zero direct qubit-filter coupling.",
             )
-            predicted_poles = numeric_array(closure, "predicted_poles_hz", "System C predicted poles")
-            observed_poles = numeric_array(closure, "observed_poles_hz", "System C observed poles")
-            pole_residuals = numeric_array(closure, "pole_residuals_hz", "System C pole residuals")
+            pole_closure = mapping(closure.get("pole_closure"), "System C pole closure")
+            predicted_poles = numeric_array(
+                pole_closure, "predicted_poles_hz", "System C predicted poles"
+            )
+            observed_poles = numeric_array(
+                pole_closure, "observed_poles_hz", "System C observed poles"
+            )
+            pole_residuals = numeric_array(
+                pole_closure, "residuals_hz", "System C pole residuals"
+            )
             require_same_length("System C pole closure", predicted_poles, observed_poles, pole_residuals)
             require(len(predicted_poles) == 3, "System C closure must contain three poles.")
+            pole_maximum_hz = finite_number(
+                pole_closure.get("maximum_residual_hz"), "System C maximum pole residual"
+            )
+            pole_threshold_hz = finite_number(
+                pole_closure.get("maximum_residual_threshold_hz"), "System C pole threshold"
+            )
+            pole_eligible = pole_maximum_hz <= pole_threshold_hz
             require(
                 np.allclose(observed_poles - predicted_poles, pole_residuals, rtol=1e-12, atol=1e-6)
-                and np.max(np.abs(pole_residuals))
-                <= finite_number(closure.get("maximum_pole_residual_gate_hz"), "System C pole gate"),
-                "System C pole residuals fail their persisted hard gate.",
+                and math.isclose(
+                    float(np.max(np.abs(pole_residuals))),
+                    pole_maximum_hz,
+                    rel_tol=1e-12,
+                    abs_tol=1e-6,
+                )
+                and pole_closure.get("reduced_model_eligible") is pole_eligible
+                and pole_closure.get("status") == ("eligible" if pole_eligible else "ineligible"),
+                "System C pole residuals and reduced-model classification are inconsistent.",
             )
             closure_response = mapping(closure.get("response"), "System C response closure")
             closure_metrics = mapping(closure_response.get("metrics"), "System C response metrics")
+            closure_thresholds = mapping(
+                closure_response.get("thresholds"), "System C response thresholds"
+            )
+            response_failure_reasons = sequence(
+                closure_response.get("failure_reasons"), "System C response failure reasons"
+            )
+            expected_response_failures: list[str] = []
+            complex_r2_value = closure_metrics.get("complex_r2")
+            abs_r2_value = closure_metrics.get("abs_r2")
+            phase_rmse_value = closure_metrics.get("phase_rmse_rad")
+            if complex_r2_value is None:
+                expected_response_failures.append("complex_r2_undefined")
+            elif finite_number(complex_r2_value, "System C complex R2") < finite_number(
+                closure_thresholds.get("min_complex_r2"), "System C minimum complex R2"
+            ):
+                expected_response_failures.append("complex_r2_below_threshold")
+            if abs_r2_value is None:
+                expected_response_failures.append("magnitude_r2_undefined")
+            elif finite_number(abs_r2_value, "System C abs R2") < finite_number(
+                closure_thresholds.get("min_abs_r2"), "System C minimum abs R2"
+            ):
+                expected_response_failures.append("magnitude_r2_below_threshold")
+            if phase_rmse_value is None:
+                expected_response_failures.append("phase_rmse_undefined")
+            elif finite_number(phase_rmse_value, "System C phase RMSE") > finite_number(
+                closure_thresholds.get("max_phase_rmse_rad"), "System C maximum phase RMSE"
+            ):
+                expected_response_failures.append("phase_rmse_above_threshold")
+            response_eligible = not expected_response_failures
             require(
-                closure_response.get("status") == "success"
-                and finite_number(closure_metrics.get("complex_r2"), "System C complex R2")
-                >= finite_number(mapping(j_fit.get("gates"), "J gates").get("min_complex_r2"), "minimum complex R2")
-                and finite_number(closure_metrics.get("abs_r2"), "System C abs R2")
-                >= finite_number(mapping(j_fit.get("gates"), "J gates").get("min_abs_r2"), "minimum abs R2")
-                and finite_number(closure_metrics.get("phase_rmse_rad"), "System C phase RMSE")
-                <= finite_number(mapping(j_fit.get("gates"), "J gates").get("max_phase_rmse_rad"), "maximum phase RMSE"),
-                "System C complex-S21 closure fails the persisted response gates.",
+                response_failure_reasons == expected_response_failures
+                and closure_response.get("reduced_model_eligible") is response_eligible
+                and closure_response.get("status") == ("eligible" if response_eligible else "ineligible"),
+                "System C response metrics must classify reduced-model eligibility without changing physical validity.",
+            )
+            system_c_eligible = pole_eligible and response_eligible
+            system_c_top = mapping(
+                mapping(reduced_eligibility.get("system_c"), "System-C eligibility"),
+                "System-C eligibility",
+            )
+            require(
+                closure.get("reduced_model_eligible") is system_c_eligible
+                and system_c_top.get("eligible") is system_c_eligible
+                and reduced_eligible is (modal_eligible and system_c_eligible),
+                "System-A/System-C reduced-model eligibility does not compose to the top-level status.",
             )
         j_provenance = mapping(j_fit.get("provenance"), "record.diagnostics.j_fit.provenance")
         for identity_key in ("measured_trace_id", "empty_feedline_trace_id"):
@@ -1973,7 +2285,7 @@ def validate_artifacts(
     final_metrics = mapping(final_record.get("metrics"), "final_diagnostics.record.metrics")
     diagnostics = mapping(final_record.get("diagnostics"), "final_diagnostics.record.diagnostics")
     require(
-        diagnostics.get("extraction_contract") == "d3-three-circuit-model-zero-probe-slot-ownership.v1",
+        diagnostics.get("extraction_contract") == D3_EXTRACTION_CONTRACT,
         "Optimizer artifact uses an incompatible historical extraction contract; run a fresh evaluation with Systems A/B/C.",
     )
     design = mapping(diagnostics.get("design"), "final_diagnostics.record.diagnostics.design")

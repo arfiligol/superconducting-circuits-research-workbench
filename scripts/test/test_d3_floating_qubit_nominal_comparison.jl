@@ -70,6 +70,12 @@ end
         expected_ceff = 30.0e-15 + expected_cg1 * expected_cg2 / (expected_cg1 + expected_cg2)
         expected_frequency = 1 / (2π * sqrt(11.5e-9 * expected_ceff))
         @test floating_qubit_coupling_off_frequency_hz(loaded.model) ≈ expected_frequency
+		capacitance_layers = floating_qubit_capacitance_layers(loaded.model)
+		expected_common_capacitance_fF = 50.0 + 70.0 + 10.0 + 1.0
+		@test capacitance_layers.Cq_B_fF ≈ 30.0 + 50.0 * 70.0 / (50.0 + 70.0)
+		@test capacitance_layers.Cq_LB_fF ≈ 30.0 + (50.0 + 10.0) * (70.0 + 1.0) / expected_common_capacitance_fF
+		@test capacitance_layers.Cr_attach_LB_fF ≈ 10.0 + 1.0 - (10.0 + 1.0)^2 / expected_common_capacitance_fF
+		@test capacitance_layers.Cdr_physical_fF ≈ 1.0 - (70.0 + 1.0) * (10.0 + 1.0) / expected_common_capacitance_fF
         physics = floating_qubit_physics_diagnostics(loaded.model; f01_target_hz = 4.7e9)
         @test physics.effective_differential_coupling_off_capacitance_fF ≈ expected_ceff * 1e15
         @test physics.first_order_transmon_f01_hz == physics.linearized_lc_frequency_hz - physics.ec_over_h_hz
@@ -193,8 +199,72 @@ end
 				max_phase_rmse_rad = 1.0e-9,
 			),
 		)
-		@test closure.status == "success"
+		@test closure.status == "eligible"
+		@test closure.reduced_model_eligible === true
 		@test closure.metrics.complex_r2 ≈ 1.0
+		closure_quality_failure = _three_mode_response_closure(
+			closure_frequencies,
+			closure_observed .+ ComplexF64[0.2 + 0.1im, -0.3 + 0.2im, 0.4 - 0.2im],
+			closure_calibration,
+			Dict("background" => closure_background);
+			fq_hz = 5.0e9,
+			fr_hz = 5.8e9,
+			fp_hz = 6.0e9,
+			g_hz = 90e6,
+			j_hz = 20e6,
+			filter_loaded_linewidth_hz = 5.0e6,
+			readout_loaded_linewidth_hz = 0.0,
+			settings = (
+				min_phase_magnitude = 0.0,
+				min_complex_r2 = 0.999,
+				min_abs_r2 = 0.999,
+				max_phase_rmse_rad = 1.0e-9,
+			),
+		)
+		@test closure_quality_failure.status == "ineligible"
+		@test closure_quality_failure.reduced_model_eligible === false
+		@test !isempty(closure_quality_failure.failure_reasons)
+		closure_undefined = _three_mode_response_closure(
+			closure_frequencies,
+			ones(ComplexF64, length(closure_frequencies)),
+			closure_calibration,
+			Dict("background" => closure_background);
+			fq_hz = 5.0e9,
+			fr_hz = 5.8e9,
+			fp_hz = 6.0e9,
+			g_hz = 90e6,
+			j_hz = 20e6,
+			filter_loaded_linewidth_hz = 5.0e6,
+			readout_loaded_linewidth_hz = 0.0,
+			settings = (
+				min_phase_magnitude = 0.0,
+				min_complex_r2 = 0.999,
+				min_abs_r2 = 0.999,
+				max_phase_rmse_rad = 1.0e-9,
+			),
+		)
+		@test closure_undefined.status == "ineligible"
+		@test closure_undefined.metrics.complex_r2 === nothing
+		@test "complex_r2_undefined" in closure_undefined.failure_reasons
+		@test_throws ErrorException _three_mode_response_closure(
+			closure_frequencies,
+			ComplexF64[NaN + 0im, 1 + 0im, 1 + 0im],
+			closure_calibration,
+			Dict("background" => closure_background);
+			fq_hz = 5.0e9,
+			fr_hz = 5.8e9,
+			fp_hz = 6.0e9,
+			g_hz = 90e6,
+			j_hz = 20e6,
+			filter_loaded_linewidth_hz = 5.0e6,
+			readout_loaded_linewidth_hz = 0.0,
+			settings = (
+				min_phase_magnitude = 0.0,
+				min_complex_r2 = 0.999,
+				min_abs_r2 = 0.999,
+				max_phase_rmse_rad = 1.0e-9,
+			),
+		)
 
         plan = CircuitPlan("synthetic-floating-qubit")
         readout_open_tail = external_node("readout_open_tail")
@@ -242,6 +312,84 @@ end
             max_abs_impedance_error_role = "mismatch_screening_only",
         )
         hb_settings = D3HBSettings(100e-6, 50.0, 20e9, 0.0, 1, 1, Dict{Symbol,Any}())
+		modal_design = merge(design, (
+			lr_total_um = 5208.0,
+			lp_total_um = 5208.0,
+			lr_short_um = 2000.0,
+			lp_short_um = 2000.0,
+			lc_um = 1000.0,
+		))
+		closed_off_plan = build_closed_d3_system_a_plan(
+			case,
+			modal_design;
+			hb_settings = hb_settings,
+			floating_qubit_nominal = loaded.model,
+			qubit_coupling_state = :mode_layer_off,
+		)
+		closed_on_plan = build_closed_d3_system_a_plan(
+			case,
+			modal_design;
+			hb_settings = hb_settings,
+			floating_qubit_nominal = loaded.model,
+			qubit_coupling_state = :physical_on,
+		)
+		closed_off_nodal = extract_linear_nodal_model(compile_to_josephson(closed_off_plan))
+		closed_on_nodal = extract_linear_nodal_model(compile_to_josephson(closed_on_plan))
+		@test closed_off_nodal.node_names == closed_on_nodal.node_names
+		@test closed_off_nodal.inverse_inductance == closed_on_nodal.inverse_inductance
+		closed_pair = reduce_linear_model_pair(closed_off_nodal, closed_on_nodal)
+		@test size(closed_pair.coupling_off.free_charge_basis, 2) == 1
+		@test diag(closed_pair.coupling_off.capacitance) ≈ diag(closed_pair.physical_on.capacitance)
+		@test norm(
+			closed_pair.coupling_off.capacitance - closed_pair.physical_on.capacitance -
+			Diagonal(diag(closed_pair.coupling_off.capacitance - closed_pair.physical_on.capacitance)),
+			Inf,
+		) > 0
+		modal_evaluator = (
+			case = case,
+			hb_settings = hb_settings,
+			floating_qubit_nominal = loaded.model,
+			qubit_coupling_off_frequency_hz = expected_frequency,
+			settings = (
+				max_qubit_anchor_distance_hz = 200e6,
+				loaded_bare_ownership_half_width_hz = 200e6,
+				max_vector_pole_disagreement_hz = 50e6,
+			),
+		)
+		modal_analysis = _closed_d3_modal_analysis(
+			modal_evaluator,
+			modal_design,
+			6e9;
+			capture_full_evidence = true,
+		)
+		@test modal_analysis.frequency_layers.fqLB_hz ≈ expected_frequency rtol = 1e-12
+		@test modal_analysis.provenance.free_charge_coordinate_count == 1
+		@test modal_analysis.projection.full_basis_reconstruction.mode_count == length(solve_generalized_modes(closed_pair.coupling_off).frequencies_hz)
+		@test modal_analysis.g_hz > 0
+		@test modal_analysis.projection.full_basis_reconstruction.maximum_bdg_residual_hz < 1.0
+		@test modal_analysis.projection.two_mode_reduced_closure.maximum_bdg_residual_hz > 1e6
+		off_participations = modal_analysis.mode_inductive_participations.coupling_off
+		@test off_participations.qubit + off_participations.readout ≈ ones(length(off_participations.qubit))
+		@test off_participations.qubit[modal_analysis.mode_indices.coupling_off_qubit] > 0.5
+		@test off_participations.readout[modal_analysis.mode_indices.coupling_off_readout] > 0.5
+		rejecting_modal_evaluator = merge(modal_evaluator, (
+			settings = merge(modal_evaluator.settings, (max_vector_pole_disagreement_hz = 1e6,)),
+		))
+		modal_ineligible = _closed_d3_modal_analysis(rejecting_modal_evaluator, modal_design, 6e9)
+		@test modal_ineligible.reduced_model_eligibility.eligible === false
+		@test "two_mode_bdg_poles_disagree_with_exact_physical_poles" in modal_ineligible.reduced_model_eligibility.failure_reasons
+		modal_audit = modal_ineligible.reduced_model_eligibility.audit
+		@test modal_audit.fqLB_hz == modal_analysis.frequency_layers.fqLB_hz
+		@test modal_audit.frLB_hz == modal_analysis.frequency_layers.frLB_hz
+		@test modal_audit.primitive_g_hz ≈ modal_analysis.g_hz
+		@test length(modal_audit.projected_bdg_frequencies_hz) == 2
+		@test length(modal_audit.projected_rwa_frequencies_hz) == 2
+		@test length(modal_audit.exact_assigned_frequencies_hz) == 2
+		@test length(modal_audit.projected_bdg_residuals_hz) == 2
+		@test size(modal_audit.number_conserving_matrix_hz) == (2, 2)
+		@test size(modal_audit.pairing_matrix_hz) == (2, 2)
+		@test modal_ineligible.reduced_model_eligibility.maximum_bdg_residual_hz >
+			modal_ineligible.reduced_model_eligibility.threshold_hz
         baseline_plan = build_single_pair_feedline_plan(
             case,
             design;
@@ -283,10 +431,11 @@ end
 		)
 		coupling_off_shunts = [
 			relation for relation in readout_coupling_off_plan.relations
-			if relation isa ShuntCapacitor && startswith(relation.id, "floating_qubit_nominal_readout_only_coupling_off_Cr")
+			if relation isa ShuntCapacitor && relation.id == "floating_qubit_nominal_readout_only_coupling_off_Cr_attachment_LB"
 		]
-		@test length(coupling_off_shunts) == 2
-		@test sort([relation.capacitance for relation in coupling_off_shunts]) ≈ sort([loaded.model.Cr1_fF, loaded.model.Cr2_fF] .* 1e-15)
+		capacitance_layers = floating_qubit_capacitance_layers(loaded.model)
+		@test length(coupling_off_shunts) == 1
+		@test only(coupling_off_shunts).capacitance ≈ capacitance_layers.Cr_attach_LB_fF * 1e-15
 		@test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_readout_only_") && !occursin("_coupling_off_", relation.id), readout_coupling_off_plan.relations) == 0
 		@test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_readout_only_") && !occursin("_coupling_off_", relation.id), readout_coupling_on_plan.relations) == 7
 		@test all(relation -> !hasproperty(relation, :id) || !occursin("filter", lowercase(relation.id)), readout_coupling_off_plan.relations)
@@ -301,7 +450,7 @@ end
 			floating_qubit_nominal = loaded.model,
 			qubit_coupling_state = :diagonal_preserving_off,
 		)
-		@test count(relation -> relation isa ShuntCapacitor && occursin("_coupling_off_Cr", relation.id), system_b_plan.relations) == 2
+		@test count(relation -> relation isa ShuntCapacitor && occursin("_coupling_off_Cr_attachment_LB", relation.id), system_b_plan.relations) == 1
 		@test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_1_") && !occursin("_coupling_off_", relation.id), system_b_plan.relations) == 0
 		@test count(relation -> relation isa ShuntCapacitor && occursin("_coupling_off_Cr", relation.id), variant_plan.relations) == 0
 		intrinsic_plan = build_intrinsic_pair_plan(

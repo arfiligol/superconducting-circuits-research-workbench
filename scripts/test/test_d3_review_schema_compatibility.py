@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""No-HB compatibility checks for legacy and per-slot D3 review artifacts."""
+"""No-HB rejection and identity checks for current D3 review artifacts."""
 
 from __future__ import annotations
 
@@ -37,10 +37,9 @@ def write_json(path: Path, value: dict) -> None:
 
 
 class D3ReviewSchemaCompatibilityTest(unittest.TestCase):
-    def test_validator_accepts_legacy_and_per_slot_schema(self) -> None:
-        legacy = validator.validate_artifacts(LEGACY_RUN)
-        self.assertEqual(legacy["manifest_schema"], validator.LEGACY_MANIFEST_SCHEMA)
-        self.assertEqual(legacy["artifact_hash_label"], "contract")
+    def test_validator_rejects_legacy_and_accepts_current_schema(self) -> None:
+        with self.assertRaises(validator.ArtifactContractError):
+            validator.validate_artifacts(LEGACY_RUN)
 
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary) / "workspace"

@@ -362,15 +362,15 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         },
     }
     record["diagnostics"]["zero_probe_lower_pole_crosscheck"] = {
-        "status": "pass",
-        "role": "zero_probe_hard_gate",
+        "status": "within_comparison_scale",
+        "role": "finite_open_s21_diagnostic_not_gate",
         "fqLB_hz": 5.0e9,
         "frLB_zero_probe_hz": common_readout_hz,
         "fr_coupling_on_zero_probe_hz": common_readout_hz + 10.0e6,
         "observed_qubit_zero_probe_hz": predicted_qubit_zero_probe_hz,
         "predicted_qubit_zero_probe_hz": predicted_qubit_zero_probe_hz,
         "residual_hz": 0.0,
-        "maximum_residual_gate_hz": 1.0e6,
+        "comparison_scale_hz": 1.0e6,
     }
 
     def complex_values(count: int, scale: float) -> list[dict[str, float]]:
@@ -418,7 +418,17 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         predicted_qubit_hz = 5.0e9 + fr0_hz - frq_hz
         fitted_qubit_hz = qubit_frequencies[index]
         mode["frequency_hz"] = frq_hz
-        mode["g_hz"] = g_values[index]
+        mode.pop("g_hz", None)
+        mode["shift_derived_g_diagnostic"] = {
+            "status": "real",
+            "role": "finite_open_s21_diagnostic_not_gate",
+            "fqLB_hz": 5.0e9,
+            "frLB_hz": fr0_hz,
+            "physical_readout_hz": frq_hz,
+            "readout_shift_hz": frq_hz - fr0_hz,
+            "radicand_hz2": (frq_hz - fr0_hz) * (frq_hz - 5.0e9),
+            "g_hz": g_values[index],
+        }
         mode["finite_probe_mode_assignment"] = (
             "finite_probe_mode_assignment_no_slot_ownership_gate"
         )
@@ -476,16 +486,86 @@ def current_optimizer_fixture(workspace: Path) -> Path:
     )
     common_reference_id = f"synthetic-common-readout-reference|grid_sha256={loaded_hash}"
     diagnostics["extraction_contract"] = (
-        "d3-three-circuit-model-zero-probe-slot-ownership.v1"
+        validator.D3_EXTRACTION_CONTRACT
     )
+    filter_loaded_bare_hz = record["metrics"]["filter_loaded_bare_hz"]
+    diagnostics["frequency_layers"] = {
+        "fqB_hz": 5.1e9,
+        "frB_hz": 6.02e9,
+        "fpB_hz": 6.03e9,
+        "fqLB_hz": 5.0e9,
+        "frLB_hz": common_readout_hz,
+        "fpLB_hz": filter_loaded_bare_hz,
+        "physical_qubit_like_hz": 4.99e9,
+        "physical_readout_like_hz": common_readout_hz + 10.0e6,
+    }
+    system_b_observed_poles = sorted(diagnostics["vector_crosscheck_poles_hz"])
+    frequency_row_values = {
+        "fqB_hz": diagnostics["frequency_layers"]["fqB_hz"],
+        "frB_hz": diagnostics["frequency_layers"]["frB_hz"],
+        "fpB_hz": diagnostics["frequency_layers"]["fpB_hz"],
+        "fqLB_hz": diagnostics["frequency_layers"]["fqLB_hz"],
+        "frLB_hz": diagnostics["frequency_layers"]["frLB_hz"],
+        "fpLB_hz": diagnostics["frequency_layers"]["fpLB_hz"],
+        "system_a_q_like_hz": diagnostics["frequency_layers"]["physical_qubit_like_hz"],
+        "system_a_r_like_hz": diagnostics["frequency_layers"]["physical_readout_like_hz"],
+        "system_b_lower_pole_hz": system_b_observed_poles[0],
+        "system_b_upper_pole_hz": system_b_observed_poles[1],
+        "system_c_q_window_pole_hz": 5.0e9,
+        "system_c_pair_lower_pole_hz": 5.9e9,
+        "system_c_pair_upper_pole_hz": 6.1e9,
+    }
+    diagnostics["final_validation_frequency_rows"] = [
+        {
+            "quantity_id": quantity_id,
+            "layer": layer,
+            "system_tag": system_tag,
+            "frequency_hz": frequency_row_values[quantity_id],
+            "source_method": source_method,
+            "ownership_label": ownership_label,
+            "cost_function_role": cost_role,
+        }
+        for quantity_id, layer, system_tag, source_method, ownership_label, cost_role
+        in validator.FINAL_VALIDATION_FREQUENCY_ROWS
+    ]
+    diagnostics["closed_modal_projection"] = {
+        "g_hz": 90.0e6,
+        "projection": {
+            "contract_id": "d3-closed-modal-projection-eligibility.v3",
+            "full_basis_reconstruction": {
+                "mode_count": 8,
+                "maximum_bdg_residual_hz": 1.0e-3,
+            },
+            "two_mode_reduced_closure": {
+                "status": "eligible",
+                "reduced_model_eligible": True,
+                "failure_reasons": [],
+                "maximum_bdg_residual_hz": 0.5e6,
+                "maximum_rwa_minus_bdg_hz": 0.4e6,
+                "maximum_residual_gate_hz": 1.0e6,
+            },
+        },
+        "reduced_model_eligibility": {
+            "model": "system_a_two_mode_qubit_readout",
+            "eligible": True,
+            "failure_reasons": [],
+            "threshold_hz": 1.0e6,
+            "maximum_bdg_residual_hz": 0.5e6,
+            "maximum_rwa_minus_bdg_hz": 0.4e6,
+            "audit": {},
+        },
+    }
     diagnostics["common_readout_loaded_bare_reference_id"] = common_reference_id
     diagnostics["common_readout_loaded_bare"] = {
         "reference_contract_id": common_reference_id,
         "frequency_hz": common_readout_hz,
         "linewidth_hz": 0.0,
         "readout_endpoint_shunts": [
-            {"id": "Cr1_readout_diagonal", "capacitance_fF": 10.0},
-            {"id": "Cr2_readout_diagonal", "capacitance_fF": 1.0},
+            {
+                "id": "Cr_attachment_LB",
+                "capacitance_fF": 10.076335877862595,
+                "provenance": "Schur_reduction_of_qubit_common_coordinate",
+            },
         ],
     }
     diagnostics["systems"] = {
@@ -512,23 +592,51 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         },
     }
     diagnostics["system_c_closure"] = {
-        "status": "success",
+        "physical_extraction_status": "valid",
+        "reduced_model_eligible": True,
+        "failure_reasons": [],
         "direct_qubit_filter_coupling_hz": 0.0,
-        "predicted_poles_hz": [5.0e9, 5.9e9, 6.1e9],
-        "observed_poles_hz": [5.0e9, 5.9e9, 6.1e9],
-        "pole_residuals_hz": [0.0, 0.0, 0.0],
-        "maximum_pole_residual_hz": 0.0,
-        "maximum_pole_residual_gate_hz": 1.0e6,
+        "physical_observed_poles": {
+            "qubit_window_pole_hz": 5.0e9,
+            "pair_window_poles_hz": [5.9e9, 6.1e9],
+        },
+        "pole_closure": {
+            "status": "eligible",
+            "reduced_model_eligible": True,
+            "predicted_poles_hz": [5.0e9, 5.9e9, 6.1e9],
+            "observed_poles_hz": [5.0e9, 5.9e9, 6.1e9],
+            "residuals_hz": [0.0, 0.0, 0.0],
+            "maximum_residual_hz": 0.0,
+            "maximum_residual_threshold_hz": 1.0e6,
+        },
         "response": {
-            "status": "success",
+            "status": "eligible",
+            "reduced_model_eligible": True,
+            "failure_reasons": [],
             "model": "fixed_primitive_g_J_three_mode_filter_response",
             "metrics": {
                 "complex_r2": 1.0,
                 "abs_r2": 1.0,
                 "phase_rmse_rad": 0.0,
             },
+            "thresholds": {
+                "min_complex_r2": 0.99,
+                "min_abs_r2": 0.99,
+                "max_phase_rmse_rad": 0.1,
+                "min_phase_magnitude": 0.0,
+            },
         },
     }
+    diagnostics["physical_evaluation_status"] = "valid"
+    diagnostics["reduced_model_eligibility"] = {
+        "status": "eligible",
+        "eligible": True,
+        "failure_reasons": [],
+        "system_a": diagnostics["closed_modal_projection"]["reduced_model_eligibility"],
+        "system_c": {"eligible": True, "failure_reasons": []},
+    }
+    record["physical_evaluation_status"] = "valid"
+    record["reduced_model_eligibility"] = diagnostics["reduced_model_eligibility"]
     for index, mode in enumerate(diagnostics["readout_probe_modes"]):
         probe = record["traces"]["readout_probes"][index]
         mode["frequency_grid_sha256"] = loaded_hash
@@ -773,6 +881,98 @@ class D3NominalReviewValidationTest(unittest.TestCase):
             with self.assertRaisesRegex(validator.ArtifactContractError, "incompatible historical"):
                 validator.validate_nominal_artifacts(nominal, LEGACY_RUN, workspace)
 
+    def test_ineligible_reduced_models_preserve_valid_physical_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace, optimizer, nominal, payload = self.make_fixture(temporary)
+            record = payload["nominal_evaluation.json"]["record"]
+            diagnostics = record["diagnostics"]
+            two_mode = diagnostics["closed_modal_projection"]["projection"]["two_mode_reduced_closure"]
+            two_mode.update(
+                {
+                    "status": "ineligible",
+                    "reduced_model_eligible": False,
+                    "failure_reasons": [
+                        "two_mode_bdg_poles_disagree_with_exact_physical_poles",
+                        "two_mode_rwa_disagrees_with_two_mode_bdg",
+                    ],
+                    "maximum_bdg_residual_hz": 75.0e6,
+                    "maximum_rwa_minus_bdg_hz": 1.54e6,
+                }
+            )
+            system_a = diagnostics["closed_modal_projection"]["reduced_model_eligibility"]
+            system_a.update(
+                {
+                    "eligible": False,
+                    "failure_reasons": list(two_mode["failure_reasons"]),
+                    "maximum_bdg_residual_hz": 75.0e6,
+                    "maximum_rwa_minus_bdg_hz": 1.54e6,
+                }
+            )
+            reduced = diagnostics["reduced_model_eligibility"]
+            reduced.update(
+                {
+                    "status": "ineligible",
+                    "eligible": False,
+                    "failure_reasons": [f"system_a:{reason}" for reason in two_mode["failure_reasons"]],
+                    "system_a": system_a,
+                }
+            )
+            record["reduced_model_eligibility"] = copy.deepcopy(reduced)
+            for name, value in payload.items():
+                write_json(nominal / name, value)
+            validated = validator.validate_nominal_artifacts(nominal, optimizer, workspace)
+            self.assertEqual(validated["record"]["physical_evaluation_status"], "valid")
+            self.assertFalse(validated["record"]["reduced_model_eligibility"]["eligible"])
+            self.assertEqual(validated["record"]["metrics"]["g_hz"], 90.0e6)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace, optimizer, nominal, payload = self.make_fixture(temporary)
+            record = payload["nominal_evaluation.json"]["record"]
+            diagnostics = record["diagnostics"]
+            response = diagnostics["system_c_closure"]["response"]
+            response.update(
+                {
+                    "status": "ineligible",
+                    "reduced_model_eligible": False,
+                    "failure_reasons": ["complex_r2_undefined", "magnitude_r2_undefined"],
+                }
+            )
+            response["metrics"]["complex_r2"] = None
+            response["metrics"]["abs_r2"] = None
+            system_c_closure = diagnostics["system_c_closure"]
+            system_c_closure.update(
+                {
+                    "reduced_model_eligible": False,
+                    "failure_reasons": [
+                        "three_mode_response:complex_r2_undefined",
+                        "three_mode_response:magnitude_r2_undefined",
+                    ],
+                }
+            )
+            reduced = diagnostics["reduced_model_eligibility"]
+            reduced.update(
+                {
+                    "status": "ineligible",
+                    "eligible": False,
+                    "failure_reasons": [
+                        "system_c:three_mode_response:complex_r2_undefined",
+                        "system_c:three_mode_response:magnitude_r2_undefined",
+                    ],
+                    "system_c": {
+                        "eligible": False,
+                        "failure_reasons": list(system_c_closure["failure_reasons"]),
+                    },
+                }
+            )
+            record["reduced_model_eligibility"] = copy.deepcopy(reduced)
+            for name, value in payload.items():
+                write_json(nominal / name, value)
+            validated = validator.validate_nominal_artifacts(nominal, optimizer, workspace)
+            self.assertEqual(validated["record"]["physical_evaluation_status"], "valid")
+            self.assertIsNone(
+                validated["record"]["diagnostics"]["system_c_closure"]["response"]["metrics"]["complex_r2"]
+            )
+
     def test_selection_unit_source_and_wide_provenance_tampering_fail(self) -> None:
         mutators = {
             "nominal semantic framing": lambda payload, workspace, optimizer: payload["validation_manifest.json"].update({"semantic_hash_framing": "wrong-framing"}),
@@ -791,10 +991,13 @@ class D3NominalReviewValidationTest(unittest.TestCase):
             "diagnostics loaded grid hash": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"loaded_frequency_grid_sha256": "0" * 64}),
             "diagnostics pair grid hash": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"pair_frequency_grid_sha256": "0" * 64}),
             "historical extraction contract": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"extraction_contract": "legacy"}),
+            "missing final-validation frequency rows": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].pop("final_validation_frequency_rows"),
+            "false System B pole ownership": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["final_validation_frequency_rows"][8].update({"ownership_label": "readout_like"}),
+            "System C pair observation mismatch": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"]["physical_observed_poles"].update({"pair_window_poles_hz": [5.8e9, 6.1e9]}),
             "System B common reference mismatch": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["systems"]["B"].update({"common_readout_reference_id": "different"}),
-            "System C pole residual": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"].update({"pole_residuals_hz": [0.0, 0.0, 2.0e6]}),
+            "System C pole residual": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"]["pole_closure"].update({"residuals_hz": [0.0, 0.0, 2.0e6]}),
             "System C complex response residual": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"]["system_c"]["closure_residual_s21"][0].update({"real": 1.0}),
-            "zero-probe lower-pole crosscheck": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["zero_probe_lower_pole_crosscheck"].update({"observed_qubit_zero_probe_hz": 4.992e9, "residual_hz": 2.0e6}),
+            "modal RWA closure": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["closed_modal_projection"]["projection"]["two_mode_reduced_closure"].update({"maximum_rwa_minus_bdg_hz": 2.0e6}),
             "missing diagnostics": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"].pop("diagnostics"),
             "missing filter trace": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"].pop("filter"),
             "missing pair trace": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"].pop("pair"),

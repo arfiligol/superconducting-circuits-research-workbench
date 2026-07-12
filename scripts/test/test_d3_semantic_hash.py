@@ -18,7 +18,7 @@ CONDITIONS_PATH = REPO_ROOT / (
     "notebooks/pluto/D3 Intrinsic Purcell Filter Design/d3_optimizer_conditions.json"
 )
 EXPECTED_ACTUAL_CONDITIONS_SHA256 = (
-    "dfcf6342da6ac283458c5827b1b753e08024ec23e6d5b11711f8036bd7a1633b"
+    "3d89ea1f08c82426799549cccc887f11e3560cc112969037783309717554087c"
 )
 
 spec = importlib.util.spec_from_file_location("d3_semantic_hash_consumer", VALIDATOR_PATH)
@@ -56,6 +56,11 @@ class D3SemanticHashTest(unittest.TestCase):
         payload = {key: value for key, value in conditions.items() if key != "sol_review"}
         self.assertEqual(
             validator.semantic_value_sha256(payload),
+            EXPECTED_ACTUAL_CONDITIONS_SHA256,
+        )
+        self.assertEqual(conditions["metric_specs"]["g_hz"]["scale"], 10.0e6)
+        self.assertEqual(
+            conditions["sol_review"]["approved_conditions_sha256"],
             EXPECTED_ACTUAL_CONDITIONS_SHA256,
         )
 

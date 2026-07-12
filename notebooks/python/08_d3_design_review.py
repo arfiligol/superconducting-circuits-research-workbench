@@ -814,10 +814,23 @@ display(
 )
 
 # %%
-if diagnostics.get("extraction_contract") != "d3-three-circuit-model-zero-probe-slot-ownership.v1":
+if diagnostics.get("extraction_contract") != "d3-three-circuit-model-physical-vs-reduced-eligibility.v3":
     raise ValueError(
         "This artifact does not implement the D3 three-circuit-model extraction contract. "
         "Run a fresh nominal validation; incompatible exploration evidence is not relabeled."
+    )
+if evidence_record.get("physical_evaluation_status") != "valid":
+    raise ValueError("The selected artifact does not contain a valid physical D3 evaluation.")
+reduced_model_eligibility = evidence_record["reduced_model_eligibility"]
+if not reduced_model_eligibility["eligible"]:
+    display(
+        Markdown(
+            "> **Reduced-model warning:** The full physical evaluation is valid, but the "
+            "two-/three-mode explanatory model is ineligible. Primitive modal `g`, System-B `J`, "
+            "and the physical Bare/LB/Hybridized results remain visible; closure residuals must "
+            "not be presented as a passing reduced model.\n\n"
+            f"> Reasons: `{', '.join(reduced_model_eligibility['failure_reasons'])}`"
+        )
     )
 frequency_fit = diagnostics["readout_coupling_off_zero_probe_frequency_fit"]
 coupling_on_frequency_fit = diagnostics["readout_zero_probe_frequency_fit"]
@@ -825,8 +838,46 @@ qubit_frequency_fit = diagnostics["qubit_zero_probe_frequency_fit"]
 zero_probe_lower_pole_crosscheck = diagnostics["zero_probe_lower_pole_crosscheck"]
 linewidth_fit = diagnostics["readout_zero_probe_linewidth_fit"]
 g_fit = diagnostics.get("g_zero_probe_fit")
+modal_projection = diagnostics["closed_modal_projection"]["projection"]
+two_mode_closure = modal_projection["two_mode_reduced_closure"]
+
+# %% [markdown]
+# ### Final-validation frequency layers
+#
+# Bare and loaded-bare rows retain named component ownership. System B and the
+# pair-window part of System C intentionally retain only lower/upper pole order:
+# the artifact does not relabel those observed poles as readout-like or filter-like.
+
+# %%
+final_validation_frequency_table = pd.DataFrame(
+    [
+        {
+            "Layer": row["layer"],
+            "Quantity": row["quantity_id"],
+            "System": row["system_tag"],
+            "Frequency (GHz)": row["frequency_hz"] / 1e9,
+            "Source / Method": row["source_method"],
+            "Ownership": row["ownership_label"],
+            "Cost-function role": row["cost_function_role"],
+        }
+        for row in diagnostics["final_validation_frequency_rows"]
+    ]
+)
+display(
+    final_validation_frequency_table.style.hide(axis="index").format(
+        {"Frequency (GHz)": "{:.9f}"}
+    )
+)
+
+# %% [markdown]
+# ### Regression and closure diagnostics
+
+# %%
 regression_rows = [
-    ("Common readout LB intercept", frequency_fit["intercept"] / 1e9, "GHz", "fitted", "coupling-off quadratic in probe capacitance"),
+    ("Primitive g", metrics["g_hz"] / 1e6, "MHz", "calculated", "off-diagonal closed modal Hamiltonian projection"),
+    ("Two-mode BdG residual", two_mode_closure["maximum_bdg_residual_hz"] / 1e3, "kHz", "eligibility diagnostic", "assigned exact physical-mode closure"),
+    ("Two-mode RWA minus BdG residual", two_mode_closure["maximum_rwa_minus_bdg_hz"] / 1e3, "kHz", "eligibility diagnostic", "existing 1 MHz classification threshold"),
+    ("Open-probe coupling-off intercept", frequency_fit["intercept"] / 1e9, "GHz", "diagnostic", "does not own f_r,LB"),
     ("Frequency linear coefficient", frequency_fit["coefficients"]["linear_per_fF"] / 1e6, "MHz/fF", "fitted", "stored coefficient"),
     ("Frequency quadratic coefficient", frequency_fit["coefficients"]["quadratic_per_fF2"] / 1e6, "MHz/fF²", "fitted", "stored coefficient"),
     ("Readout linewidth intercept", linewidth_fit["intercept"] / 1e6, "MHz", "calculated", "constrained to zero by model"),
@@ -839,18 +890,17 @@ if g_fit is not None:
     g_extraction = diagnostics.get("readout_g_extraction")
     if g_extraction is None:
         raise ValueError(
-            "This g artifact predates the readout-frequency-shift extraction contract. "
-            "Run a fresh nominal validation with the current evaluator; old q/r-pole inversion evidence is not relabeled."
+            "This artifact lacks the current closed-modal g ownership record. "
+            "Run a fresh nominal validation; historical shift-derived evidence is not relabeled."
         )
     regression_rows.extend(
         [
             ("System A coupling-on readout intercept", coupling_on_frequency_fit["intercept"] / 1e9, "GHz", "fitted", "physical Cr cross branches restored; not f_r,LB"),
             ("System A qubit-like intercept", qubit_frequency_fit["intercept"] / 1e9, "GHz", "fitted", "quadratic weak-probe extrapolation"),
-            ("Predicted zero-probe lower pole", zero_probe_lower_pole_crosscheck["predicted_qubit_zero_probe_hz"] / 1e9, "GHz", "calculated", "fqLB + frLB(0) - fr+(0)"),
-            ("Zero-probe lower-pole residual", zero_probe_lower_pole_crosscheck["residual_hz"] / 1e3, "kHz", "calculated", "only lower-pole hard-gated residual"),
-            ("Zero-probe lower-pole gate", zero_probe_lower_pole_crosscheck["maximum_residual_gate_hz"] / 1e3, "kHz", "condition", "existing vector-pole disagreement threshold"),
-            ("g intercept", g_fit["intercept"] / 1e6, "MHz", "fitted", "zero-probe quadratic intercept"),
-            ("g extrapolation R²", g_fit["r2"], "fraction", "calculated", "configured Sol gate"),
+            ("Predicted zero-probe lower pole", zero_probe_lower_pole_crosscheck["predicted_qubit_zero_probe_hz"] / 1e9, "GHz", "diagnostic", "fqLB + open-probe frLB - open-probe fr+"),
+            ("Zero-probe lower-pole residual", zero_probe_lower_pole_crosscheck["residual_hz"] / 1e3, "kHz", "diagnostic", "finite/open S21 comparison only"),
+            ("Shift-derived g intercept", g_fit["intercept"] / 1e6, "MHz", "diagnostic", "does not own primitive g"),
+            ("Shift-derived g R²", g_fit["r2"], "fraction", "diagnostic", "finite/open S21 comparison only"),
         ]
     )
 regression_table = pd.DataFrame(
@@ -882,33 +932,36 @@ closure_metrics = system_c_closure["response"]["metrics"]
 display(
     pd.DataFrame(
         [
-            ("maximum pole residual", system_c_closure["maximum_pole_residual_hz"] / 1e3, "kHz"),
+            ("maximum pole residual", system_c_closure["pole_closure"]["maximum_residual_hz"] / 1e3, "kHz"),
             ("complex S21 R²", closure_metrics["complex_r2"], "fraction"),
             ("magnitude R²", closure_metrics["abs_r2"], "fraction"),
             ("phase RMSE", closure_metrics["phase_rmse_rad"], "rad"),
         ],
         columns=["System C no-free-parameter closure", "Value", "Unit"],
-    ).style.hide(axis="index").format({"Value": "{:.8g}"})
+    ).style.hide(axis="index").format({"Value": lambda value: "—" if pd.isna(value) else f"{value:.8g}"})
 )
 
 # %% [markdown]
-# ### Readout-frequency-shift extraction of $g/2\pi$
+# ### Closed modal extraction of $g/2\pi$ and open-S21 diagnostics
 #
-# For every artificial probe capacitance, the baseline and loaded fixtures are
-# readout-only and use the same feedline grid. The baseline CircuitPlan replaces
-# the two cross branches by separate readout-side shunts; the independent
-# Kron-reduced $f_{q0}$ reference retains the qubit-side loading. With
-# $f_{r0}>f_{q0}$, the exact two-linear-mode inversion is
+# The primitive $g$ shown above is the off-diagonal matrix element obtained by
+# projecting the physical-on quadratic Hamiltonian into the complete closed
+# coupling-off modal basis. The coupling-off topology retains one Schur-reduced
+# readout attachment shunt and the qubit endpoint loading, while removing the
+# physical cross terms.
 #
-# $$g_f(C_p)=\sqrt{[f_{rq}(C_p)-f_{r0}(C_p)]\,[f_{rq}(C_p)-f_{q0}]}.$$
+# The artificial feedline-probe sweep below remains useful as an observable
+# cross-check. Its shift-derived value
+# $\sqrt{(f_{rq}-f_{r0})(f_{rq}-f_{q0})}$ is diagnostic only: it neither owns
+# the reported primitive $g$ nor gates a candidate.
 #
-# The fitted lower pole is not an input to $g_f$. Finite-probe residuals are
-# diagnostics because the feedline probe opens an extra channel. Only the three
-# quadratic intercepts check
+# The fitted lower pole is not an input to primitive $g$. Finite-probe
+# residuals are diagnostics because the feedline probe opens an extra channel.
+# The three quadratic intercepts additionally check
 # $f_{q,\mathrm{pred}}(0)=f_{q,\mathrm{LB}}+f_{r,\mathrm{LB}}(0)-f_{r+}(0)$
-# as a hard gate. Finite-probe readout poles may also lie outside the final Slot
-# ownership window; that window applies only to the coupling-off zero-probe
-# intercept after the pole remains assigned inside its declared scan.
+# without changing candidate acceptance. Finite-probe readout poles may also
+# lie outside the final Slot ownership window; closed $f_{r,\mathrm{LB}}$ owns
+# that gate.
 
 # %%
 if g_fit is not None:
@@ -921,7 +974,7 @@ if g_fit is not None:
                 "f_r0 off (GHz)": coupling_off_mode["frequency_hz"] / 1e9,
                 "f_rq on (GHz)": mode["frequency_hz"] / 1e9,
                 "Delta_r (MHz)": mode["readout_shift_hz"] / 1e6,
-                "g_f (MHz)": mode["g_hz"] / 1e6,
+                "g_shift (MHz)": mode["shift_derived_g_diagnostic"]["g_hz"] / 1e6,
                 "Predicted lower (GHz)": mode["predicted_qubit_pole_hz"] / 1e9,
                 "Fitted lower (GHz)": mode["qubit_mode"]["frequency_hz"] / 1e9,
                 "Residual (kHz)": mode["qubit_crosscheck_residual_hz"] / 1e3,
@@ -936,7 +989,7 @@ if g_fit is not None:
                 "f_r0 off (GHz)": "{:.9f}",
                 "f_rq on (GHz)": "{:.9f}",
                 "Delta_r (MHz)": "{:.6f}",
-                "g_f (MHz)": "{:.6f}",
+                "g_shift (MHz)": "{:.6f}",
                 "Predicted lower (GHz)": "{:.9f}",
                 "Fitted lower (GHz)": "{:.9f}",
                 "Residual (kHz)": "{:+.3f}",
@@ -1326,11 +1379,11 @@ else:
         + float(g_coefficients["linear_per_fF"]) * fit_x
         + float(g_coefficients["quadratic_per_fF2"]) * fit_x**2
     )
-    axis.scatter(g_x, g_y / 1e6, color=BLUE, s=36, zorder=3, label="Simulated finite-probe g")
-    axis.plot(fit_x, g_curve / 1e6, color=ORANGE, linewidth=1.5, label="Stored quadratic fit")
-    axis.scatter([0.0], [g_fit["intercept"] / 1e6], facecolors="white", edgecolors=ORANGE, linewidths=1.5, s=55, zorder=4, label="C → 0 intercept")
-    axis.axhline(metric_breakdown["g_hz"]["target"] / 1e6, color=GREY, linestyle="--", linewidth=1.2, label="Target g")
-    axis.set(title="Qubit-readout g extrapolation", xlabel="Probe capacitance (fF)", ylabel="g / 2π (MHz)")
+    axis.scatter(g_x, g_y / 1e6, color=BLUE, s=36, zorder=3, label="Finite/open shift-derived g")
+    axis.plot(fit_x, g_curve / 1e6, color=ORANGE, linewidth=1.5, label="Diagnostic quadratic fit")
+    axis.scatter([0.0], [g_fit["intercept"] / 1e6], facecolors="white", edgecolors=ORANGE, linewidths=1.5, s=55, zorder=4, label="Diagnostic C → 0")
+    axis.axhline(metrics["g_hz"] / 1e6, color=GREY, linestyle="--", linewidth=1.2, label="Closed modal g")
+    axis.set(title="Open-S21 shift diagnostic", xlabel="Probe capacitance (fF)", ylabel="shift-derived g / 2π (MHz)")
 axis.legend(loc="best", fontsize=8, frameon=False)
 
 evidence_identity = (

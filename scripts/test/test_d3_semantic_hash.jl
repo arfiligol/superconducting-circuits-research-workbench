@@ -33,6 +33,8 @@ fixture = JSON3.read(read(joinpath(@__DIR__, "fixtures", "d3_semantic_hash_vecto
     @test conditions["sol_review"]["hash_framing"] == SEMANTIC_HASH_FRAMING
     conditions_payload = Dict(key => value for (key, value) in conditions if key != "sol_review")
     @test semantic_value_sha256(conditions_payload) == fixture["actual_conditions_without_sol_review_expected_sha256"]
+    @test conditions["metric_specs"]["g_hz"]["scale"] == 10.0e6
+    @test conditions["sol_review"]["approved_conditions_sha256"] == semantic_value_sha256(conditions_payload)
     conditions_roundtrip = JSON3.read(JSON3.write(conditions_payload), Dict{String,Any})
     @test semantic_value_sha256(conditions_roundtrip) == semantic_value_sha256(conditions_payload)
 

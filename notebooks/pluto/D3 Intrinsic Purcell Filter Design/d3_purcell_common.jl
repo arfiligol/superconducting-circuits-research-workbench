@@ -61,23 +61,80 @@ struct D3FloatingQubitNominal
 	end
 end
 
-function add_floating_qubit_nominal!(circuit_plan, readout_open_tail, qubit::D3FloatingQubitNominal; id_prefix = "floating_qubit")
+"""Return the bare and Schur-reduced loaded-bare capacitance layers.
+
+The orientation is `d = Phi_island_1 - Phi_island_2`; the returned `Cdr_fF`
+is the physical reduced differential-readout matrix entry in that convention.
+"""
+function floating_qubit_capacitance_layers(qubit::D3FloatingQubitNominal)
+	values = Float64[
+		qubit.C01_fF,
+		qubit.C02_fF,
+		qubit.C12_fF,
+		qubit.Cr1_fF,
+		qubit.Cr2_fF,
+	]
+	all(value -> isfinite(value) && value > 0, values) || error(
+		"Floating-qubit capacitance-layer inputs must be finite and positive.",
+	)
+	c01, c02, c12, cr1, cr2 = values
+	total_fF = c01 + c02 + cr1 + cr2
+	readout_raw_diagonal_fF = cr1 + cr2
+	readout_schur_correction_fF = readout_raw_diagonal_fF^2 / total_fF
+	result = (
+		coordinate_orientation = "d=Phi_island_1-Phi_island_2",
+		Cq_B_fF = c12 + c01 * c02 / (c01 + c02),
+		Cq_LB_fF = c12 + (c01 + cr1) * (c02 + cr2) / total_fF,
+		Cr_attach_LB_fF = readout_raw_diagonal_fF - readout_schur_correction_fF,
+		Cdr_physical_fF = cr2 - (c02 + cr2) * readout_raw_diagonal_fF / total_fF,
+		common_coordinate_capacitance_fF = total_fF,
+		readout_raw_diagonal_fF = readout_raw_diagonal_fF,
+		readout_schur_correction_fF = readout_schur_correction_fF,
+		raw_branches_fF = (
+			C01_fF = c01,
+			C02_fF = c02,
+			C12_fF = c12,
+			Cr1_fF = cr1,
+			Cr2_fF = cr2,
+		),
+	)
+	all(value -> isfinite(value) && value > 0, (
+		result.Cq_B_fF,
+		result.Cq_LB_fF,
+		result.Cr_attach_LB_fF,
+		result.common_coordinate_capacitance_fF,
+		result.readout_schur_correction_fF,
+	)) || error("Schur-reduced floating-qubit diagonal capacitances must be finite and positive.")
+	isfinite(result.Cdr_physical_fF) || error(
+		"Schur-reduced floating-qubit differential-readout entry must be finite.",
+	)
+	return result
+end
+
+function _add_floating_qubit_core!(
+	circuit_plan,
+	qubit::D3FloatingQubitNominal;
+	id_prefix,
+	retain_attachment_endpoint_loading,
+)
 	prefix = strip(String(id_prefix))
 	isempty(prefix) && error("Floating-qubit id_prefix must be nonempty.")
 	island1 = external_node("$(prefix)_island_1")
 	island2 = external_node("$(prefix)_island_2")
+	c1_loading_fF = retain_attachment_endpoint_loading ? qubit.Cr1_fF : 0.0
+	c2_loading_fF = retain_attachment_endpoint_loading ? qubit.Cr2_fF : 0.0
 	shunt_capacitor!(
 		circuit_plan;
 		id = "$(prefix)_C01",
 		at = island1,
-		capacitance = qubit.C01_fF * D3_FARADS_PER_FF,
+		capacitance = (qubit.C01_fF + c1_loading_fF) * D3_FARADS_PER_FF,
 		role = :floating_qubit_island_ground_capacitance,
 	)
 	shunt_capacitor!(
 		circuit_plan;
 		id = "$(prefix)_C02",
 		at = island2,
-		capacitance = qubit.C02_fF * D3_FARADS_PER_FF,
+		capacitance = (qubit.C02_fF + c2_loading_fF) * D3_FARADS_PER_FF,
 		role = :floating_qubit_island_ground_capacitance,
 	)
 	couple_capacitive!(
@@ -98,11 +155,22 @@ function add_floating_qubit_nominal!(circuit_plan, readout_open_tail, qubit::D3F
 			role = :floating_qubit_linearized_josephson_inductance,
 		)
 	end
+	return (island1 = island1, island2 = island2)
+end
+
+function add_floating_qubit_nominal!(circuit_plan, readout_open_tail, qubit::D3FloatingQubitNominal; id_prefix = "floating_qubit")
+	prefix = strip(String(id_prefix))
+	nodes = _add_floating_qubit_core!(
+		circuit_plan,
+		qubit;
+		id_prefix = prefix,
+		retain_attachment_endpoint_loading = false,
+	)
 	couple_capacitive!(
 		circuit_plan;
 		id = "$(prefix)_Cr1",
 		from = readout_open_tail,
-		to = island1,
+		to = nodes.island1,
 		capacitance = qubit.Cr1_fF * D3_FARADS_PER_FF,
 		role = :readout_to_floating_qubit_capacitance,
 	)
@@ -110,27 +178,31 @@ function add_floating_qubit_nominal!(circuit_plan, readout_open_tail, qubit::D3F
 		circuit_plan;
 		id = "$(prefix)_Cr2",
 		from = readout_open_tail,
-		to = island2,
+		to = nodes.island2,
 		capacitance = qubit.Cr2_fF * D3_FARADS_PER_FF,
 		role = :readout_to_floating_qubit_capacitance,
 	)
-	return (island1 = island1, island2 = island2, readout_attachment = readout_open_tail)
+	return (
+		island1 = nodes.island1,
+		island2 = nodes.island2,
+		readout_attachment = readout_open_tail,
+	)
 end
 
-"""Add the readout-side half of the diagonal-preserving qubit coupling-off reference.
+"""Add the Schur-reduced readout attachment of the coupling-off reference.
 
-The physical `Cr1` and `Cr2` cross branches are represented as two separately
-named readout shunts so their provenance remains auditable. Qubit-side endpoint
-loading belongs to the independent Kron-reduced `fqLB` reference, not this plan.
+The effective shunt includes the non-separable common-coordinate correction.
+Raw `Cr1` and `Cr2` remain provenance and are not split back into arbitrary
+parallel shunts.
 
 # Arguments
 - `circuit_plan`: Plan that owns the readout fixture.
 - `readout_open_tail`: Distributed readout attachment node.
 - `qubit`: Reduced nominal qubit carrying `Cr1` and `Cr2`.
-- `id_prefix`: Stable prefix for the two shunt identities.
+- `id_prefix`: Stable prefix for the effective attachment identity.
 
 # Returns
-A named tuple containing the created `Cr1` and `Cr2` shunt relations.
+A named tuple containing the effective shunt and its capacitance provenance.
 
 # Throws
 `ErrorException` when `id_prefix` is empty.
@@ -143,29 +215,49 @@ function add_floating_qubit_readout_coupling_off_reference!(
 )
 	prefix = strip(String(id_prefix))
 	isempty(prefix) && error("Floating-qubit coupling-off id_prefix must be nonempty.")
-	cr1 = shunt_capacitor!(
+	layers = floating_qubit_capacitance_layers(qubit)
+	attachment = shunt_capacitor!(
 		circuit_plan;
-		id = "$(prefix)_Cr1_readout_diagonal",
+		id = "$(prefix)_Cr_attachment_LB",
 		at = readout_open_tail,
-		capacitance = qubit.Cr1_fF * D3_FARADS_PER_FF,
-		role = :floating_qubit_Cr1_readout_diagonal_preserving_coupling_off,
+		capacitance = layers.Cr_attach_LB_fF * D3_FARADS_PER_FF,
+		role = :floating_qubit_schur_reduced_readout_attachment_coupling_off,
 	)
-	cr2 = shunt_capacitor!(
-		circuit_plan;
-		id = "$(prefix)_Cr2_readout_diagonal",
-		at = readout_open_tail,
-		capacitance = qubit.Cr2_fF * D3_FARADS_PER_FF,
-		role = :floating_qubit_Cr2_readout_diagonal_preserving_coupling_off,
+	return (attachment = attachment, capacitance_layers = layers)
+end
+
+"""Add the full node-preserving mode-layer coupling-off qubit/readout network."""
+function add_floating_qubit_mode_layer_coupling_off!(
+	circuit_plan,
+	readout_open_tail,
+	qubit::D3FloatingQubitNominal;
+	id_prefix = "floating_qubit",
+)
+	prefix = strip(String(id_prefix))
+	nodes = _add_floating_qubit_core!(
+		circuit_plan,
+		qubit;
+		id_prefix = prefix,
+		retain_attachment_endpoint_loading = true,
 	)
-	return (Cr1 = cr1, Cr2 = cr2)
+	attachment = add_floating_qubit_readout_coupling_off_reference!(
+		circuit_plan,
+		readout_open_tail,
+		qubit;
+		id_prefix = "$(prefix)_mode_layer",
+	)
+	return merge(nodes, (
+		readout_attachment = readout_open_tail,
+		capacitance_layers = attachment.capacitance_layers,
+	))
 end
 
 """Instantiate exactly one declared qubit-coupling state at a readout node.
 
-`:absent` adds nothing, `:diagonal_preserving_off` adds only the separate
-readout-side `Cr1`/`Cr2` shunts, and `:physical_on` restores the complete
-linearized floating-qubit network. This exclusivity prevents artificial shunts
-and physical cross branches from being double-counted.
+`:absent` adds nothing, `:diagonal_preserving_off` adds the single
+Schur-reduced readout attachment shunt, and `:physical_on` restores the complete
+linearized floating-qubit network. This exclusivity prevents the effective
+attachment and physical cross branches from being double-counted.
 
 # Arguments
 - `circuit_plan`: Plan receiving the selected topology.
@@ -1169,6 +1261,111 @@ function build_readout_only_feedline_plan(
 		id_prefix = "floating_qubit_nominal_readout_only",
 	)
 	return attach_sparameter_hb_intent!(circuit_plan; hb_settings = hb_settings)
+end
+
+"""Build the isolated floating-qubit bare-component closed plan."""
+function build_closed_d3_bare_qubit_plan(qubit::D3FloatingQubitNominal)
+	plan = CircuitPlan("d3-closed-bare-qubit")
+	_add_floating_qubit_core!(
+		plan,
+		qubit;
+		id_prefix = "floating_qubit_nominal_closed_system_a",
+		retain_attachment_endpoint_loading = false,
+	)
+	return plan
+end
+
+"""Build one isolated readout or filter bare distributed resonator."""
+function build_closed_d3_bare_resonator_plan(
+	case,
+	design;
+	resonator,
+	hb_settings,
+)
+	kind = Symbol(resonator)
+	kind in (:readout, :filter) || error("Bare D3 resonator must be readout or filter.")
+	plan = CircuitPlan("d3-closed-bare-$(kind)-$(design.id)")
+	grounded_head = external_node("closed_bare_$(kind)_grounded_head")
+	open_tail = external_node("closed_bare_$(kind)_open_tail")
+	total_um = kind === :readout ? design.lr_total_um : design.lp_total_um
+	quarter_wave_resonator!(
+		plan;
+		id = Symbol(:closed_bare_, kind, :_resonator),
+		grounded_head = grounded_head,
+		open_tail = open_tail,
+		spec = RLGCSpec(
+			length_m = total_um * D3_METERS_PER_UM,
+			section_length_m = hb_settings.section_length_m,
+			l_per_m_h = case.single_l_per_m_h,
+			c_per_m_f = case.single_c_per_m_f,
+		),
+	)
+	return plan
+end
+
+"""Build the closed node-preserving System-A loaded-bare or physical plan."""
+function build_closed_d3_system_a_plan(
+	case,
+	design;
+	hb_settings,
+	floating_qubit_nominal,
+	qubit_coupling_state,
+)
+	state = Symbol(qubit_coupling_state)
+	state in (:mode_layer_off, :physical_on) || error(
+		"Closed D3 System A requires mode_layer_off or physical_on.",
+	)
+	plan = CircuitPlan("d3-closed-system-a-$(design.id)-$(state)")
+	readout_grounded_head = external_node("closed_system_a_readout_grounded_head")
+	readout_open_tail = external_node("closed_system_a_readout_open_tail")
+	lr_short_m = design.lr_short_um * D3_METERS_PER_UM
+	lc_m = design.lc_um * D3_METERS_PER_UM
+	quarter_wave_resonator!(
+		plan;
+		id = :closed_system_a_readout_resonator,
+		grounded_head = readout_grounded_head,
+		open_tail = readout_open_tail,
+		spec = RLGCSpec(
+			length_m = design.lr_total_um * D3_METERS_PER_UM,
+			section_length_m = hb_settings.section_length_m,
+			l_per_m_h = case.single_l_per_m_h,
+			c_per_m_f = case.single_c_per_m_f,
+		),
+		breakpoints_m = [lr_short_m, lr_short_m + lc_m],
+		section_overrides = [
+			TransmissionLineSectionOverride(
+				start_m = lr_short_m,
+				length_m = lc_m,
+				l_per_m_h = case.mtl_diag_l_per_m_h,
+				c_per_m_f = case.mtl_diag_c_per_m_f,
+				tag = :closed_system_a_readout_lc_section_mtl_diagonal,
+			),
+		],
+	)
+	prefix = "floating_qubit_nominal_closed_system_a"
+	qubit_nodes = if state === :mode_layer_off
+		add_floating_qubit_mode_layer_coupling_off!(
+			plan,
+			readout_open_tail,
+			floating_qubit_nominal;
+			id_prefix = prefix,
+		)
+	else
+		add_floating_qubit_nominal!(
+			plan,
+			readout_open_tail,
+			floating_qubit_nominal;
+			id_prefix = prefix,
+		)
+	end
+	plan.metadata[:d3_closed_system_a] = (
+		state = state,
+		readout_open_tail = readout_open_tail,
+		qubit_island_1 = qubit_nodes.island1,
+		qubit_island_2 = qubit_nodes.island2,
+		capacitance_layers = floating_qubit_capacitance_layers(floating_qubit_nominal),
+	)
+	return plan
 end
 
 function shared_readout_branch_positions_m(design_count; feedline_length_um, margin_um)

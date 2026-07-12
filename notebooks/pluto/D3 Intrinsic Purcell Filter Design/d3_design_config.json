@@ -8,9 +8,9 @@
   "floating_qubit_nominal_workspace_path": "superconducting-circuits-research-workbench/build/private_inputs/d3_floating_qubit_nominal.json",
   "target_contract": {
     "workspace_relative_path": "docs/design-targets/contracts/d3-intrinsic-interferometric-purcell-filter.v1.json",
-    "expected_sha256": "31f892ff814335e1a781150b3f47dcd013c18041ce2aba26f045751ab81ac5ba",
+    "expected_sha256": "595fa49f65916bfdbe04e523b9b68444fc209c1b24229f2a84fd1120260a9aeb",
     "expected_target_id": "d3-intrinsic-interferometric-purcell-filter",
-    "expected_revision": 1
+    "expected_revision": 2
   },
   "orpen_case_json_workspace_path": "orpen_sc_pdk/build/simulation/circuit/intrinsic_purcell_filter/orpen_q2d_rlgc_cases.json",
   "design_csv_workspace_root": "orpen_sc_pdk/build/simulation/circuit/intrinsic_purcell_filter/d3_intrinsic_purcell_filter_design/design_inputs",

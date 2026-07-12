@@ -335,8 +335,8 @@ function D3SlotEvaluator(
 	end
 	input_sha256 = String(floating_qubit_input_sha256)
 	occursin(r"^[0-9a-f]{64}$", input_sha256) || error("Floating-qubit input identity must be a lowercase SHA-256.")
-	bare_frequency_hz = Float64(qubit_coupling_off_frequency_hz)
-	isfinite(bare_frequency_hz) && bare_frequency_hz > 0 || error("Floating-qubit coupling-off frequency must be finite and positive.")
+	coupling_off_fqLB_hz = Float64(qubit_coupling_off_frequency_hz)
+	isfinite(coupling_off_fqLB_hz) && coupling_off_fqLB_hz > 0 || error("Floating-qubit coupling-off frequency must be finite and positive.")
 	f01_target_hz = Float64(qubit_f01_target_hz)
 	isfinite(f01_target_hz) && f01_target_hz > 0 || error("Canonical qubit f01 target must be finite and positive.")
 	expected_lj = Float64(expected_L_J_per_junction_nH)
@@ -356,7 +356,7 @@ function D3SlotEvaluator(
 		settings,
 		floating_qubit_nominal,
 		input_sha256,
-		bare_frequency_hz,
+		coupling_off_fqLB_hz,
 		f01_target_hz,
 		expected_lj,
 		target_contract_id,
@@ -500,7 +500,7 @@ function _d3_trace_identity(
 	return (
 		reference_contract_id = "d3-reference-contract|case=$(case)|floating_qubit_sha256=$(floating_qubit_input_sha256)|$(identity)",
 		filter_loaded_bare_reference_id = "d3-filter-loaded-bare|grid_sha256=$(loaded_grid_sha256)|design=$(design)|$(identity)",
-		common_readout_loaded_bare_reference_id = "d3-common-readout-loaded-bare|grid_sha256=$(loaded_grid_sha256)|floating_qubit_sha256=$(floating_qubit_input_sha256)|design=$(design)|$(identity)",
+		common_readout_loaded_bare_reference_id = "d3-common-readout-loaded-bare-closed-modal|floating_qubit_sha256=$(floating_qubit_input_sha256)|design=$(design)|$(identity)",
 		filter_only_trace_id = "d3-filter-only-hb|grid_sha256=$(loaded_grid_sha256)|design=$(design)|$(identity)",
 		loaded_empty_feedline_trace_id = "d3-empty-feedline-hb|grid_sha256=$(loaded_grid_sha256)|case=$(case)",
 		qubit_empty_feedline_trace_id = "d3-empty-feedline-hb|grid_sha256=$(qubit_grid_sha256)|case=$(case)",
@@ -773,6 +773,340 @@ function _zero_probe_lower_pole_crosscheck(
 	)
 end
 
+function _zero_probe_lower_pole_diagnostic(
+	fqLB_hz,
+	frLB_zero_probe_hz,
+	fr_coupling_on_zero_probe_hz,
+	observed_qubit_zero_probe_hz,
+	comparison_scale_hz,
+)
+	values = Float64[
+		fqLB_hz,
+		frLB_zero_probe_hz,
+		fr_coupling_on_zero_probe_hz,
+		observed_qubit_zero_probe_hz,
+		comparison_scale_hz,
+	]
+	all(isfinite, values) || error("Zero-probe lower-pole diagnostic inputs must be finite.")
+	values[5] >= 0 || error("Zero-probe lower-pole diagnostic scale must be non-negative.")
+	predicted_qubit_zero_probe_hz = values[1] + values[2] - values[3]
+	residual_hz = values[4] - predicted_qubit_zero_probe_hz
+	return (
+		status = abs(residual_hz) <= values[5] ? "within_comparison_scale" : "outside_comparison_scale",
+		role = "finite_open_s21_diagnostic_not_gate",
+		fqLB_hz = values[1],
+		frLB_zero_probe_hz = values[2],
+		fr_coupling_on_zero_probe_hz = values[3],
+		observed_qubit_zero_probe_hz = values[4],
+		predicted_qubit_zero_probe_hz = predicted_qubit_zero_probe_hz,
+		residual_hz = residual_hz,
+		comparison_scale_hz = values[5],
+	)
+end
+
+function _readout_shift_g_diagnostic(fqLB_hz, frLB_hz, physical_readout_hz)
+	values = Float64[fqLB_hz, frLB_hz, physical_readout_hz]
+	all(isfinite, values) || return (
+		status = "nonfinite",
+		role = "finite_open_s21_diagnostic_not_gate",
+		g_hz = nothing,
+	)
+	readout_shift_hz = values[3] - values[2]
+	radicand_hz2 = readout_shift_hz * (values[3] - values[1])
+	return (
+		status = radicand_hz2 > 0 ? "real" : "nonpositive_radicand",
+		role = "finite_open_s21_diagnostic_not_gate",
+		fqLB_hz = values[1],
+		frLB_hz = values[2],
+		physical_readout_hz = values[3],
+		readout_shift_hz = readout_shift_hz,
+		radicand_hz2 = radicand_hz2,
+		g_hz = radicand_hz2 > 0 ? sqrt(radicand_hz2) : nothing,
+	)
+end
+
+function _closed_d3_modes(plan)
+	compiled = compile_to_josephson(plan)
+	nodal = extract_linear_nodal_model(compiled)
+	reduced = reduce_free_charge_coordinates(nodal)
+	return solve_generalized_modes(reduced)
+end
+
+function _nearest_mode_index(frequencies_hz, anchor_hz)
+	values = Float64.(collect(frequencies_hz))
+	!isempty(values) || error("Closed D3 mode ownership requires at least one mode.")
+	return argmin(abs.(values .- Float64(anchor_hz)))
+end
+
+function _qubit_inductive_participations(modes, qubit, island_1_index, island_2_index)
+	branch_inverse_inductance = 2 / (qubit.L_J_per_junction_nH * D3_HENRIES_PER_NH)
+	return [
+		begin
+			flux = modes.node_flux_vectors[:, mode_index]
+			total_inductive_energy = dot(
+				flux,
+				modes.model.source.inverse_inductance * flux,
+			)
+			total_inductive_energy > 0 || error("Closed D3 mode has no positive inductive energy.")
+			branch_inverse_inductance * (flux[island_1_index] - flux[island_2_index])^2 /
+				total_inductive_energy
+		end
+		for mode_index in eachindex(modes.frequencies_hz)
+	]
+end
+
+function _nearest_exact_pair_indices(frequencies_hz, target_frequencies_hz)
+	frequencies = Float64.(collect(frequencies_hz))
+	targets = sort(Float64.(collect(target_frequencies_hz)))
+	length(targets) == 2 || error("Closed D3 target-mode ownership requires two target frequencies.")
+	length(frequencies) >= 2 || error("Closed D3 physical model must contain at least two modes.")
+	best = nothing
+	best_cost = Inf
+	for lower_index in 1:(length(frequencies) - 1), upper_index in (lower_index + 1):length(frequencies)
+		cost = abs(frequencies[lower_index] - targets[1]) + abs(frequencies[upper_index] - targets[2])
+		if cost < best_cost
+			best = (lower_index, upper_index)
+			best_cost = cost
+		end
+	end
+	return collect(best)
+end
+
+"""Solve the closed bare, loaded-bare, and physical System-A frequency layers.
+
+The complete reduced off-mode basis is used for the Hamiltonian projection so
+the finite discretized line is not silently truncated. The primitive `g` is the
+qubit/readout matrix element of the projected number-conserving Hamiltonian;
+finite/open S21 pole shifts remain independent diagnostics.
+"""
+function _closed_d3_modal_analysis(evaluator, design, slot_hz; capture_full_evidence = false)
+	hb_settings = evaluator.hb_settings
+	qubit = evaluator.floating_qubit_nominal
+	bare_qubit_modes = _closed_d3_modes(build_closed_d3_bare_qubit_plan(qubit))
+	length(bare_qubit_modes.frequencies_hz) == 1 || error(
+		"The isolated closed floating qubit must own exactly one positive differential mode.",
+	)
+	bare_readout_modes = capture_full_evidence ? _closed_d3_modes(build_closed_d3_bare_resonator_plan(
+		evaluator.case,
+		design;
+		resonator = :readout,
+		hb_settings = hb_settings,
+	)) : nothing
+	bare_filter_modes = capture_full_evidence ? _closed_d3_modes(build_closed_d3_bare_resonator_plan(
+		evaluator.case,
+		design;
+		resonator = :filter,
+		hb_settings = hb_settings,
+	)) : nothing
+	frB_index = isnothing(bare_readout_modes) ? nothing :
+		_nearest_mode_index(bare_readout_modes.frequencies_hz, slot_hz)
+	fpB_index = isnothing(bare_filter_modes) ? nothing :
+		_nearest_mode_index(bare_filter_modes.frequencies_hz, slot_hz)
+
+	off_plan = build_closed_d3_system_a_plan(
+		evaluator.case,
+		design;
+		hb_settings = hb_settings,
+		floating_qubit_nominal = qubit,
+		qubit_coupling_state = :mode_layer_off,
+	)
+	on_plan = build_closed_d3_system_a_plan(
+		evaluator.case,
+		design;
+		hb_settings = hb_settings,
+		floating_qubit_nominal = qubit,
+		qubit_coupling_state = :physical_on,
+	)
+	off_nodal = extract_linear_nodal_model(compile_to_josephson(off_plan))
+	on_nodal = extract_linear_nodal_model(compile_to_josephson(on_plan))
+	reduced_pair = reduce_linear_model_pair(off_nodal, on_nodal)
+	off_modes = solve_generalized_modes(reduced_pair.coupling_off)
+	on_modes = solve_generalized_modes(reduced_pair.physical_on)
+
+	island_1_index = findfirst(name -> occursin("closed_system_a_island_1", name), off_nodal.node_names)
+	island_2_index = findfirst(name -> occursin("closed_system_a_island_2", name), off_nodal.node_names)
+	isnothing(island_1_index) && error("Closed D3 System A is missing qubit island 1.")
+	isnothing(island_2_index) && error("Closed D3 System A is missing qubit island 2.")
+	off_qubit_participations = _qubit_inductive_participations(
+		off_modes,
+		qubit,
+		island_1_index,
+		island_2_index,
+	)
+	qubit_mode_index = argmax(off_qubit_participations)
+	off_qubit_participations[qubit_mode_index] > 0.5 || reject_d3_candidate(
+		"modal.qubit_loaded_bare_ownership",
+		"No closed coupling-off mode has majority floating-qubit inductive participation.";
+		details = (participations = off_qubit_participations,),
+	)
+	off_readout_participations = 1 .- off_qubit_participations
+	readout_candidates = findall(participation -> participation > 0.5, off_readout_participations)
+	!isempty(readout_candidates) || reject_d3_candidate(
+		"modal.readout_loaded_bare_ownership",
+		"No closed coupling-off mode has majority distributed-readout inductive participation.";
+		details = (
+			qubit_inductive_participations = off_qubit_participations,
+			readout_inductive_participations = off_readout_participations,
+		),
+	)
+	readout_mode_index = readout_candidates[argmin(abs.(off_modes.frequencies_hz[readout_candidates] .- slot_hz))]
+	fqLB_hz = off_modes.frequencies_hz[qubit_mode_index]
+	frLB_hz = off_modes.frequencies_hz[readout_mode_index]
+	abs(fqLB_hz - evaluator.qubit_coupling_off_frequency_hz) <= evaluator.settings.max_qubit_anchor_distance_hz ||
+		reject_d3_candidate(
+			"modal.qubit_loaded_bare_anchor",
+			"Closed modal fqLB lies outside the analytic Kron-reduction anchor gate.";
+			details = (
+				modal_fqLB_hz = fqLB_hz,
+				analytic_fqLB_hz = evaluator.qubit_coupling_off_frequency_hz,
+				maximum_anchor_distance_hz = evaluator.settings.max_qubit_anchor_distance_hz,
+			),
+		)
+	_require_zero_probe_readout_slot_ownership(
+		frLB_hz,
+		slot_hz,
+		evaluator.settings.loaded_bare_ownership_half_width_hz,
+	)
+
+	all_mode_indices = collect(eachindex(off_modes.frequencies_hz))
+	pair_projection = project_selected_modes(
+		off_modes,
+		reduced_pair.physical_on,
+		[qubit_mode_index, readout_mode_index],
+	)
+	g_hz = abs(pair_projection.coupling_matrix_hz[1, 2])
+	isfinite(g_hz) && g_hz > 0 || reject_d3_candidate(
+		"modal.nonpositive_g",
+		"Closed modal projection must produce a finite positive qubit-readout coupling.";
+		details = (g_hz = g_hz,),
+	)
+	exact_pair_indices = _nearest_exact_pair_indices(
+		on_modes.frequencies_hz,
+		pair_projection.projected_bdg_frequencies_hz,
+	)
+	on_qubit_participations = _qubit_inductive_participations(
+		on_modes,
+		qubit,
+		island_1_index,
+		island_2_index,
+	)
+	on_readout_participations = 1 .- on_qubit_participations
+	qubit_exact_index = exact_pair_indices[argmax(on_qubit_participations[exact_pair_indices])]
+	readout_exact_index = only(setdiff(exact_pair_indices, [qubit_exact_index]))
+	full_projection = capture_full_evidence ? project_selected_modes(
+		off_modes,
+		reduced_pair.physical_on,
+		all_mode_indices,
+	) : nothing
+	full_closure = isnothing(full_projection) ? nothing :
+		linear_projection_closure(full_projection, on_modes.frequencies_hz)
+	pair_closure = linear_projection_closure(
+		pair_projection,
+		on_modes.frequencies_hz[exact_pair_indices],
+	)
+	pair_bdg_residual_hz = pair_closure.max_abs_bdg_residual_hz
+	pair_rwa_bdg_residual_hz = pair_closure.max_abs_rwa_minus_bdg_hz
+	gate_hz = evaluator.settings.max_vector_pole_disagreement_hz
+	modal_closure_audit = (
+		fqLB_hz = fqLB_hz,
+		frLB_hz = frLB_hz,
+		primitive_g_hz = g_hz,
+		projected_bdg_frequencies_hz = pair_projection.projected_bdg_frequencies_hz,
+		projected_rwa_frequencies_hz = pair_projection.projected_rwa_frequencies_hz,
+		exact_assigned_frequencies_hz = sort(on_modes.frequencies_hz[exact_pair_indices]),
+		projected_bdg_residuals_hz = pair_closure.projected_bdg_residuals_hz,
+		projected_rwa_residuals_hz = pair_closure.projected_rwa_residuals_hz,
+		rwa_minus_bdg_hz = pair_closure.rwa_minus_bdg_hz,
+		hnc_diagonal_shifts_hz = pair_projection.diagonal_shifts_hz,
+		number_conserving_matrix_hz = pair_projection.number_conserving_matrix_rad_s ./ (2π),
+		pairing_matrix_hz = pair_projection.pairing_matrix_rad_s ./ (2π),
+		maximum_residual_gate_hz = gate_hz,
+	)
+	reduced_model_failure_reasons = String[]
+	pair_bdg_residual_hz <= gate_hz || push!(
+		reduced_model_failure_reasons,
+		"two_mode_bdg_poles_disagree_with_exact_physical_poles",
+	)
+	pair_rwa_bdg_residual_hz <= gate_hz || push!(
+		reduced_model_failure_reasons,
+		"two_mode_rwa_disagrees_with_two_mode_bdg",
+	)
+	reduced_model_eligible = isempty(reduced_model_failure_reasons)
+
+	return (
+		frequency_layers = (
+			fqB_hz = only(bare_qubit_modes.frequencies_hz),
+			frB_hz = isnothing(bare_readout_modes) ? nothing : bare_readout_modes.frequencies_hz[frB_index],
+			fpB_hz = isnothing(bare_filter_modes) ? nothing : bare_filter_modes.frequencies_hz[fpB_index],
+			fqLB_hz = fqLB_hz,
+			frLB_hz = frLB_hz,
+			physical_qubit_like_hz = on_modes.frequencies_hz[qubit_exact_index],
+			physical_readout_like_hz = on_modes.frequencies_hz[readout_exact_index],
+		),
+		g_hz = g_hz,
+		readout_shift_hz = on_modes.frequencies_hz[readout_exact_index] - frLB_hz,
+		mode_indices = (
+			coupling_off_qubit = qubit_mode_index,
+			coupling_off_readout = readout_mode_index,
+			physical_qubit_like = qubit_exact_index,
+			physical_readout_like = readout_exact_index,
+		),
+		mode_inductive_participations = (
+			coupling_off = (
+				qubit = off_qubit_participations,
+				readout = off_readout_participations,
+			),
+			physical_on = (
+				qubit = on_qubit_participations,
+				readout = on_readout_participations,
+			),
+		),
+		projection = (
+			contract_id = "d3-closed-modal-projection-eligibility.v3",
+			g_hz = g_hz,
+			selected_number_conserving_matrix_hz = pair_projection.number_conserving_matrix_rad_s ./ (2π),
+			selected_pairing_matrix_hz = pair_projection.pairing_matrix_rad_s ./ (2π),
+			full_basis_reconstruction = isnothing(full_projection) ? nothing : (
+				mode_count = length(all_mode_indices),
+				maximum_bdg_residual_hz = full_closure.max_abs_bdg_residual_hz,
+			),
+			two_mode_reduced_closure = (
+				status = reduced_model_eligible ? "eligible" : "ineligible",
+				reduced_model_eligible = reduced_model_eligible,
+				failure_reasons = reduced_model_failure_reasons,
+				selected_off_mode_indices = [qubit_mode_index, readout_mode_index],
+				projected_bdg_frequencies_hz = pair_projection.projected_bdg_frequencies_hz,
+				projected_rwa_frequencies_hz = pair_projection.projected_rwa_frequencies_hz,
+				exact_assigned_frequencies_hz = sort(on_modes.frequencies_hz[exact_pair_indices]),
+				bdg_residuals_hz = pair_closure.projected_bdg_residuals_hz,
+				rwa_minus_bdg_hz = pair_closure.rwa_minus_bdg_hz,
+				maximum_bdg_residual_hz = pair_bdg_residual_hz,
+				maximum_rwa_minus_bdg_hz = pair_rwa_bdg_residual_hz,
+				maximum_residual_gate_hz = gate_hz,
+			),
+		),
+		reduced_model_eligibility = (
+			model = "system_a_two_mode_qubit_readout",
+			eligible = reduced_model_eligible,
+			failure_reasons = reduced_model_failure_reasons,
+			threshold_hz = gate_hz,
+			maximum_bdg_residual_hz = pair_bdg_residual_hz,
+			maximum_rwa_minus_bdg_hz = pair_rwa_bdg_residual_hz,
+			audit = modal_closure_audit,
+		),
+		capacitance_layers = floating_qubit_capacitance_layers(qubit),
+		provenance = (
+			coupling_off_source_sha256 = off_nodal.source_sha256,
+			physical_on_source_sha256 = on_nodal.source_sha256,
+			node_order_sha256 = off_nodal.node_order_sha256,
+			coupling_off_capacitance_sha256 = off_nodal.capacitance_sha256,
+			physical_on_capacitance_sha256 = on_nodal.capacitance_sha256,
+			inverse_inductance_sha256 = off_nodal.inverse_inductance_sha256,
+			free_charge_coordinate_count = size(reduced_pair.coupling_off.free_charge_basis, 2),
+		),
+	)
+end
+
 """Return the fixed-parameter qubit–readout–filter normal-mode frequencies.
 
 This diagonalizes the loaded-bare three-mode matrix using primitive `g` from
@@ -804,7 +1138,8 @@ end
 
 The prediction reuses System B's calibrated direct path and channel residue,
 then adds the qubit self-energy using System A's fixed `g` and System B's fixed
-`J`. No parameter is refit; closure-quality failure rejects the candidate.
+`J`. No parameter is refit. Closure quality classifies reduced-model
+eligibility without rejecting an otherwise valid physical System-C extraction.
 
 # Arguments
 - `frequencies_hz`, `observed_s21`: System C pair-window trace.
@@ -818,8 +1153,8 @@ then adds the qubit self-energy using System A's fixed `g` and System B's fixed
 A named tuple containing closure status, metrics, prediction, and residual trace.
 
 # Throws
-`ErrorException` for malformed traces or singular sampling; `D3CandidateRejected`
-when the existing complex-response gates fail.
+`ErrorException` for malformed traces, invalid numeric inputs, or singular
+sampling. Reduced-model quality failures are returned as diagnostics.
 """
 function _three_mode_response_closure(
 	frequencies_hz,
@@ -838,6 +1173,18 @@ function _three_mode_response_closure(
 	frequencies = Float64.(collect(frequencies_hz))
 	observed = ComplexF64.(collect(observed_s21))
 	length(frequencies) == length(observed) >= 3 || error("Three-mode response closure requires matching nonempty traces.")
+	all(isfinite, frequencies) || error("Three-mode response closure frequencies must be finite.")
+	all(isfinite, real.(observed)) && all(isfinite, imag.(observed)) || error(
+		"Three-mode response closure observations must be finite.",
+	)
+	fixed_values = Float64[
+		fq_hz, fr_hz, fp_hz, g_hz, j_hz,
+		filter_loaded_linewidth_hz, readout_loaded_linewidth_hz,
+	]
+	all(isfinite, fixed_values) || error("Three-mode response closure fixed parameters must be finite.")
+	all(>(0.0), fixed_values[1:6]) && fixed_values[7] >= 0 || error(
+		"Three-mode response closure frequencies, couplings, and filter linewidth must be positive; readout linewidth must be non-negative.",
+	)
 	background = j_fit["background"]
 	center_hz = Float64(background["frequency_center_hz"])
 	scale_hz = Float64(background["frequency_scale_hz"])
@@ -848,6 +1195,9 @@ function _three_mode_response_closure(
 		residue_parameters["channel_residue_real_hz"],
 		residue_parameters["channel_residue_imag_hz"],
 	)
+	all(isfinite, (center_hz, scale_hz, real(c0), imag(c0), real(c1), imag(c1), real(residue_hz), imag(residue_hz))) ||
+		error("Three-mode response closure background and residue must be finite.")
+	scale_hz != 0 || error("Three-mode response closure frequency scale must be non-zero.")
 	direct_path = c0 .+ c1 .* ((frequencies .- center_hz) ./ scale_hz)
 	a_p = filter_loaded_linewidth_hz / 2 .+ im .* (frequencies .- fp_hz)
 	a_r = readout_loaded_linewidth_hz / 2 .+ im .* (frequencies .- fr_hz)
@@ -855,44 +1205,61 @@ function _three_mode_response_closure(
 	minimum(abs.(a_q)) > 0 || error("Three-mode closure pair grid must not sample the lossless coupling-off qubit loaded-bare pole exactly.")
 	a_r_effective = a_r .+ g_hz^2 ./ a_q
 	predicted = direct_path .+ residue_hz .* a_r_effective ./ (a_p .* a_r_effective .+ j_hz^2)
+	all(isfinite, real.(predicted)) && all(isfinite, imag.(predicted)) || error(
+		"Three-mode response closure prediction produced non-finite values.",
+	)
 	residual = predicted .- observed
 	abs_residual = abs.(predicted) .- abs.(observed)
 	complex_sse = sum(abs2, residual)
 	abs_sse = sum(abs2, abs_residual)
 	complex_centered = sum(abs2, observed .- sum(observed) / length(observed))
 	abs_centered = sum(abs2, abs.(observed) .- sum(abs.(observed)) / length(observed))
-	complex_centered > 0 && abs_centered > 0 || reject_d3_candidate(
-		"system_c.response_closure_undefined",
-		"System C response-closure R2 is undefined.";
-	)
+	failure_reasons = String[]
+	complex_centered > 0 || push!(failure_reasons, "complex_r2_undefined")
+	abs_centered > 0 || push!(failure_reasons, "magnitude_r2_undefined")
 	phase_residual = angle.(predicted .* conj.(observed))
 	phase_valid = (abs.(predicted) .>= settings.min_phase_magnitude) .&
 		(abs.(observed) .>= settings.min_phase_magnitude)
 	phase_valid_count = count(phase_valid)
-	phase_valid_count > 0 || reject_d3_candidate(
-		"system_c.response_closure_phase_undefined",
-		"System C response closure has no phase-valid samples.";
-	)
+	phase_valid_count > 0 || push!(failure_reasons, "phase_rmse_undefined")
+	complex_r2 = complex_centered > 0 ? 1 - complex_sse / complex_centered : nothing
+	abs_r2 = abs_centered > 0 ? 1 - abs_sse / abs_centered : nothing
+	phase_rmse_rad = phase_valid_count > 0 ?
+		sqrt(sum(abs2, phase_residual[phase_valid]) / phase_valid_count) : nothing
 	metrics = (
 		complex_rmse = sqrt(complex_sse / length(observed)),
-		complex_r2 = 1 - complex_sse / complex_centered,
+		complex_r2 = complex_r2,
 		abs_rmse = sqrt(abs_sse / length(observed)),
-		abs_r2 = 1 - abs_sse / abs_centered,
-		phase_rmse_rad = sqrt(sum(abs2, phase_residual[phase_valid]) / phase_valid_count),
+		abs_r2 = abs_r2,
+		phase_rmse_rad = phase_rmse_rad,
 		phase_valid_sample_count = phase_valid_count,
 		phase_valid_sample_fraction = phase_valid_count / length(observed),
 	)
-	metrics.complex_r2 >= settings.min_complex_r2 &&
-		metrics.abs_r2 >= settings.min_abs_r2 &&
-		metrics.phase_rmse_rad <= settings.max_phase_rmse_rad || reject_d3_candidate(
-			"system_c.response_closure_gate",
-			"System C no-free-parameter complex-S21 closure failed the existing complex-response gates.";
-			details = (metrics = metrics,),
-		)
+	!isnothing(complex_r2) && complex_r2 < settings.min_complex_r2 && push!(
+		failure_reasons,
+		"complex_r2_below_threshold",
+	)
+	!isnothing(abs_r2) && abs_r2 < settings.min_abs_r2 && push!(
+		failure_reasons,
+		"magnitude_r2_below_threshold",
+	)
+	!isnothing(phase_rmse_rad) && phase_rmse_rad > settings.max_phase_rmse_rad && push!(
+		failure_reasons,
+		"phase_rmse_above_threshold",
+	)
+	reduced_model_eligible = isempty(failure_reasons)
 	return (
-		status = "success",
+		status = reduced_model_eligible ? "eligible" : "ineligible",
+		reduced_model_eligible = reduced_model_eligible,
+		failure_reasons = failure_reasons,
 		model = "fixed_primitive_g_J_three_mode_filter_response",
 		metrics = metrics,
+		thresholds = (
+			min_complex_r2 = settings.min_complex_r2,
+			min_abs_r2 = settings.min_abs_r2,
+			max_phase_rmse_rad = settings.max_phase_rmse_rad,
+			min_phase_magnitude = settings.min_phase_magnitude,
+		),
 		frequencies_hz = frequencies,
 		observed_s21 = observed,
 		predicted_s21 = predicted,
@@ -1165,6 +1532,8 @@ function _journal_d3_evaluation!(evaluator, candidate, record)
 		_d3_plain_data((
 			candidate = candidate,
 			status = "valid",
+			physical_evaluation_status = record.physical_evaluation_status,
+			reduced_model_eligibility = record.reduced_model_eligibility,
 			metrics = record.metrics,
 			diagnostics = record.diagnostics,
 		))
@@ -1193,6 +1562,14 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		slot_hz = Float64(design.slot_target_ghz) * D3_HZ_PER_GHZ
 		notch_target_hz = Float64(design.notch_target_ghz) * D3_HZ_PER_GHZ
 		candidate_identity = _candidate_identity(candidate)
+		closed_modal = _closed_d3_modal_analysis(
+			evaluator,
+			design,
+			slot_hz;
+			capture_full_evidence = capture_traces,
+		)
+		qubit_loaded_bare_hz = closed_modal.frequency_layers.fqLB_hz
+		readout_loaded_bare_hz = closed_modal.frequency_layers.frLB_hz
 
 		loaded_frequencies_hz = _slot_frequency_grid(
 			slot_hz,
@@ -1207,7 +1584,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		)
 		pair_grid_sha256 = _frequency_grid_sha256(pair_frequencies_hz)
 		qubit_frequencies_hz = _slot_frequency_grid(
-			evaluator.qubit_coupling_off_frequency_hz,
+			qubit_loaded_bare_hz,
 			settings.qubit_local_half_width_hz,
 			settings.frequency_step_hz,
 		)
@@ -1269,7 +1646,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			"filter_only_trace_id" => filter_only_trace_id,
 			"empty_feedline_trace_id" => loaded_empty_feedline_trace_id,
 			"filter_loaded_bare_reference_id" => filter_loaded_bare_reference_id,
-			"loaded_bare_reference_topology" => "system_B_maxwell_diagonal_MTL_with_separate_Cr1_Cr2_readout_shunts_and_zeroed_exchange",
+			"loaded_bare_reference_topology" => "system_B_maxwell_diagonal_MTL_with_single_Schur_reduced_Cr_attachment_LB_shunt_and_zeroed_exchange",
 			"quantity_scope" => "system_B_qubit_dynamic_nodes_absent_g_zero_filter_loaded_bare_calibration",
 			"port_plane" => port_plane,
 			"feedline_source" => evaluator.feedline.source,
@@ -1315,7 +1692,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		)
 		readout_modes = Any[]
 		readout_captures = Any[]
-		g_values_hz = Float64[]
+		readout_shift_g_diagnostics = Any[]
 		for capacitance_fF in settings.readout_probe_capacitances_fF
 			coupling_off_trace_id = "d3-readout-g-probe-diagonal-preserving-off|grid_sha256=$(loaded_grid_sha256)|capacitance_fF=$(bitstring(capacitance_fF))|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
 			coupling_on_trace_id = "d3-readout-g-probe-physical-on|grid_sha256=$(loaded_grid_sha256)|capacitance_fF=$(bitstring(capacitance_fF))|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
@@ -1395,7 +1772,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			qubit_mode = _fit_qubit_probe_mode(
 				qubit_frequencies_hz,
 				qubit_normalized,
-				evaluator.qubit_coupling_off_frequency_hz,
+				qubit_loaded_bare_hz,
 				"readout-only physical-qubit lower-pole cross-check $(capacitance_fF) fF",
 				settings,
 			)
@@ -1408,16 +1785,16 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 					slot_grid_stop_hz = last(loaded_frequencies_hz),
 				),
 			)
-			g_hz = _linearized_g_from_readout_shift_hz(
-				evaluator.qubit_coupling_off_frequency_hz,
+			shift_g_diagnostic = _readout_shift_g_diagnostic(
+				qubit_loaded_bare_hz,
 				coupling_off_mode.frequency_hz,
 				coupling_on_mode.frequency_hz,
 			)
 			readout_shift_hz = coupling_on_mode.frequency_hz - coupling_off_mode.frequency_hz
-			predicted_qubit_pole_hz = evaluator.qubit_coupling_off_frequency_hz +
+			predicted_qubit_pole_hz = qubit_loaded_bare_hz +
 				coupling_off_mode.frequency_hz - coupling_on_mode.frequency_hz
 			qubit_crosscheck_residual_hz = qubit_mode.frequency_hz - predicted_qubit_pole_hz
-			push!(g_values_hz, g_hz)
+			push!(readout_shift_g_diagnostics, shift_g_diagnostic)
 			push!(readout_modes, merge(coupling_on_mode, (
 				finite_probe_mode_assignment = "finite_probe_mode_assignment_no_slot_ownership_gate",
 				frequency_grid_sha256 = loaded_grid_sha256,
@@ -1438,7 +1815,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 					measured_trace_id = qubit_probe_trace_id,
 					reference_trace_id = qubit_empty_feedline_trace_id,
 				)),
-				g_hz = g_hz,
+				shift_derived_g_diagnostic = shift_g_diagnostic,
 			)))
 			capture_traces && push!(readout_captures, (
 				capacitance_fF = capacitance_fF,
@@ -1486,33 +1863,48 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			"common readout loaded-bare weak-probe linewidth",
 			"readout_extrapolation.linewidth",
 		)
-		g_fit = _quadratic_zero_intercept(
-			settings.readout_probe_capacitances_fF,
-			g_values_hz,
-			settings.min_g_extrapolation_r2,
-			"linearized g weak-probe",
-			"g_extrapolation",
-		)
-		readout_frequency_hz = readout_coupling_off_frequency_fit.intercept
+		diagnostic_g_values_hz = [item.g_hz for item in readout_shift_g_diagnostics]
+		g_fit = if all(value -> !isnothing(value), diagnostic_g_values_hz)
+			try
+				merge(
+					_quadratic_zero_intercept(
+						settings.readout_probe_capacitances_fF,
+						Float64.(diagnostic_g_values_hz),
+						settings.min_g_extrapolation_r2,
+						"readout-shift-derived g weak-probe diagnostic",
+						"g_extrapolation",
+					),
+					(role = "finite_open_s21_diagnostic_not_gate", status = "fit_available"),
+				)
+			catch exception
+				exception isa D3CandidateRejected || rethrow()
+				(
+					status = "fit_rejected_diagnostic_only",
+					role = "finite_open_s21_diagnostic_not_gate",
+					code = exception.code,
+					reason = exception.reason,
+					details = exception.details,
+				)
+			end
+		else
+			(
+				status = "nonreal_shift_diagnostic",
+				role = "finite_open_s21_diagnostic_not_gate",
+				probe_diagnostics = readout_shift_g_diagnostics,
+			)
+		end
+		g_shift_fit_diagnostic = g_fit
+		g_fit = hasproperty(g_fit, :intercept) ? g_fit : nothing
+		readout_frequency_hz = readout_loaded_bare_hz
 		coupling_on_readout_frequency_hz = readout_frequency_fit.intercept
 		readout_loaded_linewidth_hz = readout_linewidth_fit.intercept
-		g_hz = g_fit.intercept
-		isfinite(g_hz) && g_hz > 0 || reject_d3_candidate(
-			"g_extrapolation.nonpositive_intercept",
-			"Zero-probe linearized g intercept must be finite and strictly positive.";
-			details = (g_fit = g_fit,),
-		)
-		zero_probe_lower_pole_crosscheck = _zero_probe_lower_pole_crosscheck(
-			evaluator.qubit_coupling_off_frequency_hz,
+		g_hz = closed_modal.g_hz
+		zero_probe_lower_pole_crosscheck = _zero_probe_lower_pole_diagnostic(
+			qubit_loaded_bare_hz,
 			readout_frequency_hz,
 			coupling_on_readout_frequency_hz,
 			qubit_frequency_fit.intercept,
 			settings.max_vector_pole_disagreement_hz,
-		)
-		_require_zero_probe_readout_slot_ownership(
-			readout_frequency_hz,
-			slot_hz,
-			settings.loaded_bare_ownership_half_width_hz,
 		)
 		readout_loaded_linewidth_hz == 0.0 || error(
 			"Lossless Maxwell-diagonal readout zero-probe linewidth must be exactly zero.",
@@ -1593,7 +1985,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				"empty_feedline_trace_id" => pair_empty_feedline_trace_id,
 				"filter_loaded_bare_reference_id" => filter_loaded_bare_reference_id,
 				"readout_loaded_bare_reference_id" => common_readout_loaded_bare_reference_id,
-				"loaded_bare_reference_topology" => "common_readout_diagonal_preserving_Cr1_Cr2_shunts_plus_filter_finite_Cext_and_MTL_self_terms",
+				"loaded_bare_reference_topology" => "common_readout_single_Schur_reduced_Cr_attachment_LB_shunt_plus_filter_finite_Cext_and_MTL_self_terms",
 				"quantity_scope" => "system_B_qubit_dynamic_nodes_absent_g_zero_primitive_J",
 				"floating_qubit_input_sha256" => evaluator.floating_qubit_input_sha256,
 				"pair_assignment_id" => trace_identity.pair_assignment_id,
@@ -1701,7 +2093,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		system_c_qubit_mode = _fit_qubit_probe_mode(
 			qubit_frequencies_hz,
 			system_c_qubit_normalized,
-			evaluator.qubit_coupling_off_frequency_hz,
+			qubit_loaded_bare_hz,
 			"System C qubit-like pole",
 			settings,
 		)
@@ -1719,37 +2111,29 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			"System C pair-window pole closure",
 			settings,
 		)
+		system_c_pair_observed_poles_hz = sort(Float64[mode["fr_hz"] for mode in system_c_pair_modes])
 		system_c_observed_poles_hz = sort(vcat(
 			[system_c_qubit_mode.frequency_hz],
-			Float64[mode["fr_hz"] for mode in system_c_pair_modes],
+			system_c_pair_observed_poles_hz,
 		))
 		j_hz = Float64(j_fit["params"]["j_hz"])
 		system_c_predicted_poles_hz = _three_mode_poles_hz(
-			evaluator.qubit_coupling_off_frequency_hz,
+			qubit_loaded_bare_hz,
 			readout_frequency_hz,
 			filter_mode.frequency_hz,
 			g_hz,
 			j_hz,
 		)
 		system_c_pole_residuals_hz = system_c_observed_poles_hz .- system_c_predicted_poles_hz
-		maximum(abs.(system_c_pole_residuals_hz)) <= settings.max_vector_pole_disagreement_hz ||
-			reject_d3_candidate(
-				"system_c.pole_closure_gate",
-				"System C poles disagree with the no-free-parameter three-mode prediction.";
-				details = (
-					predicted_poles_hz = system_c_predicted_poles_hz,
-					observed_poles_hz = system_c_observed_poles_hz,
-					residuals_hz = system_c_pole_residuals_hz,
-					maximum_residual_hz = maximum(abs.(system_c_pole_residuals_hz)),
-					maximum_residual_gate_hz = settings.max_vector_pole_disagreement_hz,
-				),
-			)
-		system_c_response_closure = _three_mode_response_closure(
+		system_c_maximum_pole_residual_hz = maximum(abs.(system_c_pole_residuals_hz))
+		system_c_pole_closure_eligible =
+			system_c_maximum_pole_residual_hz <= settings.max_vector_pole_disagreement_hz
+			system_c_response_closure = _three_mode_response_closure(
 			pair_frequencies_hz[pair_fit_mask],
 			system_c_pair_normalized[pair_fit_mask],
 			channel_calibration,
 			j_fit;
-			fq_hz = evaluator.qubit_coupling_off_frequency_hz,
+			fq_hz = qubit_loaded_bare_hz,
 			fr_hz = readout_frequency_hz,
 			fp_hz = filter_mode.frequency_hz,
 			g_hz = g_hz,
@@ -1758,6 +2142,21 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			readout_loaded_linewidth_hz = readout_loaded_linewidth_hz,
 			settings = settings,
 		)
+		system_c_failure_reasons = String[]
+		system_c_pole_closure_eligible || push!(
+			system_c_failure_reasons,
+			"three_mode_poles_disagree_with_full_physical_poles",
+		)
+		append!(
+			system_c_failure_reasons,
+			["three_mode_response:$(reason)" for reason in system_c_response_closure.failure_reasons],
+		)
+		system_c_reduced_model_eligible = isempty(system_c_failure_reasons)
+		reduced_model_failure_reasons = [
+			["system_a:$(reason)" for reason in closed_modal.reduced_model_eligibility.failure_reasons];
+			["system_c:$(reason)" for reason in system_c_failure_reasons];
+		]
+		reduced_model_eligible = isempty(reduced_model_failure_reasons)
 
 		notch_frequencies_hz = _slot_frequency_grid(
 			notch_target_hz,
@@ -1860,31 +2259,66 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			j_hz = j_hz,
 			g_hz = g_hz,
 		)
+		final_validation_frequency_rows = capture_traces ? [
+			(layer = "bare", quantity_id = "fqB_hz", system_tag = "Bare Qubit Component", frequency_hz = closed_modal.frequency_layers.fqB_hz, source_method = "isolated_closed_generalized_eigenmode", ownership_label = "qubit_component", cost_function_role = "context_only"),
+			(layer = "bare", quantity_id = "frB_hz", system_tag = "Bare Readout Component", frequency_hz = closed_modal.frequency_layers.frB_hz, source_method = "isolated_distributed_readout_generalized_eigenmode", ownership_label = "readout_component", cost_function_role = "context_only"),
+			(layer = "bare", quantity_id = "fpB_hz", system_tag = "Bare Filter Component", frequency_hz = closed_modal.frequency_layers.fpB_hz, source_method = "isolated_distributed_filter_generalized_eigenmode", ownership_label = "filter_component", cost_function_role = "context_only"),
+			(layer = "loaded_bare", quantity_id = "fqLB_hz", system_tag = "System A Coupling Off", frequency_hz = qubit_loaded_bare_hz, source_method = "closed_generalized_eigenmode_after_common_coordinate_reduction", ownership_label = "qubit_loaded_bare_by_majority_inductive_participation", cost_function_role = "fixed_reference_not_cost"),
+			(layer = "loaded_bare", quantity_id = "frLB_hz", system_tag = "System A Coupling Off", frequency_hz = readout_frequency_hz, source_method = "closed_generalized_eigenmode_after_common_coordinate_reduction", ownership_label = "readout_loaded_bare_by_majority_inductive_participation_and_slot_anchor", cost_function_role = "objective"),
+			(layer = "loaded_bare", quantity_id = "fpLB_hz", system_tag = "System B Filter Only", frequency_hz = filter_mode.frequency_hz, source_method = "finite_Cext_filter_HB_vector_fit", ownership_label = "filter_loaded_bare", cost_function_role = "objective"),
+			(layer = "hybridized", quantity_id = "system_a_q_like_hz", system_tag = "System A Physical On", frequency_hz = closed_modal.frequency_layers.physical_qubit_like_hz, source_method = "exact_closed_physical_generalized_eigenmode", ownership_label = "qubit_like_by_inductive_participation_within_assigned_pair", cost_function_role = "physical_validation_diagnostic"),
+			(layer = "hybridized", quantity_id = "system_a_r_like_hz", system_tag = "System A Physical On", frequency_hz = closed_modal.frequency_layers.physical_readout_like_hz, source_method = "exact_closed_physical_generalized_eigenmode", ownership_label = "readout_like_by_complementary_inductive_participation_within_assigned_pair", cost_function_role = "physical_validation_diagnostic"),
+			(layer = "hybridized", quantity_id = "system_b_lower_pole_hz", system_tag = "System B Physical Pair", frequency_hz = vector_poles_hz[1], source_method = "observed_pair_window_independent_vector_fit", ownership_label = "lower_pole_order_only_readout_filter_ownership_unassigned", cost_function_role = "physical_validation_diagnostic"),
+			(layer = "hybridized", quantity_id = "system_b_upper_pole_hz", system_tag = "System B Physical Pair", frequency_hz = vector_poles_hz[2], source_method = "observed_pair_window_independent_vector_fit", ownership_label = "upper_pole_order_only_readout_filter_ownership_unassigned", cost_function_role = "physical_validation_diagnostic"),
+			(layer = "hybridized", quantity_id = "system_c_q_window_pole_hz", system_tag = "System C Physical Full", frequency_hz = system_c_qubit_mode.frequency_hz, source_method = "observed_qubit_window_HB_vector_fit", ownership_label = "qubit_like_by_qubit_window_anchor", cost_function_role = "physical_validation_diagnostic"),
+			(layer = "hybridized", quantity_id = "system_c_pair_lower_pole_hz", system_tag = "System C Physical Full", frequency_hz = system_c_pair_observed_poles_hz[1], source_method = "observed_pair_window_HB_vector_fit", ownership_label = "lower_pole_order_only_readout_filter_ownership_unassigned", cost_function_role = "physical_validation_diagnostic"),
+			(layer = "hybridized", quantity_id = "system_c_pair_upper_pole_hz", system_tag = "System C Physical Full", frequency_hz = system_c_pair_observed_poles_hz[2], source_method = "observed_pair_window_HB_vector_fit", ownership_label = "upper_pole_order_only_readout_filter_ownership_unassigned", cost_function_role = "physical_validation_diagnostic"),
+		] : nothing
 		diagnostics = (
 			status = "success",
+			physical_evaluation_status = "valid",
+			reduced_model_eligibility = (
+				status = reduced_model_eligible ? "eligible" : "ineligible",
+				eligible = reduced_model_eligible,
+				failure_reasons = reduced_model_failure_reasons,
+				system_a = closed_modal.reduced_model_eligibility,
+				system_c = (
+					eligible = system_c_reduced_model_eligible,
+					failure_reasons = system_c_failure_reasons,
+				),
+			),
 			design = design,
-			extraction_contract = "d3-three-circuit-model-zero-probe-slot-ownership.v1",
+			extraction_contract = "d3-three-circuit-model-physical-vs-reduced-eligibility.v3",
+			frequency_layers = merge(
+				closed_modal.frequency_layers,
+				(fpLB_hz = filter_mode.frequency_hz,),
+			),
+			final_validation_frequency_rows = final_validation_frequency_rows,
+			closed_modal_projection = closed_modal,
 			common_readout_loaded_bare = (
 				reference_contract_id = common_readout_loaded_bare_reference_id,
 				frequency_hz = readout_frequency_hz,
 				linewidth_hz = readout_loaded_linewidth_hz,
 				active_couplings = String[],
 				off_couplings = ["g", "J"],
-				retained_loading = ["readout_MTL_diagonal_self_terms", "Cr1_readout_endpoint_shunt", "Cr2_readout_endpoint_shunt"],
+				retained_loading = ["readout_MTL_diagonal_self_terms", "Cr_attachment_LB_Schur_reduced_shunt"],
 				readout_endpoint_shunts = [
-					(id = "Cr1_readout_diagonal", capacitance_fF = evaluator.floating_qubit_nominal.Cr1_fF),
-					(id = "Cr2_readout_diagonal", capacitance_fF = evaluator.floating_qubit_nominal.Cr2_fF),
+					(
+						id = "Cr_attachment_LB",
+						capacitance_fF = closed_modal.capacitance_layers.Cr_attach_LB_fF,
+						provenance = "Schur_reduction_of_qubit_common_coordinate",
+					),
 				],
 			),
 			systems = (
 				A = (
-					id = "qubit-readout-feedline",
-					dynamic_nodes = ["qubit_left", "qubit_right", "readout", "feedline"],
-					ports = ["feedline_port_1", "feedline_port_2"],
+					id = "closed-qubit-readout-modal-system",
+					dynamic_nodes = ["qubit_left", "qubit_right", "distributed_readout"],
+					ports = String[],
 					active_couplings = ["physical_Cr1", "physical_Cr2"],
 					off_couplings = ["J"],
 					common_readout_reference_id = common_readout_loaded_bare_reference_id,
-					metric_ownership = ["fqLB", "g_hz", "readout_shift", "zero_probe_two_mode_pole_crosscheck"],
+					metric_ownership = ["fqB", "frB", "fqLB", "frLB", "g_hz", "exact_physical_modes"],
 				),
 				B = (
 					id = "readout-filter-feedline",
@@ -1904,17 +2338,18 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 					common_readout_reference_id = common_readout_loaded_bare_reference_id,
 					primitive_g_source = "System A",
 					primitive_J_source = "System B",
-					metric_ownership = ["three_mode_poles", "complex_s21_closure", "loaded_notch_continuation"],
+					metric_ownership = ["full_physical_poles", "full_physical_s21", "loaded_notch_continuation", "reduced_model_eligibility_diagnostics"],
 				),
 			),
 			filter_loaded_bare = filter_mode,
 			readout_probe_modes = readout_modes,
 			readout_g_extraction = (
-				fixture_topology = "readout_only_plus_artificial_feedline_probe_no_filter_no_readout_filter_mtl_coupling",
-				coupling_off_reference = "split_common_mode_layer_reference: this readout-only CircuitPlan retains separate Cr1/Cr2 readout endpoint shunts; independent Kron-reduced fqLB retains the qubit endpoint loading",
-				qubit_loaded_bare_frequency_role = "Kron_reduced_linearized_LJ_coupling_off_plasma_frequency_fqLB_not_anharmonic_f01",
-				formula = "g_f=sqrt((f_rq-f_r0)*(f_rq-f_q0))",
-				lower_pole_crosscheck = "finite_probe_residuals_are_diagnostic_only; zero_probe_hard_gate_uses_f_q_predicted=fqLB+frLB_zero_probe-fr_coupling_on_zero_probe",
+				fixture_topology = "closed_node_preserving_qubit_plus_distributed_readout_no_ports_no_filter",
+				coupling_off_reference = "one_Schur_reduced_Cr_attachment_LB_shunt_plus_qubit_endpoint_loading_with_physical_cross_terms_zero",
+				qubit_loaded_bare_frequency_role = "closed_generalized_mode_fqLB_crosschecked_against_analytic_Kron_reduction",
+				formula = "g=abs(offdiag(H_number_conserving))/(2pi)",
+				projection_contract = closed_modal.projection.contract_id,
+				finite_open_s21_role = "diagnostic_only_not_metric_ownership_not_gate",
 				coupling_on_zero_probe_readout_frequency_hz = coupling_on_readout_frequency_hz,
 			),
 			readout_coupling_off_zero_probe_frequency_fit = readout_coupling_off_frequency_fit,
@@ -1922,6 +2357,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			qubit_zero_probe_frequency_fit = qubit_frequency_fit,
 			readout_zero_probe_linewidth_fit = readout_linewidth_fit,
 			g_zero_probe_fit = g_fit,
+			g_shift_fit_diagnostic = g_shift_fit_diagnostic,
 			zero_probe_lower_pole_crosscheck = zero_probe_lower_pole_crosscheck,
 			readout_loaded_linewidth_hz = readout_loaded_linewidth_hz,
 			floating_qubit = (
@@ -1930,7 +2366,8 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				input_sha256 = evaluator.floating_qubit_input_sha256,
 				topology_id = "d3-floating-qubit-kron-reduced-five-branch-two-parallel-lj-v1",
 				coupling_off_reference = "Cr endpoint shunts retain nodal diagonals",
-				coupling_off_frequency_hz = evaluator.qubit_coupling_off_frequency_hz,
+				coupling_off_frequency_hz = qubit_loaded_bare_hz,
+				analytic_kron_reduction_frequency_hz = evaluator.qubit_coupling_off_frequency_hz,
 				qubit_frequency_grid_sha256 = qubit_grid_sha256,
 				electrostatic_reduction = floating_qubit_reduction_evidence(
 					evaluator.floating_qubit_nominal;
@@ -1950,19 +2387,32 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			j_fit = _compact_j_fit(j_fit),
 			vector_crosscheck_poles_hz = vector_poles_hz,
 			system_c_closure = (
-				status = "success",
+				physical_extraction_status = "valid",
+				reduced_model_eligible = system_c_reduced_model_eligible,
+				failure_reasons = system_c_failure_reasons,
 				primitive_g_hz = g_hz,
 				primitive_j_hz = j_hz,
 				direct_qubit_filter_coupling_hz = 0.0,
-				predicted_poles_hz = system_c_predicted_poles_hz,
-				observed_poles_hz = system_c_observed_poles_hz,
-				pole_residuals_hz = system_c_pole_residuals_hz,
-				maximum_pole_residual_hz = maximum(abs.(system_c_pole_residuals_hz)),
-				maximum_pole_residual_gate_hz = settings.max_vector_pole_disagreement_hz,
+				physical_observed_poles = (
+					qubit_window_pole_hz = system_c_qubit_mode.frequency_hz,
+					pair_window_poles_hz = system_c_pair_observed_poles_hz,
+				),
+				pole_closure = (
+					status = system_c_pole_closure_eligible ? "eligible" : "ineligible",
+					reduced_model_eligible = system_c_pole_closure_eligible,
+					predicted_poles_hz = system_c_predicted_poles_hz,
+					observed_poles_hz = system_c_observed_poles_hz,
+					residuals_hz = system_c_pole_residuals_hz,
+					maximum_residual_hz = system_c_maximum_pole_residual_hz,
+					maximum_residual_threshold_hz = settings.max_vector_pole_disagreement_hz,
+				),
 				response = (
 					status = system_c_response_closure.status,
+					reduced_model_eligible = system_c_response_closure.reduced_model_eligible,
+					failure_reasons = system_c_response_closure.failure_reasons,
 					model = system_c_response_closure.model,
 					metrics = system_c_response_closure.metrics,
+					thresholds = system_c_response_closure.thresholds,
 				),
 			),
 			notch = notch,
@@ -2033,6 +2483,8 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		) : nothing
 		record = (
 			status = :valid,
+			physical_evaluation_status = "valid",
+			reduced_model_eligibility = diagnostics.reduced_model_eligibility,
 			metrics = metrics,
 			diagnostics = diagnostics,
 			traces = traces,

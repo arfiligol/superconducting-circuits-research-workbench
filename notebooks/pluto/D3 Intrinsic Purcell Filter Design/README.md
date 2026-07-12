@@ -80,8 +80,9 @@ simulation.
    $L_{ii},C_{ii}$ with all off-diagonal entries zero. This is the pair
    Hamiltonian reference, not a circuit made by removing the full ladder's
    physical cross capacitor. Its filter channel supplies
-   $\omega_{p,\mathrm{LB}}$; its readout weak-probe sweep is extrapolated to
-   zero probe capacitance for $\omega_{r,\mathrm{LB}}$.
+   $\omega_{p,\mathrm{LB}}$. A separate closed, node-preserving qubit/readout
+   model supplies $\omega_{q,\mathrm{LB}}$ and
+   $\omega_{r,\mathrm{LB}}$ by generalized modes.
 
 3. Separate impedance mismatch from external loading.
 
@@ -167,10 +168,12 @@ simulation.
 
 - [`d3_coupled_evaluator.jl`](d3_coupled_evaluator.jl)
   owns the real single-slot HB evaluation, loaded-bare references, complex-S21
-  $J$ fit, fixed nominal floating-qubit loading, readout-frequency-shift
+  $J$ fit, fixed nominal floating-qubit loading, closed modal-Hamiltonian
   extraction of linearized $g$, and the no-free-parameter full three-mode
   closure. Its A/B/C circuit models share one coupling-off readout loaded-bare
-  identity; only System B owns the objective notch. Unavailable source $R'/G'$
+  identity; finite/open readout-pole shifts are diagnostics only, and only
+  System B owns the objective notch. Physical extraction validity and reduced-
+  model eligibility are separate artifact statuses. Unavailable source $R'/G'$
   remains zero for lossless exploration.
 
 - [`d3_coupled_optimizer.jl`](d3_coupled_optimizer.jl)
@@ -218,10 +221,12 @@ while source-file identities remain raw byte SHA-256. Integral finite Float64
 values normalize to the same integer framing across a JSON write/read boundary;
 non-integral Float64 values retain their exact IEEE-754 bits.
 
-Artifacts produced before `d3-three-circuit-model-zero-probe-slot-ownership.v1` are
-semantically incompatible with the shared loaded-bare A/B/C contract. The
-current validator rejects them explicitly; it does not relabel their
-qubit-loaded readout pole or two-mode J result as current evidence.
+Artifacts that do not declare
+`d3-three-circuit-model-physical-vs-reduced-eligibility.v3` are semantically
+incompatible with the current shared loaded-bare A/B/C contract. The validator
+rejects them explicitly; it does not relabel a historical shift-derived $g$ as
+current modal-projection evidence or infer reduced-model eligibility from a
+generic success field.
 
 To review without writes, set `DESIGN_TARGET_JSON` and
 `OPTIMIZER_RUN_DIRECTORY` in Notebook 08, leave
@@ -252,31 +257,42 @@ Validation.
 The original no-qubit / with-qubit comparison remains historical diagnostic
 provenance. Current optimization always connects the reduced linearized qubit
 to `readout_open_tail`; its five reduced branches and per-junction $L_J$ are
-fixed private input, not optimizer variables. Each readout probe uses one Slot-local
-readout-only grid twice: a diagonal-preserving coupling-off baseline replaces
-$C_{r1}$ and $C_{r2}$ by separately named readout-side endpoint shunts; the
-independent Kron-reduced $f_{q,\mathrm{LB}}$ reference retains the qubit-side
-endpoint loading. The loaded fixture restores the physical cross branches
-without retaining the artificial shunts. Their exact readout-pole shift determines $g$,
-which is extrapolated to zero probe. Qubit-local fitted lower poles are retained
-as finite-probe diagnostics and extrapolated quadratically; only their
-zero-probe intercept checks the trace-identity prediction as a hard gate. The
-lower pole is not an input to $g$. The local two-mode $J$
-fit fails fast if the qubit-like pole enters its trace window.
+fixed private input, not optimizer variables. Closed System A keeps identical
+qubit/readout nodes and stiffness in its off/on topologies. The off topology
+uses one Schur-reduced $C_{r,\mathrm{attach,LB}}$ shunt plus qubit-side endpoint
+loading; the on topology restores physical $C_{r1}$ and $C_{r2}$ cross
+branches. Generalized coupling-off modes own $f_{q,\mathrm{LB}}$ and
+$f_{r,\mathrm{LB}}$. Projecting the physical-on quadratic Hamiltonian into the
+complete off-mode basis owns primitive $g$; exact physical modes and the RWA
+approximation are compared against the existing 1 MHz thresholds to classify
+the reduced two-mode model. A mismatch remains visible but does not reject a
+valid physical candidate or replace primitive $g$.
+
+Artificial feedline-probe readout and qubit poles remain observable
+diagnostics. Their zero-probe intercepts and shift-derived $g$ neither own the
+reported parameters nor reject a candidate. The local two-mode $J$ fit still
+fails fast if the qubit-like pole enters its trace window.
 
 System A finite-probe readout poles must remain assignable inside their declared
 scan and pass vector-fit quality, but they are not individually subjected to
-the final Slot-ownership window. The unchanged 115 MHz ownership condition is
-applied only to the extrapolated coupling-off readout intercept.
+the final Slot-ownership window. The unchanged ownership condition is applied
+to the closed coupling-off readout mode.
 
-The evaluator then uses three explicit circuit systems. System A contains only
-qubit, readout, and feedline and owns primitive $g$. System B contains readout,
-filter, and feedline, retains the same two readout endpoint shunts, and owns
+The evaluator then uses three explicit circuit systems. Closed System A
+contains only qubit and distributed readout and owns primitive $g$. System B
+contains readout, filter, and feedline, retains the same single Schur-reduced
+readout attachment shunt, and owns
 $f_{p,\mathrm{LB}}$, $\kappa_{p,\mathrm{LB}}$, primitive $J$, and the no-qubit
 notch used by the Cost Function. System C restores both physical exchange
 channels and checks three poles plus complex $S_{21}$ using A's $g$ and B's $J$
-without refitting either coupling. A System C failure rejects the candidate; it
-does not create another scalar objective.
+without refitting either coupling. Failure to extract the physical HB/vector
+poles still rejects the candidate. A fixed-$g/J$ pole or response mismatch only
+marks the reduced three-mode explanation ineligible; it does not create another
+scalar objective or invalidate the full distributed-circuit result.
+
+The Human-reviewed primitive-$g$ objective remains centered at 90 MHz and uses
+a 10 MHz cost scale. No other target center, evaluator threshold, or optimizer
+algorithm changes with that tolerance.
 
 The private JSON uses schema `d3-floating-qubit-maxwell.v1`. It carries the
 labeled full Maxwell matrix, a reference conductor, exactly four disconnected

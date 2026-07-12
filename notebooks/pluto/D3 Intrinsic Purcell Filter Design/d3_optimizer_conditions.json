@@ -86,7 +86,7 @@
     "notch_hz": {"scale": 1000000.0, "weight": 1.0, "role": "cost_objective"},
     "filter_loaded_linewidth_hz": {"scale": 1000000.0, "weight": 1.0, "role": "cost_objective"},
     "j_hz": {"scale": 1000000.0, "weight": 1.0, "role": "cost_objective"},
-    "g_hz": {"scale": 1000000.0, "weight": 1.0, "role": "cost_objective"},
+    "g_hz": {"scale": 10000000.0, "weight": 1.0, "role": "cost_objective"},
     "readout_minus_filter_detuning_hz": {"scale": 500000.0, "weight": 0.0, "role": "promotion_condition"}
   },
   "optimization": {
@@ -109,13 +109,14 @@
     "status": "sol_reviewed",
     "reviewer_role": "Sol_or_higher",
     "reviewer_identity": "Codex Sol semantic/physics/contract reviewer",
-    "reviewed_at_utc": "2026-07-11T17:40:31Z",
-    "rationale": "Sol review approves replacing the reduced-five-capacitance private input with a labeled full Maxwell matrix, eliminating exactly four disconnected floating Coupler pads by Schur-complement linear solve, retaining only the two qubit islands and readout attachment, and keeping the reduced readout diagonal as provenance because the distributed resonator owns readout self-capacitance. Per-junction inductance and qubit f01 flow exclusively from the canonical Design Target; the private input must match its inductance record. Qubit f01 remains diagnostic rather than a Layout objective, while g remains a positive-weight objective. Loaded-notch ownership is the root nearest the unique no-qubit intrinsic reference with the reviewed assignment margin. Existing J, kappa, frequency targets, six Layout variables, thresholds, Human-only promotion, and LC-artifact ineligibility remain unchanged.",
+    "reviewed_at_utc": "2026-07-12T09:44:56Z",
+    "rationale": "Sol review implements the Human-decided plus-or-minus 10 MHz objective tolerance for primitive qubit-readout coupling by changing only the positive-weight g_hz cost scale to 10 MHz. Primitive g remains the off-diagonal number-conserving Hamiltonian element from the closed System-A modal projection; no pole-shift or System-C effective coupling replaces it. Two-mode System-A and fixed-g/J three-mode System-C closure thresholds classify reduced-model eligibility and remain visible diagnostics, while matrix extraction, passivity, mode ownership, parameter definition, and authoritative physical HB/vector-pole extraction remain hard requirements. Existing target centers, J, kappa, frequency objectives, all other thresholds, six Layout variables, optimizer algorithms, Human-only promotion, and LC-artifact ineligibility remain unchanged.",
     "evidence": [
-      "The approved implementation contract requires synthetic Schur-equivalence, role-partition, no-readout-shunt, f01, invalid-input, and multi-root notch-ownership checks.",
-      "The exact private full matrix must reduce near the reviewed diagnostic values without copying those private values into tracked source or tests.",
-      "A fresh no-write candidate evaluation is required before the economic Luna optimizer run; no historical optimizer artifact is relabeled."
+      "Root Design Target revision 2 records g = 90 MHz with a Human-reviewed 10 MHz objective tolerance.",
+      "System A reports modal primitive g separately from exact physical poles and marks the two-mode reduction eligible only when both existing 1 MHz closure comparisons pass.",
+      "System C retains authoritative physical HB/vector-pole extraction while fixed-g/J pole and response mismatches classify reduced-model eligibility without refitting g or J.",
+      "Schema-v3 validators reject historical artifacts that do not separate physical evaluation status from reduced-model eligibility."
     ],
-    "approved_conditions_sha256": "dfcf6342da6ac283458c5827b1b753e08024ec23e6d5b11711f8036bd7a1633b"
+    "approved_conditions_sha256": "3d89ea1f08c82426799549cccc887f11e3560cc112969037783309717554087c"
   }
 }
