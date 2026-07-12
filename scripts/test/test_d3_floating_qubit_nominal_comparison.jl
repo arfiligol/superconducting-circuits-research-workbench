@@ -161,6 +161,24 @@ end
 		three_mode_poles = _three_mode_poles_hz(5.0e9, 5.8e9, 6.0e9, 90e6, 20e6)
 		@test length(three_mode_poles) == 3
 		@test sum(three_mode_poles) ≈ 16.8e9
+		observability = _system_c_dark_mode_observability(
+			[4.9e9, 5.0e9, 5.1e9],
+			ComplexF64[1.0, 0.999, 1.0],
+			5.0e9,
+		)
+		@test observability.status == "dark_mode_observability_diagnostic"
+		@test observability.role == "human_review_only_not_physical_extraction_gate"
+		@test observability.prediction_source == "fixed_primitive_g_J_three_mode_prediction"
+		@test observability.frequency_grid_step_hz == 100e6
+		@test observability.closest_sample_frequency_hz == 5.0e9
+		@test observability.abs_s21_peak_to_peak ≈ 0.001
+		@test observability.unwrapped_phase_span_rad == 0.0
+		@test observability.max_adjacent_phase_step_rad == 0.0
+		@test_throws ErrorException _system_c_dark_mode_observability(
+			[4.9e9, 5.0e9, 5.1e9],
+			ComplexF64[1.0, 0.999, 1.0],
+			5.2e9,
+		)
 		closure_frequencies = [5.7e9, 5.8e9, 5.9e9]
 		closure_background = Dict(
 			"frequency_center_hz" => 5.8e9,

@@ -1134,6 +1134,43 @@ function _three_mode_poles_hz(fq_hz, fr_hz, fp_hz, g_hz, j_hz)
 	return sort(Float64.(eigvals(matrix_hz)))
 end
 
+"""Summarize whether the predicted System-C q-like mode is visible in feedline S21.
+
+This is Human-review evidence, not a pole extractor or acceptance gate. A dark
+eigenmode may have no resolvable feedline residue on the declared HB grid.
+"""
+function _system_c_dark_mode_observability(frequencies_hz, normalized_s21, predicted_q_like_hz)
+	frequencies = Float64.(collect(frequencies_hz))
+	values = ComplexF64.(collect(normalized_s21))
+	length(frequencies) == length(values) >= 2 || error("System-C observability trace requires at least two matched samples.")
+	all(isfinite, frequencies) && all(isfinite, real.(values)) && all(isfinite, imag.(values)) ||
+		error("System-C observability trace must be finite.")
+	steps = diff(frequencies)
+	all(>(0.0), steps) || error("System-C observability frequency grid must be strictly increasing.")
+	grid_step_hz = first(steps)
+	all(step -> isapprox(step, grid_step_hz; rtol = 0.0, atol = 1e-6), steps) ||
+		error("System-C observability frequency grid must have one uniform step.")
+	predicted_hz = Float64(predicted_q_like_hz)
+	first(frequencies) <= predicted_hz <= last(frequencies) || error("Predicted System-C q-like frequency lies outside its observability grid.")
+	magnitudes = abs.(values)
+	phase_steps = angle.(values[2:end] ./ values[1:(end - 1)])
+	unwrapped_phase = cumsum(vcat(angle(first(values)), phase_steps))
+	closest_index = argmin(abs.(frequencies .- predicted_hz))
+	return (
+		status = "dark_mode_observability_diagnostic",
+		role = "human_review_only_not_physical_extraction_gate",
+		predicted_q_like_frequency_hz = predicted_hz,
+		prediction_source = "fixed_primitive_g_J_three_mode_prediction",
+		frequency_grid_step_hz = grid_step_hz,
+		closest_sample_frequency_hz = frequencies[closest_index],
+		closest_sample_abs_s21 = magnitudes[closest_index],
+		closest_sample_phase_rad = unwrapped_phase[closest_index],
+		abs_s21_peak_to_peak = maximum(magnitudes) - minimum(magnitudes),
+		unwrapped_phase_span_rad = maximum(unwrapped_phase) - minimum(unwrapped_phase),
+		max_adjacent_phase_step_rad = maximum(abs.(phase_steps)),
+	)
+end
+
 """Check System C complex transmission against the fixed three-mode response.
 
 The prediction reuses System B's calibrated direct path and channel residue,
@@ -2055,7 +2092,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			)
 
 		system_c_pair_trace_id = "d3-system-c-full-pair-hb|grid_sha256=$(pair_grid_sha256)|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
-		system_c_qubit_trace_id = "d3-system-c-full-qubit-hb|grid_sha256=$(qubit_grid_sha256)|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
+		system_c_qubit_trace_id = "d3-system-c-full-qubit-observability-hb|grid_sha256=$(qubit_grid_sha256)|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
 		system_c_plan = build_single_pair_feedline_plan(
 			evaluator.case,
 			design;
@@ -2078,25 +2115,6 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			pair_reference,
 			settings.min_reference_magnitude,
 		)
-		system_c_qubit_hb = _run_candidate_hb(
-			evaluator,
-			system_c_plan,
-			qubit_frequencies_hz,
-			"System C full qubit-window closure",
-		)
-		system_c_qubit_normalized = _normalized_s21(
-			qubit_frequencies_hz,
-			system_c_qubit_hb.s21,
-			qubit_reference,
-			settings.min_reference_magnitude,
-		)
-		system_c_qubit_mode = _fit_qubit_probe_mode(
-			qubit_frequencies_hz,
-			system_c_qubit_normalized,
-			qubit_loaded_bare_hz,
-			"System C qubit-like pole",
-			settings,
-		)
 		system_c_pair_vector_result = fit_vector_s21(
 			pair_frequencies_hz[pair_fit_mask],
 			system_c_pair_normalized[pair_fit_mask];
@@ -2112,10 +2130,6 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			settings,
 		)
 		system_c_pair_observed_poles_hz = sort(Float64[mode["fr_hz"] for mode in system_c_pair_modes])
-		system_c_observed_poles_hz = sort(vcat(
-			[system_c_qubit_mode.frequency_hz],
-			system_c_pair_observed_poles_hz,
-		))
 		j_hz = Float64(j_fit["params"]["j_hz"])
 		system_c_predicted_poles_hz = _three_mode_poles_hz(
 			qubit_loaded_bare_hz,
@@ -2124,7 +2138,15 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			g_hz,
 			j_hz,
 		)
-		system_c_pole_residuals_hz = system_c_observed_poles_hz .- system_c_predicted_poles_hz
+		system_c_predicted_q_index = argmin(abs.(
+			system_c_predicted_poles_hz .- closed_modal.frequency_layers.physical_qubit_like_hz,
+		))
+		system_c_predicted_q_like_hz = system_c_predicted_poles_hz[system_c_predicted_q_index]
+		system_c_predicted_pair_poles_hz = sort(system_c_predicted_poles_hz[
+			setdiff(eachindex(system_c_predicted_poles_hz), [system_c_predicted_q_index])
+		])
+		length(system_c_predicted_pair_poles_hz) == 2 || error("System-C three-mode prediction must retain exactly two readout/filter pair poles.")
+		system_c_pole_residuals_hz = system_c_pair_observed_poles_hz .- system_c_predicted_pair_poles_hz
 		system_c_maximum_pole_residual_hz = maximum(abs.(system_c_pole_residuals_hz))
 		system_c_pole_closure_eligible =
 			system_c_maximum_pole_residual_hz <= settings.max_vector_pole_disagreement_hz
@@ -2145,13 +2167,38 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		system_c_failure_reasons = String[]
 		system_c_pole_closure_eligible || push!(
 			system_c_failure_reasons,
-			"three_mode_poles_disagree_with_full_physical_poles",
+			"three_mode_pair_poles_disagree_with_full_physical_pair_poles",
 		)
 		append!(
 			system_c_failure_reasons,
 			["three_mode_response:$(reason)" for reason in system_c_response_closure.failure_reasons],
 		)
 		system_c_reduced_model_eligible = isempty(system_c_failure_reasons)
+		system_c_qubit_observability = if capture_traces
+			system_c_qubit_hb = _run_candidate_hb(
+				evaluator,
+				system_c_plan,
+				qubit_frequencies_hz,
+				"System C dark-mode qubit-window observability",
+			)
+			system_c_qubit_normalized = _normalized_s21(
+				qubit_frequencies_hz,
+				system_c_qubit_hb.s21,
+				qubit_reference,
+				settings.min_reference_magnitude,
+			)
+			(
+				hb = system_c_qubit_hb,
+				normalized_s21 = system_c_qubit_normalized,
+				diagnostic = _system_c_dark_mode_observability(
+					qubit_frequencies_hz,
+					system_c_qubit_normalized,
+					system_c_predicted_q_like_hz,
+				),
+			)
+		else
+			nothing
+		end
 		reduced_model_failure_reasons = [
 			["system_a:$(reason)" for reason in closed_modal.reduced_model_eligibility.failure_reasons];
 			["system_c:$(reason)" for reason in system_c_failure_reasons];
@@ -2270,7 +2317,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			(layer = "hybridized", quantity_id = "system_a_r_like_hz", system_tag = "System A Physical On", frequency_hz = closed_modal.frequency_layers.physical_readout_like_hz, source_method = "exact_closed_physical_generalized_eigenmode", ownership_label = "readout_like_by_complementary_inductive_participation_within_assigned_pair", cost_function_role = "physical_validation_diagnostic"),
 			(layer = "hybridized", quantity_id = "system_b_lower_pole_hz", system_tag = "System B Physical Pair", frequency_hz = vector_poles_hz[1], source_method = "observed_pair_window_independent_vector_fit", ownership_label = "lower_pole_order_only_readout_filter_ownership_unassigned", cost_function_role = "physical_validation_diagnostic"),
 			(layer = "hybridized", quantity_id = "system_b_upper_pole_hz", system_tag = "System B Physical Pair", frequency_hz = vector_poles_hz[2], source_method = "observed_pair_window_independent_vector_fit", ownership_label = "upper_pole_order_only_readout_filter_ownership_unassigned", cost_function_role = "physical_validation_diagnostic"),
-			(layer = "hybridized", quantity_id = "system_c_q_window_pole_hz", system_tag = "System C Physical Full", frequency_hz = system_c_qubit_mode.frequency_hz, source_method = "observed_qubit_window_HB_vector_fit", ownership_label = "qubit_like_by_qubit_window_anchor", cost_function_role = "physical_validation_diagnostic"),
+			(layer = "hybridized", quantity_id = "system_c_q_like_predicted_hz", system_tag = "System C Fixed-g/J Reduced Model", frequency_hz = system_c_predicted_q_like_hz, source_method = "fixed_primitive_g_J_three_mode_prediction", ownership_label = "predicted_q_like_reduced_model_not_feedline_observation", cost_function_role = "reduced_model_prediction_diagnostic"),
 			(layer = "hybridized", quantity_id = "system_c_pair_lower_pole_hz", system_tag = "System C Physical Full", frequency_hz = system_c_pair_observed_poles_hz[1], source_method = "observed_pair_window_HB_vector_fit", ownership_label = "lower_pole_order_only_readout_filter_ownership_unassigned", cost_function_role = "physical_validation_diagnostic"),
 			(layer = "hybridized", quantity_id = "system_c_pair_upper_pole_hz", system_tag = "System C Physical Full", frequency_hz = system_c_pair_observed_poles_hz[2], source_method = "observed_pair_window_HB_vector_fit", ownership_label = "upper_pole_order_only_readout_filter_ownership_unassigned", cost_function_role = "physical_validation_diagnostic"),
 		] : nothing
@@ -2288,7 +2335,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				),
 			),
 			design = design,
-			extraction_contract = "d3-three-circuit-model-physical-vs-reduced-eligibility.v3",
+			extraction_contract = "d3-three-circuit-model-dark-mode-aware-physical-vs-reduced-eligibility.v4",
 			frequency_layers = merge(
 				closed_modal.frequency_layers,
 				(fpLB_hz = filter_mode.frequency_hz,),
@@ -2338,7 +2385,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 					common_readout_reference_id = common_readout_loaded_bare_reference_id,
 					primitive_g_source = "System A",
 					primitive_J_source = "System B",
-					metric_ownership = ["full_physical_poles", "full_physical_s21", "loaded_notch_continuation", "reduced_model_eligibility_diagnostics"],
+					metric_ownership = ["observable_pair_window_poles", "full_physical_pair_window_s21", "loaded_notch_continuation", "dark_mode_observability_diagnostic", "reduced_model_eligibility_diagnostics"],
 				),
 			),
 			filter_loaded_bare = filter_mode,
@@ -2394,14 +2441,22 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				primitive_j_hz = j_hz,
 				direct_qubit_filter_coupling_hz = 0.0,
 				physical_observed_poles = (
-					qubit_window_pole_hz = system_c_qubit_mode.frequency_hz,
 					pair_window_poles_hz = system_c_pair_observed_poles_hz,
 				),
+				predicted_q_like = (
+					frequency_hz = system_c_predicted_q_like_hz,
+					source_method = "fixed_primitive_g_J_three_mode_prediction",
+					ownership_label = "predicted_q_like_reduced_model_not_feedline_observation",
+				),
+				qubit_window_observability = isnothing(system_c_qubit_observability) ? nothing :
+					system_c_qubit_observability.diagnostic,
 				pole_closure = (
 					status = system_c_pole_closure_eligible ? "eligible" : "ineligible",
 					reduced_model_eligible = system_c_pole_closure_eligible,
-					predicted_poles_hz = system_c_predicted_poles_hz,
-					observed_poles_hz = system_c_observed_poles_hz,
+					predicted_three_mode_poles_hz = system_c_predicted_poles_hz,
+					predicted_q_like_hz = system_c_predicted_q_like_hz,
+					predicted_pair_poles_hz = system_c_predicted_pair_poles_hz,
+					observed_pair_poles_hz = system_c_pair_observed_poles_hz,
 					residuals_hz = system_c_pole_residuals_hz,
 					maximum_residual_hz = system_c_maximum_pole_residual_hz,
 					maximum_residual_threshold_hz = settings.max_vector_pole_disagreement_hz,
@@ -2454,12 +2509,14 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				pair_frequencies_hz = pair_frequencies_hz,
 				pair_s21 = ComplexF64.(system_c_pair_hb.s21),
 				pair_reference_s21 = pair_reference,
-				qubit_frequency_grid_sha256 = qubit_grid_sha256,
-				qubit_measured_trace_id = system_c_qubit_trace_id,
-				qubit_reference_trace_id = qubit_empty_feedline_trace_id,
-				qubit_frequencies_hz = qubit_frequencies_hz,
-				qubit_s21 = ComplexF64.(system_c_qubit_hb.s21),
-				qubit_reference_s21 = qubit_reference,
+				qubit_observability_frequency_grid_sha256 = qubit_grid_sha256,
+				qubit_observability_measured_trace_id = system_c_qubit_trace_id,
+				qubit_observability_reference_trace_id = qubit_empty_feedline_trace_id,
+				qubit_observability_frequencies_hz = qubit_frequencies_hz,
+				qubit_observability_s21 = ComplexF64.(system_c_qubit_observability.hb.s21),
+				qubit_observability_reference_s21 = qubit_reference,
+				qubit_observability_normalized_s21 = system_c_qubit_observability.normalized_s21,
+				qubit_observability_diagnostic = system_c_qubit_observability.diagnostic,
 				closure_frequencies_hz = system_c_response_closure.frequencies_hz,
 				closure_observed_s21 = system_c_response_closure.observed_s21,
 				closure_predicted_s21 = system_c_response_closure.predicted_s21,

@@ -814,7 +814,7 @@ display(
 )
 
 # %%
-if diagnostics.get("extraction_contract") != "d3-three-circuit-model-physical-vs-reduced-eligibility.v3":
+if diagnostics.get("extraction_contract") != "d3-three-circuit-model-dark-mode-aware-physical-vs-reduced-eligibility.v4":
     raise ValueError(
         "This artifact does not implement the D3 three-circuit-model extraction contract. "
         "Run a fresh nominal validation; incompatible exploration evidence is not relabeled."
@@ -940,6 +940,21 @@ display(
         columns=["System C no-free-parameter closure", "Value", "Unit"],
     ).style.hide(axis="index").format({"Value": lambda value: "—" if pd.isna(value) else f"{value:.8g}"})
 )
+
+qubit_observability = system_c_closure.get("qubit_window_observability")
+if qubit_observability is not None:
+    display(
+        pd.DataFrame(
+            [
+                ("predicted q-like frequency", qubit_observability["predicted_q_like_frequency_hz"] / 1e9, "GHz"),
+                ("frequency-grid step", qubit_observability["frequency_grid_step_hz"] / 1e6, "MHz"),
+                ("|S21| peak-to-peak", qubit_observability["abs_s21_peak_to_peak"], "fraction"),
+                ("unwrapped phase span", qubit_observability["unwrapped_phase_span_rad"], "rad"),
+                ("maximum adjacent phase step", qubit_observability["max_adjacent_phase_step_rad"], "rad"),
+            ],
+            columns=["System C q-window observability (Human diagnostic only)", "Value", "Unit"],
+        ).style.hide(axis="index").format({"Value": "{:.8g}"})
+    )
 
 # %% [markdown]
 # ### Closed modal extraction of $g/2\pi$ and open-S21 diagnostics

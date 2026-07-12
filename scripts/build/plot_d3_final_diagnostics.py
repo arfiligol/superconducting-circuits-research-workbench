@@ -53,7 +53,7 @@ LEGACY_MANIFEST_SCHEMA = "d3-condition-manifest.v1"
 SLOT_EXECUTION_MANIFEST_SCHEMA = "d3-slot-execution-manifest.v1"
 NOMINAL_MANIFEST_SCHEMA = "d3-nominal-validation-manifest.v1"
 SEMANTIC_HASH_FRAMING = "d3-semantic-value-sha256-v1"
-D3_EXTRACTION_CONTRACT = "d3-three-circuit-model-physical-vs-reduced-eligibility.v3"
+D3_EXTRACTION_CONTRACT = "d3-three-circuit-model-dark-mode-aware-physical-vs-reduced-eligibility.v4"
 NOMINAL_OBJECTIVE_IDS = {
     "filter_loaded_bare_hz",
     "readout_loaded_bare_hz",
@@ -130,9 +130,10 @@ FINAL_VALIDATION_FREQUENCY_ROWS = (
         "physical_validation_diagnostic",
     ),
     (
-        "system_c_q_window_pole_hz", "hybridized", "System C Physical Full",
-        "observed_qubit_window_HB_vector_fit", "qubit_like_by_qubit_window_anchor",
-        "physical_validation_diagnostic",
+        "system_c_q_like_predicted_hz", "hybridized", "System C Fixed-g/J Reduced Model",
+        "fixed_primitive_g_J_three_mode_prediction",
+        "predicted_q_like_reduced_model_not_feedline_observation",
+        "reduced_model_prediction_diagnostic",
     ),
     (
         "system_c_pair_lower_pole_hz", "hybridized", "System C Physical Full",
@@ -670,7 +671,7 @@ def _validate_notebook_record_shape(
             len(frequency_rows) == len(FINAL_VALIDATION_FREQUENCY_ROWS)
             and [mapping(row, "final-validation frequency row").get("quantity_id") for row in frequency_rows]
             == expected_frequency_ids,
-            "Final-validation frequency rows must contain the exact ordered v3 frequency-layer contract.",
+            "Final-validation frequency rows must contain the exact ordered v4 frequency-layer contract.",
         )
         system_b_observed_poles = [
             finite_number(value, f"System B observed pole {index}")
@@ -693,9 +694,9 @@ def _validate_notebook_record_shape(
             ).get("physical_observed_poles"),
             "System C physical observed poles",
         )
-        system_c_qubit_window_hz = finite_number(
-            system_c_physical_observations.get("qubit_window_pole_hz"),
-            "System C qubit-window observed pole",
+        require(
+            set(system_c_physical_observations) == {"pair_window_poles_hz"},
+            "System C physical observations must contain only observable pair-window poles.",
         )
         system_c_pair_observed_poles = [
             finite_number(value, f"System C pair-window observed pole {index}")
@@ -711,6 +712,21 @@ def _validate_notebook_record_shape(
             and system_c_pair_observed_poles == sorted(system_c_pair_observed_poles),
             "System C final-validation pair observations must contain ordered lower/upper poles.",
         )
+        system_c_closure = mapping(
+            diagnostics.get("system_c_closure"), "record.diagnostics.system_c_closure"
+        )
+        predicted_q_like = mapping(
+            system_c_closure.get("predicted_q_like"), "System C predicted q-like mode"
+        )
+        system_c_q_like_predicted_hz = finite_number(
+            predicted_q_like.get("frequency_hz"), "System C predicted q-like frequency"
+        )
+        require(
+            predicted_q_like.get("source_method") == "fixed_primitive_g_J_three_mode_prediction"
+            and predicted_q_like.get("ownership_label")
+            == "predicted_q_like_reduced_model_not_feedline_observation",
+            "System C q-like frequency must remain a labeled reduced-model prediction.",
+        )
         expected_frequency_values = {
             "fqB_hz": frequency_layers["fqB_hz"],
             "frB_hz": frequency_layers["frB_hz"],
@@ -722,7 +738,7 @@ def _validate_notebook_record_shape(
             "system_a_r_like_hz": frequency_layers["physical_readout_like_hz"],
             "system_b_lower_pole_hz": system_b_observed_poles[0],
             "system_b_upper_pole_hz": system_b_observed_poles[1],
-            "system_c_q_window_pole_hz": system_c_qubit_window_hz,
+            "system_c_q_like_predicted_hz": system_c_q_like_predicted_hz,
             "system_c_pair_lower_pole_hz": system_c_pair_observed_poles[0],
             "system_c_pair_upper_pole_hz": system_c_pair_observed_poles[1],
         }
@@ -1053,6 +1069,41 @@ def _validate_notebook_record_shape(
     require_increasing(pair_fit_frequency, "record pair fit frequency grid")
     if expected_step_hz is not None:
         system_c_trace = mapping(traces.get("system_c"), "record.traces.system_c")
+        system_c_pair_frequency = numeric_array(
+            system_c_trace, "pair_frequencies_hz", "record.traces.system_c pair"
+        )
+        system_c_pair_s21 = complex_array(
+            system_c_trace, "pair_s21", "record.traces.system_c pair"
+        )
+        system_c_pair_reference = complex_array(
+            system_c_trace, "pair_reference_s21", "record.traces.system_c pair reference"
+        )
+        require_same_length(
+            "System C pair trace",
+            system_c_pair_frequency,
+            system_c_pair_s21,
+            system_c_pair_reference,
+        )
+        require_increasing(system_c_pair_frequency, "System C pair frequency grid")
+        require(
+            np.all(np.abs(system_c_pair_reference) > 0),
+            "System C pair reference S21 must be nonzero.",
+        )
+        system_c_pair_hash = frequency_grid_sha256(system_c_pair_frequency)
+        require(
+            system_c_trace.get("pair_frequency_grid_sha256") == system_c_pair_hash,
+            "System C pair grid hash is inconsistent.",
+        )
+        _require_trace_id_grid_link(
+            system_c_trace.get("pair_measured_trace_id"),
+            system_c_pair_hash,
+            "System C pair measured_trace_id",
+        )
+        _require_trace_id_grid_link(
+            system_c_trace.get("pair_reference_trace_id"),
+            system_c_pair_hash,
+            "System C pair reference_trace_id",
+        )
         closure_frequency = numeric_array(
             system_c_trace, "closure_frequencies_hz", "record.traces.system_c closure"
         )
@@ -1073,8 +1124,153 @@ def _validate_notebook_record_shape(
             closure_residual,
         )
         require(
-            np.allclose(closure_predicted - closure_observed, closure_residual, rtol=1e-12, atol=1e-12),
+            np.array_equal(closure_frequency, system_c_pair_frequency)
+            and np.allclose(
+                system_c_pair_s21 / system_c_pair_reference,
+                closure_observed,
+                rtol=1e-12,
+                atol=1e-12,
+            )
+            and np.allclose(
+                closure_predicted - closure_observed,
+                closure_residual,
+                rtol=1e-12,
+                atol=1e-12,
+            ),
             "System C stored complex-S21 residual is inconsistent.",
+        )
+        qubit_observability_frequency = numeric_array(
+            system_c_trace,
+            "qubit_observability_frequencies_hz",
+            "record.traces.system_c qubit observability",
+        )
+        qubit_observability_s21 = complex_array(
+            system_c_trace,
+            "qubit_observability_s21",
+            "record.traces.system_c qubit observability",
+        )
+        qubit_observability_reference = complex_array(
+            system_c_trace,
+            "qubit_observability_reference_s21",
+            "record.traces.system_c qubit observability reference",
+        )
+        qubit_observability_normalized = complex_array(
+            system_c_trace,
+            "qubit_observability_normalized_s21",
+            "record.traces.system_c qubit observability normalized",
+        )
+        require_same_length(
+            "System C dark-mode observability",
+            qubit_observability_frequency,
+            qubit_observability_s21,
+            qubit_observability_reference,
+            qubit_observability_normalized,
+        )
+        require_increasing(qubit_observability_frequency, "System C qubit observability grid")
+        require(
+            np.all(np.abs(qubit_observability_reference) > 0)
+            and np.allclose(
+                qubit_observability_s21 / qubit_observability_reference,
+                qubit_observability_normalized,
+                rtol=1e-12,
+                atol=1e-12,
+            ),
+            "System C qubit observability normalization is inconsistent.",
+        )
+        qubit_observability_hash = frequency_grid_sha256(qubit_observability_frequency)
+        require(
+            system_c_trace.get("qubit_observability_frequency_grid_sha256")
+            == qubit_observability_hash,
+            "System C qubit observability grid hash is inconsistent.",
+        )
+        _require_trace_id_grid_link(
+            system_c_trace.get("qubit_observability_measured_trace_id"),
+            qubit_observability_hash,
+            "System C qubit observability measured_trace_id",
+        )
+        _require_trace_id_grid_link(
+            system_c_trace.get("qubit_observability_reference_trace_id"),
+            qubit_observability_hash,
+            "System C qubit observability reference_trace_id",
+        )
+        observability = mapping(
+            system_c_trace.get("qubit_observability_diagnostic"),
+            "System C dark-mode observability diagnostic",
+        )
+        closure_observability = mapping(
+            mapping(diagnostics.get("system_c_closure"), "System C closure").get(
+                "qubit_window_observability"
+            ),
+            "System C closure qubit-window observability",
+        )
+        phase_steps = np.angle(
+            qubit_observability_normalized[1:] / qubit_observability_normalized[:-1]
+        )
+        unwrapped_phase = np.cumsum(
+            np.concatenate(([np.angle(qubit_observability_normalized[0])], phase_steps))
+        )
+        predicted_q_like_hz = finite_number(
+            mapping(
+                mapping(diagnostics.get("system_c_closure"), "System C closure").get(
+                    "predicted_q_like"
+                ),
+                "System C predicted q-like mode",
+            ).get("frequency_hz"),
+            "System C predicted q-like frequency",
+        )
+        closest_index = int(np.argmin(np.abs(qubit_observability_frequency - predicted_q_like_hz)))
+        require(
+            observability == closure_observability
+            and observability.get("status") == "dark_mode_observability_diagnostic"
+            and observability.get("role") == "human_review_only_not_physical_extraction_gate"
+            and observability.get("prediction_source")
+            == "fixed_primitive_g_J_three_mode_prediction"
+            and observability.get("predicted_q_like_frequency_hz") == predicted_q_like_hz
+            and observability.get("closest_sample_frequency_hz")
+            == qubit_observability_frequency[closest_index]
+            and math.isclose(
+                finite_number(
+                    observability.get("closest_sample_abs_s21"),
+                    "observability closest-sample magnitude",
+                ),
+                float(np.abs(qubit_observability_normalized[closest_index])),
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            )
+            and math.isclose(
+                finite_number(
+                    observability.get("closest_sample_phase_rad"),
+                    "observability closest-sample phase",
+                ),
+                float(unwrapped_phase[closest_index]),
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            )
+            and math.isclose(
+                finite_number(observability.get("frequency_grid_step_hz"), "observability grid step"),
+                float(qubit_observability_frequency[1] - qubit_observability_frequency[0]),
+                rel_tol=0.0,
+                abs_tol=1e-6,
+            )
+            and math.isclose(
+                finite_number(observability.get("abs_s21_peak_to_peak"), "observability magnitude span"),
+                float(np.ptp(np.abs(qubit_observability_normalized))),
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            )
+            and math.isclose(
+                finite_number(observability.get("unwrapped_phase_span_rad"), "observability phase span"),
+                float(np.ptp(unwrapped_phase)),
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            )
+            and math.isclose(
+                finite_number(observability.get("max_adjacent_phase_step_rad"), "observability phase step"),
+                float(np.max(np.abs(phase_steps))),
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            ),
+            "System C dark-mode observability metrics are inconsistent.",
         )
 
     probes = sequence(traces.get("readout_probes"), "record.traces.readout_probes")
@@ -1318,17 +1514,34 @@ def _validate_notebook_record_shape(
                 "System C must preserve valid physical extraction and zero direct qubit-filter coupling.",
             )
             pole_closure = mapping(closure.get("pole_closure"), "System C pole closure")
-            predicted_poles = numeric_array(
-                pole_closure, "predicted_poles_hz", "System C predicted poles"
+            predicted_three_mode_poles = numeric_array(
+                pole_closure, "predicted_three_mode_poles_hz", "System C predicted three-mode poles"
             )
-            observed_poles = numeric_array(
-                pole_closure, "observed_poles_hz", "System C observed poles"
+            predicted_q_like_hz = finite_number(
+                pole_closure.get("predicted_q_like_hz"), "System C predicted q-like pole"
+            )
+            predicted_pair_poles = numeric_array(
+                pole_closure, "predicted_pair_poles_hz", "System C predicted pair poles"
+            )
+            observed_pair_poles = numeric_array(
+                pole_closure, "observed_pair_poles_hz", "System C observed pair poles"
             )
             pole_residuals = numeric_array(
                 pole_closure, "residuals_hz", "System C pole residuals"
             )
-            require_same_length("System C pole closure", predicted_poles, observed_poles, pole_residuals)
-            require(len(predicted_poles) == 3, "System C closure must contain three poles.")
+            require_same_length(
+                "System C pair-pole closure", predicted_pair_poles, observed_pair_poles, pole_residuals
+            )
+            require(
+                len(predicted_three_mode_poles) == 3
+                and len(predicted_pair_poles) == len(observed_pair_poles) == 2
+                and predicted_q_like_hz in predicted_three_mode_poles
+                and np.array_equal(
+                    np.sort(np.append(predicted_pair_poles, predicted_q_like_hz)),
+                    np.sort(predicted_three_mode_poles),
+                ),
+                "System C must separate one predicted q-like pole from two predicted pair poles.",
+            )
             pole_maximum_hz = finite_number(
                 pole_closure.get("maximum_residual_hz"), "System C maximum pole residual"
             )
@@ -1337,7 +1550,12 @@ def _validate_notebook_record_shape(
             )
             pole_eligible = pole_maximum_hz <= pole_threshold_hz
             require(
-                np.allclose(observed_poles - predicted_poles, pole_residuals, rtol=1e-12, atol=1e-6)
+                np.allclose(
+                    observed_pair_poles - predicted_pair_poles,
+                    pole_residuals,
+                    rtol=1e-12,
+                    atol=1e-6,
+                )
                 and math.isclose(
                     float(np.max(np.abs(pole_residuals))),
                     pole_maximum_hz,

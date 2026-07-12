@@ -222,11 +222,14 @@ values normalize to the same integer framing across a JSON write/read boundary;
 non-integral Float64 values retain their exact IEEE-754 bits.
 
 Artifacts that do not declare
-`d3-three-circuit-model-physical-vs-reduced-eligibility.v3` are semantically
-incompatible with the current shared loaded-bare A/B/C contract. The validator
-rejects them explicitly; it does not relabel a historical shift-derived $g$ as
-current modal-projection evidence or infer reduced-model eligibility from a
-generic success field.
+`d3-three-circuit-model-dark-mode-aware-physical-vs-reduced-eligibility.v4` are
+semantically incompatible with the current shared loaded-bare A/B/C contract.
+System C requires the two observable pair-window poles, while its q-like pole
+is retained only as a fixed-$g/J$ reduced-model prediction. A captured q-window
+trace reports magnitude and phase observability for Human review without
+fitting a feedline pole or gating physical validity. The validator rejects
+older contracts explicitly; it does not relabel dark-mode evidence as a
+physical feedline observation.
 
 To review without writes, set `DESIGN_TARGET_JSON` and
 `OPTIMIZER_RUN_DIRECTORY` in Notebook 08, leave

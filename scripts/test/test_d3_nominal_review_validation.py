@@ -463,7 +463,50 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         }
     )
     closure_observed = complex_values(len(pair_grid), 0.025)
+    qubit_observability_grid = [4.9e9, 5.0e9, 5.1e9]
+    qubit_observability_hash = validator.frequency_grid_sha256(qubit_observability_grid)
+    qubit_observability_normalized = [
+        {"real": 1.0, "imag": 0.0},
+        {"real": 0.999, "imag": 0.0},
+        {"real": 1.0, "imag": 0.0},
+    ]
+    qubit_observability_reference = [
+        {"real": 1.0, "imag": 0.0} for _ in qubit_observability_grid
+    ]
+    qubit_observability_diagnostic = {
+        "status": "dark_mode_observability_diagnostic",
+        "role": "human_review_only_not_physical_extraction_gate",
+        "predicted_q_like_frequency_hz": 5.0e9,
+        "prediction_source": "fixed_primitive_g_J_three_mode_prediction",
+        "frequency_grid_step_hz": 100.0e6,
+        "closest_sample_frequency_hz": 5.0e9,
+        "closest_sample_abs_s21": 0.999,
+        "closest_sample_phase_rad": 0.0,
+        "abs_s21_peak_to_peak": 0.0010000000000000009,
+        "unwrapped_phase_span_rad": 0.0,
+        "max_adjacent_phase_step_rad": 0.0,
+    }
     record["traces"]["system_c"] = {
+        "pair_frequency_grid_sha256": pair_hash,
+        "pair_measured_trace_id": f"synthetic-system-c-pair|grid_sha256={pair_hash}",
+        "pair_reference_trace_id": f"synthetic-pair-reference|grid_sha256={pair_hash}",
+        "pair_frequencies_hz": pair_grid,
+        "pair_s21": closure_observed,
+        "pair_reference_s21": [
+            {"real": 1.0, "imag": 0.0} for _ in pair_grid
+        ],
+        "qubit_observability_frequency_grid_sha256": qubit_observability_hash,
+        "qubit_observability_measured_trace_id": (
+            f"synthetic-system-c-qubit-observability|grid_sha256={qubit_observability_hash}"
+        ),
+        "qubit_observability_reference_trace_id": (
+            f"synthetic-qubit-reference|grid_sha256={qubit_observability_hash}"
+        ),
+        "qubit_observability_frequencies_hz": qubit_observability_grid,
+        "qubit_observability_s21": qubit_observability_normalized,
+        "qubit_observability_reference_s21": qubit_observability_reference,
+        "qubit_observability_normalized_s21": qubit_observability_normalized,
+        "qubit_observability_diagnostic": qubit_observability_diagnostic,
         "closure_frequencies_hz": pair_grid,
         "closure_observed_s21": closure_observed,
         "closure_predicted_s21": closure_observed,
@@ -511,7 +554,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         "system_a_r_like_hz": diagnostics["frequency_layers"]["physical_readout_like_hz"],
         "system_b_lower_pole_hz": system_b_observed_poles[0],
         "system_b_upper_pole_hz": system_b_observed_poles[1],
-        "system_c_q_window_pole_hz": 5.0e9,
+        "system_c_q_like_predicted_hz": 5.0e9,
         "system_c_pair_lower_pole_hz": 5.9e9,
         "system_c_pair_upper_pole_hz": 6.1e9,
     }
@@ -597,15 +640,22 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         "failure_reasons": [],
         "direct_qubit_filter_coupling_hz": 0.0,
         "physical_observed_poles": {
-            "qubit_window_pole_hz": 5.0e9,
             "pair_window_poles_hz": [5.9e9, 6.1e9],
         },
+        "predicted_q_like": {
+            "frequency_hz": 5.0e9,
+            "source_method": "fixed_primitive_g_J_three_mode_prediction",
+            "ownership_label": "predicted_q_like_reduced_model_not_feedline_observation",
+        },
+        "qubit_window_observability": qubit_observability_diagnostic,
         "pole_closure": {
             "status": "eligible",
             "reduced_model_eligible": True,
-            "predicted_poles_hz": [5.0e9, 5.9e9, 6.1e9],
-            "observed_poles_hz": [5.0e9, 5.9e9, 6.1e9],
-            "residuals_hz": [0.0, 0.0, 0.0],
+            "predicted_three_mode_poles_hz": [5.0e9, 5.9e9, 6.1e9],
+            "predicted_q_like_hz": 5.0e9,
+            "predicted_pair_poles_hz": [5.9e9, 6.1e9],
+            "observed_pair_poles_hz": [5.9e9, 6.1e9],
+            "residuals_hz": [0.0, 0.0],
             "maximum_residual_hz": 0.0,
             "maximum_residual_threshold_hz": 1.0e6,
         },
@@ -990,12 +1040,15 @@ class D3NominalReviewValidationTest(unittest.TestCase):
             "pair grid hash": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"]["pair"].update({"frequency_grid_sha256": "0" * 64}),
             "diagnostics loaded grid hash": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"loaded_frequency_grid_sha256": "0" * 64}),
             "diagnostics pair grid hash": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"pair_frequency_grid_sha256": "0" * 64}),
-            "historical extraction contract": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"extraction_contract": "legacy"}),
+            "historical extraction contract": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"extraction_contract": "d3-three-circuit-model-physical-vs-reduced-eligibility.v3"}),
             "missing final-validation frequency rows": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].pop("final_validation_frequency_rows"),
             "false System B pole ownership": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["final_validation_frequency_rows"][8].update({"ownership_label": "readout_like"}),
             "System C pair observation mismatch": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"]["physical_observed_poles"].update({"pair_window_poles_hz": [5.8e9, 6.1e9]}),
             "System B common reference mismatch": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["systems"]["B"].update({"common_readout_reference_id": "different"}),
-            "System C pole residual": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"]["pole_closure"].update({"residuals_hz": [0.0, 0.0, 2.0e6]}),
+            "System C false q observation": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"]["physical_observed_poles"].update({"qubit_window_pole_hz": 5.0e9}),
+            "System C predicted q ownership": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"]["predicted_q_like"].update({"ownership_label": "feedline_observation"}),
+            "System C dark-mode observability": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"]["system_c"]["qubit_observability_diagnostic"].update({"abs_s21_peak_to_peak": 0.5}),
+            "System C pole residual": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"]["pole_closure"].update({"residuals_hz": [0.0, 2.0e6]}),
             "System C complex response residual": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"]["system_c"]["closure_residual_s21"][0].update({"real": 1.0}),
             "modal RWA closure": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["closed_modal_projection"]["projection"]["two_mode_reduced_closure"].update({"maximum_rwa_minus_bdg_hz": 2.0e6}),
             "missing diagnostics": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"].pop("diagnostics"),
