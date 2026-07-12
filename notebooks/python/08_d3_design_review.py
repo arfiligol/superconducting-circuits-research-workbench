@@ -814,13 +814,15 @@ display(
 )
 
 # %%
-if diagnostics.get("extraction_contract") != "d3-three-circuit-model-extraction.v1":
+if diagnostics.get("extraction_contract") != "d3-three-circuit-model-zero-probe-crosscheck.v1":
     raise ValueError(
         "This artifact does not implement the D3 three-circuit-model extraction contract. "
         "Run a fresh nominal validation; incompatible exploration evidence is not relabeled."
     )
 frequency_fit = diagnostics["readout_coupling_off_zero_probe_frequency_fit"]
 coupling_on_frequency_fit = diagnostics["readout_zero_probe_frequency_fit"]
+qubit_frequency_fit = diagnostics["qubit_zero_probe_frequency_fit"]
+zero_probe_lower_pole_crosscheck = diagnostics["zero_probe_lower_pole_crosscheck"]
 linewidth_fit = diagnostics["readout_zero_probe_linewidth_fit"]
 g_fit = diagnostics.get("g_zero_probe_fit")
 regression_rows = [
@@ -843,6 +845,10 @@ if g_fit is not None:
     regression_rows.extend(
         [
             ("System A coupling-on readout intercept", coupling_on_frequency_fit["intercept"] / 1e9, "GHz", "fitted", "physical Cr cross branches restored; not f_r,LB"),
+            ("System A qubit-like intercept", qubit_frequency_fit["intercept"] / 1e9, "GHz", "fitted", "quadratic weak-probe extrapolation"),
+            ("Predicted zero-probe lower pole", zero_probe_lower_pole_crosscheck["predicted_qubit_zero_probe_hz"] / 1e9, "GHz", "calculated", "fqLB + frLB(0) - fr+(0)"),
+            ("Zero-probe lower-pole residual", zero_probe_lower_pole_crosscheck["residual_hz"] / 1e3, "kHz", "calculated", "only lower-pole hard-gated residual"),
+            ("Zero-probe lower-pole gate", zero_probe_lower_pole_crosscheck["maximum_residual_gate_hz"] / 1e3, "kHz", "condition", "existing vector-pole disagreement threshold"),
             ("g intercept", g_fit["intercept"] / 1e6, "MHz", "fitted", "zero-probe quadratic intercept"),
             ("g extrapolation R²", g_fit["r2"], "fraction", "calculated", "configured Sol gate"),
         ]
@@ -896,8 +902,11 @@ display(
 #
 # $$g_f(C_p)=\sqrt{[f_{rq}(C_p)-f_{r0}(C_p)]\,[f_{rq}(C_p)-f_{q0}]}.$$
 #
-# The fitted lower pole is not an input to $g_f$; it only checks the trace
-# identity prediction $f_{q,\mathrm{pred}}=f_{q0}+f_{r0}-f_{rq}$.
+# The fitted lower pole is not an input to $g_f$. Finite-probe residuals are
+# diagnostics because the feedline probe opens an extra channel. Only the three
+# quadratic intercepts check
+# $f_{q,\mathrm{pred}}(0)=f_{q,\mathrm{LB}}+f_{r,\mathrm{LB}}(0)-f_{r+}(0)$
+# as a hard gate.
 
 # %%
 if g_fit is not None:
@@ -914,6 +923,7 @@ if g_fit is not None:
                 "Predicted lower (GHz)": mode["predicted_qubit_pole_hz"] / 1e9,
                 "Fitted lower (GHz)": mode["qubit_mode"]["frequency_hz"] / 1e9,
                 "Residual (kHz)": mode["qubit_crosscheck_residual_hz"] / 1e3,
+                "Role": mode["qubit_crosscheck_role"],
             }
         )
     display(

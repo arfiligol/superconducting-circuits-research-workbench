@@ -518,7 +518,7 @@ def _validate_notebook_record_shape(
     diagnostics = mapping(record.get("diagnostics"), "record.diagnostics")
     if expected_step_hz is not None:
         require(
-            diagnostics.get("extraction_contract") == "d3-three-circuit-model-extraction.v1",
+            diagnostics.get("extraction_contract") == "d3-three-circuit-model-zero-probe-crosscheck.v1",
             "Current D3 evidence must use the three-circuit-model extraction contract; incompatible historical artifacts are rejected.",
         )
         common_readout = mapping(
@@ -618,10 +618,20 @@ def _validate_notebook_record_shape(
         if expected_step_hz is not None
         else None
     )
+    qubit_frequency_fit = (
+        mapping(
+            diagnostics.get("qubit_zero_probe_frequency_fit"),
+            "qubit zero-probe frequency fit",
+        )
+        if expected_step_hz is not None
+        else None
+    )
     fit_x_by_label: dict[str, np.ndarray] = {}
     fits = [("readout frequency fit", frequency_fit), ("readout linewidth fit", linewidth_fit)]
     if coupling_off_frequency_fit is not None:
         fits.append(("readout coupling-off frequency fit", coupling_off_frequency_fit))
+    if qubit_frequency_fit is not None:
+        fits.append(("qubit frequency fit", qubit_frequency_fit))
     if g_fit is not None:
         fits.append(("g fit", g_fit))
     for label, fit in fits:
@@ -635,7 +645,7 @@ def _validate_notebook_record_shape(
     require(
         all(np.array_equal(fit_x_by_label["readout frequency fit"], values)
             for values in fit_x_by_label.values()),
-        "Readout frequency, linewidth, and g fits must share the probe grid.",
+        "Readout, qubit, linewidth, and g fits must share the weak-probe grid.",
     )
     if coupling_off_frequency_fit is not None:
         require(
@@ -963,9 +973,10 @@ def _validate_notebook_record_shape(
                 residual_hz = finite_number(
                     mode.get("qubit_crosscheck_residual_hz"), f"lower-pole residual {index}"
                 )
-                residual_gate_hz = finite_number(
-                    mode.get("qubit_crosscheck_maximum_residual_hz"),
-                    f"lower-pole residual gate {index}",
+                require(
+                    mode.get("qubit_crosscheck_role") == "finite_probe_diagnostic_not_gate"
+                    and "qubit_crosscheck_maximum_residual_hz" not in mode,
+                    f"Finite-probe lower-pole residual {index} must be diagnostic-only and carry no gate.",
                 )
                 require(fr0_hz > coupling_off_qubit_hz and readout_shift_hz > 0 and g_hz > 0,
                         f"Finite-probe readout-shift inversion {index} must have positive detuning, shift, and g.")
@@ -973,10 +984,55 @@ def _validate_notebook_record_shape(
                     math.isclose(frq_hz - fr0_hz, readout_shift_hz, rel_tol=1e-12, abs_tol=1e-6)
                     and math.isclose(g_hz**2, readout_shift_hz * (frq_hz - coupling_off_qubit_hz), rel_tol=1e-12, abs_tol=1e-3)
                     and math.isclose(predicted_qubit_hz, coupling_off_qubit_hz + fr0_hz - frq_hz, rel_tol=1e-12, abs_tol=1e-6)
-                    and math.isclose(residual_hz, fitted_qubit_hz - predicted_qubit_hz, rel_tol=1e-12, abs_tol=1e-6)
-                    and abs(residual_hz) <= residual_gate_hz,
-                    f"Finite-probe readout-shift inversion or lower-pole cross-check {index} is inconsistent.",
+                    and math.isclose(residual_hz, fitted_qubit_hz - predicted_qubit_hz, rel_tol=1e-12, abs_tol=1e-6),
+                    f"Finite-probe readout-shift inversion or diagnostic lower-pole residual {index} is inconsistent.",
                 )
+        if expected_step_hz is not None:
+            zero_probe_crosscheck = mapping(
+                diagnostics.get("zero_probe_lower_pole_crosscheck"),
+                "record.diagnostics.zero_probe_lower_pole_crosscheck",
+            )
+            predicted_zero_probe_hz = finite_number(
+                zero_probe_crosscheck.get("predicted_qubit_zero_probe_hz"),
+                "predicted zero-probe qubit pole",
+            )
+            observed_zero_probe_hz = finite_number(
+                zero_probe_crosscheck.get("observed_qubit_zero_probe_hz"),
+                "observed zero-probe qubit pole",
+            )
+            zero_probe_residual_hz = finite_number(
+                zero_probe_crosscheck.get("residual_hz"), "zero-probe lower-pole residual"
+            )
+            zero_probe_gate_hz = finite_number(
+                zero_probe_crosscheck.get("maximum_residual_gate_hz"),
+                "zero-probe lower-pole residual gate",
+            )
+            require(
+                zero_probe_crosscheck.get("status") == "pass"
+                and zero_probe_crosscheck.get("role") == "zero_probe_hard_gate"
+                and zero_probe_crosscheck.get("fqLB_hz") == coupling_off_qubit_hz
+                and zero_probe_crosscheck.get("frLB_zero_probe_hz")
+                == coupling_off_frequency_fit.get("intercept")
+                and zero_probe_crosscheck.get("fr_coupling_on_zero_probe_hz")
+                == frequency_fit.get("intercept")
+                and observed_zero_probe_hz == qubit_frequency_fit.get("intercept")
+                and math.isclose(
+                    predicted_zero_probe_hz,
+                    coupling_off_qubit_hz
+                    + coupling_off_frequency_fit["intercept"]
+                    - frequency_fit["intercept"],
+                    rel_tol=1e-12,
+                    abs_tol=1e-6,
+                )
+                and math.isclose(
+                    zero_probe_residual_hz,
+                    observed_zero_probe_hz - predicted_zero_probe_hz,
+                    rel_tol=1e-12,
+                    abs_tol=1e-6,
+                )
+                and abs(zero_probe_residual_hz) <= zero_probe_gate_hz,
+                "Only the zero-probe lower-pole cross-check may be gated, and its persisted values are inconsistent.",
+            )
         for diagnostic_id in ("filter_loaded_bare_reference_id",):
             _require_trace_id_grid_link(
                 diagnostics.get(diagnostic_id), filter_grid_hash, f"diagnostics.{diagnostic_id}"
@@ -1911,7 +1967,7 @@ def validate_artifacts(
     final_metrics = mapping(final_record.get("metrics"), "final_diagnostics.record.metrics")
     diagnostics = mapping(final_record.get("diagnostics"), "final_diagnostics.record.diagnostics")
     require(
-        diagnostics.get("extraction_contract") == "d3-three-circuit-model-extraction.v1",
+        diagnostics.get("extraction_contract") == "d3-three-circuit-model-zero-probe-crosscheck.v1",
         "Optimizer artifact uses an incompatible historical extraction contract; run a fresh evaluation with Systems A/B/C.",
     )
     design = mapping(diagnostics.get("design"), "final_diagnostics.record.diagnostics.design")

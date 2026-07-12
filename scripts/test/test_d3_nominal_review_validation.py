@@ -346,6 +346,32 @@ def current_optimizer_fixture(workspace: Path) -> Path:
             "quadratic_per_fF2": 1.0,
         },
     }
+    predicted_qubit_zero_probe_hz = 5.0e9 + common_readout_hz - (common_readout_hz + 10.0e6)
+    qubit_frequencies = [
+        predicted_qubit_zero_probe_hz + 1.0e6 * value for value in x_values
+    ]
+    record["diagnostics"]["qubit_zero_probe_frequency_fit"] = {
+        "x_values": x_values,
+        "y_values": qubit_frequencies,
+        "fitted_y_values": qubit_frequencies,
+        "intercept": predicted_qubit_zero_probe_hz,
+        "coefficients": {
+            "intercept": predicted_qubit_zero_probe_hz,
+            "linear_per_fF": 1.0e6,
+            "quadratic_per_fF2": 0.0,
+        },
+    }
+    record["diagnostics"]["zero_probe_lower_pole_crosscheck"] = {
+        "status": "pass",
+        "role": "zero_probe_hard_gate",
+        "fqLB_hz": 5.0e9,
+        "frLB_zero_probe_hz": common_readout_hz,
+        "fr_coupling_on_zero_probe_hz": common_readout_hz + 10.0e6,
+        "observed_qubit_zero_probe_hz": predicted_qubit_zero_probe_hz,
+        "predicted_qubit_zero_probe_hz": predicted_qubit_zero_probe_hz,
+        "residual_hz": 0.0,
+        "maximum_residual_gate_hz": 1.0e6,
+    }
 
     def complex_values(count: int, scale: float) -> list[dict[str, float]]:
         return [
@@ -390,7 +416,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         frq_hz = coupling_on_frequencies[index]
         fr0_hz = coupling_off_frequencies[index]
         predicted_qubit_hz = 5.0e9 + fr0_hz - frq_hz
-        fitted_qubit_hz = predicted_qubit_hz + 1.0e3
+        fitted_qubit_hz = qubit_frequencies[index]
         mode["frequency_hz"] = frq_hz
         mode["g_hz"] = g_values[index]
         mode["diagonal_preserving_coupling_off_mode"] = {
@@ -402,7 +428,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         mode["readout_shift_hz"] = frq_hz - fr0_hz
         mode["predicted_qubit_pole_hz"] = predicted_qubit_hz
         mode["qubit_crosscheck_residual_hz"] = fitted_qubit_hz - predicted_qubit_hz
-        mode["qubit_crosscheck_maximum_residual_hz"] = 1.0e6
+        mode["qubit_crosscheck_role"] = "finite_probe_diagnostic_not_gate"
         mode["qubit_mode"] = {
             "frequency_hz": fitted_qubit_hz,
             "frequency_grid_sha256": qubit_hash,
@@ -443,7 +469,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         f"synthetic-filter-reference|grid_sha256={loaded_hash}"
     )
     common_reference_id = f"synthetic-common-readout-reference|grid_sha256={loaded_hash}"
-    diagnostics["extraction_contract"] = "d3-three-circuit-model-extraction.v1"
+    diagnostics["extraction_contract"] = "d3-three-circuit-model-zero-probe-crosscheck.v1"
     diagnostics["common_readout_loaded_bare_reference_id"] = common_reference_id
     diagnostics["common_readout_loaded_bare"] = {
         "reference_contract_id": common_reference_id,
@@ -713,6 +739,15 @@ class D3NominalReviewValidationTest(unittest.TestCase):
             workspace, optimizer, nominal, _ = self.make_fixture(temporary)
             validated = validator.validate_nominal_artifacts(nominal, optimizer, workspace)
             self.assertEqual(validated["record"]["status"], "valid")
+            residuals = [
+                mode["qubit_crosscheck_residual_hz"]
+                for mode in validated["record"]["diagnostics"]["readout_probe_modes"]
+            ]
+            self.assertTrue(all(abs(value) > 1.0e6 for value in residuals))
+            self.assertEqual(
+                validated["record"]["diagnostics"]["zero_probe_lower_pole_crosscheck"]["residual_hz"],
+                0.0,
+            )
 
     def test_legacy_optimizer_cannot_back_independent_nominal_validation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -741,6 +776,7 @@ class D3NominalReviewValidationTest(unittest.TestCase):
             "System B common reference mismatch": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["systems"]["B"].update({"common_readout_reference_id": "different"}),
             "System C pole residual": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"].update({"pole_residuals_hz": [0.0, 0.0, 2.0e6]}),
             "System C complex response residual": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"]["system_c"]["closure_residual_s21"][0].update({"real": 1.0}),
+            "zero-probe lower-pole crosscheck": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["zero_probe_lower_pole_crosscheck"].update({"observed_qubit_zero_probe_hz": 4.992e9, "residual_hz": 2.0e6}),
             "missing diagnostics": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"].pop("diagnostics"),
             "missing filter trace": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"].pop("filter"),
             "missing pair trace": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"].pop("pair"),

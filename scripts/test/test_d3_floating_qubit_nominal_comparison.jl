@@ -99,6 +99,24 @@ end
 		@test loaded_bare_detuning_rejection isa D3CandidateRejected
 		@test loaded_bare_detuning_rejection.code == "g.nonpositive_loaded_bare_detuning"
 		@test_throws D3CandidateRejected _linearized_g_from_readout_shift_hz(5.0e9, 5.8e9, 5.79e9)
+		zero_probe_crosscheck = _zero_probe_lower_pole_crosscheck(
+			5.0e9,
+			5.8e9,
+			5.81e9,
+			4.9905e9,
+			1.0e6,
+		)
+		@test zero_probe_crosscheck.role == "zero_probe_hard_gate"
+		@test zero_probe_crosscheck.residual_hz ≈ 0.5e6
+		zero_probe_rejection = try
+			_zero_probe_lower_pole_crosscheck(5.0e9, 5.8e9, 5.81e9, 4.992e9, 1.0e6)
+		catch exception
+			exception
+		end
+		@test zero_probe_rejection isa D3CandidateRejected
+		@test zero_probe_rejection.code == "g_crosscheck.zero_probe_lower_pole_residual_gate"
+		@test zero_probe_rejection.details.residual_hz ≈ 2.0e6
+		@test zero_probe_rejection.details.maximum_residual_gate_hz == 1.0e6
 		three_mode_poles = _three_mode_poles_hz(5.0e9, 5.8e9, 6.0e9, 90e6, 20e6)
 		@test length(three_mode_poles) == 3
 		@test sum(three_mode_poles) ≈ 16.8e9

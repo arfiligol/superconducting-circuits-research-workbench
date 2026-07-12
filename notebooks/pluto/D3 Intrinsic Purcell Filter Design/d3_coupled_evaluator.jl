@@ -712,6 +712,51 @@ function _linearized_g_from_readout_shift_hz(coupling_off_qubit_hz, coupling_off
 	return sqrt(radicand_hz2)
 end
 
+"""Gate the closed two-mode lower-pole identity only at the zero-probe boundary."""
+function _zero_probe_lower_pole_crosscheck(
+	fqLB_hz,
+	frLB_zero_probe_hz,
+	fr_coupling_on_zero_probe_hz,
+	observed_qubit_zero_probe_hz,
+	maximum_residual_gate_hz,
+)
+	values = Float64[
+		fqLB_hz,
+		frLB_zero_probe_hz,
+		fr_coupling_on_zero_probe_hz,
+		observed_qubit_zero_probe_hz,
+		maximum_residual_gate_hz,
+	]
+	all(isfinite, values) || error("Zero-probe lower-pole cross-check inputs must be finite.")
+	values[5] >= 0 || error("Zero-probe lower-pole residual gate must be non-negative.")
+	predicted_qubit_zero_probe_hz = values[1] + values[2] - values[3]
+	residual_hz = values[4] - predicted_qubit_zero_probe_hz
+	abs(residual_hz) <= values[5] || reject_d3_candidate(
+		"g_crosscheck.zero_probe_lower_pole_residual_gate",
+		"Zero-probe fitted qubit-like pole disagrees with the closed two-mode trace-identity prediction.";
+		details = (
+			fqLB_hz = values[1],
+			frLB_zero_probe_hz = values[2],
+			fr_coupling_on_zero_probe_hz = values[3],
+			observed_qubit_zero_probe_hz = values[4],
+			predicted_qubit_zero_probe_hz = predicted_qubit_zero_probe_hz,
+			residual_hz = residual_hz,
+			maximum_residual_gate_hz = values[5],
+		),
+	)
+	return (
+		status = "pass",
+		role = "zero_probe_hard_gate",
+		fqLB_hz = values[1],
+		frLB_zero_probe_hz = values[2],
+		fr_coupling_on_zero_probe_hz = values[3],
+		observed_qubit_zero_probe_hz = values[4],
+		predicted_qubit_zero_probe_hz = predicted_qubit_zero_probe_hz,
+		residual_hz = residual_hz,
+		maximum_residual_gate_hz = values[5],
+	)
+end
+
 """Return the fixed-parameter qubit–readout–filter normal-mode frequencies.
 
 This diagonalizes the loaded-bare three-mode matrix using primitive `g` from
@@ -1356,17 +1401,6 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			predicted_qubit_pole_hz = evaluator.qubit_coupling_off_frequency_hz +
 				coupling_off_mode.frequency_hz - coupling_on_mode.frequency_hz
 			qubit_crosscheck_residual_hz = qubit_mode.frequency_hz - predicted_qubit_pole_hz
-			abs(qubit_crosscheck_residual_hz) <= settings.max_vector_pole_disagreement_hz ||
-				reject_d3_candidate(
-					"g_crosscheck.lower_pole_residual_gate",
-					"Fitted lower pole disagrees with the trace-identity prediction from the readout shift.";
-					details = (
-						predicted_qubit_pole_hz = predicted_qubit_pole_hz,
-						fitted_qubit_pole_hz = qubit_mode.frequency_hz,
-						residual_hz = qubit_crosscheck_residual_hz,
-						maximum_residual_hz = settings.max_vector_pole_disagreement_hz,
-					),
-				)
 			push!(g_values_hz, g_hz)
 			push!(readout_modes, merge(coupling_on_mode, (
 				frequency_grid_sha256 = loaded_grid_sha256,
@@ -1380,7 +1414,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				readout_shift_hz = readout_shift_hz,
 				predicted_qubit_pole_hz = predicted_qubit_pole_hz,
 				qubit_crosscheck_residual_hz = qubit_crosscheck_residual_hz,
-				qubit_crosscheck_maximum_residual_hz = settings.max_vector_pole_disagreement_hz,
+				qubit_crosscheck_role = "finite_probe_diagnostic_not_gate",
 				qubit_mode = merge(qubit_mode, (
 					frequency_grid_sha256 = qubit_grid_sha256,
 					measured_trace_id = qubit_probe_trace_id,
@@ -1420,6 +1454,13 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			"readout weak-probe frequency",
 			"readout_extrapolation.frequency",
 		)
+		qubit_frequency_fit = _quadratic_zero_intercept(
+			settings.readout_probe_capacitances_fF,
+			[mode.qubit_mode.frequency_hz for mode in readout_modes],
+			settings.min_readout_frequency_extrapolation_r2,
+			"coupling-on qubit-like weak-probe frequency",
+			"qubit_extrapolation.frequency",
+		)
 		readout_linewidth_fit = _zero_constrained_linewidth_fit(
 			settings.readout_probe_capacitances_fF,
 			[mode.diagonal_preserving_coupling_off_mode.bandwidth_hz for mode in readout_modes],
@@ -1442,6 +1483,13 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			"g_extrapolation.nonpositive_intercept",
 			"Zero-probe linearized g intercept must be finite and strictly positive.";
 			details = (g_fit = g_fit,),
+		)
+		zero_probe_lower_pole_crosscheck = _zero_probe_lower_pole_crosscheck(
+			evaluator.qubit_coupling_off_frequency_hz,
+			readout_frequency_hz,
+			coupling_on_readout_frequency_hz,
+			qubit_frequency_fit.intercept,
+			settings.max_vector_pole_disagreement_hz,
 		)
 		abs(readout_frequency_hz - slot_hz) <= settings.loaded_bare_ownership_half_width_hz ||
 			reject_d3_candidate(
@@ -1802,7 +1850,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		diagnostics = (
 			status = "success",
 			design = design,
-			extraction_contract = "d3-three-circuit-model-extraction.v1",
+			extraction_contract = "d3-three-circuit-model-zero-probe-crosscheck.v1",
 			common_readout_loaded_bare = (
 				reference_contract_id = common_readout_loaded_bare_reference_id,
 				frequency_hz = readout_frequency_hz,
@@ -1823,7 +1871,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 					active_couplings = ["physical_Cr1", "physical_Cr2"],
 					off_couplings = ["J"],
 					common_readout_reference_id = common_readout_loaded_bare_reference_id,
-					metric_ownership = ["fqLB", "g_hz", "readout_shift", "two_mode_pole_crosscheck"],
+					metric_ownership = ["fqLB", "g_hz", "readout_shift", "zero_probe_two_mode_pole_crosscheck"],
 				),
 				B = (
 					id = "readout-filter-feedline",
@@ -1853,13 +1901,15 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				coupling_off_reference = "split_common_mode_layer_reference: this readout-only CircuitPlan retains separate Cr1/Cr2 readout endpoint shunts; independent Kron-reduced fqLB retains the qubit endpoint loading",
 				qubit_loaded_bare_frequency_role = "Kron_reduced_linearized_LJ_coupling_off_plasma_frequency_fqLB_not_anharmonic_f01",
 				formula = "g_f=sqrt((f_rq-f_r0)*(f_rq-f_q0))",
-				lower_pole_crosscheck = "f_q_predicted=f_q0+f_r0-f_rq",
+				lower_pole_crosscheck = "finite_probe_residuals_are_diagnostic_only; zero_probe_hard_gate_uses_f_q_predicted=fqLB+frLB_zero_probe-fr_coupling_on_zero_probe",
 				coupling_on_zero_probe_readout_frequency_hz = coupling_on_readout_frequency_hz,
 			),
 			readout_coupling_off_zero_probe_frequency_fit = readout_coupling_off_frequency_fit,
 			readout_zero_probe_frequency_fit = readout_frequency_fit,
+			qubit_zero_probe_frequency_fit = qubit_frequency_fit,
 			readout_zero_probe_linewidth_fit = readout_linewidth_fit,
 			g_zero_probe_fit = g_fit,
+			zero_probe_lower_pole_crosscheck = zero_probe_lower_pole_crosscheck,
 			readout_loaded_linewidth_hz = readout_loaded_linewidth_hz,
 			floating_qubit = (
 				model_id = evaluator.floating_qubit_nominal.model_id,
