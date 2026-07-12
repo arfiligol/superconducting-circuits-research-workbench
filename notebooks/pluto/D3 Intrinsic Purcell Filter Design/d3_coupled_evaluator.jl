@@ -500,11 +500,12 @@ function _d3_trace_identity(
 	return (
 		reference_contract_id = "d3-reference-contract|case=$(case)|floating_qubit_sha256=$(floating_qubit_input_sha256)|$(identity)",
 		filter_loaded_bare_reference_id = "d3-filter-loaded-bare|grid_sha256=$(loaded_grid_sha256)|design=$(design)|$(identity)",
-		readout_loaded_bare_reference_id = "d3-qubit-loaded-readout-zero-probe|grid_sha256=$(loaded_grid_sha256)|floating_qubit_sha256=$(floating_qubit_input_sha256)|design=$(design)|$(identity)",
+		common_readout_loaded_bare_reference_id = "d3-common-readout-loaded-bare|grid_sha256=$(loaded_grid_sha256)|floating_qubit_sha256=$(floating_qubit_input_sha256)|design=$(design)|$(identity)",
 		filter_only_trace_id = "d3-filter-only-hb|grid_sha256=$(loaded_grid_sha256)|design=$(design)|$(identity)",
 		loaded_empty_feedline_trace_id = "d3-empty-feedline-hb|grid_sha256=$(loaded_grid_sha256)|case=$(case)",
+		qubit_empty_feedline_trace_id = "d3-empty-feedline-hb|grid_sha256=$(qubit_grid_sha256)|case=$(case)",
 		calibration_id = "d3-filter-channel|grid_sha256=$(loaded_grid_sha256)|case=$(case)|$(identity)",
-		pair_measured_trace_id = "d3-single-pair-hb|grid_sha256=$(pair_grid_sha256)|design=$(design)|$(identity)",
+		pair_measured_trace_id = "d3-system-b-readout-filter-hb|grid_sha256=$(pair_grid_sha256)|design=$(design)|$(identity)",
 		pair_empty_feedline_trace_id = "d3-empty-feedline-hb|grid_sha256=$(pair_grid_sha256)|case=$(case)",
 		pair_assignment_id = "$(design)|grid_sha256=$(pair_grid_sha256)|$(identity)",
 		qubit_frequency_grid_sha256 = String(qubit_grid_sha256),
@@ -656,128 +657,186 @@ function _fit_single_loaded_mode(
 	)
 end
 
-function _fit_readout_probe_loaded_mode(
-	frequencies_hz,
-	normalized_s21,
-	slot_hz,
-	filter_frequency_hz,
-	label,
-	settings,
-)
-	# The selected filter loading remains present in every finite readout probe.
-	# Assign the filter feature only by closeness to its independent reference;
-	# frequency sign/order is not a mode identity.
-	result = fit_vector_s21(
-		frequencies_hz,
-		normalized_s21;
-		n_resonators = 2,
-		bg_poles = settings.vector_bg_poles,
-		min_q = settings.vector_min_q,
-		restrict_to_input_span = true,
-	)
-	resonances = _require_vector_fit(result, 2, label, settings)
-	pole_frequencies_hz = Float64[resonance["fr_hz"] for resonance in resonances]
-	anchor_distances_hz = abs.(pole_frequencies_hz .- filter_frequency_hz)
-	filter_index = argmin(anchor_distances_hz)
-	readout_index = filter_index == 1 ? 2 : 1
-	filter_anchor_distance_hz = anchor_distances_hz[filter_index]
-	assignment_margin_hz = anchor_distances_hz[readout_index] - filter_anchor_distance_hz
-	filter_anchor_distance_hz <= settings.max_filter_anchor_distance_hz ||
-		reject_d3_candidate(
-			"mode_assignment.filter_anchor_distance",
-			"$(label) nearest pole is too far from the independent filter reference.";
-			details = (
-				filter_loaded_bare_hz = filter_frequency_hz,
-				vector_poles_hz = pole_frequencies_hz,
-				filter_anchor_distance_hz = filter_anchor_distance_hz,
-				max_filter_anchor_distance_hz = settings.max_filter_anchor_distance_hz,
-			),
-		)
-	assignment_margin_hz >= settings.min_filter_assignment_margin_hz ||
-		reject_d3_candidate(
-			"mode_assignment.ambiguous_filter_anchor",
-			"$(label) pole assignment margin is too small to distinguish filter and readout.";
-		details = (
-			filter_loaded_bare_hz = filter_frequency_hz,
-			vector_poles_hz = pole_frequencies_hz,
-			anchor_distances_hz = anchor_distances_hz,
-			assignment_margin_hz = assignment_margin_hz,
-			min_filter_assignment_margin_hz = settings.min_filter_assignment_margin_hz,
-		),
-		)
-	filter_probe_mode = _loaded_mode_from_vector_resonance(
-		resonances[filter_index],
-		slot_hz,
-		"$(label) assigned filter pole",
-		settings;
-		require_slot_ownership = true,
-		vector_rms_error = result["metrics"]["rms_error"],
-	)
-	readout_mode = _loaded_mode_from_vector_resonance(
-		resonances[readout_index],
-		slot_hz,
-		"$(label) assigned readout pole",
-		settings;
-		require_slot_ownership = false,
-		vector_rms_error = result["metrics"]["rms_error"],
-	)
-	return merge(readout_mode, (
-		assignment = (
-			filter_reference_hz = filter_frequency_hz,
-			vector_poles_hz = pole_frequencies_hz,
-			filter_pole_index = filter_index,
-			readout_pole_index = readout_index,
-			filter_anchor_distance_hz = filter_anchor_distance_hz,
-			assignment_margin_hz = assignment_margin_hz,
-			filter_probe_mode = filter_probe_mode,
-		),
-	))
-end
-
-function _fit_qubit_probe_mode(frequencies_hz, normalized_s21, bare_qubit_hz, label, settings)
+function _fit_qubit_probe_mode(frequencies_hz, normalized_s21, coupling_off_qubit_hz, label, settings)
 	mode = _fit_single_loaded_mode(
 		frequencies_hz,
 		normalized_s21,
-		bare_qubit_hz,
+		coupling_off_qubit_hz,
 		label,
 		settings,
 		require_slot_ownership = false,
 	)
-	anchor_distance_hz = abs(mode.frequency_hz - bare_qubit_hz)
+	anchor_distance_hz = abs(mode.frequency_hz - coupling_off_qubit_hz)
 	anchor_distance_hz <= settings.max_qubit_anchor_distance_hz || reject_d3_candidate(
 		"mode_assignment.qubit_anchor_distance",
-		"$(label) pole lies too far from the diagonal-preserving coupling-off qubit frequency.";
+		"$(label) pole lies too far from the diagonal-preserving coupling-off qubit loaded-bare frequency fqLB.";
 		details = (
 			qubit_pole_hz = mode.frequency_hz,
-			qubit_coupling_off_frequency_hz = bare_qubit_hz,
+			coupling_off_qubit_hz = coupling_off_qubit_hz,
 			anchor_distance_hz = anchor_distance_hz,
 			max_qubit_anchor_distance_hz = settings.max_qubit_anchor_distance_hz,
 		),
 	)
-	return merge(mode, (coupling_off_anchor_hz = bare_qubit_hz, anchor_distance_hz = anchor_distance_hz))
+	return merge(mode, (coupling_off_anchor_hz = coupling_off_qubit_hz, anchor_distance_hz = anchor_distance_hz))
 end
 
-"""Extract real linearized g from one assigned qubit/readout pole pair."""
-function _linearized_g_hz(bare_qubit_hz, qubit_pole_hz, readout_pole_hz)
-	values = Float64[bare_qubit_hz, qubit_pole_hz, readout_pole_hz]
+"""Extract real linearized g from the coupling-induced readout pole shift."""
+function _linearized_g_from_readout_shift_hz(coupling_off_qubit_hz, coupling_off_readout_hz, coupling_on_readout_hz)
+	values = Float64[coupling_off_qubit_hz, coupling_off_readout_hz, coupling_on_readout_hz]
 	all(isfinite, values) || reject_d3_candidate(
-		"g.nonfinite_poles",
-		"Linearized g requires finite bare-qubit and assigned coupled-pole frequencies.";
+		"g.nonfinite_readout_shift",
+		"Linearized g requires finite coupling-off qubit loaded-bare, coupling-off readout loaded-bare, and coupling-on readout frequencies.";
 		details = (values_hz = values,),
 	)
-	lower_hz, upper_hz = extrema(values[2:3])
-	lower_hz < values[1] < upper_hz || reject_d3_candidate(
-		"g.bare_frequency_not_bracketed",
-		"The coupling-off qubit frequency must lie strictly between the assigned coupling-on qubit/readout poles.";
-		details = (bare_qubit_hz = values[1], lower_pole_hz = lower_hz, upper_pole_hz = upper_hz),
+	values[2] > values[1] || reject_d3_candidate(
+		"g.nonpositive_loaded_bare_detuning",
+		"The coupling-off readout loaded-bare frequency must lie above the coupling-off qubit loaded-bare frequency.";
+		details = (coupling_off_qubit_hz = values[1], coupling_off_readout_hz = values[2]),
 	)
-	radicand_hz2 = (values[1] - lower_hz) * (upper_hz - values[1])
+	readout_shift_hz = values[3] - values[2]
+	readout_shift_hz > 0 || reject_d3_candidate(
+		"g.nonpositive_readout_shift",
+		"Qubit coupling must shift the readout-like pole upward for positive readout-qubit detuning.";
+		details = (
+			coupling_off_readout_hz = values[2],
+			coupling_on_readout_hz = values[3],
+			readout_shift_hz = readout_shift_hz,
+		),
+	)
+	radicand_hz2 = readout_shift_hz * (values[3] - values[1])
 	isfinite(radicand_hz2) && radicand_hz2 > 0 || reject_d3_candidate(
 		"g.invalid_radicand",
 		"Linearized g radicand must be finite and positive.";
-		details = (radicand_hz2 = radicand_hz2,),
+		details = (readout_shift_hz = readout_shift_hz, radicand_hz2 = radicand_hz2),
 	)
 	return sqrt(radicand_hz2)
+end
+
+"""Return the fixed-parameter qubit–readout–filter normal-mode frequencies.
+
+This diagonalizes the loaded-bare three-mode matrix using primitive `g` from
+System A and primitive `J` from System B, with direct qubit–filter coupling
+fixed to zero. It performs no fitting.
+
+# Arguments
+- `fq_hz`, `fr_hz`, `fp_hz`: Common loaded-bare mode frequencies in hertz.
+- `g_hz`, `j_hz`: Fixed primitive exchange couplings in hertz.
+
+# Returns
+Three ascending real eigenfrequencies in hertz.
+
+# Throws
+`ErrorException` when any frequency or coupling is non-finite or non-positive.
+"""
+function _three_mode_poles_hz(fq_hz, fr_hz, fp_hz, g_hz, j_hz)
+	values = Float64[fq_hz, fr_hz, fp_hz, g_hz, j_hz]
+	all(isfinite, values) && all(>(0.0), values) || error("Three-mode frequencies and couplings must be finite and positive.")
+	matrix_hz = Symmetric([
+		values[1] values[4] 0.0
+		values[4] values[2] values[5]
+		0.0 values[5] values[3]
+	])
+	return sort(Float64.(eigvals(matrix_hz)))
+end
+
+"""Check System C complex transmission against the fixed three-mode response.
+
+The prediction reuses System B's calibrated direct path and channel residue,
+then adds the qubit self-energy using System A's fixed `g` and System B's fixed
+`J`. No parameter is refit; closure-quality failure rejects the candidate.
+
+# Arguments
+- `frequencies_hz`, `observed_s21`: System C pair-window trace.
+- `channel_calibration`, `j_fit`: Fixed System B calibration artifacts.
+- `fq_hz`, `fr_hz`, `fp_hz`: Common loaded-bare frequencies.
+- `g_hz`, `j_hz`: Fixed primitive pair couplings.
+- `filter_loaded_linewidth_hz`, `readout_loaded_linewidth_hz`: Fixed linewidths.
+- `settings`: Existing complex-response quality gates.
+
+# Returns
+A named tuple containing closure status, metrics, prediction, and residual trace.
+
+# Throws
+`ErrorException` for malformed traces or singular sampling; `D3CandidateRejected`
+when the existing complex-response gates fail.
+"""
+function _three_mode_response_closure(
+	frequencies_hz,
+	observed_s21,
+	channel_calibration,
+	j_fit;
+	fq_hz,
+	fr_hz,
+	fp_hz,
+	g_hz,
+	j_hz,
+	filter_loaded_linewidth_hz,
+	readout_loaded_linewidth_hz,
+	settings,
+)
+	frequencies = Float64.(collect(frequencies_hz))
+	observed = ComplexF64.(collect(observed_s21))
+	length(frequencies) == length(observed) >= 3 || error("Three-mode response closure requires matching nonempty traces.")
+	background = j_fit["background"]
+	center_hz = Float64(background["frequency_center_hz"])
+	scale_hz = Float64(background["frequency_scale_hz"])
+	c0 = ComplexF64(background["c0_real"], background["c0_imag"])
+	c1 = ComplexF64(background["c1_real_per_scaled_frequency"], background["c1_imag_per_scaled_frequency"])
+	residue_parameters = channel_calibration["params"]
+	residue_hz = ComplexF64(
+		residue_parameters["channel_residue_real_hz"],
+		residue_parameters["channel_residue_imag_hz"],
+	)
+	direct_path = c0 .+ c1 .* ((frequencies .- center_hz) ./ scale_hz)
+	a_p = filter_loaded_linewidth_hz / 2 .+ im .* (frequencies .- fp_hz)
+	a_r = readout_loaded_linewidth_hz / 2 .+ im .* (frequencies .- fr_hz)
+	a_q = im .* (frequencies .- fq_hz)
+	minimum(abs.(a_q)) > 0 || error("Three-mode closure pair grid must not sample the lossless coupling-off qubit loaded-bare pole exactly.")
+	a_r_effective = a_r .+ g_hz^2 ./ a_q
+	predicted = direct_path .+ residue_hz .* a_r_effective ./ (a_p .* a_r_effective .+ j_hz^2)
+	residual = predicted .- observed
+	abs_residual = abs.(predicted) .- abs.(observed)
+	complex_sse = sum(abs2, residual)
+	abs_sse = sum(abs2, abs_residual)
+	complex_centered = sum(abs2, observed .- sum(observed) / length(observed))
+	abs_centered = sum(abs2, abs.(observed) .- sum(abs.(observed)) / length(observed))
+	complex_centered > 0 && abs_centered > 0 || reject_d3_candidate(
+		"system_c.response_closure_undefined",
+		"System C response-closure R2 is undefined.";
+	)
+	phase_residual = angle.(predicted .* conj.(observed))
+	phase_valid = (abs.(predicted) .>= settings.min_phase_magnitude) .&
+		(abs.(observed) .>= settings.min_phase_magnitude)
+	phase_valid_count = count(phase_valid)
+	phase_valid_count > 0 || reject_d3_candidate(
+		"system_c.response_closure_phase_undefined",
+		"System C response closure has no phase-valid samples.";
+	)
+	metrics = (
+		complex_rmse = sqrt(complex_sse / length(observed)),
+		complex_r2 = 1 - complex_sse / complex_centered,
+		abs_rmse = sqrt(abs_sse / length(observed)),
+		abs_r2 = 1 - abs_sse / abs_centered,
+		phase_rmse_rad = sqrt(sum(abs2, phase_residual[phase_valid]) / phase_valid_count),
+		phase_valid_sample_count = phase_valid_count,
+		phase_valid_sample_fraction = phase_valid_count / length(observed),
+	)
+	metrics.complex_r2 >= settings.min_complex_r2 &&
+		metrics.abs_r2 >= settings.min_abs_r2 &&
+		metrics.phase_rmse_rad <= settings.max_phase_rmse_rad || reject_d3_candidate(
+			"system_c.response_closure_gate",
+			"System C no-free-parameter complex-S21 closure failed the existing complex-response gates.";
+			details = (metrics = metrics,),
+		)
+	return (
+		status = "success",
+		model = "fixed_primitive_g_J_three_mode_filter_response",
+		metrics = metrics,
+		frequencies_hz = frequencies,
+		observed_s21 = observed,
+		predicted_s21 = predicted,
+		residual_s21 = residual,
+	)
 end
 
 function _quadratic_zero_intercept(x_values, y_values, minimum_r2, label, rejection_code)
@@ -1103,9 +1162,10 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		)
 		reference_contract_id = trace_identity.reference_contract_id
 		filter_loaded_bare_reference_id = trace_identity.filter_loaded_bare_reference_id
-		readout_loaded_bare_reference_id = trace_identity.readout_loaded_bare_reference_id
+		common_readout_loaded_bare_reference_id = trace_identity.common_readout_loaded_bare_reference_id
 		filter_only_trace_id = trace_identity.filter_only_trace_id
 		loaded_empty_feedline_trace_id = trace_identity.loaded_empty_feedline_trace_id
+		qubit_empty_feedline_trace_id = trace_identity.qubit_empty_feedline_trace_id
 		calibration_id = trace_identity.calibration_id
 		pair_measured_trace_id = trace_identity.pair_measured_trace_id
 		pair_empty_feedline_trace_id = trace_identity.pair_empty_feedline_trace_id
@@ -1118,6 +1178,8 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			feedline_length_um = settings.feedline_length_um,
 			feedline = evaluator.feedline,
 			hb_settings = evaluator.hb_settings,
+			floating_qubit_nominal = evaluator.floating_qubit_nominal,
+			qubit_coupling_state = :diagonal_preserving_off,
 		)
 		filter_hb = _run_candidate_hb(
 			evaluator,
@@ -1146,8 +1208,8 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			"filter_only_trace_id" => filter_only_trace_id,
 			"empty_feedline_trace_id" => loaded_empty_feedline_trace_id,
 			"filter_loaded_bare_reference_id" => filter_loaded_bare_reference_id,
-			"loaded_bare_reference_topology" => "maxwell_diagonal_lc_with_zeroed_offdiagonal_entries",
-			"quantity_scope" => "lc_only",
+			"loaded_bare_reference_topology" => "system_B_maxwell_diagonal_MTL_with_separate_Cr1_Cr2_readout_shunts_and_zeroed_exchange",
+			"quantity_scope" => "system_B_qubit_dynamic_nodes_absent_g_zero_filter_loaded_bare_calibration",
 			"port_plane" => port_plane,
 			"feedline_source" => evaluator.feedline.source,
 			"feedline_lc_derived_zo_ohm" => evaluator.feedline.zo_ohm,
@@ -1194,43 +1256,74 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		readout_captures = Any[]
 		g_values_hz = Float64[]
 		for capacitance_fF in settings.readout_probe_capacitances_fF
-			readout_probe_trace_id = "d3-readout-probe-hb|grid_sha256=$(loaded_grid_sha256)|capacitance_fF=$(bitstring(capacitance_fF))|design=$(design.id)|$(candidate_identity)"
+			coupling_off_trace_id = "d3-readout-g-probe-diagonal-preserving-off|grid_sha256=$(loaded_grid_sha256)|capacitance_fF=$(bitstring(capacitance_fF))|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
+			coupling_on_trace_id = "d3-readout-g-probe-physical-on|grid_sha256=$(loaded_grid_sha256)|capacitance_fF=$(bitstring(capacitance_fF))|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
 			qubit_probe_trace_id = "d3-qubit-probe-hb|grid_sha256=$(qubit_grid_sha256)|capacitance_fF=$(bitstring(capacitance_fF))|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
-			readout_plan = build_maxwell_diagonal_pair_feedline_plan(
+			coupling_off_plan = build_readout_only_feedline_plan(
 				evaluator.case,
 				design;
-				filter_capacitance_fF = design.filter_to_line_capacitance_fF,
-				readout_probe_capacitance_fF = capacitance_fF,
+				capacitance_fF = capacitance_fF,
 				feedline_length_um = settings.feedline_length_um,
 				feedline = evaluator.feedline,
 				hb_settings = evaluator.hb_settings,
 				floating_qubit_nominal = evaluator.floating_qubit_nominal,
+				qubit_coupling_state = :diagonal_preserving_off,
 			)
-			readout_hb = _run_candidate_hb(
+			coupling_on_plan = build_readout_only_feedline_plan(
+				evaluator.case,
+				design;
+				capacitance_fF = capacitance_fF,
+				feedline_length_um = settings.feedline_length_um,
+				feedline = evaluator.feedline,
+				hb_settings = evaluator.hb_settings,
+				floating_qubit_nominal = evaluator.floating_qubit_nominal,
+				qubit_coupling_state = :physical_on,
+			)
+			coupling_off_hb = _run_candidate_hb(
 				evaluator,
-				readout_plan,
+				coupling_off_plan,
 				loaded_frequencies_hz,
-				"Maxwell-diagonal pair readout loaded-bare probe $(capacitance_fF) fF",
+				"readout-only diagonal-preserving coupling-off probe $(capacitance_fF) fF",
 			)
-			readout_normalized = _normalized_s21(
+			coupling_on_hb = _run_candidate_hb(
+				evaluator,
+				coupling_on_plan,
 				loaded_frequencies_hz,
-				readout_hb.s21,
+				"readout-only physical-qubit coupling-on probe $(capacitance_fF) fF",
+			)
+			coupling_off_normalized = _normalized_s21(
+				loaded_frequencies_hz,
+				coupling_off_hb.s21,
 				loaded_reference,
 				settings.min_reference_magnitude,
 			)
-			readout_mode = _fit_readout_probe_loaded_mode(
+			coupling_on_normalized = _normalized_s21(
 				loaded_frequencies_hz,
-				readout_normalized,
+				coupling_on_hb.s21,
+				loaded_reference,
+				settings.min_reference_magnitude,
+			)
+			coupling_off_mode = _fit_single_loaded_mode(
+				loaded_frequencies_hz,
+				coupling_off_normalized,
 				slot_hz,
-				filter_mode.frequency_hz,
-				"Maxwell-diagonal pair readout loaded-bare probe $(capacitance_fF) fF",
+				"readout-only diagonal-preserving coupling-off probe $(capacitance_fF) fF",
 				settings,
+				require_slot_ownership = true,
+			)
+			coupling_on_mode = _fit_single_loaded_mode(
+				loaded_frequencies_hz,
+				coupling_on_normalized,
+				slot_hz,
+				"readout-only physical-qubit coupling-on probe $(capacitance_fF) fF",
+				settings,
+				require_slot_ownership = true,
 			)
 			qubit_hb = _run_candidate_hb(
 				evaluator,
-				readout_plan,
+				coupling_on_plan,
 				qubit_frequencies_hz,
-				"Maxwell-diagonal pair qubit probe $(capacitance_fF) fF",
+				"readout-only physical-qubit lower-pole cross-check $(capacitance_fF) fF",
 			)
 			qubit_normalized = _normalized_s21(
 				qubit_frequencies_hz,
@@ -1242,7 +1335,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				qubit_frequencies_hz,
 				qubit_normalized,
 				evaluator.qubit_coupling_off_frequency_hz,
-				"Maxwell-diagonal pair qubit probe $(capacitance_fF) fF",
+				"readout-only physical-qubit lower-pole cross-check $(capacitance_fF) fF",
 				settings,
 			)
 			(first(loaded_frequencies_hz) <= qubit_mode.frequency_hz <= last(loaded_frequencies_hz)) && reject_d3_candidate(
@@ -1254,37 +1347,72 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 					slot_grid_stop_hz = last(loaded_frequencies_hz),
 				),
 			)
-			g_hz = _linearized_g_hz(
+			g_hz = _linearized_g_from_readout_shift_hz(
 				evaluator.qubit_coupling_off_frequency_hz,
-				qubit_mode.frequency_hz,
-				readout_mode.frequency_hz,
+				coupling_off_mode.frequency_hz,
+				coupling_on_mode.frequency_hz,
 			)
+			readout_shift_hz = coupling_on_mode.frequency_hz - coupling_off_mode.frequency_hz
+			predicted_qubit_pole_hz = evaluator.qubit_coupling_off_frequency_hz +
+				coupling_off_mode.frequency_hz - coupling_on_mode.frequency_hz
+			qubit_crosscheck_residual_hz = qubit_mode.frequency_hz - predicted_qubit_pole_hz
+			abs(qubit_crosscheck_residual_hz) <= settings.max_vector_pole_disagreement_hz ||
+				reject_d3_candidate(
+					"g_crosscheck.lower_pole_residual_gate",
+					"Fitted lower pole disagrees with the trace-identity prediction from the readout shift.";
+					details = (
+						predicted_qubit_pole_hz = predicted_qubit_pole_hz,
+						fitted_qubit_pole_hz = qubit_mode.frequency_hz,
+						residual_hz = qubit_crosscheck_residual_hz,
+						maximum_residual_hz = settings.max_vector_pole_disagreement_hz,
+					),
+				)
 			push!(g_values_hz, g_hz)
-			push!(readout_modes, merge(readout_mode, (
+			push!(readout_modes, merge(coupling_on_mode, (
 				frequency_grid_sha256 = loaded_grid_sha256,
-				measured_trace_id = readout_probe_trace_id,
+				measured_trace_id = coupling_on_trace_id,
 				reference_trace_id = loaded_empty_feedline_trace_id,
+				diagonal_preserving_coupling_off_mode = merge(coupling_off_mode, (
+					frequency_grid_sha256 = loaded_grid_sha256,
+					measured_trace_id = coupling_off_trace_id,
+					reference_trace_id = loaded_empty_feedline_trace_id,
+				)),
+				readout_shift_hz = readout_shift_hz,
+				predicted_qubit_pole_hz = predicted_qubit_pole_hz,
+				qubit_crosscheck_residual_hz = qubit_crosscheck_residual_hz,
+				qubit_crosscheck_maximum_residual_hz = settings.max_vector_pole_disagreement_hz,
 				qubit_mode = merge(qubit_mode, (
 					frequency_grid_sha256 = qubit_grid_sha256,
 					measured_trace_id = qubit_probe_trace_id,
+					reference_trace_id = qubit_empty_feedline_trace_id,
 				)),
 				g_hz = g_hz,
 			)))
 			capture_traces && push!(readout_captures, (
 				capacitance_fF = capacitance_fF,
 				frequency_grid_sha256 = loaded_grid_sha256,
-				measured_trace_id = readout_probe_trace_id,
+				measured_trace_id = coupling_on_trace_id,
 				reference_trace_id = loaded_empty_feedline_trace_id,
 				frequencies_hz = loaded_frequencies_hz,
-				s21 = ComplexF64.(readout_hb.s21),
+				s21 = ComplexF64.(coupling_on_hb.s21),
 				reference_s21 = loaded_reference,
+				diagonal_preserving_coupling_off_measured_trace_id = coupling_off_trace_id,
+				diagonal_preserving_coupling_off_s21 = ComplexF64.(coupling_off_hb.s21),
 				qubit_frequency_grid_sha256 = qubit_grid_sha256,
 				qubit_measured_trace_id = qubit_probe_trace_id,
+				qubit_reference_trace_id = qubit_empty_feedline_trace_id,
 				qubit_frequencies_hz = qubit_frequencies_hz,
 				qubit_s21 = ComplexF64.(qubit_hb.s21),
 				qubit_reference_s21 = qubit_reference,
 			))
 		end
+		readout_coupling_off_frequency_fit = _quadratic_zero_intercept(
+			settings.readout_probe_capacitances_fF,
+			[mode.diagonal_preserving_coupling_off_mode.frequency_hz for mode in readout_modes],
+			settings.min_readout_frequency_extrapolation_r2,
+			"readout diagonal-preserving coupling-off weak-probe frequency",
+			"readout_extrapolation.coupling_off_frequency",
+		)
 		readout_frequency_fit = _quadratic_zero_intercept(
 			settings.readout_probe_capacitances_fF,
 			[mode.frequency_hz for mode in readout_modes],
@@ -1294,9 +1422,9 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		)
 		readout_linewidth_fit = _zero_constrained_linewidth_fit(
 			settings.readout_probe_capacitances_fF,
-			[mode.bandwidth_hz for mode in readout_modes],
+			[mode.diagonal_preserving_coupling_off_mode.bandwidth_hz for mode in readout_modes],
 			settings.min_readout_linewidth_extrapolation_r2,
-			"readout weak-probe total loaded linewidth",
+			"common readout loaded-bare weak-probe linewidth",
 			"readout_extrapolation.linewidth",
 		)
 		g_fit = _quadratic_zero_intercept(
@@ -1306,7 +1434,8 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			"linearized g weak-probe",
 			"g_extrapolation",
 		)
-		readout_frequency_hz = readout_frequency_fit.intercept
+		readout_frequency_hz = readout_coupling_off_frequency_fit.intercept
+		coupling_on_readout_frequency_hz = readout_frequency_fit.intercept
 		readout_loaded_linewidth_hz = readout_linewidth_fit.intercept
 		g_hz = g_fit.intercept
 		isfinite(g_hz) && g_hz > 0 || reject_d3_candidate(
@@ -1328,7 +1457,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			"Lossless Maxwell-diagonal readout zero-probe linewidth must be exactly zero.",
 		)
 		pair_reference = _reference_trace!(evaluator, pair_frequencies_hz)
-		pair_plan = build_single_pair_feedline_plan(
+		system_b_pair_plan = build_single_pair_feedline_plan(
 			evaluator.case,
 			design;
 			capacitance_fF = design.filter_to_line_capacitance_fF,
@@ -1336,6 +1465,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			feedline = evaluator.feedline,
 			hb_settings = evaluator.hb_settings,
 			floating_qubit_nominal = evaluator.floating_qubit_nominal,
+			qubit_coupling_state = :diagonal_preserving_off,
 		)
 		any(mode -> first(pair_frequencies_hz) <= mode.qubit_mode.frequency_hz <= last(pair_frequencies_hz), readout_modes) && reject_d3_candidate(
 			"j_fit.qubit_pole_inside_trace_window",
@@ -1346,15 +1476,15 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				pair_trace_stop_hz = last(pair_frequencies_hz),
 			),
 		)
-		pair_hb = _run_candidate_hb(
+		system_b_pair_hb = _run_candidate_hb(
 			evaluator,
-			pair_plan,
+			system_b_pair_plan,
 			pair_frequencies_hz,
-			"isolated pair",
+			"System B readout-filter pair",
 		)
-		pair_normalized = _normalized_s21(
+		system_b_pair_normalized = _normalized_s21(
 			pair_frequencies_hz,
-			pair_hb.s21,
+			system_b_pair_hb.s21,
 			pair_reference,
 			settings.min_reference_magnitude,
 		)
@@ -1366,7 +1496,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		filter_loaded_linewidth_hz = filter_mode.bandwidth_hz
 		j_fit = fit_d3_through_line_s21(
 			pair_frequencies_hz,
-			pair_hb.s21,
+			system_b_pair_hb.s21,
 			pair_reference;
 			phasor_convention = "exp_plus_iomega_t",
 			fit_window_hz = fit_window,
@@ -1401,9 +1531,9 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				"measured_trace_id" => pair_measured_trace_id,
 				"empty_feedline_trace_id" => pair_empty_feedline_trace_id,
 				"filter_loaded_bare_reference_id" => filter_loaded_bare_reference_id,
-				"readout_loaded_bare_reference_id" => readout_loaded_bare_reference_id,
-				"loaded_bare_reference_topology" => "maxwell_diagonal_filter_plus_nominal_floating_qubit_loaded_readout",
-				"quantity_scope" => "linearized_nominal_floating_qubit_loaded_lc",
+				"readout_loaded_bare_reference_id" => common_readout_loaded_bare_reference_id,
+				"loaded_bare_reference_topology" => "common_readout_diagonal_preserving_Cr1_Cr2_shunts_plus_filter_finite_Cext_and_MTL_self_terms",
+				"quantity_scope" => "system_B_qubit_dynamic_nodes_absent_g_zero_primitive_J",
 				"floating_qubit_input_sha256" => evaluator.floating_qubit_input_sha256,
 				"pair_assignment_id" => trace_identity.pair_assignment_id,
 				"port_plane" => port_plane,
@@ -1435,7 +1565,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		pair_fit_mask = abs.(pair_frequencies_hz .- slot_hz) .<= settings.pair_fit_half_width_hz
 		pair_vector_result = fit_vector_s21(
 			pair_frequencies_hz[pair_fit_mask],
-			pair_normalized[pair_fit_mask];
+			system_b_pair_normalized[pair_fit_mask];
 			n_resonators = 2,
 			bg_poles = settings.vector_bg_poles,
 			min_q = settings.vector_min_q,
@@ -1469,6 +1599,103 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				vector_paired_pole_center_hz = vector_paired_pole_center_hz,
 				pair_pole_center_offset_hz = pair_pole_center_offset_hz,
 			),
+			)
+
+		system_c_pair_trace_id = "d3-system-c-full-pair-hb|grid_sha256=$(pair_grid_sha256)|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
+		system_c_qubit_trace_id = "d3-system-c-full-qubit-hb|grid_sha256=$(qubit_grid_sha256)|floating_qubit_sha256=$(evaluator.floating_qubit_input_sha256)|design=$(design.id)|$(candidate_identity)"
+		system_c_plan = build_single_pair_feedline_plan(
+			evaluator.case,
+			design;
+			capacitance_fF = design.filter_to_line_capacitance_fF,
+			feedline_length_um = settings.feedline_length_um,
+			feedline = evaluator.feedline,
+			hb_settings = evaluator.hb_settings,
+			floating_qubit_nominal = evaluator.floating_qubit_nominal,
+			qubit_coupling_state = :physical_on,
+		)
+		system_c_pair_hb = _run_candidate_hb(
+			evaluator,
+			system_c_plan,
+			pair_frequencies_hz,
+			"System C full pair-window closure",
+		)
+		system_c_pair_normalized = _normalized_s21(
+			pair_frequencies_hz,
+			system_c_pair_hb.s21,
+			pair_reference,
+			settings.min_reference_magnitude,
+		)
+		system_c_qubit_hb = _run_candidate_hb(
+			evaluator,
+			system_c_plan,
+			qubit_frequencies_hz,
+			"System C full qubit-window closure",
+		)
+		system_c_qubit_normalized = _normalized_s21(
+			qubit_frequencies_hz,
+			system_c_qubit_hb.s21,
+			qubit_reference,
+			settings.min_reference_magnitude,
+		)
+		system_c_qubit_mode = _fit_qubit_probe_mode(
+			qubit_frequencies_hz,
+			system_c_qubit_normalized,
+			evaluator.qubit_coupling_off_frequency_hz,
+			"System C qubit-like pole",
+			settings,
+		)
+		system_c_pair_vector_result = fit_vector_s21(
+			pair_frequencies_hz[pair_fit_mask],
+			system_c_pair_normalized[pair_fit_mask];
+			n_resonators = 2,
+			bg_poles = settings.vector_bg_poles,
+			min_q = settings.vector_min_q,
+			restrict_to_input_span = true,
+		)
+		system_c_pair_modes = _require_vector_fit(
+			system_c_pair_vector_result,
+			2,
+			"System C pair-window pole closure",
+			settings,
+		)
+		system_c_observed_poles_hz = sort(vcat(
+			[system_c_qubit_mode.frequency_hz],
+			Float64[mode["fr_hz"] for mode in system_c_pair_modes],
+		))
+		j_hz = Float64(j_fit["params"]["j_hz"])
+		system_c_predicted_poles_hz = _three_mode_poles_hz(
+			evaluator.qubit_coupling_off_frequency_hz,
+			readout_frequency_hz,
+			filter_mode.frequency_hz,
+			g_hz,
+			j_hz,
+		)
+		system_c_pole_residuals_hz = system_c_observed_poles_hz .- system_c_predicted_poles_hz
+		maximum(abs.(system_c_pole_residuals_hz)) <= settings.max_vector_pole_disagreement_hz ||
+			reject_d3_candidate(
+				"system_c.pole_closure_gate",
+				"System C poles disagree with the no-free-parameter three-mode prediction.";
+				details = (
+					predicted_poles_hz = system_c_predicted_poles_hz,
+					observed_poles_hz = system_c_observed_poles_hz,
+					residuals_hz = system_c_pole_residuals_hz,
+					maximum_residual_hz = maximum(abs.(system_c_pole_residuals_hz)),
+					maximum_residual_gate_hz = settings.max_vector_pole_disagreement_hz,
+				),
+			)
+		system_c_response_closure = _three_mode_response_closure(
+			pair_frequencies_hz[pair_fit_mask],
+			system_c_pair_normalized[pair_fit_mask],
+			channel_calibration,
+			j_fit;
+			fq_hz = evaluator.qubit_coupling_off_frequency_hz,
+			fr_hz = readout_frequency_hz,
+			fp_hz = filter_mode.frequency_hz,
+			g_hz = g_hz,
+			j_hz = j_hz,
+			filter_loaded_linewidth_hz = filter_loaded_linewidth_hz,
+			readout_loaded_linewidth_hz = readout_loaded_linewidth_hz,
+			settings = settings,
 		)
 
 		notch_frequencies_hz = _slot_frequency_grid(
@@ -1483,6 +1710,8 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			evaluator.case,
 			design;
 			hb_settings = evaluator.hb_settings,
+			floating_qubit_nominal = evaluator.floating_qubit_nominal,
+			qubit_coupling_state = :diagonal_preserving_off,
 		)
 		reference_intrinsic_hb = _run_candidate_hb(
 			evaluator,
@@ -1508,6 +1737,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			design;
 			hb_settings = evaluator.hb_settings,
 			floating_qubit_nominal = evaluator.floating_qubit_nominal,
+			qubit_coupling_state = :physical_on,
 		)
 		intrinsic_hb = _run_candidate_hb(
 			evaluator,
@@ -1564,16 +1794,69 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			model_paired_pole_center_hz = model_paired_pole_center_hz,
 			vector_paired_pole_center_hz = vector_paired_pole_center_hz,
 			pair_pole_center_offset_hz = pair_pole_center_offset_hz,
-			notch_hz = notch.frequency_hz,
+			notch_hz = reference_notch.frequency_hz,
 			filter_loaded_linewidth_hz = filter_loaded_linewidth_hz,
-			j_hz = Float64(j_fit["params"]["j_hz"]),
+			j_hz = j_hz,
 			g_hz = g_hz,
 		)
 		diagnostics = (
 			status = "success",
 			design = design,
+			extraction_contract = "d3-three-circuit-model-extraction.v1",
+			common_readout_loaded_bare = (
+				reference_contract_id = common_readout_loaded_bare_reference_id,
+				frequency_hz = readout_frequency_hz,
+				linewidth_hz = readout_loaded_linewidth_hz,
+				active_couplings = String[],
+				off_couplings = ["g", "J"],
+				retained_loading = ["readout_MTL_diagonal_self_terms", "Cr1_readout_endpoint_shunt", "Cr2_readout_endpoint_shunt"],
+				readout_endpoint_shunts = [
+					(id = "Cr1_readout_diagonal", capacitance_fF = evaluator.floating_qubit_nominal.Cr1_fF),
+					(id = "Cr2_readout_diagonal", capacitance_fF = evaluator.floating_qubit_nominal.Cr2_fF),
+				],
+			),
+			systems = (
+				A = (
+					id = "qubit-readout-feedline",
+					dynamic_nodes = ["qubit_left", "qubit_right", "readout", "feedline"],
+					ports = ["feedline_port_1", "feedline_port_2"],
+					active_couplings = ["physical_Cr1", "physical_Cr2"],
+					off_couplings = ["J"],
+					common_readout_reference_id = common_readout_loaded_bare_reference_id,
+					metric_ownership = ["fqLB", "g_hz", "readout_shift", "two_mode_pole_crosscheck"],
+				),
+				B = (
+					id = "readout-filter-feedline",
+					dynamic_nodes = ["readout", "filter", "feedline"],
+					ports = ["feedline_port_1", "feedline_port_2"],
+					active_couplings = ["J", "filter_Cext"],
+					off_couplings = ["g"],
+					common_readout_reference_id = common_readout_loaded_bare_reference_id,
+					metric_ownership = ["fpLB", "filter_loaded_linewidth_hz", "j_hz", "notch_hz"],
+				),
+				C = (
+					id = "qubit-readout-filter-feedline",
+					dynamic_nodes = ["qubit_left", "qubit_right", "readout", "filter", "feedline"],
+					ports = ["feedline_port_1", "feedline_port_2"],
+					active_couplings = ["physical_Cr1", "physical_Cr2", "J", "filter_Cext"],
+					off_couplings = ["direct_qubit_filter_coupling"],
+					common_readout_reference_id = common_readout_loaded_bare_reference_id,
+					primitive_g_source = "System A",
+					primitive_J_source = "System B",
+					metric_ownership = ["three_mode_poles", "complex_s21_closure", "loaded_notch_continuation"],
+				),
+			),
 			filter_loaded_bare = filter_mode,
 			readout_probe_modes = readout_modes,
+			readout_g_extraction = (
+				fixture_topology = "readout_only_plus_artificial_feedline_probe_no_filter_no_readout_filter_mtl_coupling",
+				coupling_off_reference = "split_common_mode_layer_reference: this readout-only CircuitPlan retains separate Cr1/Cr2 readout endpoint shunts; independent Kron-reduced fqLB retains the qubit endpoint loading",
+				qubit_loaded_bare_frequency_role = "Kron_reduced_linearized_LJ_coupling_off_plasma_frequency_fqLB_not_anharmonic_f01",
+				formula = "g_f=sqrt((f_rq-f_r0)*(f_rq-f_q0))",
+				lower_pole_crosscheck = "f_q_predicted=f_q0+f_r0-f_rq",
+				coupling_on_zero_probe_readout_frequency_hz = coupling_on_readout_frequency_hz,
+			),
+			readout_coupling_off_zero_probe_frequency_fit = readout_coupling_off_frequency_fit,
 			readout_zero_probe_frequency_fit = readout_frequency_fit,
 			readout_zero_probe_linewidth_fit = readout_linewidth_fit,
 			g_zero_probe_fit = g_fit,
@@ -1596,13 +1879,29 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			),
 			reference_contract_id = reference_contract_id,
 			filter_loaded_bare_reference_id = filter_loaded_bare_reference_id,
-			readout_loaded_bare_reference_id = readout_loaded_bare_reference_id,
+			common_readout_loaded_bare_reference_id = common_readout_loaded_bare_reference_id,
 			loaded_frequency_grid_sha256 = loaded_grid_sha256,
 			pair_frequency_grid_sha256 = pair_grid_sha256,
 			qubit_frequency_grid_sha256 = qubit_grid_sha256,
 			channel_calibration = _compact_channel_calibration(channel_calibration),
 			j_fit = _compact_j_fit(j_fit),
 			vector_crosscheck_poles_hz = vector_poles_hz,
+			system_c_closure = (
+				status = "success",
+				primitive_g_hz = g_hz,
+				primitive_j_hz = j_hz,
+				direct_qubit_filter_coupling_hz = 0.0,
+				predicted_poles_hz = system_c_predicted_poles_hz,
+				observed_poles_hz = system_c_observed_poles_hz,
+				pole_residuals_hz = system_c_pole_residuals_hz,
+				maximum_pole_residual_hz = maximum(abs.(system_c_pole_residuals_hz)),
+				maximum_pole_residual_gate_hz = settings.max_vector_pole_disagreement_hz,
+				response = (
+					status = system_c_response_closure.status,
+					model = system_c_response_closure.model,
+					metrics = system_c_response_closure.metrics,
+				),
+			),
 			notch = notch,
 			reference_notch = reference_notch,
 		)
@@ -1618,11 +1917,12 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			),
 			readout_probes = readout_captures,
 			pair = (
+				system = "B",
 				frequency_grid_sha256 = pair_grid_sha256,
 				measured_trace_id = pair_measured_trace_id,
 				reference_trace_id = pair_empty_feedline_trace_id,
 				frequencies_hz = pair_frequencies_hz,
-				s21 = ComplexF64.(pair_hb.s21),
+				s21 = ComplexF64.(system_b_pair_hb.s21),
 				reference_s21 = pair_reference,
 				fit_frequencies_hz = Float64.(j_fit_trace["frequency_hz"]),
 				fit_normalized_s21 = ComplexF64.(
@@ -1633,14 +1933,34 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 					Float64.(j_fit_trace["fitted_s21_real"]) .+
 					im .* Float64.(j_fit_trace["fitted_s21_imag"]),
 				),
+				),
+			system_c = (
+				pair_frequency_grid_sha256 = pair_grid_sha256,
+				pair_measured_trace_id = system_c_pair_trace_id,
+				pair_reference_trace_id = pair_empty_feedline_trace_id,
+				pair_frequencies_hz = pair_frequencies_hz,
+				pair_s21 = ComplexF64.(system_c_pair_hb.s21),
+				pair_reference_s21 = pair_reference,
+				qubit_frequency_grid_sha256 = qubit_grid_sha256,
+				qubit_measured_trace_id = system_c_qubit_trace_id,
+				qubit_reference_trace_id = qubit_empty_feedline_trace_id,
+				qubit_frequencies_hz = qubit_frequencies_hz,
+				qubit_s21 = ComplexF64.(system_c_qubit_hb.s21),
+				qubit_reference_s21 = qubit_reference,
+				closure_frequencies_hz = system_c_response_closure.frequencies_hz,
+				closure_observed_s21 = system_c_response_closure.observed_s21,
+				closure_predicted_s21 = system_c_response_closure.predicted_s21,
+				closure_residual_s21 = system_c_response_closure.residual_s21,
 			),
 			intrinsic = (
+				system = "C",
 				frequency_grid_sha256 = notch_grid_sha256,
 				trace_id = loaded_notch_trace_id,
 				frequencies_hz = notch_frequencies_hz,
 				z21_ptc = ComplexF64.(intrinsic_hb.z21_ptc),
 			),
 			intrinsic_reference = (
+				system = "B",
 				frequency_grid_sha256 = notch_grid_sha256,
 				trace_id = reference_notch_trace_id,
 				frequencies_hz = notch_frequencies_hz,

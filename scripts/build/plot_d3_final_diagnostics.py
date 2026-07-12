@@ -516,6 +516,59 @@ def _validate_notebook_record_shape(
     """Validate the diagnostics and traces consumed by Notebook 08."""
     record_metrics = mapping(record.get("metrics"), "record.metrics")
     diagnostics = mapping(record.get("diagnostics"), "record.diagnostics")
+    if expected_step_hz is not None:
+        require(
+            diagnostics.get("extraction_contract") == "d3-three-circuit-model-extraction.v1",
+            "Current D3 evidence must use the three-circuit-model extraction contract; incompatible historical artifacts are rejected.",
+        )
+        common_readout = mapping(
+            diagnostics.get("common_readout_loaded_bare"),
+            "record.diagnostics.common_readout_loaded_bare",
+        )
+        common_reference_id = common_readout.get("reference_contract_id")
+        require(
+            isinstance(common_reference_id, str) and common_reference_id,
+            "Common readout loaded-bare reference requires one stable identity.",
+        )
+        require(
+            finite_number(common_readout.get("frequency_hz"), "common readout frequency")
+            == finite_number(record_metrics.get("readout_loaded_bare_hz"), "readout_loaded_bare_hz"),
+            "readout_loaded_bare_hz must be owned by the common coupling-off reference.",
+        )
+        endpoint_shunts = sequence(
+            common_readout.get("readout_endpoint_shunts"), "common readout endpoint shunts"
+        )
+        require(len(endpoint_shunts) == 2, "Common readout reference must retain separate Cr1 and Cr2 shunts.")
+        shunts_by_id = {
+            mapping(value, "common readout endpoint shunt").get("id"): mapping(
+                value, "common readout endpoint shunt"
+            )
+            for value in endpoint_shunts
+        }
+        require(
+            set(shunts_by_id) == {"Cr1_readout_diagonal", "Cr2_readout_diagonal"}
+            and all(
+                finite_number(value.get("capacitance_fF"), "common readout shunt capacitance") > 0
+                for value in shunts_by_id.values()
+            ),
+            "Common readout Cr1/Cr2 shunts must be separately named and positive.",
+        )
+        systems = mapping(diagnostics.get("systems"), "record.diagnostics.systems")
+        require(set(systems) == {"A", "B", "C"}, "Diagnostics must contain exactly Systems A, B, and C.")
+        for system_id in ("A", "B", "C"):
+            system = mapping(systems[system_id], f"record.diagnostics.systems.{system_id}")
+            require(
+                system.get("common_readout_reference_id") == common_reference_id,
+                f"System {system_id} must consume the exact common readout reference identity.",
+            )
+        require(
+            mapping(systems["A"], "System A").get("off_couplings") == ["J"]
+            and mapping(systems["B"], "System B").get("off_couplings") == ["g"]
+            and "direct_qubit_filter_coupling" in sequence(
+                mapping(systems["C"], "System C").get("off_couplings"), "System C off couplings"
+            ),
+            "A/B/C active/off coupling ownership is inconsistent.",
+        )
     design = mapping(diagnostics.get("design"), "record.diagnostics.design")
     for key in ("lp_total_um", "lr_total_um", "notch_length_um"):
         finite_number(design.get(key), f"record.diagnostics.design.{key}")
@@ -557,8 +610,18 @@ def _validate_notebook_record_shape(
         if expected_step_hz is not None
         else None
     )
+    coupling_off_frequency_fit = (
+        mapping(
+            diagnostics.get("readout_coupling_off_zero_probe_frequency_fit"),
+            "readout coupling-off frequency fit",
+        )
+        if expected_step_hz is not None
+        else None
+    )
     fit_x_by_label: dict[str, np.ndarray] = {}
     fits = [("readout frequency fit", frequency_fit), ("readout linewidth fit", linewidth_fit)]
+    if coupling_off_frequency_fit is not None:
+        fits.append(("readout coupling-off frequency fit", coupling_off_frequency_fit))
     if g_fit is not None:
         fits.append(("g fit", g_fit))
     for label, fit in fits:
@@ -574,6 +637,13 @@ def _validate_notebook_record_shape(
             for values in fit_x_by_label.values()),
         "Readout frequency, linewidth, and g fits must share the probe grid.",
     )
+    if coupling_off_frequency_fit is not None:
+        require(
+            coupling_off_frequency_fit.get("intercept")
+            == diagnostics["common_readout_loaded_bare"].get("frequency_hz")
+            == record_metrics.get("readout_loaded_bare_hz"),
+            "Common readout loaded-bare value must be the coupling-off zero-probe intercept and may be charged only once.",
+        )
     frequency_coefficients = mapping(
         frequency_fit.get("coefficients"), "readout frequency fit coefficients"
     )
@@ -591,6 +661,10 @@ def _validate_notebook_record_shape(
             "g fit intercept must equal the positive g_hz metric.",
         )
         floating_qubit = mapping(diagnostics.get("floating_qubit"), "record.diagnostics.floating_qubit")
+        coupling_off_qubit_hz = finite_number(
+            floating_qubit.get("coupling_off_frequency_hz"),
+            "floating-qubit coupling-off loaded-bare frequency fqLB",
+        )
         require(
             isinstance(floating_qubit.get("input_sha256"), str)
             and HEX_SHA256.fullmatch(floating_qubit["input_sha256"]) is not None,
@@ -643,6 +717,10 @@ def _validate_notebook_record_shape(
             and loaded_notch.get("reference_notch_hz") == reference_notch.get("frequency_hz")
             and finite_number(loaded_notch.get("assignment_margin_hz"), "loaded-notch assignment margin") > 0,
             "Loaded-notch ownership must bind the unique no-qubit reference with a positive margin.",
+        )
+        require(
+            record_metrics.get("notch_hz") == reference_notch.get("frequency_hz"),
+            "Objective notch_hz must be owned by the System B no-qubit reference root; System C is continuation-only.",
         )
 
     traces = mapping(record.get("traces"), "record.traces")
@@ -706,6 +784,8 @@ def _validate_notebook_record_shape(
     require(np.all(np.abs(filter_reference) > 0), "Record filter reference S21 must be nonzero.")
 
     pair_trace = mapping(traces.get("pair"), "record.traces.pair")
+    if expected_step_hz is not None:
+        require(pair_trace.get("system") == "B", "Primitive J pair trace must be owned by System B.")
     pair_frequency, pair_grid_hash = _validate_declared_frequency_grid(
         pair_trace,
         "record.traces.pair",
@@ -723,6 +803,31 @@ def _validate_notebook_record_shape(
         "record pair fit", pair_fit_frequency, pair_fit_observed, pair_fit_model
     )
     require_increasing(pair_fit_frequency, "record pair fit frequency grid")
+    if expected_step_hz is not None:
+        system_c_trace = mapping(traces.get("system_c"), "record.traces.system_c")
+        closure_frequency = numeric_array(
+            system_c_trace, "closure_frequencies_hz", "record.traces.system_c closure"
+        )
+        closure_observed = complex_array(
+            system_c_trace, "closure_observed_s21", "record.traces.system_c closure observed"
+        )
+        closure_predicted = complex_array(
+            system_c_trace, "closure_predicted_s21", "record.traces.system_c closure predicted"
+        )
+        closure_residual = complex_array(
+            system_c_trace, "closure_residual_s21", "record.traces.system_c closure residual"
+        )
+        require_same_length(
+            "System C complex-S21 closure",
+            closure_frequency,
+            closure_observed,
+            closure_predicted,
+            closure_residual,
+        )
+        require(
+            np.allclose(closure_predicted - closure_observed, closure_residual, rtol=1e-12, atol=1e-12),
+            "System C stored complex-S21 residual is inconsistent.",
+        )
 
     probes = sequence(traces.get("readout_probes"), "record.traces.readout_probes")
     require(len(probes) == len(frequency_fit["x_values"]), "Readout probes must match fit points.")
@@ -748,6 +853,19 @@ def _validate_notebook_record_shape(
         )
         require(np.all(np.abs(probe_reference) > 0), f"Record readout probe {index} reference must be nonzero.")
         if expected_step_hz is not None:
+            coupling_off_s21 = complex_array(
+                probe,
+                "diagonal_preserving_coupling_off_s21",
+                f"record readout coupling-off probe {index}",
+            )
+            require_same_length(
+                f"record readout coupling-off probe {index}", probe_frequency, coupling_off_s21
+            )
+            _require_trace_id_grid_link(
+                probe.get("diagonal_preserving_coupling_off_measured_trace_id"),
+                probe_grid_hash,
+                f"readout coupling-off probe {index} measured_trace_id",
+            )
             qubit_frequency = numeric_array(probe, "qubit_frequencies_hz", f"record qubit probe {index}")
             qubit_grid_hash = probe.get("qubit_frequency_grid_sha256")
             require(
@@ -815,19 +933,94 @@ def _validate_notebook_record_shape(
                     probe.get(identity_key), filter_grid_hash, f"readout probe {index} {identity_key}"
                 )
             if expected_step_hz is not None:
+                coupling_off_mode = mapping(
+                    mode.get("diagonal_preserving_coupling_off_mode"),
+                    f"record readout coupling-off mode {index}",
+                )
+                require(
+                    coupling_off_mode.get("frequency_grid_sha256") == filter_grid_hash
+                    and coupling_off_mode.get("measured_trace_id")
+                    == probe.get("diagonal_preserving_coupling_off_measured_trace_id")
+                    and coupling_off_mode.get("reference_trace_id") == probe.get("reference_trace_id"),
+                    f"Readout coupling-off mode {index} and trace identities disagree.",
+                )
                 qubit_mode = mapping(mode.get("qubit_mode"), f"record qubit mode {index}")
                 require(
                     qubit_mode.get("frequency_grid_sha256") == probe.get("qubit_frequency_grid_sha256")
                     and qubit_mode.get("measured_trace_id") == probe.get("qubit_measured_trace_id"),
                     f"Qubit mode {index} and trace identities disagree.",
                 )
-                require(finite_number(mode.get("g_hz"), f"finite-probe g {index}") > 0, f"Finite-probe g {index} must be positive.")
-        for diagnostic_id in (
-            "filter_loaded_bare_reference_id",
-            "readout_loaded_bare_reference_id",
-        ):
+                fr0_hz = finite_number(coupling_off_mode.get("frequency_hz"), f"finite-probe f_r0 {index}")
+                frq_hz = finite_number(mode.get("frequency_hz"), f"finite-probe f_rq {index}")
+                readout_shift_hz = finite_number(mode.get("readout_shift_hz"), f"finite-probe readout shift {index}")
+                g_hz = finite_number(mode.get("g_hz"), f"finite-probe g {index}")
+                predicted_qubit_hz = finite_number(
+                    mode.get("predicted_qubit_pole_hz"), f"predicted lower pole {index}"
+                )
+                fitted_qubit_hz = finite_number(
+                    qubit_mode.get("frequency_hz"), f"fitted lower pole {index}"
+                )
+                residual_hz = finite_number(
+                    mode.get("qubit_crosscheck_residual_hz"), f"lower-pole residual {index}"
+                )
+                residual_gate_hz = finite_number(
+                    mode.get("qubit_crosscheck_maximum_residual_hz"),
+                    f"lower-pole residual gate {index}",
+                )
+                require(fr0_hz > coupling_off_qubit_hz and readout_shift_hz > 0 and g_hz > 0,
+                        f"Finite-probe readout-shift inversion {index} must have positive detuning, shift, and g.")
+                require(
+                    math.isclose(frq_hz - fr0_hz, readout_shift_hz, rel_tol=1e-12, abs_tol=1e-6)
+                    and math.isclose(g_hz**2, readout_shift_hz * (frq_hz - coupling_off_qubit_hz), rel_tol=1e-12, abs_tol=1e-3)
+                    and math.isclose(predicted_qubit_hz, coupling_off_qubit_hz + fr0_hz - frq_hz, rel_tol=1e-12, abs_tol=1e-6)
+                    and math.isclose(residual_hz, fitted_qubit_hz - predicted_qubit_hz, rel_tol=1e-12, abs_tol=1e-6)
+                    and abs(residual_hz) <= residual_gate_hz,
+                    f"Finite-probe readout-shift inversion or lower-pole cross-check {index} is inconsistent.",
+                )
+        for diagnostic_id in ("filter_loaded_bare_reference_id",):
             _require_trace_id_grid_link(
                 diagnostics.get(diagnostic_id), filter_grid_hash, f"diagnostics.{diagnostic_id}"
+            )
+        if expected_step_hz is not None:
+            _require_trace_id_grid_link(
+                diagnostics.get("common_readout_loaded_bare_reference_id"),
+                filter_grid_hash,
+                "diagnostics.common_readout_loaded_bare_reference_id",
+            )
+            require(
+                diagnostics.get("common_readout_loaded_bare_reference_id")
+                == diagnostics["common_readout_loaded_bare"].get("reference_contract_id")
+                == mapping(j_fit.get("provenance"), "J-fit provenance").get("readout_loaded_bare_reference_id"),
+                "System A common readout identity and System B J-fit reference identity must be exactly equal.",
+            )
+            closure = mapping(diagnostics.get("system_c_closure"), "record.diagnostics.system_c_closure")
+            require(
+                closure.get("status") == "success"
+                and closure.get("direct_qubit_filter_coupling_hz") == 0.0,
+                "System C must close with fixed pair couplings and zero direct qubit-filter coupling.",
+            )
+            predicted_poles = numeric_array(closure, "predicted_poles_hz", "System C predicted poles")
+            observed_poles = numeric_array(closure, "observed_poles_hz", "System C observed poles")
+            pole_residuals = numeric_array(closure, "pole_residuals_hz", "System C pole residuals")
+            require_same_length("System C pole closure", predicted_poles, observed_poles, pole_residuals)
+            require(len(predicted_poles) == 3, "System C closure must contain three poles.")
+            require(
+                np.allclose(observed_poles - predicted_poles, pole_residuals, rtol=1e-12, atol=1e-6)
+                and np.max(np.abs(pole_residuals))
+                <= finite_number(closure.get("maximum_pole_residual_gate_hz"), "System C pole gate"),
+                "System C pole residuals fail their persisted hard gate.",
+            )
+            closure_response = mapping(closure.get("response"), "System C response closure")
+            closure_metrics = mapping(closure_response.get("metrics"), "System C response metrics")
+            require(
+                closure_response.get("status") == "success"
+                and finite_number(closure_metrics.get("complex_r2"), "System C complex R2")
+                >= finite_number(mapping(j_fit.get("gates"), "J gates").get("min_complex_r2"), "minimum complex R2")
+                and finite_number(closure_metrics.get("abs_r2"), "System C abs R2")
+                >= finite_number(mapping(j_fit.get("gates"), "J gates").get("min_abs_r2"), "minimum abs R2")
+                and finite_number(closure_metrics.get("phase_rmse_rad"), "System C phase RMSE")
+                <= finite_number(mapping(j_fit.get("gates"), "J gates").get("max_phase_rmse_rad"), "maximum phase RMSE"),
+                "System C complex-S21 closure fails the persisted response gates.",
             )
         j_provenance = mapping(j_fit.get("provenance"), "record.diagnostics.j_fit.provenance")
         for identity_key in ("measured_trace_id", "empty_feedline_trace_id"):
@@ -1717,6 +1910,10 @@ def validate_artifacts(
     selected_metrics = mapping(selected_evaluation.get("metrics"), "selected_record.evaluation.metrics")
     final_metrics = mapping(final_record.get("metrics"), "final_diagnostics.record.metrics")
     diagnostics = mapping(final_record.get("diagnostics"), "final_diagnostics.record.diagnostics")
+    require(
+        diagnostics.get("extraction_contract") == "d3-three-circuit-model-extraction.v1",
+        "Optimizer artifact uses an incompatible historical extraction contract; run a fresh evaluation with Systems A/B/C.",
+    )
     design = mapping(diagnostics.get("design"), "final_diagnostics.record.diagnostics.design")
 
     layout_variables = sequence(layout.get("variables"), "layout_specs.variables")
@@ -1823,8 +2020,10 @@ def validate_artifacts(
     require_same_length("Paired fitted S21", pair_fit_frequency, pair_measured_fit, pair_fitted)
     require_increasing(pair_fit_frequency, "Paired fit frequency grid")
 
-    frequency_fit = mapping(diagnostics.get("readout_zero_probe_frequency_fit"),
-                            "diagnostics.readout_zero_probe_frequency_fit")
+    frequency_fit = mapping(
+        diagnostics.get("readout_coupling_off_zero_probe_frequency_fit"),
+        "diagnostics.readout_coupling_off_zero_probe_frequency_fit",
+    )
     linewidth_fit = mapping(diagnostics.get("readout_zero_probe_linewidth_fit"),
                             "diagnostics.readout_zero_probe_linewidth_fit")
     frequency_x = numeric_array(frequency_fit, "x_values", "frequency fit")

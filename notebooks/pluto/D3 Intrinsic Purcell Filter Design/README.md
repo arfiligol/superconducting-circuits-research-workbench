@@ -157,7 +157,7 @@ simulation.
   sweep, reruns a readout weak-probe sweep, and runs intrinsic-pair `Z21`.
 
 - [`../../python/06_lc_hybrid_split_diagnostic_analysis.py`](../../python/06_lc_hybrid_split_diagnostic_analysis.py)
-  extracts the loaded bare frequencies, applies the measured filter loading
+  extracts the loaded bare frequencies, applies the simulated/extracted filter loading
   shift to `Z21`, and reports `half_hybrid_split_mhz` as a diagnostic. It does
   not identify half of the corrected hybrid split as $J$.
 
@@ -167,9 +167,11 @@ simulation.
 
 - [`d3_coupled_evaluator.jl`](d3_coupled_evaluator.jl)
   owns the real single-slot HB evaluation, loaded-bare references, complex-S21
-  $J$ fit, fixed nominal floating-qubit loading, linearized $g$ extraction,
-  independent pole cross-check, notch extraction, and physical rejection
-  evidence. Unavailable source $R'/G'$ remains zero for lossless exploration.
+  $J$ fit, fixed nominal floating-qubit loading, readout-frequency-shift
+  extraction of linearized $g$, and the no-free-parameter full three-mode
+  closure. Its A/B/C circuit models share one coupling-off readout loaded-bare
+  identity; only System B owns the objective notch. Unavailable source $R'/G'$
+  remains zero for lossless exploration.
 
 - [`d3_coupled_optimizer.jl`](d3_coupled_optimizer.jl)
   owns the generic bounded cost accounting, exact cache, CMA-ES search,
@@ -216,6 +218,11 @@ while source-file identities remain raw byte SHA-256. Integral finite Float64
 values normalize to the same integer framing across a JSON write/read boundary;
 non-integral Float64 values retain their exact IEEE-754 bits.
 
+Artifacts produced before `d3-three-circuit-model-extraction.v1` are
+semantically incompatible with the shared loaded-bare A/B/C contract. The
+current validator rejects them explicitly; it does not relabel their
+qubit-loaded readout pole or two-mode J result as current evidence.
+
 To review without writes, set `DESIGN_TARGET_JSON` and
 `OPTIMIZER_RUN_DIRECTORY` in Notebook 08, leave
 `NOMINAL_VALIDATION_DIRECTORY=None` and `RUN_NOMINAL_VALIDATION=False`, then run
@@ -246,9 +253,23 @@ The original no-qubit / with-qubit comparison remains historical diagnostic
 provenance. Current optimization always connects the reduced linearized qubit
 to `readout_open_tail`; its five reduced branches and per-junction $L_J$ are
 fixed private input, not optimizer variables. Each readout probe uses one Slot-local
-filter/readout grid and one qubit-local grid, then extrapolates the assigned
-pole-pair $g$ to zero probe. The local two-mode $J$ fit fails fast if the
-qubit-like pole enters its trace window.
+readout-only grid twice: a diagonal-preserving coupling-off baseline replaces
+$C_{r1}$ and $C_{r2}$ by separately named readout-side endpoint shunts; the
+independent Kron-reduced $f_{q,\mathrm{LB}}$ reference retains the qubit-side
+endpoint loading. The loaded fixture restores the physical cross branches
+without retaining the artificial shunts. Their exact readout-pole shift determines $g$,
+which is extrapolated to zero probe. A qubit-local fitted lower pole checks the
+trace-identity prediction but is not an input to $g$. The local two-mode $J$
+fit fails fast if the qubit-like pole enters its trace window.
+
+The evaluator then uses three explicit circuit systems. System A contains only
+qubit, readout, and feedline and owns primitive $g$. System B contains readout,
+filter, and feedline, retains the same two readout endpoint shunts, and owns
+$f_{p,\mathrm{LB}}$, $\kappa_{p,\mathrm{LB}}$, primitive $J$, and the no-qubit
+notch used by the Cost Function. System C restores both physical exchange
+channels and checks three poles plus complex $S_{21}$ using A's $g$ and B's $J$
+without refitting either coupling. A System C failure rejects the candidate; it
+does not create another scalar objective.
 
 The private JSON uses schema `d3-floating-qubit-maxwell.v1`. It carries the
 labeled full Maxwell matrix, a reference conductor, exactly four disconnected

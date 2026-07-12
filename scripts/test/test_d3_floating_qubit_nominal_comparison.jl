@@ -90,8 +90,58 @@ end
             target_contract_id = "synthetic-target",
             target_contract_sha256 = repeat("a", 64),
         )
-        @test _linearized_g_hz(5.0e9, 4.99e9, 5.81e9) ≈ 90e6
-        @test_throws D3CandidateRejected _linearized_g_hz(5.0e9, 5.01e9, 5.81e9)
+		@test _linearized_g_from_readout_shift_hz(5.0e9, 5.8e9, 5.81e9) ≈ 90e6
+		loaded_bare_detuning_rejection = try
+			_linearized_g_from_readout_shift_hz(5.0e9, 4.9e9, 5.81e9)
+		catch exception
+			exception
+		end
+		@test loaded_bare_detuning_rejection isa D3CandidateRejected
+		@test loaded_bare_detuning_rejection.code == "g.nonpositive_loaded_bare_detuning"
+		@test_throws D3CandidateRejected _linearized_g_from_readout_shift_hz(5.0e9, 5.8e9, 5.79e9)
+		three_mode_poles = _three_mode_poles_hz(5.0e9, 5.8e9, 6.0e9, 90e6, 20e6)
+		@test length(three_mode_poles) == 3
+		@test sum(three_mode_poles) ≈ 16.8e9
+		closure_frequencies = [5.7e9, 5.8e9, 5.9e9]
+		closure_background = Dict(
+			"frequency_center_hz" => 5.8e9,
+			"frequency_scale_hz" => 2.0e8,
+			"c0_real" => 1.0,
+			"c0_imag" => 0.0,
+			"c1_real_per_scaled_frequency" => 0.0,
+			"c1_imag_per_scaled_frequency" => 0.0,
+		)
+		closure_calibration = Dict("params" => Dict(
+			"channel_residue_real_hz" => -4.5e6,
+			"channel_residue_imag_hz" => 2.0e6,
+		))
+		a_p = 5.0e6 / 2 .+ im .* (closure_frequencies .- 6.0e9)
+		a_r = im .* (closure_frequencies .- 5.8e9)
+		a_q = im .* (closure_frequencies .- 5.0e9)
+		a_r_effective = a_r .+ 90e6^2 ./ a_q
+		closure_observed = 1 .+ ComplexF64(-4.5e6, 2.0e6) .* a_r_effective ./
+			(a_p .* a_r_effective .+ 20e6^2)
+		closure = _three_mode_response_closure(
+			closure_frequencies,
+			closure_observed,
+			closure_calibration,
+			Dict("background" => closure_background);
+			fq_hz = 5.0e9,
+			fr_hz = 5.8e9,
+			fp_hz = 6.0e9,
+			g_hz = 90e6,
+			j_hz = 20e6,
+			filter_loaded_linewidth_hz = 5.0e6,
+			readout_loaded_linewidth_hz = 0.0,
+			settings = (
+				min_phase_magnitude = 0.0,
+				min_complex_r2 = 0.999,
+				min_abs_r2 = 0.999,
+				max_phase_rmse_rad = 1.0e-9,
+			),
+		)
+		@test closure.status == "success"
+		@test closure.metrics.complex_r2 ≈ 1.0
 
         plan = CircuitPlan("synthetic-floating-qubit")
         readout_open_tail = external_node("readout_open_tail")
@@ -107,10 +157,12 @@ end
             plan.relations,
         )
 
-        case = (
-            single_l_per_m_h = 4.0e-7,
-            single_c_per_m_f = 1.6e-10,
-            mtl_l_matrix_h_per_m = [4.0e-7 5.0e-8; 5.0e-8 4.0e-7],
+		case = (
+			single_l_per_m_h = 4.0e-7,
+			single_c_per_m_f = 1.6e-10,
+			mtl_diag_l_per_m_h = 4.0e-7,
+			mtl_diag_c_per_m_f = 1.6e-10,
+			mtl_l_matrix_h_per_m = [4.0e-7 5.0e-8; 5.0e-8 4.0e-7],
             mtl_c_matrix_f_per_m = [1.6e-10 -2.0e-11; -2.0e-11 1.6e-10],
         )
         design = (
@@ -155,8 +207,51 @@ end
             floating_qubit_nominal = loaded.model,
         )
         @test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_1_"), baseline_plan.relations) == 0
-        @test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_1_"), variant_plan.relations) == 7
-        intrinsic_plan = build_intrinsic_pair_plan(
+		@test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_1_"), variant_plan.relations) == 7
+		readout_coupling_off_plan = build_readout_only_feedline_plan(
+			case,
+			design;
+			capacitance_fF = 5.0,
+			feedline_length_um = 1000.0,
+			feedline = feedline,
+			hb_settings = hb_settings,
+			floating_qubit_nominal = loaded.model,
+			qubit_coupling_state = :diagonal_preserving_off,
+		)
+		readout_coupling_on_plan = build_readout_only_feedline_plan(
+			case,
+			design;
+			capacitance_fF = 5.0,
+			feedline_length_um = 1000.0,
+			feedline = feedline,
+			hb_settings = hb_settings,
+			floating_qubit_nominal = loaded.model,
+			qubit_coupling_state = :physical_on,
+		)
+		coupling_off_shunts = [
+			relation for relation in readout_coupling_off_plan.relations
+			if relation isa ShuntCapacitor && startswith(relation.id, "floating_qubit_nominal_readout_only_coupling_off_Cr")
+		]
+		@test length(coupling_off_shunts) == 2
+		@test sort([relation.capacitance for relation in coupling_off_shunts]) ≈ sort([loaded.model.Cr1_fF, loaded.model.Cr2_fF] .* 1e-15)
+		@test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_readout_only_") && !occursin("_coupling_off_", relation.id), readout_coupling_off_plan.relations) == 0
+		@test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_readout_only_") && !occursin("_coupling_off_", relation.id), readout_coupling_on_plan.relations) == 7
+		@test all(relation -> !hasproperty(relation, :id) || !occursin("filter", lowercase(relation.id)), readout_coupling_off_plan.relations)
+		@test all(relation -> !hasproperty(relation, :id) || !occursin("filter", lowercase(relation.id)), readout_coupling_on_plan.relations)
+		system_b_plan = build_single_pair_feedline_plan(
+			case,
+			design;
+			capacitance_fF = design.filter_to_line_capacitance_fF,
+			feedline_length_um = 1000.0,
+			feedline = feedline,
+			hb_settings = hb_settings,
+			floating_qubit_nominal = loaded.model,
+			qubit_coupling_state = :diagonal_preserving_off,
+		)
+		@test count(relation -> relation isa ShuntCapacitor && occursin("_coupling_off_Cr", relation.id), system_b_plan.relations) == 2
+		@test count(relation -> hasproperty(relation, :id) && startswith(relation.id, "floating_qubit_nominal_1_") && !occursin("_coupling_off_", relation.id), system_b_plan.relations) == 0
+		@test count(relation -> relation isa ShuntCapacitor && occursin("_coupling_off_Cr", relation.id), variant_plan.relations) == 0
+		intrinsic_plan = build_intrinsic_pair_plan(
             case,
             design;
             hb_settings = hb_settings,

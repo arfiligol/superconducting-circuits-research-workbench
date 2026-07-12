@@ -585,9 +585,9 @@ hybrid_spacing_hz = model_poles[1]["frequency_hz"] - model_poles[0]["frequency_h
 
 physical_parameter_rows = [
     ("f_p,LB", "loaded-bare filter frequency", metrics["filter_loaded_bare_hz"] / 1e9, "GHz", "extracted", "filter-only vector pole"),
-    ("f_r,LB^g", "loaded-bare readout frequency", metrics["readout_loaded_bare_hz"] / 1e9, "GHz", "fitted", "C_ext probe → 0 quadratic intercept"),
-    ("Delta_rp,LB", "readout minus filter detuning", metrics["readout_minus_filter_detuning_hz"] / 1e6, "MHz", "calculated", "f_r,LB^g - f_p,LB"),
-    ("f_n", "interference notch", metrics["notch_hz"] / 1e9, "GHz", "extracted", "PTC zero crossing"),
+    ("f_r,LB", "common coupling-off loaded-bare readout frequency", metrics["readout_loaded_bare_hz"] / 1e9, "GHz", "fitted", "System A diagonal-preserving weak probe → 0; consumed unchanged by System B"),
+    ("Delta_rp,LB", "readout minus filter detuning", metrics["readout_minus_filter_detuning_hz"] / 1e6, "MHz", "calculated", "common f_r,LB - System B f_p,LB"),
+    ("f_n", "interference notch", metrics["notch_hz"] / 1e9, "GHz", "extracted", "System B no-qubit PTC reference root"),
     ("kappa_p,LB / 2pi", "loaded filter linewidth", metrics["filter_loaded_linewidth_hz"] / 1e6, "MHz", "fitted", "filter-only complex response"),
     ("J / 2pi", "readout-filter exchange coupling", metrics["j_hz"] / 1e6, "MHz", "fitted", "fixed-reference complex S21 fit"),
     (
@@ -596,7 +596,7 @@ physical_parameter_rows = [
         metrics.get("g_hz", float("nan")) / 1e6,
         "MHz",
         "fitted" if "g_hz" in metrics else "unavailable",
-        "finite-probe q/r poles → zero-probe quadratic intercept" if "g_hz" in metrics else "no qubit model in this historical run",
+        "finite-probe readout shift → exact inversion → zero-probe quadratic intercept" if "g_hz" in metrics else "no qubit model in this historical run",
     ),
     ("tilde f lower", "lower hybridized model pole", model_poles[0]["frequency_hz"] / 1e9, "GHz", "calculated", "J-fit pole; mode ownership not assigned"),
     ("tilde f upper", "upper hybridized model pole", model_poles[1]["frequency_hz"] / 1e9, "GHz", "calculated", "J-fit pole; mode ownership not assigned"),
@@ -814,11 +814,17 @@ display(
 )
 
 # %%
-frequency_fit = diagnostics["readout_zero_probe_frequency_fit"]
+if diagnostics.get("extraction_contract") != "d3-three-circuit-model-extraction.v1":
+    raise ValueError(
+        "This artifact does not implement the D3 three-circuit-model extraction contract. "
+        "Run a fresh nominal validation; incompatible exploration evidence is not relabeled."
+    )
+frequency_fit = diagnostics["readout_coupling_off_zero_probe_frequency_fit"]
+coupling_on_frequency_fit = diagnostics["readout_zero_probe_frequency_fit"]
 linewidth_fit = diagnostics["readout_zero_probe_linewidth_fit"]
 g_fit = diagnostics.get("g_zero_probe_fit")
 regression_rows = [
-    ("Readout frequency intercept", frequency_fit["intercept"] / 1e9, "GHz", "fitted", "quadratic in probe capacitance"),
+    ("Common readout LB intercept", frequency_fit["intercept"] / 1e9, "GHz", "fitted", "coupling-off quadratic in probe capacitance"),
     ("Frequency linear coefficient", frequency_fit["coefficients"]["linear_per_fF"] / 1e6, "MHz/fF", "fitted", "stored coefficient"),
     ("Frequency quadratic coefficient", frequency_fit["coefficients"]["quadratic_per_fF2"] / 1e6, "MHz/fF²", "fitted", "stored coefficient"),
     ("Readout linewidth intercept", linewidth_fit["intercept"] / 1e6, "MHz", "calculated", "constrained to zero by model"),
@@ -828,8 +834,15 @@ regression_rows = [
     ("J multi-seed spread", j_fit["diagnostics"]["j_seed_spread_hz"], "Hz", "calculated", "three successful seeds"),
 ]
 if g_fit is not None:
+    g_extraction = diagnostics.get("readout_g_extraction")
+    if g_extraction is None:
+        raise ValueError(
+            "This g artifact predates the readout-frequency-shift extraction contract. "
+            "Run a fresh nominal validation with the current evaluator; old q/r-pole inversion evidence is not relabeled."
+        )
     regression_rows.extend(
         [
+            ("System A coupling-on readout intercept", coupling_on_frequency_fit["intercept"] / 1e9, "GHz", "fitted", "physical Cr cross branches restored; not f_r,LB"),
             ("g intercept", g_fit["intercept"] / 1e6, "MHz", "fitted", "zero-probe quadratic intercept"),
             ("g extrapolation R²", g_fit["r2"], "fraction", "calculated", "configured Sol gate"),
         ]
@@ -839,6 +852,84 @@ regression_table = pd.DataFrame(
     columns=["Quantity", "Value", "Unit", "Evidence state", "Meaning"],
 )
 display(regression_table.style.hide(axis="index").format({"Value": "{:.8g}"}))
+
+# %% [markdown]
+# ### Three-circuit-model ownership and closure
+
+# %%
+system_rows = []
+for system_id, system in diagnostics["systems"].items():
+    system_rows.append(
+        {
+            "System": system_id,
+            "Topology": system["id"],
+            "Active couplings": ", ".join(system["active_couplings"]),
+            "Off couplings": ", ".join(system["off_couplings"]),
+            "Metric ownership": ", ".join(system["metric_ownership"]),
+            "Common f_r,LB identity": system["common_readout_reference_id"],
+        }
+    )
+display(pd.DataFrame(system_rows).style.hide(axis="index"))
+
+system_c_closure = diagnostics["system_c_closure"]
+closure_metrics = system_c_closure["response"]["metrics"]
+display(
+    pd.DataFrame(
+        [
+            ("maximum pole residual", system_c_closure["maximum_pole_residual_hz"] / 1e3, "kHz"),
+            ("complex S21 R²", closure_metrics["complex_r2"], "fraction"),
+            ("magnitude R²", closure_metrics["abs_r2"], "fraction"),
+            ("phase RMSE", closure_metrics["phase_rmse_rad"], "rad"),
+        ],
+        columns=["System C no-free-parameter closure", "Value", "Unit"],
+    ).style.hide(axis="index").format({"Value": "{:.8g}"})
+)
+
+# %% [markdown]
+# ### Readout-frequency-shift extraction of $g/2\pi$
+#
+# For every artificial probe capacitance, the baseline and loaded fixtures are
+# readout-only and use the same feedline grid. The baseline CircuitPlan replaces
+# the two cross branches by separate readout-side shunts; the independent
+# Kron-reduced $f_{q0}$ reference retains the qubit-side loading. With
+# $f_{r0}>f_{q0}$, the exact two-linear-mode inversion is
+#
+# $$g_f(C_p)=\sqrt{[f_{rq}(C_p)-f_{r0}(C_p)]\,[f_{rq}(C_p)-f_{q0}]}.$$
+#
+# The fitted lower pole is not an input to $g_f$; it only checks the trace
+# identity prediction $f_{q,\mathrm{pred}}=f_{q0}+f_{r0}-f_{rq}$.
+
+# %%
+if g_fit is not None:
+    shift_rows = []
+    for capacitance_fF, mode in zip(g_fit["x_values"], diagnostics["readout_probe_modes"]):
+        coupling_off_mode = mode["diagonal_preserving_coupling_off_mode"]
+        shift_rows.append(
+            {
+                "Probe (fF)": capacitance_fF,
+                "f_r0 off (GHz)": coupling_off_mode["frequency_hz"] / 1e9,
+                "f_rq on (GHz)": mode["frequency_hz"] / 1e9,
+                "Delta_r (MHz)": mode["readout_shift_hz"] / 1e6,
+                "g_f (MHz)": mode["g_hz"] / 1e6,
+                "Predicted lower (GHz)": mode["predicted_qubit_pole_hz"] / 1e9,
+                "Fitted lower (GHz)": mode["qubit_mode"]["frequency_hz"] / 1e9,
+                "Residual (kHz)": mode["qubit_crosscheck_residual_hz"] / 1e3,
+            }
+        )
+    display(
+        pd.DataFrame(shift_rows).style.hide(axis="index").format(
+            {
+                "Probe (fF)": "{:.3f}",
+                "f_r0 off (GHz)": "{:.9f}",
+                "f_rq on (GHz)": "{:.9f}",
+                "Delta_r (MHz)": "{:.6f}",
+                "g_f (MHz)": "{:.6f}",
+                "Predicted lower (GHz)": "{:.9f}",
+                "Fitted lower (GHz)": "{:.9f}",
+                "Residual (kHz)": "{:+.3f}",
+            }
+        )
+    )
 
 # %% [markdown]
 # ## Diagnostic evidence coverage

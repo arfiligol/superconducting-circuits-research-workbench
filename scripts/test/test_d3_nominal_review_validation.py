@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import math
 import shutil
 import tempfile
 import unittest
@@ -263,6 +264,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
     record["diagnostics"]["floating_qubit"] = {
         "model_id": "synthetic-floating-qubit",
         "input_sha256": input_hash,
+        "coupling_off_frequency_hz": 5.0e9,
         "electrostatic_reduction": {
             "partition": {
                 "floating_labels": ["pad-a", "pad-b", "pad-c", "pad-d"],
@@ -302,7 +304,37 @@ def current_optimizer_fixture(workspace: Path) -> Path:
     }
     frequency_fit = record["diagnostics"]["readout_zero_probe_frequency_fit"]
     x_values = frequency_fit["x_values"]
-    g_values = [90.0e6 + 100.0 * value + value**2 for value in x_values]
+    common_readout_hz = record["metrics"]["readout_loaded_bare_hz"]
+    coupling_off_frequencies = [
+        common_readout_hz + 1.0e6 * value + 100.0 * value**2 for value in x_values
+    ]
+    coupling_on_frequencies = [value + 10.0e6 for value in coupling_off_frequencies]
+    frequency_fit.update(
+        {
+            "y_values": coupling_on_frequencies,
+            "fitted_y_values": coupling_on_frequencies,
+            "intercept": common_readout_hz + 10.0e6,
+            "coefficients": {
+                "intercept": common_readout_hz + 10.0e6,
+                "linear_per_fF": 1.0e6,
+                "quadratic_per_fF2": 100.0,
+            },
+        }
+    )
+    g_values = [
+        math.sqrt(10.0e6 * (frq_hz - 5.0e9)) for frq_hz in coupling_on_frequencies
+    ]
+    record["diagnostics"]["readout_coupling_off_zero_probe_frequency_fit"] = {
+        "x_values": x_values,
+        "y_values": coupling_off_frequencies,
+        "fitted_y_values": coupling_off_frequencies,
+        "intercept": common_readout_hz,
+        "coefficients": {
+            "intercept": common_readout_hz,
+            "linear_per_fF": 1.0e6,
+            "quadratic_per_fF2": 100.0,
+        },
+    }
     record["diagnostics"]["g_zero_probe_fit"] = {
         "x_values": x_values,
         "y_values": g_values,
@@ -341,6 +373,8 @@ def current_optimizer_fixture(workspace: Path) -> Path:
                 "frequencies_hz": loaded_grid,
                 "s21": complex_values(len(loaded_grid), 0.02 + index * 0.001),
                 "reference_s21": complex_values(len(loaded_grid), 0.001),
+                "diagonal_preserving_coupling_off_measured_trace_id": f"synthetic-readout-off-{index}|grid_sha256={loaded_hash}",
+                "diagonal_preserving_coupling_off_s21": complex_values(len(loaded_grid), 0.015 + index * 0.001),
             }
         )
         probe.update(
@@ -353,15 +387,31 @@ def current_optimizer_fixture(workspace: Path) -> Path:
             }
         )
         mode = record["diagnostics"]["readout_probe_modes"][index]
+        frq_hz = coupling_on_frequencies[index]
+        fr0_hz = coupling_off_frequencies[index]
+        predicted_qubit_hz = 5.0e9 + fr0_hz - frq_hz
+        fitted_qubit_hz = predicted_qubit_hz + 1.0e3
+        mode["frequency_hz"] = frq_hz
         mode["g_hz"] = g_values[index]
+        mode["diagonal_preserving_coupling_off_mode"] = {
+            "frequency_hz": fr0_hz,
+            "frequency_grid_sha256": loaded_hash,
+            "measured_trace_id": probe["diagonal_preserving_coupling_off_measured_trace_id"],
+            "reference_trace_id": probe["reference_trace_id"],
+        }
+        mode["readout_shift_hz"] = frq_hz - fr0_hz
+        mode["predicted_qubit_pole_hz"] = predicted_qubit_hz
+        mode["qubit_crosscheck_residual_hz"] = fitted_qubit_hz - predicted_qubit_hz
+        mode["qubit_crosscheck_maximum_residual_hz"] = 1.0e6
         mode["qubit_mode"] = {
-            "frequency_hz": 5.0e9,
+            "frequency_hz": fitted_qubit_hz,
             "frequency_grid_sha256": qubit_hash,
             "measured_trace_id": probe["qubit_measured_trace_id"],
         }
     pair_trace = record["traces"]["pair"]
     pair_trace.update(
         {
+            "system": "B",
             "frequency_grid_sha256": pair_hash,
             "measured_trace_id": f"synthetic-pair|grid_sha256={pair_hash}",
             "reference_trace_id": f"synthetic-pair-reference|grid_sha256={pair_hash}",
@@ -370,6 +420,13 @@ def current_optimizer_fixture(workspace: Path) -> Path:
             "reference_s21": complex_values(len(pair_grid), 0.001),
         }
     )
+    closure_observed = complex_values(len(pair_grid), 0.025)
+    record["traces"]["system_c"] = {
+        "closure_frequencies_hz": pair_grid,
+        "closure_observed_s21": closure_observed,
+        "closure_predicted_s21": closure_observed,
+        "closure_residual_s21": [{"real": 0.0, "imag": 0.0} for _ in pair_grid],
+    }
     intrinsic = record["traces"]["intrinsic"]
     intrinsic_hash = validator.frequency_grid_sha256(intrinsic["frequencies_hz"])
     intrinsic["frequency_grid_sha256"] = intrinsic_hash
@@ -385,9 +442,59 @@ def current_optimizer_fixture(workspace: Path) -> Path:
     diagnostics["filter_loaded_bare_reference_id"] = (
         f"synthetic-filter-reference|grid_sha256={loaded_hash}"
     )
-    diagnostics["readout_loaded_bare_reference_id"] = (
-        f"synthetic-readout-reference|grid_sha256={loaded_hash}"
-    )
+    common_reference_id = f"synthetic-common-readout-reference|grid_sha256={loaded_hash}"
+    diagnostics["extraction_contract"] = "d3-three-circuit-model-extraction.v1"
+    diagnostics["common_readout_loaded_bare_reference_id"] = common_reference_id
+    diagnostics["common_readout_loaded_bare"] = {
+        "reference_contract_id": common_reference_id,
+        "frequency_hz": common_readout_hz,
+        "linewidth_hz": 0.0,
+        "readout_endpoint_shunts": [
+            {"id": "Cr1_readout_diagonal", "capacitance_fF": 10.0},
+            {"id": "Cr2_readout_diagonal", "capacitance_fF": 1.0},
+        ],
+    }
+    diagnostics["systems"] = {
+        "A": {
+            "id": "qubit-readout-feedline",
+            "common_readout_reference_id": common_reference_id,
+            "active_couplings": ["physical_Cr1", "physical_Cr2"],
+            "off_couplings": ["J"],
+            "metric_ownership": ["fqLB", "g_hz"],
+        },
+        "B": {
+            "id": "readout-filter-feedline",
+            "common_readout_reference_id": common_reference_id,
+            "active_couplings": ["J", "filter_Cext"],
+            "off_couplings": ["g"],
+            "metric_ownership": ["fpLB", "j_hz", "notch_hz"],
+        },
+        "C": {
+            "id": "qubit-readout-filter-feedline",
+            "common_readout_reference_id": common_reference_id,
+            "active_couplings": ["physical_Cr1", "physical_Cr2", "J", "filter_Cext"],
+            "off_couplings": ["direct_qubit_filter_coupling"],
+            "metric_ownership": ["three_mode_poles", "complex_s21_closure"],
+        },
+    }
+    diagnostics["system_c_closure"] = {
+        "status": "success",
+        "direct_qubit_filter_coupling_hz": 0.0,
+        "predicted_poles_hz": [5.0e9, 5.9e9, 6.1e9],
+        "observed_poles_hz": [5.0e9, 5.9e9, 6.1e9],
+        "pole_residuals_hz": [0.0, 0.0, 0.0],
+        "maximum_pole_residual_hz": 0.0,
+        "maximum_pole_residual_gate_hz": 1.0e6,
+        "response": {
+            "status": "success",
+            "model": "fixed_primitive_g_J_three_mode_filter_response",
+            "metrics": {
+                "complex_r2": 1.0,
+                "abs_r2": 1.0,
+                "phase_rmse_rad": 0.0,
+            },
+        },
+    }
     for index, mode in enumerate(diagnostics["readout_probe_modes"]):
         probe = record["traces"]["readout_probes"][index]
         mode["frequency_grid_sha256"] = loaded_hash
@@ -396,6 +503,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
     j_provenance = diagnostics["j_fit"]["provenance"]
     j_provenance["measured_trace_id"] = pair_trace["measured_trace_id"]
     j_provenance["empty_feedline_trace_id"] = pair_trace["reference_trace_id"]
+    j_provenance["readout_loaded_bare_reference_id"] = common_reference_id
     write_json(optimizer_run / "final_diagnostics.json", final_diagnostics)
 
     inventory = {
@@ -609,7 +717,7 @@ class D3NominalReviewValidationTest(unittest.TestCase):
     def test_legacy_optimizer_cannot_back_independent_nominal_validation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace, _, nominal, _ = self.make_fixture(temporary)
-            with self.assertRaisesRegex(validator.ArtifactContractError, "current per-Slot"):
+            with self.assertRaisesRegex(validator.ArtifactContractError, "incompatible historical"):
                 validator.validate_nominal_artifacts(nominal, LEGACY_RUN, workspace)
 
     def test_selection_unit_source_and_wide_provenance_tampering_fail(self) -> None:
@@ -629,6 +737,10 @@ class D3NominalReviewValidationTest(unittest.TestCase):
             "pair grid hash": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"]["pair"].update({"frequency_grid_sha256": "0" * 64}),
             "diagnostics loaded grid hash": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"loaded_frequency_grid_sha256": "0" * 64}),
             "diagnostics pair grid hash": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"pair_frequency_grid_sha256": "0" * 64}),
+            "historical extraction contract": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"extraction_contract": "legacy"}),
+            "System B common reference mismatch": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["systems"]["B"].update({"common_readout_reference_id": "different"}),
+            "System C pole residual": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"].update({"pole_residuals_hz": [0.0, 0.0, 2.0e6]}),
+            "System C complex response residual": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"]["system_c"]["closure_residual_s21"][0].update({"real": 1.0}),
             "missing diagnostics": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"].pop("diagnostics"),
             "missing filter trace": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"].pop("filter"),
             "missing pair trace": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["traces"].pop("pair"),
