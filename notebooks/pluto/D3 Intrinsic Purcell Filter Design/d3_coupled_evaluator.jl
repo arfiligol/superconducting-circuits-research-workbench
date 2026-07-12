@@ -20,6 +20,9 @@
 
 import SHA
 
+const D3_EXTRACTION_CONTRACT =
+	"d3-three-circuit-model-dark-mode-aware-physical-vs-reduced-eligibility.v4"
+
 struct D3CandidateRejected <: Exception
 	code::String
 	reason::String
@@ -2335,7 +2338,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				),
 			),
 			design = design,
-			extraction_contract = "d3-three-circuit-model-dark-mode-aware-physical-vs-reduced-eligibility.v4",
+			extraction_contract = D3_EXTRACTION_CONTRACT,
 			frequency_layers = merge(
 				closed_modal.frequency_layers,
 				(fpLB_hz = filter_mode.frequency_hz,),

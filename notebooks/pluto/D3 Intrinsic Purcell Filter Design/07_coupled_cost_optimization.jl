@@ -66,9 +66,11 @@ selects exactly one matching CSV seed row, derives slot-specific targets and
 bounds, and builds the execution manifest automatically.
 
 Opening the notebook or changing the selector never runs HB and never writes an
-artifact. A completed target-satisfying Slot is read-only; failed Slots may be
-retried. Human promotion remains impossible while the current LC artifact says
-`promotion_eligible=false`.
+artifact. Only completed, target-satisfying evidence that declares the current
+v4 extraction contract and has matching execution/fingerprint identities is
+read-only. Historical evidence remains viewable but cannot block a fresh v4
+run. Failed Slots may be retried. Human promotion remains impossible while the
+current LC artifact says `promotion_eligible=false`.
 """
 
 # ╔═╡ fc66b3bc-83ed-4816-b1fe-d5ca8132bdd5
@@ -96,7 +98,6 @@ begin
 		"status.json", "condition_manifest.json", "config_snapshot.json", "hash_inventory.json",
 		"evaluations.jsonl", "optimization_result.json", "layout_specs.json", "final_diagnostics.json",
 	])
-
 	d3_sha256(value) = semantic_value_sha256(value)
 	d3_file_sha256(path) = open(path, "r") do io
 		bytes2hex(SHA.sha256(io))
@@ -240,6 +241,7 @@ begin
 			return (
 				directory = run_directory, status = status, manifest = manifest,
 				slot_ghz = slot_ghz, case_id = case_id, target_set_id = target_set_id,
+				execution_sha256 = get(manifest, "execution_sha256", nothing),
 				fingerprint = fingerprint,
 			)
 		catch exception
@@ -248,15 +250,90 @@ begin
 		end
 	end
 
-	function d3_target_satisfying(run, target, conditions)
+	function d3_execution_fingerprint(contracts, catalog, slot_ghz)
+		source_row = select_d3_source_row(
+			catalog.seed_path;
+			case_id = catalog.case_id,
+			target_set_id = catalog.target_set_id,
+			slot_target_ghz = slot_ghz,
+		)
+		return d3_sha256(Dict(
+			"target_id" => contracts.target["target_id"],
+			"target_revision" => contracts.target["revision"],
+			"target_sha256" => contracts.target_sha256,
+			"conditions_sha256" => contracts.conditions_sha256,
+			"case_id" => catalog.case_id,
+			"target_set_id" => catalog.target_set_id,
+			"slot_target_ghz" => Float64(slot_ghz),
+			"source_row_sha256" => d3_sha256(source_row),
+			"source_csv_sha256" => catalog.csv_sha256,
+			"orpen_case_sha256" => catalog.case_sha256,
+			"floating_qubit_input_sha256" => catalog.qubit_input.input_sha256,
+			"floating_qubit_model_id" => catalog.qubit_input.model.model_id,
+		))
+	end
+
+	function d3_declared_execution_fingerprint(contract)
+		try
+			target = contract["target_contract"]
+			conditions = contract["optimizer_conditions"]
+			selection = contract["selection"]
+			qubit = contract["floating_qubit_nominal"]
+			inventory = Dict(String(row["id"]) => row for row in contract["consumed_files"])
+			return d3_sha256(Dict(
+				"target_id" => target["target_id"],
+				"target_revision" => target["revision"],
+				"target_sha256" => target["sha256"],
+				"conditions_sha256" => conditions["sha256"],
+				"case_id" => selection["case_id"],
+				"target_set_id" => selection["target_set_id"],
+				"slot_target_ghz" => Float64(selection["slot_target_ghz"]),
+				"source_row_sha256" => selection["source_row_sha256"],
+				"source_csv_sha256" => selection["source_csv_sha256"],
+				"orpen_case_sha256" => inventory["orpen_case_json"]["expected_sha256"],
+				"floating_qubit_input_sha256" => qubit["input_sha256"],
+				"floating_qubit_model_id" => qubit["model_id"],
+			))
+		catch
+			return nothing
+		end
+	end
+
+	function d3_current_run_identity_matches(run, expected_fingerprint)
+		manifest = run.manifest
+		status = run.status
+		get(manifest, "schema_version", nothing) == "d3-slot-execution-manifest.v1" || return false
+		get(manifest, "semantic_hash_framing", nothing) == SEMANTIC_HASH_FRAMING || return false
+		execution_sha256 = get(manifest, "execution_sha256", nothing)
+		execution_sha256 isa AbstractString || return false
+		payload = Dict(String(key) => value for (key, value) in manifest if key != "execution_sha256")
+		d3_sha256(payload) == execution_sha256 || return false
+		get(status, "execution_sha256", nothing) == execution_sha256 || return false
+		contract = get(manifest, "contract", nothing)
+		contract isa AbstractDict || return false
+		fingerprint = get(contract, "execution_fingerprint_sha256", nothing)
+		fingerprint isa AbstractString || return false
+		d3_declared_execution_fingerprint(contract) == fingerprint || return false
+		fingerprint == expected_fingerprint || return false
+		get(status, "execution_fingerprint_sha256", nothing) == fingerprint || return false
+		return run.execution_sha256 == execution_sha256 && run.fingerprint == fingerprint
+	end
+
+	function d3_target_satisfying(run, target, conditions, expected_fingerprint)
 		get(run.status, "state", nothing) == "completed" || return false
+		d3_current_run_identity_matches(run, expected_fingerprint) || return false
 		diagnostics = try
 			JSON3.read(read(joinpath(run.directory, "final_diagnostics.json"), String), Dict{String,Any})
 		catch
 			return false
 		end
 		get(diagnostics, "state", nothing) == "captured" || return false
-		metrics = get(get(diagnostics, "record", Dict{String,Any}()), "metrics", nothing)
+		record = get(diagnostics, "record", nothing)
+		record isa AbstractDict || return false
+		record_diagnostics = get(record, "diagnostics", nothing)
+		record_diagnostics isa AbstractDict || return false
+		get(record_diagnostics, "extraction_contract", nothing) == D3_EXTRACTION_CONTRACT || return false
+		metrics = get(record, "metrics", nothing)
 		metrics isa AbstractDict || return false
 		targets = d3_target_values(target, run.slot_ghz)
 		metric_specs = conditions["metric_specs"]
@@ -272,16 +349,23 @@ begin
 		return cost <= Float64(promotion["max_cost"]) && max_residual <= Float64(promotion["max_abs_normalized_residual"])
 	end
 
-	function d3_discover_slots(contracts, catalog)
-		output_root = d3_workspace_path(contracts.config["output_root_workspace_path"])
-		runs = isdir(output_root) ? filter(!isnothing, [
-			d3_run_identity(path) for path in (joinpath(output_root, name) for name in readdir(output_root)) if isdir(path)
-		]) : Any[]
+	function d3_discover_slots(contracts, catalog; discovered_runs = nothing)
+		runs = if isnothing(discovered_runs)
+			output_root = d3_workspace_path(contracts.config["output_root_workspace_path"])
+			isdir(output_root) ? filter(!isnothing, [
+				d3_run_identity(path) for path in (joinpath(output_root, name) for name in readdir(output_root)) if isdir(path)
+			]) : Any[]
+		else
+			collect(discovered_runs)
+		end
 		return map(catalog.slots) do slot
 			slot_runs = [run for run in runs if run.case_id == catalog.case_id && run.target_set_id == catalog.target_set_id && run.slot_ghz == slot]
-			satisfying = [run for run in slot_runs if d3_target_satisfying(run, contracts.target, contracts.conditions)]
-			fingerprints = filter(!isnothing, [run.fingerprint for run in slot_runs if get(run.status, "state", nothing) == "completed"])
-			ambiguous = length(satisfying) > 1 || length(fingerprints) != length(unique(fingerprints))
+			expected_fingerprint = d3_execution_fingerprint(contracts, catalog, slot)
+			satisfying = [
+				run for run in slot_runs
+				if d3_target_satisfying(run, contracts.target, contracts.conditions, expected_fingerprint)
+			]
+			ambiguous = length(satisfying) > 1
 			failed = count(run -> get(run.status, "state", nothing) == "failed", slot_runs)
 			if ambiguous
 				(slot_ghz = slot, state = "ambiguous_completed_runs", target_satisfying = true,
@@ -409,15 +493,7 @@ begin
 		promotion_settings = PromotionSettings(max_cost = promotion["max_cost"], max_abs_normalized_residual = promotion["max_abs_normalized_residual"])
 
 		row_sha = d3_sha256(source_row)
-		fingerprint = d3_sha256(Dict(
-			"target_id" => contracts.target["target_id"], "target_revision" => contracts.target["revision"],
-			"target_sha256" => contracts.target_sha256, "conditions_sha256" => contracts.conditions_sha256,
-			"case_id" => catalog.case_id, "target_set_id" => catalog.target_set_id,
-			"slot_target_ghz" => Float64(slot_ghz), "source_row_sha256" => row_sha,
-			"source_csv_sha256" => catalog.csv_sha256, "orpen_case_sha256" => catalog.case_sha256,
-			"floating_qubit_input_sha256" => catalog.qubit_input.input_sha256,
-			"floating_qubit_model_id" => catalog.qubit_input.model.model_id,
-		))
+		fingerprint = d3_execution_fingerprint(contracts, catalog, slot_ghz)
 		consumed_paths = Dict(
 			"target_contract" => contracts.target_path, "optimizer_conditions" => D3_CONDITIONS_PATH,
 			"design_config" => D3_CONFIG_PATH, "d3_purcell_common" => joinpath(@__DIR__, "d3_purcell_common.jl"),
@@ -571,8 +647,14 @@ begin
 		))
 	end
 
-	function d3_require_slot_runnable(slot_ghz)
-		fresh = only(row for row in d3_discover_slots(d3_contracts, d3_seed_catalog) if row.slot_ghz == Float64(slot_ghz))
+	function d3_require_slot_runnable(slot_ghz; discovered_runs = nothing)
+		fresh = only(
+			row for row in d3_discover_slots(
+				d3_contracts,
+				d3_seed_catalog;
+				discovered_runs = discovered_runs,
+			) if row.slot_ghz == Float64(slot_ghz)
+		)
 		fresh.rerun_blocked && error("Slot $(slot_ghz) GHz already has completed matching evidence or an ambiguity; rerun blocked.")
 		return nothing
 	end
