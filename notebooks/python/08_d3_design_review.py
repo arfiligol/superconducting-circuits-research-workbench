@@ -814,7 +814,7 @@ display(
 )
 
 # %%
-if diagnostics.get("extraction_contract") != "d3-three-circuit-model-zero-probe-crosscheck.v1":
+if diagnostics.get("extraction_contract") != "d3-three-circuit-model-zero-probe-slot-ownership.v1":
     raise ValueError(
         "This artifact does not implement the D3 three-circuit-model extraction contract. "
         "Run a fresh nominal validation; incompatible exploration evidence is not relabeled."
@@ -906,7 +906,9 @@ display(
 # diagnostics because the feedline probe opens an extra channel. Only the three
 # quadratic intercepts check
 # $f_{q,\mathrm{pred}}(0)=f_{q,\mathrm{LB}}+f_{r,\mathrm{LB}}(0)-f_{r+}(0)$
-# as a hard gate.
+# as a hard gate. Finite-probe readout poles may also lie outside the final Slot
+# ownership window; that window applies only to the coupling-off zero-probe
+# intercept after the pole remains assigned inside its declared scan.
 
 # %%
 if g_fit is not None:
@@ -924,6 +926,7 @@ if g_fit is not None:
                 "Fitted lower (GHz)": mode["qubit_mode"]["frequency_hz"] / 1e9,
                 "Residual (kHz)": mode["qubit_crosscheck_residual_hz"] / 1e3,
                 "Role": mode["qubit_crosscheck_role"],
+                "Mode assignment": mode["finite_probe_mode_assignment"],
             }
         )
     display(

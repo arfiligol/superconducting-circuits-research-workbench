@@ -218,7 +218,7 @@ while source-file identities remain raw byte SHA-256. Integral finite Float64
 values normalize to the same integer framing across a JSON write/read boundary;
 non-integral Float64 values retain their exact IEEE-754 bits.
 
-Artifacts produced before `d3-three-circuit-model-zero-probe-crosscheck.v1` are
+Artifacts produced before `d3-three-circuit-model-zero-probe-slot-ownership.v1` are
 semantically incompatible with the shared loaded-bare A/B/C contract. The
 current validator rejects them explicitly; it does not relabel their
 qubit-loaded readout pole or two-mode J result as current evidence.
@@ -263,6 +263,11 @@ as finite-probe diagnostics and extrapolated quadratically; only their
 zero-probe intercept checks the trace-identity prediction as a hard gate. The
 lower pole is not an input to $g$. The local two-mode $J$
 fit fails fast if the qubit-like pole enters its trace window.
+
+System A finite-probe readout poles must remain assignable inside their declared
+scan and pass vector-fit quality, but they are not individually subjected to
+the final Slot-ownership window. The unchanged 115 MHz ownership condition is
+applied only to the extrapolated coupling-off readout intercept.
 
 The evaluator then uses three explicit circuit systems. System A contains only
 qubit, readout, and feedline and owns primitive $g$. System B contains readout,

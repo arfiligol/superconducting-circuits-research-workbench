@@ -117,6 +117,41 @@ end
 		@test zero_probe_rejection.code == "g_crosscheck.zero_probe_lower_pole_residual_gate"
 		@test zero_probe_rejection.details.residual_hz ≈ 2.0e6
 		@test zero_probe_rejection.details.maximum_residual_gate_hz == 1.0e6
+		finite_probe_mode = _loaded_mode_from_vector_resonance(
+			Dict(
+				"fr_hz" => 6.13e9,
+				"bandwidth_hz" => 1.0e6,
+				"pole_real" => -0.5e6,
+				"pole_imag" => 6.13e9,
+			),
+			6.0e9,
+			"20 fF finite probe",
+			(loaded_bare_ownership_half_width_hz = 115.0e6,);
+			require_slot_ownership = false,
+			vector_rms_error = 1.0e-4,
+		)
+		@test finite_probe_mode.frequency_hz == 6.13e9
+		@test_throws D3CandidateRejected _loaded_mode_from_vector_resonance(
+			Dict(
+				"fr_hz" => 6.13e9,
+				"bandwidth_hz" => 1.0e6,
+				"pole_real" => -0.5e6,
+				"pole_imag" => 6.13e9,
+			),
+			6.0e9,
+			"finite probe incorrectly gated",
+			(loaded_bare_ownership_half_width_hz = 115.0e6,);
+			require_slot_ownership = true,
+			vector_rms_error = 1.0e-4,
+		)
+		@test _require_zero_probe_readout_slot_ownership(6.10e9, 6.0e9, 115.0e6) == 6.10e9
+		zero_probe_slot_rejection = try
+			_require_zero_probe_readout_slot_ownership(6.13e9, 6.0e9, 115.0e6)
+		catch exception
+			exception
+		end
+		@test zero_probe_slot_rejection isa D3CandidateRejected
+		@test zero_probe_slot_rejection.code == "loaded_bare.readout_ownership_window"
 		three_mode_poles = _three_mode_poles_hz(5.0e9, 5.8e9, 6.0e9, 90e6, 20e6)
 		@test length(three_mode_poles) == 3
 		@test sum(three_mode_poles) ≈ 16.8e9

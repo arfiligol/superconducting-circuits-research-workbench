@@ -306,7 +306,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
     x_values = frequency_fit["x_values"]
     common_readout_hz = record["metrics"]["readout_loaded_bare_hz"]
     coupling_off_frequencies = [
-        common_readout_hz + 1.0e6 * value + 100.0 * value**2 for value in x_values
+        common_readout_hz + 1.0e6 * value + 300.0e3 * value**2 for value in x_values
     ]
     coupling_on_frequencies = [value + 10.0e6 for value in coupling_off_frequencies]
     frequency_fit.update(
@@ -317,7 +317,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
             "coefficients": {
                 "intercept": common_readout_hz + 10.0e6,
                 "linear_per_fF": 1.0e6,
-                "quadratic_per_fF2": 100.0,
+                "quadratic_per_fF2": 300.0e3,
             },
         }
     )
@@ -332,7 +332,7 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         "coefficients": {
             "intercept": common_readout_hz,
             "linear_per_fF": 1.0e6,
-            "quadratic_per_fF2": 100.0,
+            "quadratic_per_fF2": 300.0e3,
         },
     }
     record["diagnostics"]["g_zero_probe_fit"] = {
@@ -419,11 +419,17 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         fitted_qubit_hz = qubit_frequencies[index]
         mode["frequency_hz"] = frq_hz
         mode["g_hz"] = g_values[index]
+        mode["finite_probe_mode_assignment"] = (
+            "finite_probe_mode_assignment_no_slot_ownership_gate"
+        )
         mode["diagonal_preserving_coupling_off_mode"] = {
             "frequency_hz": fr0_hz,
             "frequency_grid_sha256": loaded_hash,
             "measured_trace_id": probe["diagonal_preserving_coupling_off_measured_trace_id"],
             "reference_trace_id": probe["reference_trace_id"],
+            "finite_probe_mode_assignment": (
+                "finite_probe_mode_assignment_no_slot_ownership_gate"
+            ),
         }
         mode["readout_shift_hz"] = frq_hz - fr0_hz
         mode["predicted_qubit_pole_hz"] = predicted_qubit_hz
@@ -469,7 +475,9 @@ def current_optimizer_fixture(workspace: Path) -> Path:
         f"synthetic-filter-reference|grid_sha256={loaded_hash}"
     )
     common_reference_id = f"synthetic-common-readout-reference|grid_sha256={loaded_hash}"
-    diagnostics["extraction_contract"] = "d3-three-circuit-model-zero-probe-crosscheck.v1"
+    diagnostics["extraction_contract"] = (
+        "d3-three-circuit-model-zero-probe-slot-ownership.v1"
+    )
     diagnostics["common_readout_loaded_bare_reference_id"] = common_reference_id
     diagnostics["common_readout_loaded_bare"] = {
         "reference_contract_id": common_reference_id,
@@ -747,6 +755,16 @@ class D3NominalReviewValidationTest(unittest.TestCase):
             self.assertEqual(
                 validated["record"]["diagnostics"]["zero_probe_lower_pole_crosscheck"]["residual_hz"],
                 0.0,
+            )
+            diagnostics = validated["record"]["diagnostics"]
+            zero_probe_readout_hz = diagnostics["common_readout_loaded_bare"]["frequency_hz"]
+            finite_probe_readout_hz = [
+                mode["diagonal_preserving_coupling_off_mode"]["frequency_hz"]
+                for mode in diagnostics["readout_probe_modes"]
+            ]
+            self.assertGreater(
+                max(abs(value - zero_probe_readout_hz) for value in finite_probe_readout_hz),
+                115.0e6,
             )
 
     def test_legacy_optimizer_cannot_back_independent_nominal_validation(self) -> None:

@@ -518,7 +518,7 @@ def _validate_notebook_record_shape(
     diagnostics = mapping(record.get("diagnostics"), "record.diagnostics")
     if expected_step_hz is not None:
         require(
-            diagnostics.get("extraction_contract") == "d3-three-circuit-model-zero-probe-crosscheck.v1",
+            diagnostics.get("extraction_contract") == "d3-three-circuit-model-zero-probe-slot-ownership.v1",
             "Current D3 evidence must use the three-circuit-model extraction contract; incompatible historical artifacts are rejected.",
         )
         common_readout = mapping(
@@ -953,6 +953,12 @@ def _validate_notebook_record_shape(
                     == probe.get("diagonal_preserving_coupling_off_measured_trace_id")
                     and coupling_off_mode.get("reference_trace_id") == probe.get("reference_trace_id"),
                     f"Readout coupling-off mode {index} and trace identities disagree.",
+                )
+                require(
+                    mode.get("finite_probe_mode_assignment")
+                    == coupling_off_mode.get("finite_probe_mode_assignment")
+                    == "finite_probe_mode_assignment_no_slot_ownership_gate",
+                    f"Finite-probe readout modes {index} must explicitly state that Slot ownership is not gated.",
                 )
                 qubit_mode = mapping(mode.get("qubit_mode"), f"record qubit mode {index}")
                 require(
@@ -1967,7 +1973,7 @@ def validate_artifacts(
     final_metrics = mapping(final_record.get("metrics"), "final_diagnostics.record.metrics")
     diagnostics = mapping(final_record.get("diagnostics"), "final_diagnostics.record.diagnostics")
     require(
-        diagnostics.get("extraction_contract") == "d3-three-circuit-model-zero-probe-crosscheck.v1",
+        diagnostics.get("extraction_contract") == "d3-three-circuit-model-zero-probe-slot-ownership.v1",
         "Optimizer artifact uses an incompatible historical extraction contract; run a fresh evaluation with Systems A/B/C.",
     )
     design = mapping(diagnostics.get("design"), "final_diagnostics.record.diagnostics.design")

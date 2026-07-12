@@ -680,6 +680,22 @@ function _fit_qubit_probe_mode(frequencies_hz, normalized_s21, coupling_off_qubi
 	return merge(mode, (coupling_off_anchor_hz = coupling_off_qubit_hz, anchor_distance_hz = anchor_distance_hz))
 end
 
+function _require_zero_probe_readout_slot_ownership(readout_frequency_hz, slot_hz, ownership_half_width_hz)
+	values = Float64[readout_frequency_hz, slot_hz, ownership_half_width_hz]
+	all(isfinite, values) || error("Zero-probe readout Slot-ownership inputs must be finite.")
+	values[3] >= 0 || error("Zero-probe readout Slot-ownership half width must be non-negative.")
+	abs(values[1] - values[2]) <= values[3] || reject_d3_candidate(
+		"loaded_bare.readout_ownership_window",
+		"Readout zero-probe frequency intercept lies outside its loaded-bare ownership window.";
+		details = (
+			readout_frequency_hz = values[1],
+			slot_hz = values[2],
+			ownership_half_width_hz = values[3],
+		),
+	)
+	return values[1]
+end
+
 """Extract real linearized g from the coupling-induced readout pole shift."""
 function _linearized_g_from_readout_shift_hz(coupling_off_qubit_hz, coupling_off_readout_hz, coupling_on_readout_hz)
 	values = Float64[coupling_off_qubit_hz, coupling_off_readout_hz, coupling_on_readout_hz]
@@ -1354,7 +1370,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				slot_hz,
 				"readout-only diagonal-preserving coupling-off probe $(capacitance_fF) fF",
 				settings,
-				require_slot_ownership = true,
+				require_slot_ownership = false,
 			)
 			coupling_on_mode = _fit_single_loaded_mode(
 				loaded_frequencies_hz,
@@ -1362,7 +1378,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 				slot_hz,
 				"readout-only physical-qubit coupling-on probe $(capacitance_fF) fF",
 				settings,
-				require_slot_ownership = true,
+				require_slot_ownership = false,
 			)
 			qubit_hb = _run_candidate_hb(
 				evaluator,
@@ -1403,10 +1419,12 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			qubit_crosscheck_residual_hz = qubit_mode.frequency_hz - predicted_qubit_pole_hz
 			push!(g_values_hz, g_hz)
 			push!(readout_modes, merge(coupling_on_mode, (
+				finite_probe_mode_assignment = "finite_probe_mode_assignment_no_slot_ownership_gate",
 				frequency_grid_sha256 = loaded_grid_sha256,
 				measured_trace_id = coupling_on_trace_id,
 				reference_trace_id = loaded_empty_feedline_trace_id,
 				diagonal_preserving_coupling_off_mode = merge(coupling_off_mode, (
+					finite_probe_mode_assignment = "finite_probe_mode_assignment_no_slot_ownership_gate",
 					frequency_grid_sha256 = loaded_grid_sha256,
 					measured_trace_id = coupling_off_trace_id,
 					reference_trace_id = loaded_empty_feedline_trace_id,
@@ -1491,16 +1509,11 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 			qubit_frequency_fit.intercept,
 			settings.max_vector_pole_disagreement_hz,
 		)
-		abs(readout_frequency_hz - slot_hz) <= settings.loaded_bare_ownership_half_width_hz ||
-			reject_d3_candidate(
-				"loaded_bare.readout_ownership_window",
-				"Readout zero-probe frequency intercept lies outside its loaded-bare ownership window.";
-				details = (
-					readout_frequency_hz = readout_frequency_hz,
-					slot_hz = slot_hz,
-					ownership_half_width_hz = settings.loaded_bare_ownership_half_width_hz,
-				),
-			)
+		_require_zero_probe_readout_slot_ownership(
+			readout_frequency_hz,
+			slot_hz,
+			settings.loaded_bare_ownership_half_width_hz,
+		)
 		readout_loaded_linewidth_hz == 0.0 || error(
 			"Lossless Maxwell-diagonal readout zero-probe linewidth must be exactly zero.",
 		)
@@ -1850,7 +1863,7 @@ function evaluate_d3_slot(evaluator::D3SlotEvaluator, candidate; capture_traces 
 		diagnostics = (
 			status = "success",
 			design = design,
-			extraction_contract = "d3-three-circuit-model-zero-probe-crosscheck.v1",
+			extraction_contract = "d3-three-circuit-model-zero-probe-slot-ownership.v1",
 			common_readout_loaded_bare = (
 				reference_contract_id = common_readout_loaded_bare_reference_id,
 				frequency_hz = readout_frequency_hz,
