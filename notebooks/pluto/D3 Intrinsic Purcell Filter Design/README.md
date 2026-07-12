@@ -255,6 +255,18 @@ optimizer. Failed, stale, candidate-mismatched, or source-mismatched directories
 remain visible rejected evidence and are never substituted for Final
 Validation.
 
+An isolated direct optimizer run may enter this nominal handoff only when it
+was produced by the same persisted `optimize_d3` runtime after the formal UI
+was blocked by a recorded discovery/governance defect. Such a run must retain
+the distinct `isolated_direct_optimizer_final_reproduction` analysis kind,
+record the exact formal blocker and unchanged optimizer settings in
+`hash_inventory.json`, and pass the same manifest, source-hash, candidate, and
+final-physical-evaluation checks. It is never relabeled as an internal UI run
+and never becomes reusable evidence in Notebook 07. This narrow provenance
+path exists so a fresh nominal solve can audit real completed computation
+without mutating its immutable artifact or repeating an unchanged full-budget
+search.
+
 ## Nominal Floating-Qubit Loading
 
 The original no-qubit / with-qubit comparison remains historical diagnostic
