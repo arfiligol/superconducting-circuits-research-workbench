@@ -98,6 +98,8 @@ begin
 		"status.json", "condition_manifest.json", "config_snapshot.json", "hash_inventory.json",
 		"evaluations.jsonl", "optimization_result.json", "layout_specs.json", "final_diagnostics.json",
 	])
+	const D3_CURRENT_EXTRACTION_CONTRACT =
+		"d3-three-circuit-model-dark-mode-aware-physical-vs-reduced-eligibility.v4"
 	d3_sha256(value) = semantic_value_sha256(value)
 	d3_file_sha256(path) = open(path, "r") do io
 		bytes2hex(SHA.sha256(io))
@@ -332,7 +334,7 @@ begin
 		record isa AbstractDict || return false
 		record_diagnostics = get(record, "diagnostics", nothing)
 		record_diagnostics isa AbstractDict || return false
-		get(record_diagnostics, "extraction_contract", nothing) == D3_EXTRACTION_CONTRACT || return false
+		get(record_diagnostics, "extraction_contract", nothing) == D3_CURRENT_EXTRACTION_CONTRACT || return false
 		metrics = get(record, "metrics", nothing)
 		metrics isa AbstractDict || return false
 		targets = d3_target_values(target, run.slot_ghz)

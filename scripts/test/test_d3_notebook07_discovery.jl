@@ -7,7 +7,7 @@ const NOTEBOOK_07_PATH = normpath(joinpath(
 
 include(NOTEBOOK_07_PATH)
 
-function synthetic_completed_run(runtime, directory; extraction_contract = D3_EXTRACTION_CONTRACT)
+function synthetic_completed_run(runtime, directory; extraction_contract = D3_CURRENT_EXTRACTION_CONTRACT)
 	mkdir(directory)
 	metrics = d3_target_values(d3_contracts.target, runtime.slot_ghz)
 	diagnostics = Dict{String,Any}()
