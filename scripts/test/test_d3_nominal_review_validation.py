@@ -708,6 +708,35 @@ def current_optimizer_fixture(workspace: Path) -> Path:
     return optimizer_run
 
 
+def mark_isolated_optimizer_fixture(optimizer_run: Path) -> dict:
+    status = read_json(optimizer_run / "status.json")
+    status["execution_mode"] = validator.ISOLATED_EXECUTION_MODE
+    write_json(optimizer_run / "status.json", status)
+
+    isolated_execution = {
+        "reason": validator.ISOLATED_EXECUTION_REASON,
+        "formal_blocker": "Synthetic formal runner rejected completed artifact reuse.",
+        "optimizer_settings": "unchanged_from_runtime",
+        "initial_candidate_override": {
+            "field": "lr_open_um",
+            "unit": "um",
+            "value": 1414.25,
+        },
+    }
+    inventory = read_json(optimizer_run / "hash_inventory.json")
+    inventory["isolated_execution"] = isolated_execution
+    write_json(optimizer_run / "hash_inventory.json", inventory)
+
+    final = read_json(optimizer_run / "final_diagnostics.json")
+    final["analysis_kind"] = validator.ISOLATED_FINAL_ANALYSIS_KIND
+    write_json(optimizer_run / "final_diagnostics.json", final)
+    return {
+        "analysis_kind": validator.ISOLATED_FINAL_ANALYSIS_KIND,
+        "execution_mode": validator.ISOLATED_EXECUTION_MODE,
+        "isolated_execution": isolated_execution,
+    }
+
+
 def nominal_payload(workspace: Path, optimizer_run: Path) -> dict[str, dict]:
     identity = validator.optimizer_candidate_identity(optimizer_run)
     optimizer_manifest = read_json(optimizer_run / "condition_manifest.json")
@@ -800,6 +829,13 @@ def nominal_payload(workspace: Path, optimizer_run: Path) -> dict[str, dict]:
         "variation": {"kind": "none", "parameters": []},
         "source_hashes": sources,
     }
+    source_optimizer_provenance = validator.isolated_optimizer_source_provenance(
+        read_json(optimizer_run / "status.json"),
+        read_json(optimizer_run / "final_diagnostics.json"),
+        optimizer_inventory,
+    )
+    if source_optimizer_provenance is not None:
+        contract["source_optimizer_provenance"] = source_optimizer_provenance
     validation_hash = validator.semantic_value_sha256(
         {
             "schema_version": validator.NOMINAL_MANIFEST_SCHEMA,
@@ -835,6 +871,14 @@ def nominal_payload(workspace: Path, optimizer_run: Path) -> dict[str, dict]:
             "stop_role": "conservative_no_cext_intrinsic_resonator_upper_bound",
         },
     }
+    summary = {
+        "validation_contract_sha256": validation_hash,
+        "analysis_kind": "nominal",
+        "human_acceptance_claim": None,
+        "objective_operands": operands,
+    }
+    if source_optimizer_provenance is not None:
+        summary["source_optimizer_provenance"] = source_optimizer_provenance
     return {
         "validation_manifest.json": {
             "schema_version": validator.NOMINAL_MANIFEST_SCHEMA,
@@ -856,12 +900,7 @@ def nominal_payload(workspace: Path, optimizer_run: Path) -> dict[str, dict]:
             "variation": {"kind": "none", "parameters": []},
             "record": record,
         },
-        "validation_summary.json": {
-            "validation_contract_sha256": validation_hash,
-            "analysis_kind": "nominal",
-            "human_acceptance_claim": None,
-            "objective_operands": operands,
-        },
+        "validation_summary.json": summary,
         "status.json": {
             "validation_contract_sha256": validation_hash,
             "analysis_kind": "nominal",
@@ -930,6 +969,95 @@ class D3NominalReviewValidationTest(unittest.TestCase):
             workspace, _, nominal, _ = self.make_fixture(temporary)
             with self.assertRaisesRegex(validator.ArtifactContractError, "incompatible historical"):
                 validator.validate_nominal_artifacts(nominal, LEGACY_RUN, workspace)
+
+    def test_isolated_optimizer_provenance_is_preserved_without_relabeling(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary) / "workspace"
+            workspace.mkdir()
+            optimizer = current_optimizer_fixture(workspace)
+            expected_provenance = mark_isolated_optimizer_fixture(optimizer)
+            validator.validate_artifacts(optimizer, workspace)
+            payload = nominal_payload(workspace, optimizer)
+            nominal = workspace / "workbench/build/research/d3_nominal_validation_v1/isolated"
+            write_exact_six(nominal, payload)
+
+            validated = validator.validate_nominal_artifacts(nominal, optimizer, workspace)
+            self.assertEqual(validated["record"]["status"], "valid")
+            self.assertEqual(
+                payload["validation_manifest.json"]["contract"]["analysis_kind"],
+                "nominal",
+            )
+            self.assertEqual(
+                payload["validation_manifest.json"]["contract"]["source_optimizer_provenance"],
+                expected_provenance,
+            )
+            self.assertEqual(
+                payload["validation_summary.json"]["source_optimizer_provenance"],
+                expected_provenance,
+            )
+
+            payload["validation_summary.json"]["source_optimizer_provenance"][
+                "execution_mode"
+            ] = "tampered"
+            write_json(nominal / "validation_summary.json", payload["validation_summary.json"])
+            with self.assertRaisesRegex(
+                validator.ArtifactContractError, "provenance must remain exact"
+            ):
+                validator.validate_nominal_artifacts(nominal, optimizer, workspace)
+
+    def test_malformed_isolated_optimizer_provenance_is_rejected(self) -> None:
+        mutators = {
+            "missing isolated provenance": lambda status, final, inventory: inventory.pop(
+                "isolated_execution"
+            ),
+            "wrong execution mode": lambda status, final, inventory: status.update(
+                {"execution_mode": "unsupported"}
+            ),
+            "wrong reason": lambda status, final, inventory: inventory[
+                "isolated_execution"
+            ].update({"reason": "unsupported"}),
+            "empty formal blocker": lambda status, final, inventory: inventory[
+                "isolated_execution"
+            ].update({"formal_blocker": ""}),
+            "changed optimizer settings": lambda status, final, inventory: inventory[
+                "isolated_execution"
+            ].update({"optimizer_settings": "changed"}),
+            "malformed initial override": lambda status, final, inventory: inventory[
+                "isolated_execution"
+            ].update(
+                {
+                    "initial_candidate_override": {
+                        "field": "lr_open_um",
+                        "unit": "fF",
+                        "value": 1414.25,
+                    }
+                }
+            ),
+            "unsupported analysis kind": lambda status, final, inventory: final.update(
+                {"analysis_kind": "unsupported"}
+            ),
+            "false independence": lambda status, final, inventory: final.update(
+                {"independent_validation": True}
+            ),
+            "invalid physical record": lambda status, final, inventory: final["record"].update(
+                {"physical_evaluation_status": "invalid"}
+            ),
+        }
+        for label, mutate in mutators.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                workspace = Path(temporary) / "workspace"
+                workspace.mkdir()
+                optimizer = current_optimizer_fixture(workspace)
+                mark_isolated_optimizer_fixture(optimizer)
+                status = read_json(optimizer / "status.json")
+                final = read_json(optimizer / "final_diagnostics.json")
+                inventory = read_json(optimizer / "hash_inventory.json")
+                mutate(status, final, inventory)
+                write_json(optimizer / "status.json", status)
+                write_json(optimizer / "final_diagnostics.json", final)
+                write_json(optimizer / "hash_inventory.json", inventory)
+                with self.assertRaises(validator.ArtifactContractError):
+                    validator.validate_artifacts(optimizer, workspace)
 
     def test_ineligible_reduced_models_preserve_valid_physical_records(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1041,6 +1169,10 @@ class D3NominalReviewValidationTest(unittest.TestCase):
             "diagnostics loaded grid hash": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"loaded_frequency_grid_sha256": "0" * 64}),
             "diagnostics pair grid hash": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"pair_frequency_grid_sha256": "0" * 64}),
             "historical extraction contract": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].update({"extraction_contract": "d3-three-circuit-model-physical-vs-reduced-eligibility.v3"}),
+            "fake isolated provenance on internal optimizer": lambda payload, workspace, optimizer: (
+                payload["validation_manifest.json"]["contract"].update({"source_optimizer_provenance": {"analysis_kind": validator.ISOLATED_FINAL_ANALYSIS_KIND}}),
+                payload["validation_summary.json"].update({"source_optimizer_provenance": {"analysis_kind": validator.ISOLATED_FINAL_ANALYSIS_KIND}}),
+            ),
             "missing final-validation frequency rows": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"].pop("final_validation_frequency_rows"),
             "false System B pole ownership": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["final_validation_frequency_rows"][8].update({"ownership_label": "readout_like"}),
             "System C pair observation mismatch": lambda payload, workspace, optimizer: payload["nominal_evaluation.json"]["record"]["diagnostics"]["system_c_closure"]["physical_observed_poles"].update({"pair_window_poles_hz": [5.8e9, 6.1e9]}),

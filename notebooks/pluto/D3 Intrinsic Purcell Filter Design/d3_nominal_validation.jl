@@ -65,6 +65,10 @@ const EVALUATOR_METRIC_IDS = [
     "j_hz",
     "g_hz",
 ]
+const INTERNAL_FINAL_ANALYSIS_KIND = "optimizer_internal_final_reproduction"
+const ISOLATED_FINAL_ANALYSIS_KIND = "isolated_direct_optimizer_final_reproduction"
+const ISOLATED_EXECUTION_MODE = "isolated_direct_optimize_d3_after_legacy_governance_block"
+const ISOLATED_EXECUTION_REASON = "formal_runner_blocked_by_legacy_completed_artifact_reuse"
 
 file_sha256(path) = open(path, "r") do io
     bytes2hex(SHA.sha256(io))
@@ -153,6 +157,65 @@ function normalized_inventory(records)
     return result
 end
 
+function source_optimizer_provenance(status, final_diagnostics, hash_inventory)
+    analysis_kind = get(final_diagnostics, "analysis_kind", nothing)
+    get(final_diagnostics, "independent_validation", nothing) === false || error(
+        "Current optimizer final diagnostics must not claim independent validation.",
+    )
+    analysis_kind == INTERNAL_FINAL_ANALYSIS_KIND && return nothing
+    analysis_kind == ISOLATED_FINAL_ANALYSIS_KIND || error(
+        "Current optimizer final diagnostics use an unsupported analysis kind.",
+    )
+    get(final_diagnostics, "state", nothing) == "captured" || error(
+        "Isolated optimizer final diagnostics must be captured.",
+    )
+    final_record = get(final_diagnostics, "record", nothing)
+    final_record isa AbstractDict || error("Isolated optimizer final diagnostics must contain one record.")
+    get(final_record, "status", nothing) == "valid" || error(
+        "Isolated optimizer final diagnostics must contain a valid record.",
+    )
+    get(final_record, "physical_evaluation_status", nothing) == "valid" || error(
+        "Isolated optimizer final diagnostics must contain valid physical evidence.",
+    )
+    get(status, "execution_mode", nothing) == ISOLATED_EXECUTION_MODE || error(
+        "Isolated optimizer status has the wrong execution mode.",
+    )
+    isolated = get(hash_inventory, "isolated_execution", nothing)
+    isolated isa AbstractDict || error("Isolated optimizer inventory must contain isolated_execution.")
+    Set(String.(keys(isolated))) == Set([
+        "reason", "formal_blocker", "optimizer_settings", "initial_candidate_override",
+    ]) || error("Isolated optimizer provenance has an incompatible schema.")
+    get(isolated, "reason", nothing) == ISOLATED_EXECUTION_REASON || error(
+        "Isolated optimizer provenance has the wrong reason.",
+    )
+    blocker = get(isolated, "formal_blocker", nothing)
+    blocker isa AbstractString && !isempty(strip(blocker)) || error(
+        "Isolated optimizer provenance requires a nonempty formal blocker.",
+    )
+    get(isolated, "optimizer_settings", nothing) == "unchanged_from_runtime" || error(
+        "Isolated optimizer provenance must retain unchanged runtime settings.",
+    )
+    override = get(isolated, "initial_candidate_override", nothing)
+    override isa AbstractDict || error("Isolated optimizer provenance requires one initial candidate override.")
+    Set(String.(keys(override))) == Set(["field", "unit", "value"]) || error(
+        "Isolated initial candidate override must be one exact field/unit/value record.",
+    )
+    field = String(get(override, "field", ""))
+    field in VARIABLE_IDS || error("Isolated initial candidate override field is unsupported.")
+    get(override, "unit", nothing) == VARIABLE_UNITS[field] || error(
+        "Isolated initial candidate override has the wrong unit.",
+    )
+    value = get(override, "value", nothing)
+    value isa Real && isfinite(Float64(value)) || error(
+        "Isolated initial candidate override must have one finite numeric value.",
+    )
+    return Dict(
+        "analysis_kind" => ISOLATED_FINAL_ANALYSIS_KIND,
+        "execution_mode" => ISOLATED_EXECUTION_MODE,
+        "isolated_execution" => json_ready(isolated),
+    )
+end
+
 """Validate a persisted optimizer run without consulting in-memory state."""
 function preflight_optimizer_run(run_directory)
     run_path = abspath(String(run_directory))
@@ -226,13 +289,13 @@ function preflight_optimizer_run(run_directory)
         expected_config_snapshot_sha == config_snapshot_sha || error("Persisted optimizer config snapshot was modified after execution.")
     end
     config_snapshot = JSON3.read(read(config_snapshot_path, String), Dict{String,Any})
+    optimizer_source_provenance = nothing
     if current
         final_diagnostics = JSON3.read(read(joinpath(run_path, "final_diagnostics.json"), String), Dict{String,Any})
-        get(final_diagnostics, "analysis_kind", nothing) == "optimizer_internal_final_reproduction" || error(
-            "Current optimizer final diagnostics must identify optimizer-internal final reproduction.",
-        )
-        get(final_diagnostics, "independent_validation", nothing) === false || error(
-            "Current optimizer final diagnostics must not claim independent validation.",
+        optimizer_source_provenance = source_optimizer_provenance(
+            status,
+            final_diagnostics,
+            hash_inventory_payload,
         )
         for key in ("execution_sha256", "condition_manifest_sha256")
             haskey(final_diagnostics, key) && String(final_diagnostics[key]) != declared_hash && error(
@@ -265,6 +328,7 @@ function preflight_optimizer_run(run_directory)
         config_snapshot_sha256 = config_snapshot_sha,
         consumed_inventory = consumed_inventory,
         optimizer_contract = contract,
+        source_optimizer_provenance = optimizer_source_provenance,
     )
 end
 
@@ -512,6 +576,9 @@ function run_nominal_validation(
         "variation" => Dict("kind" => "none", "parameters" => Any[]),
         "source_hashes" => source_hashes,
     )
+    if !isnothing(preflight.source_optimizer_provenance)
+        contract["source_optimizer_provenance"] = preflight.source_optimizer_provenance
+    end
     validation_hash = semantic_value_sha256(Dict(
         "schema_version" => "d3-nominal-validation-manifest.v1",
         "semantic_hash_framing" => SEMANTIC_HASH_FRAMING,
@@ -564,12 +631,16 @@ function run_nominal_validation(
             "variation" => Dict("kind" => "none", "parameters" => Any[]),
             "record" => record,
         ))
-        write_json(paths["validation_summary.json"], Dict(
+        summary = Dict(
             "validation_contract_sha256" => validation_hash,
             "analysis_kind" => "nominal",
             "human_acceptance_claim" => nothing,
             "objective_operands" => operands,
-        ))
+        )
+        if !isnothing(preflight.source_optimizer_provenance)
+            summary["source_optimizer_provenance"] = preflight.source_optimizer_provenance
+        end
+        write_json(paths["validation_summary.json"], summary)
         write_json(paths["status.json"], Dict(
             "validation_contract_sha256" => validation_hash,
             "analysis_kind" => "nominal",

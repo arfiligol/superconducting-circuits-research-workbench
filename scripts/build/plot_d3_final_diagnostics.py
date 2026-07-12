@@ -54,6 +54,10 @@ SLOT_EXECUTION_MANIFEST_SCHEMA = "d3-slot-execution-manifest.v1"
 NOMINAL_MANIFEST_SCHEMA = "d3-nominal-validation-manifest.v1"
 SEMANTIC_HASH_FRAMING = "d3-semantic-value-sha256-v1"
 D3_EXTRACTION_CONTRACT = "d3-three-circuit-model-dark-mode-aware-physical-vs-reduced-eligibility.v4"
+INTERNAL_FINAL_ANALYSIS_KIND = "optimizer_internal_final_reproduction"
+ISOLATED_FINAL_ANALYSIS_KIND = "isolated_direct_optimizer_final_reproduction"
+ISOLATED_EXECUTION_MODE = "isolated_direct_optimize_d3_after_legacy_governance_block"
+ISOLATED_EXECUTION_REASON = "formal_runner_blocked_by_legacy_completed_artifact_reuse"
 NOMINAL_OBJECTIVE_IDS = {
     "filter_loaded_bare_hz",
     "readout_loaded_bare_hz",
@@ -210,6 +214,80 @@ def finite_number(value: Any, label: str) -> float:
     result = float(value)
     require(math.isfinite(result), f"{label} must be finite.")
     return result
+
+
+def isolated_optimizer_source_provenance(
+    status: dict[str, Any],
+    final: dict[str, Any],
+    inventory: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Validate the narrow isolated-run path without relabeling its source role."""
+    analysis_kind = final.get("analysis_kind")
+    require(
+        final.get("independent_validation") is False,
+        "Current optimizer final diagnostics must not claim independent validation.",
+    )
+    if analysis_kind == INTERNAL_FINAL_ANALYSIS_KIND:
+        return None
+    require(
+        analysis_kind == ISOLATED_FINAL_ANALYSIS_KIND,
+        "Current optimizer final diagnostics use an unsupported analysis kind.",
+    )
+    final_record = mapping(final.get("record"), "isolated final_diagnostics.record")
+    require(
+        final.get("state") == "captured"
+        and final_record.get("status") == "valid"
+        and final_record.get("physical_evaluation_status") == "valid",
+        "Isolated optimizer final diagnostics must contain captured valid physical evidence.",
+    )
+    require(
+        status.get("execution_mode") == ISOLATED_EXECUTION_MODE,
+        "Isolated optimizer status has the wrong execution mode.",
+    )
+    isolated = mapping(
+        inventory.get("isolated_execution"), "hash_inventory.isolated_execution"
+    )
+    require(
+        set(isolated)
+        == {"reason", "formal_blocker", "optimizer_settings", "initial_candidate_override"},
+        "Isolated optimizer provenance has an incompatible schema.",
+    )
+    require(
+        isolated.get("reason") == ISOLATED_EXECUTION_REASON,
+        "Isolated optimizer provenance has the wrong reason.",
+    )
+    blocker = isolated.get("formal_blocker")
+    require(
+        isinstance(blocker, str) and bool(blocker.strip()),
+        "Isolated optimizer provenance requires a nonempty formal blocker.",
+    )
+    require(
+        isolated.get("optimizer_settings") == "unchanged_from_runtime",
+        "Isolated optimizer provenance must retain unchanged runtime settings.",
+    )
+    override = mapping(
+        isolated.get("initial_candidate_override"),
+        "isolated initial_candidate_override",
+    )
+    require(
+        set(override) == {"field", "unit", "value"},
+        "Isolated initial candidate override must be one exact field/unit/value record.",
+    )
+    field = override.get("field")
+    require(
+        isinstance(field, str) and field in NOMINAL_VARIABLE_IDS,
+        "Isolated initial candidate override field is unsupported.",
+    )
+    require(
+        override.get("unit") == NOMINAL_VARIABLE_UNITS[field],
+        "Isolated initial candidate override has the wrong unit.",
+    )
+    finite_number(override.get("value"), "isolated initial candidate override value")
+    return {
+        "analysis_kind": ISOLATED_FINAL_ANALYSIS_KIND,
+        "execution_mode": ISOLATED_EXECUTION_MODE,
+        "isolated_execution": isolated,
+    }
 
 
 def canonical_qubit_targets(target: dict[str, Any]) -> tuple[float, float]:
@@ -1123,10 +1201,17 @@ def _validate_notebook_record_shape(
             closure_predicted,
             closure_residual,
         )
+        closure_pair_indices = np.searchsorted(system_c_pair_frequency, closure_frequency)
         require(
-            np.array_equal(closure_frequency, system_c_pair_frequency)
+            np.all(closure_pair_indices < len(system_c_pair_frequency))
+            and np.array_equal(
+                system_c_pair_frequency[closure_pair_indices], closure_frequency
+            )
             and np.allclose(
-                system_c_pair_s21 / system_c_pair_reference,
+                (
+                    system_c_pair_s21[closure_pair_indices]
+                    / system_c_pair_reference[closure_pair_indices]
+                ),
                 closure_observed,
                 rtol=1e-12,
                 atol=1e-12,
@@ -1716,6 +1801,23 @@ def validate_nominal_artifacts(
         "Nominal selection does not exactly match the optimizer case, target set, and Slot.",
     )
     optimizer_config = optimizer_artifacts["config_snapshot.json"]
+    source_optimizer_provenance = isolated_optimizer_source_provenance(
+        optimizer_artifacts["status.json"],
+        optimizer_artifacts["final_diagnostics.json"],
+        optimizer_artifacts["hash_inventory.json"],
+    )
+    if source_optimizer_provenance is not None:
+        require(
+            contract.get("source_optimizer_provenance") == source_optimizer_provenance
+            and summary.get("source_optimizer_provenance") == source_optimizer_provenance,
+            "Isolated optimizer provenance must remain exact in the nominal contract and summary.",
+        )
+    else:
+        require(
+            "source_optimizer_provenance" not in contract
+            and "source_optimizer_provenance" not in summary,
+            "Internal optimizer nominal evidence must not inject isolated source provenance.",
+        )
     optimizer_inventory = _optimizer_inventory_by_id(optimizer_artifacts["hash_inventory.json"])
     optimizer_identity = optimizer_candidate_identity(optimizer_run_directory, optimizer_artifacts)
     source_optimizer = mapping(contract.get("source_optimizer"), "nominal contract.source_optimizer")
@@ -2288,11 +2390,7 @@ def validate_artifacts(
             manifest.get("execution_sha256") == recomputed_execution_sha256,
             "Current optimizer execution_sha256 does not match canonical {schema_version, contract}.",
         )
-        require(
-            final.get("analysis_kind") == "optimizer_internal_final_reproduction"
-            and final.get("independent_validation") is False,
-            "Current final_diagnostics must be optimizer-internal reproduction, not independent validation.",
-        )
+        isolated_optimizer_source_provenance(status, final, inventory)
         config_snapshot_sha256 = file_sha256(run_directory / "config_snapshot.json")
         require(
             isinstance(inventory.get("config_snapshot_sha256"), str)

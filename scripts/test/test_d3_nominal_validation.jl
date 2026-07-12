@@ -163,6 +163,38 @@ function make_optimizer_fixture(root, paths)
     return run
 end
 
+function mark_isolated_optimizer_fixture(run)
+    status_path = joinpath(run, "status.json")
+    status = JSON3.read(read(status_path, String), Dict{String,Any})
+    status["execution_mode"] = "isolated_direct_optimize_d3_after_legacy_governance_block"
+    write_test_json(status_path, status)
+
+    isolated_execution = Dict(
+        "reason" => "formal_runner_blocked_by_legacy_completed_artifact_reuse",
+        "formal_blocker" => "Synthetic formal runner rejected completed artifact reuse.",
+        "optimizer_settings" => "unchanged_from_runtime",
+        "initial_candidate_override" => Dict(
+            "field" => "lr_open_um",
+            "unit" => "um",
+            "value" => 1414.25,
+        ),
+    )
+    inventory_path = joinpath(run, "hash_inventory.json")
+    inventory = JSON3.read(read(inventory_path, String), Dict{String,Any})
+    inventory["isolated_execution"] = isolated_execution
+    write_test_json(inventory_path, inventory)
+
+    final_path = joinpath(run, "final_diagnostics.json")
+    final_diagnostics = JSON3.read(read(final_path, String), Dict{String,Any})
+    final_diagnostics["analysis_kind"] = "isolated_direct_optimizer_final_reproduction"
+    final_diagnostics["record"] = Dict(
+        "status" => "valid",
+        "physical_evaluation_status" => "valid",
+    )
+    write_test_json(final_path, final_diagnostics)
+    return isolated_execution
+end
+
 function synthetic_factory(factory_calls, evaluation_calls)
     metrics = (
         filter_loaded_bare_hz = 6.001e9,
@@ -237,6 +269,7 @@ end
         @test factory_calls[] == evaluation_calls[] == 1
         @test Set(readdir(result.run_directory)) == VALIDATION_OUTPUT_FILES
         manifest = JSON3.read(read(joinpath(result.run_directory, "validation_manifest.json"), String), Dict{String,Any})
+        @test !haskey(manifest["contract"], "source_optimizer_provenance")
         @test !isabspath(manifest["contract"]["source_optimizer"]["run_directory"])
         @test !occursin("..", manifest["contract"]["source_optimizer"]["run_directory"])
         @test all(!isabspath(item["path"]) && !occursin("..", item["path"]) for item in manifest["contract"]["source_hashes"])
@@ -312,5 +345,80 @@ end
             fresh_evaluator = true,
         )
         @test factory_calls[] == evaluation_calls[] == 2
+    end
+
+
+    mktempdir() do root
+        paths = make_sources(root)
+        optimizer_run = make_optimizer_fixture(root, paths)
+        isolated_execution = mark_isolated_optimizer_fixture(optimizer_run)
+        preflight = preflight_optimizer_run(optimizer_run)
+        expected_provenance = Dict(
+            "analysis_kind" => "isolated_direct_optimizer_final_reproduction",
+            "execution_mode" => "isolated_direct_optimize_d3_after_legacy_governance_block",
+            "isolated_execution" => isolated_execution,
+        )
+        @test preflight.source_optimizer_provenance == expected_provenance
+
+        output_root = joinpath(root, "workbench", "isolated-nominal-output")
+        result = run_nominal_validation(
+            optimizer_run;
+            output_root = output_root,
+            source_paths = paths,
+            workspace_root = root,
+            evaluator_factory = synthetic_factory(Ref(0), Ref(0)),
+            fresh_process = true,
+            fresh_evaluator = true,
+        )
+        manifest = JSON3.read(read(joinpath(result.run_directory, "validation_manifest.json"), String), Dict{String,Any})
+        summary = JSON3.read(read(joinpath(result.run_directory, "validation_summary.json"), String), Dict{String,Any})
+        @test manifest["contract"]["analysis_kind"] == "nominal"
+        @test manifest["contract"]["source_optimizer_provenance"] == expected_provenance
+        @test summary["source_optimizer_provenance"] == expected_provenance
+
+        status_path = joinpath(optimizer_run, "status.json")
+        status = JSON3.read(read(status_path, String), Dict{String,Any})
+        status["execution_mode"] = "unsupported"
+        write_test_json(status_path, status)
+        @test_throws ErrorException preflight_optimizer_run(optimizer_run)
+        status["execution_mode"] = "isolated_direct_optimize_d3_after_legacy_governance_block"
+        write_test_json(status_path, status)
+
+        inventory_path = joinpath(optimizer_run, "hash_inventory.json")
+        inventory = JSON3.read(read(inventory_path, String), Dict{String,Any})
+        delete!(inventory, "isolated_execution")
+        write_test_json(inventory_path, inventory)
+        @test_throws ErrorException preflight_optimizer_run(optimizer_run)
+        inventory["isolated_execution"] = isolated_execution
+        write_test_json(inventory_path, inventory)
+
+        for (key, bad_value) in (
+            ("reason", "unsupported"),
+            ("formal_blocker", ""),
+            ("optimizer_settings", "changed"),
+        )
+            inventory = JSON3.read(read(inventory_path, String), Dict{String,Any})
+            inventory["isolated_execution"][key] = bad_value
+            write_test_json(inventory_path, inventory)
+            @test_throws ErrorException preflight_optimizer_run(optimizer_run)
+            inventory["isolated_execution"][key] = isolated_execution[key]
+            write_test_json(inventory_path, inventory)
+        end
+        inventory = JSON3.read(read(inventory_path, String), Dict{String,Any})
+        inventory["isolated_execution"]["initial_candidate_override"] = Dict(
+            "field" => "lr_open_um",
+            "unit" => "fF",
+            "value" => 1414.25,
+        )
+        write_test_json(inventory_path, inventory)
+        @test_throws ErrorException preflight_optimizer_run(optimizer_run)
+        inventory["isolated_execution"] = isolated_execution
+        write_test_json(inventory_path, inventory)
+
+        final_path = joinpath(optimizer_run, "final_diagnostics.json")
+        final_diagnostics = JSON3.read(read(final_path, String), Dict{String,Any})
+        final_diagnostics["analysis_kind"] = "unsupported"
+        write_test_json(final_path, final_diagnostics)
+        @test_throws ErrorException preflight_optimizer_run(optimizer_run)
     end
 end
