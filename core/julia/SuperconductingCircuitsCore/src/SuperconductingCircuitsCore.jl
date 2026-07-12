@@ -19,6 +19,7 @@ include("simulation/hb_intent.jl")
 include("simulation/hb_problem.jl")
 include("compiler/topology_key.jl")
 include("compiler/josephson_compiler.jl")
+include("analysis/linear_modes.jl")
 include("authoring/macro_dsl.jl")
 include("sweeps/executors.jl")
 include("sweeps/sweep_spec.jl")
@@ -160,6 +161,16 @@ export compile_to_josephson
 export JosephsonCompiledCircuit
 export TopologyKey
 export topology_key
+export LinearNodalModel
+export ReducedLinearModel
+export GeneralizedModeSolution
+export SelectedModeProjection
+export extract_linear_nodal_model
+export reduce_free_charge_coordinates
+export reduce_linear_model_pair
+export solve_generalized_modes
+export project_selected_modes
+export linear_projection_closure
 
 export PumpAxis
 export HBSourceSlot
