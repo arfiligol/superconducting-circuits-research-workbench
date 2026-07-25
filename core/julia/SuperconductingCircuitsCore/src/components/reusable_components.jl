@@ -13,6 +13,22 @@ struct ParallelLCResonator
     inductor::ShuntInductor
 end
 
+# Canonical floating-qubit small-signal semantics:
+# https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/bare-vs-hybridized-readout-filter-modes.qmd
+struct LinearizedFloatingQubit
+    id::String
+    island_1::AbstractNodeEndpoint
+    island_2::AbstractNodeEndpoint
+    readout_attachment::AbstractNodeEndpoint
+    c01::ShuntCapacitor
+    c02::ShuntCapacitor
+    c12::CapacitiveCoupling
+    cr1::CapacitiveCoupling
+    cr2::CapacitiveCoupling
+    lj1::SeriesInductor
+    lj2::SeriesInductor
+end
+
 # ReflectiveJPA contains one nonlinear JosephsonJunction. It is not a dc SQUID
 # and has no external-flux, asymmetry, or loop-inductance model.
 # https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd
@@ -106,6 +122,135 @@ function add_parallel_lc_resonator!(
         pins=[:signal],
     )
     return ParallelLCResonator(string(id), node, capacitor, inductor)
+end
+
+"""
+    add_linearized_floating_qubit!(plan; id, island_1, island_2,
+        readout_attachment, c01_f, c02_f, c12_f, cr1_f, cr2_f,
+        l_j_per_junction_h)
+
+Insert the passive small-signal circuit for a symmetric floating qubit. The
+component owns five capacitance branches and two identical parallel linearized
+Josephson-inductance branches; parameter extraction and nonlinear junction
+physics remain outside this component.
+"""
+function add_linearized_floating_qubit!(
+    plan::CircuitPlan;
+    id,
+    island_1,
+    island_2,
+    readout_attachment,
+    c01_f,
+    c02_f,
+    c12_f,
+    cr1_f,
+    cr2_f,
+    l_j_per_junction_h,
+)
+    component_id = strip(string(id))
+    isempty(component_id) && _validation_error("LinearizedFloatingQubit id must be nonempty.")
+    endpoints = (island_1, island_2, readout_attachment)
+    all(endpoint -> endpoint isa AbstractNodeEndpoint, endpoints) ||
+        _validation_error("LinearizedFloatingQubit endpoints must be NodeEndpoints.")
+    length(Set(endpoints)) == 3 ||
+        _validation_error("LinearizedFloatingQubit endpoints must be distinct.")
+
+    numeric = Float64[c01_f, c02_f, c12_f, cr1_f, cr2_f, l_j_per_junction_h]
+    all(value -> isfinite(value) && value > 0, numeric) ||
+        _validation_error("LinearizedFloatingQubit capacitances and per-junction inductance must be finite and positive.")
+    c01_value, c02_value, c12_value, cr1_value, cr2_value, lj_value = numeric
+
+    c01 = shunt_capacitor!(
+        plan;
+        id="$(component_id)_c01",
+        at=island_1,
+        capacitance=c01_value,
+        role=:floating_qubit_island_ground_capacitance,
+        label=raw"$C_{01}$",
+    )
+    c02 = shunt_capacitor!(
+        plan;
+        id="$(component_id)_c02",
+        at=island_2,
+        capacitance=c02_value,
+        role=:floating_qubit_island_ground_capacitance,
+        label=raw"$C_{02}$",
+    )
+    c12 = couple_capacitive!(
+        plan;
+        id="$(component_id)_c12",
+        from=island_1,
+        to=island_2,
+        capacitance=c12_value,
+        role=:floating_qubit_island_mutual_capacitance,
+        label=raw"$C_{12}$",
+    )
+    cr1 = couple_capacitive!(
+        plan;
+        id="$(component_id)_cr1",
+        from=readout_attachment,
+        to=island_1,
+        capacitance=cr1_value,
+        role=:readout_to_floating_qubit_capacitance,
+        label=raw"$C_{r1}$",
+    )
+    cr2 = couple_capacitive!(
+        plan;
+        id="$(component_id)_cr2",
+        from=readout_attachment,
+        to=island_2,
+        capacitance=cr2_value,
+        role=:readout_to_floating_qubit_capacitance,
+        label=raw"$C_{r2}$",
+    )
+    lj1 = series_inductor!(
+        plan;
+        id="$(component_id)_lj1",
+        from=island_1,
+        to=island_2,
+        inductance=lj_value,
+        role=:floating_qubit_linearized_josephson_inductance,
+        label=raw"$L_{J1}$",
+    )
+    lj2 = series_inductor!(
+        plan;
+        id="$(component_id)_lj2",
+        from=island_1,
+        to=island_2,
+        inductance=lj_value,
+        role=:floating_qubit_linearized_josephson_inductance,
+        label=raw"$L_{J2}$",
+    )
+    record_engineering_component!(
+        plan;
+        id=component_id,
+        display_name=component_id,
+        component_type=:LinearizedFloatingQubit,
+        role=:qubit,
+        parameters=Dict(
+            :c01_f => c01_value,
+            :c02_f => c02_value,
+            :c12_f => c12_value,
+            :cr1_f => cr1_value,
+            :cr2_f => cr2_value,
+            :l_j_per_junction_h => lj_value,
+            :inductive_branch_kind => :linearized_josephson,
+        ),
+        pins=[:island_1, :island_2, :readout_attachment],
+    )
+    return LinearizedFloatingQubit(
+        component_id,
+        island_1,
+        island_2,
+        readout_attachment,
+        c01,
+        c02,
+        c12,
+        cr1,
+        cr2,
+        lj1,
+        lj2,
+    )
 end
 
 function add_reflective_jpa!(

@@ -1,406 +1,257 @@
 # D3 Intrinsic Interferometric Purcell Filter Design
 
-This folder owns the D3 design-process notebooks for the intrinsic
-interferometric Purcell filter. The purpose is to turn Q2D CPW and MTL
-cross-section data into corrected resonator lengths, an external coupling
-capacitor, and simulation evidence for the final five-pair readout design.
+This folder owns the D3 simulation, optimization, and evidence workflow. It
+turns Q2D CPW/MTL inputs and a floating-qubit capacitance artifact into six
+Layout variables, full-$\mathcal T_{\mathrm{QRP}}$ response evidence, and
+Human-reviewable validation artifacts.
 
-The notebooks are meant to be read as a chain. Python owns analysis
-orchestration and candidate evidence tables. Pluto reads explicit CSV inputs,
-builds circuit models, runs HB, and writes solver-returned plus declared
-derived/PTC traces. Human review owns promotion into design parameters or
-corrections. A PTC trace is promotion evidence only when the compiled shunt row,
-value, and removal intent are preserved with it.
-
-This child folder owns workflow execution, implementation, and evidence
-artifacts. The Super Repo owns the canonical [D3 Design Target](https://github.com/arfiligol/SCQ_Design/blob/main/docs/design-targets/d3-intrinsic-interferometric-purcell-filter.qmd)
+The Super Repo owns the canonical [D3 Same-Die Design Target](https://github.com/arfiligol/SCQ_Design/blob/main/docs/design-targets/d3-intrinsic-interferometric-purcell-filter.qmd),
+[separate D3 Split-Die Design Target](https://github.com/arfiligol/SCQ_Design/blob/main/docs/design-targets/d3-split-die-intrinsic-interferometric-purcell-filter.qmd),
+[Exact-N Port-Anchored Chain Realizations](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/exact-n-port-anchored-chain-realizations.qmd),
+[Full Qubit--Readout--Filter Complex Response Fit](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/worked-examples/d3-full-qrp-complex-response-fit.qmd),
+[Full QRP Node Flux to Bare Coordinates](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/worked-examples/d3-full-qrp-node-flux-to-bare-coordinates.qmd),
+[Bare, Coupling-On Diagonal, and Hybridized Modes](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/bare-vs-hybridized-readout-filter-modes.qmd),
 and [Auditable Scientific Optimization](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/auditable-scientific-optimization.qmd)
-semantics. Single-notch candidate fits follow [Notch Resonator Complex S21 Fit](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/notch-resonator-complex-s21-fit.qmd),
-while scalar rational diagnostics follow [Vector Fitting and Passivity](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/vector-fitting-passivity.qmd).
-Terminal-basis, Maxwell, modal, and matrix-artifact rules live in
-[Multiconductor RLGC Matrices: Basis, Modes, and Physical Meaning](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd).
-Raw/derived trace meaning and compensation gates live in [Port Reference
-Impedance Semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd)
-and [Port-Termination Compensation](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd).
-The child [D3 Readout-Filter S21 Fit API](../../../docs/concepts/equivalent-circuit-modeling/d3-readout-filter-s21-fit-api.md)
-lists only the concrete Python/Julia entrypoints, payloads, failures, and replay
-requirements.
-Notebook 07 is the sole review and run entrypoint for the physical evaluator
-and bounded CMA-ES → Nelder-Mead workflow. It reads the canonical Super Repo
-target JSON, the generic `d3_optimizer_conditions.json`, and exactly one CSV
-row for the selected Slot. Users select a Slot and click an action; they never
-edit a manifest hash. Opening the notebook or changing the selector does not
-start a run.
+semantics. This Workbench owns circuit construction, execution, fitting APIs,
+optimizer integration, and artifacts. The [D3 Full-QRP Response Fit API](../../../docs/concepts/equivalent-circuit-modeling/d3-readout-filter-s21-fit-api.md)
+documents the concrete implementation boundary.
 
-## Design Target
+The current forward-search artifacts and Exact-Six explorer in this folder
+belong to the **Same-Die** Target: both resonator traces are on `D0/top` in the
+current evidence. They must not be used as Split-Die closure evidence.
 
-The final design needs one shared readout line with five filter/readout
-resonator pairs. For each pair, the design variables should be tuned together:
-$\omega_p$, $\omega_r$, $\omega_n$, $J$, and $\kappa_p$.
+## Design target
 
-The 50 Ω shared feedline is a separate Q2D cross section. Its v1 lossless LC
-extraction is $L'=383.83846\,\mathrm{nH/m}$ and
-$C'=152.91443\,\mathrm{pF/m}$, giving $Z_0=50.1014\,\Omega$. It must not reuse
-the selected resonator case's single-trace LC values. The source did not
-supply $R'$ or $G'$; the current LC-only exploration explicitly assumes both
-are zero. The 0.25 Ω impedance condition is mismatch screening only, not an
-extraction-uncertainty or promotion claim.
+The final Design Target has exactly six positive-weight
+$\mathcal T_{\mathrm{QRP}}$ quantities:
 
-For the resonator pair, the current screening heuristic chooses CPW cross
-sections where $Z_m=\sqrt{L_m/C_m}$ is close to the uncoupled resonator-line
-impedance, $Z_m \approx Z_{0,r}$. This ratio is not the general definition of
-an MTL modal characteristic impedance; promotion to a design law requires the
-evidence named by the canonical Knowledge node.
+| Metric | Source |
+| --- | --- |
+| `system_c_filter_loaded_bare_hz` | Pointwise full-QRP circuit-to-Hamiltonian map with complex-response closure |
+| `system_c_readout_loaded_bare_hz` | Pointwise full-QRP circuit-to-Hamiltonian map with complex-response closure |
+| `system_c_intrinsic_notch_hz` | Full-QRP PTC complex-$Z_{21}$ zero |
+| `system_c_filter_loaded_bare_external_linewidth_hz` | Transformed port map with full-QRP open-response closure |
+| `system_c_j_hz` | Full-QRP $h_{rp}$ with complex-response closure |
+| `system_c_g_hz` | Full-QRP $h_{qr}$ at nominal $L_J$ with complex-response closure |
 
-This makes the length design easier. For the current flip-chip case, however,
-the artificial Maxwell-diagonal reference is not necessarily equal to the
-single-trace impedance,
-$Z_{\mathrm{diag},i}=\sqrt{L_{ii}/C^{\mathrm M}_{ii}}\ne Z_0$. This is a
-mismatch diagnostic, not a coupled-line modal characteristic impedance.
+`system_c_readout_minus_filter_loaded_bare_detuning_hz` has zero weight. It is
+a Human promotion condition and never becomes a hidden optimizer preference.
+The fitted qubit diagonal curve and three hybridized poles are required review
+evidence, not additional Layout objectives.
 
-That mismatch shifts the resonator frequency and must be corrected by
-simulation.
+The Layout result contains exactly six variables:
 
-## Workflow
+- `lc_um`
+- `lp_short_um`
+- `lr_short_um`
+- `lp_open_um`
+- `lr_open_um`
+- `filter_to_line_capacitance_fF`
 
-1. Select two CPW cross sections from Q2D data.
+The last value is the finite physical filter-to-feedline $C_{\mathrm{ext}}$.
+The artificial weak observation hook uses `c_probe_capacitances_fF`, represents
+$C_{\mathrm{probe}}$, and is extrapolated to zero. These capacitances have
+different physical roles.
 
-   One cross section describes the MTL coupling window. The other describes the
-   uncoupled resonator sections. A third, independent cross section owns the
-   50 Ω shared feedline. The resonator selection target is
-   $Z_m \approx Z_{0,r}$. The current design accepts
-   $Z_{\mathrm{diag},i}\ne Z_{0,r}$, so the artificial diagonal-reference
-   section can create a frequency shift.
+The probe list is strictly increasing and contains at least five positive
+values. The first readout probe uses the Slot target as its scan anchor; every
+later probe centers a fresh 300 MHz continuation interval on the preceding
+accepted coupling-off pole. Coupling-off, coupling-on, and empty-feedline HB
+share that probe's exact grid and grid SHA. Coupling-off and coupling-on mode
+ownership independently continue from their preceding accepted pole, with no
+nearest-frequency or out-of-span fallback.
 
-2. Estimate and simulate loaded-bare resonator frequencies.
+The `system_c_*` strings are retained runtime compatibility keys. They do not
+define a basis or establish final authority by themselves.
 
-   Start from section delays and CPW velocities to estimate the five section
-   lengths. Then simulate the Maxwell-diagonal pair: it retains both resonators and
-   the actual filter-to-feedline capacitor, but uses the Maxwell diagonal
-   $L_{ii},C_{ii}$ with all off-diagonal entries zero. This is the pair
-   Hamiltonian reference, not a circuit made by removing the full ladder's
-   physical cross capacitor. Its filter channel supplies
-   $\omega_{p,\mathrm{LB}}$. A separate closed, node-preserving qubit/readout
-   model supplies $\omega_{q,\mathrm{LB}}$ and
-   $\omega_{r,\mathrm{LB}}$ by generalized modes.
+## Model ownership
 
-3. Separate impedance mismatch from external loading.
+The evaluator uses four non-aliased evidence groups:
 
-   Compare a full-impedance-match reference against the real MTL-diagonal
-   mismatch case. The difference measures the frequency shift caused by the
-   middle $l_c$ section.
+| Group | Circuit | Role |
+| --- | --- | --- |
+| Coupling-off reference | Declared terminal-shunt fixture | Off-reference windows, poles, and reduced initial values |
+| $\mathcal T_{\mathrm{QR}}$ (`System A`) | Qubit + readout + feedline | Initial q/r curves, coupling estimate, and response diagnostics |
+| $\mathcal T_{\mathrm{RP}}$ (`System B`) | Readout + filter + feedline | Initial r/p curves, $J$, filter linewidth, and response diagnostics |
+| $\mathcal T_{\mathrm{QRP}}$ (`System C`) | Qubit + readout + filter + feedline | Final topology; authority requires the pointwise circuit, Hamiltonian, port, and response maps |
 
-4. Sweep the external coupling capacitor.
+$\mathcal T_{\mathrm{QR}}$, $\mathcal T_{\mathrm{RP}}$, and coupling-off
+estimates seed and bound the full-QRP fit. They never populate final metric
+fields, because removing a mode or changing coupling topology changes the
+capacitance inverse, self terms, normalization, and resulting bare basis.
 
-   Sweep $C_{ext}$ from the filter resonator open end to the feedline. The
-   resulting traces are candidate evidence for loading and linewidth behavior;
-   they are not promoted until the fit window, isolated-notch ownership, source
-   metadata, and acceptance policy have passed Human review.
+The full physical $\mathcal T_{\mathrm{QRP}}$ fixture keeps all coupling
+branches present and
+sweeps only the per-junction $L_J$. Every trace owns a union of local frequency
+windows, an empty-feedline reference on that exact grid, and matching candidate,
+topology, reference-contract, and port-plane identities. The final model must
+derive $\mathbf h(L_J)$ and the port/direct maps pointwise from the same full
+circuit parameter set, then constrain them with the joint complex response.
 
-5. Correct lengths and choose $C_{ext}$.
+Before final metrics may reach the Cost Function:
 
-   The coupled evaluator and optimizer may generate corrected candidate values
-   as exploration evidence. Only a Human-approved condition manifest can
-   promote them into design parameters.
+- response quality, seed, bound, identifiability, and stability gates pass;
+- the signed direct qubit--filter alternative reports `passed`; and
+- residue-qualified bright full-QRP and Vector-Fit poles agree
+  bidirectionally in count, frequency, and total linewidth.
 
-6. Tune the full pair design.
+The intrinsic notch is independently refined as a full physical
+$\mathcal T_{\mathrm{QRP}}$ PTC
+$Z_{21}$ complex zero. Scan samples only discover signed brackets; fresh HB/PTC
+evaluations own the final root and Re/Im/complex residual gates.
 
-   In the full circuit, $\omega_p$, $\omega_r$, $\omega_n$, $J$, and
-   $\kappa_p$ are coupled design outcomes. Adjusting lengths can keep the
-   target resonator frequencies in place while tuning $J$ and $\omega_n$.
+## Current runtime stop gate
 
-## Notebook Map
+The current `d3_system_c_s21_lj_sweep_fit.v4` implementation still fits seven
+reduced coefficients, imposes a scalar LC qubit curve and fixed-participation
+$L_J^{-1/4}$ coupling laws, and observes the response through a filter-only
+port projection. It does not yet execute the pointwise
+`theta_circ -> C_bare,K_bare -> h,Delta,K_port,D_port -> S21` map required by
+the canonical contract. Its outputs are reduced-runtime estimates and may be
+used for initialization, plots, and migration comparisons, but they may not
+publish the six final Cost operands even when the current numerical gates pass.
 
+## Inputs
+
+- The canonical target JSON supplies Slot targets and target identities.
+- `d3_design_config.json` selects the Q2D artifacts and fixed design inputs.
+- `d3_optimizer_conditions.json` is the reviewed
+  `d3-optimizer-conditions.v7` condition manifest shared by every Slot.
+- `design_inputs/d3_selected_resonator_lengths.csv` supplies one seed row per
+  Slot.
+- The configured private open-side input supplies the labeled Maxwell
+  capacitance matrix, cut-plane/region ledger, and per-junction $L_J$ input.
+
+The canonical `d3-readout-open-side-maxwell.v2` loader fixes the reference
+conductor and eliminates exactly the four disconnected Coupler pads by Schur
+complement. It retains the qubit islands and readout terminal and maps the
+reduced matrix to
+$C_{01},C_{02},C_{12},C_{r1},C_{r2},C_{0r}$. The complete local block owns
+the open-side electric energy; the distributed readout stops at the declared
+cut plane and excludes that local region. The old
+`d3-floating-qubit-maxwell.v1` input remains historical-replay-only because it
+discarded $C_{0r}$ without a cut-plane ledger.
+
+The machine-readable input shape is
+[`contracts/d3-readout-open-side-maxwell.v2.schema.json`](contracts/d3-readout-open-side-maxwell.v2.schema.json).
+
+The v1 distributed model is lossless LC because the source provides no
+$R'$/$G'$. Artifacts record those terms as unavailable and assumed zero; they
+do not claim extracted distributed loss.
+
+## Notebook and module map
+
+- [`00_exact_six_s21_target_explorer.jl`](00_exact_six_s21_target_explorer.jl)
+  interactively explores every independent Same-Die Exact-Six parameter with a
+  Pluto Slider, renders raw/calibrated complex-$S_{21}$ magnitude and phase,
+  and downloads a candidate analytical-target snapshot for the four-node
+  handoff. It has no synthetic input fallback.
 - [`../../python/01_resonator_length_estimate.py`](../../python/01_resonator_length_estimate.py)
-  is the source of truth for the first delay-form length estimate. It writes
-  `design_inputs/d3_selected_resonator_lengths.csv`, which the Pluto notebooks
-  consume.
-
-- [`01_bare_frequency_probe.jl`](01_bare_frequency_probe.jl)
-  reads the Python length table and writes HB probe traces for mode ownership.
-  Use the perturbation data to decide which peak belongs to the filter
-  resonator and which belongs to the readout resonator.
-
+  creates the delay-form seed-length table consumed by Pluto.
+- [`01_coupled_pair_frequency_probe.jl`](01_coupled_pair_frequency_probe.jl) produces
+  component-response mode-ownership evidence.
 - [`02_filter_frequency_loading_calibration.jl`](02_filter_frequency_loading_calibration.jl)
-  reads the Python length table and produces broad filter-only HB traces. It
-  preserves existing fine artifacts but no longer generates new fine windows
-  from the superseded local vector-fit linewidth path. A new fine run requires
-  a Human-approved per-trace center/window/step artifact.
-
-- [`../../python/02_filter_frequency_loading_analysis.py`](../../python/02_filter_frequency_loading_analysis.py)
-  is the Jupytext source for the Python evidence notebook. It reads exactly the
-  90 traces named by the current fine manifest, calls the shared complex-notch
-  fitter, and publishes candidate fit and residual evidence. It stops before
-  bare-frequency regression, linewidth promotion, or length correction.
-
-- [`03_full_readout_hanging_pairs.jl`](03_full_readout_hanging_pairs.jl)
-  reads the Python length table and runs the final five-pair shared-readout
-  circuit. Only the filter resonator open end couples capacitively to the
-  readout line.
-
-- [`../../python/03_full_readout_analysis.py`](../../python/03_full_readout_analysis.py)
-  analyzes the bare-probe ownership traces and the full five-pair readout
-  traces. It runs vector-fit pre-passes and the Spring2025 `S11` fit attempt. It
-  does not fit `$J$` or publish `$J$` evidence.
-
-- [`05_coupling_notch_z21_sweep.jl`](05_coupling_notch_z21_sweep.jl)
-  generates fixed-spec PTC Z21 geometry sweeps over MTL coupling length and the
-  common short-side correction.
-
-- [`../../python/05_coupling_notch_z21_sweep_analysis.py`](../../python/05_coupling_notch_z21_sweep_analysis.py)
-  ranks geometry seeds with notch, center, and half-Z21-peak-split screening
-  diagnostics. The half split is not extracted `$J$` or promotion evidence;
-  promoted `$J$` must come from the canonical complex-S21 fit.
-
+  produces broad filter-loading and impedance-mismatch seed traces.
+- [`03_full_readout_hanging_pairs.jl`](03_full_readout_hanging_pairs.jl) and
+  [`../../python/03_full_readout_analysis.py`](../../python/03_full_readout_analysis.py)
+  provide screening-only shared-feedline diagnostics; their local mode
+  associations do not enter Cost or own final full-QRP modes.
+- [`05_coupling_notch_z21_sweep.jl`](05_coupling_notch_z21_sweep.jl) and
+  [`../../python/05_coupling_notch_z21_sweep_analysis.py`](../../python/05_coupling_notch_z21_sweep_analysis.py)
+  provide geometry and notch seed diagnostics.
 - [`06_lc_hybrid_split_diagnostic_sweep.jl`](06_lc_hybrid_split_diagnostic_sweep.jl)
-  runs the `lc` hybrid-split diagnostic sweep for the representative slot. Each
-  `lc` point compensates short and open lengths, reruns the filter `C_ext`
-  sweep, reruns a readout weak-probe sweep, and runs intrinsic-pair `Z21`.
+  and [`../../python/06_lc_hybrid_split_diagnostic_analysis.py`](../../python/06_lc_hybrid_split_diagnostic_analysis.py)
+  provide coupling-length screening diagnostics.
+- [`d3_purcell_common.jl`](d3_purcell_common.jl) owns shared D3 circuit
+  construction and input loading.
+- [`d3_procedure_catalog.v1.json`](d3_procedure_catalog.v1.json) maps a
+  topology/goal requirement to an executable Procedure, required paths,
+  preflight checks, stages, and expected artifacts.
+- [`../../../scripts/build/d3_design_platform.py`](../../../scripts/build/d3_design_platform.py)
+  resolves that catalog, prints a no-write execution plan, runs the exact
+  stages on request, and writes a SHA-bound Procedure receipt.
+- [`d3_coupled_evaluator.jl`](d3_coupled_evaluator.jl) owns physical HB,
+  the current reduced full-QRP fitting path, checks, notch extraction, and
+  compatibility metric projection.
+- [`d3_coupled_optimizer.jl`](d3_coupled_optimizer.jl) owns bounded cost,
+  caching, CMA-ES, Nelder--Mead, and structured outcomes. It owns no D3 physics
+  or threshold decisions.
+- [`07_coupled_cost_optimization.jl`](07_coupled_cost_optimization.jl) is the
+  sole interactive evaluation and optimization entrypoint.
+- [`../../python/08_d3_design_review.py`](../../python/08_d3_design_review.py)
+  is the editable Jupytext source for the read-only Human review notebook; its
+  generated `.ipynb` mirror uses Plotly and `nbformat` at runtime.
 
-- [`../../python/06_lc_hybrid_split_diagnostic_analysis.py`](../../python/06_lc_hybrid_split_diagnostic_analysis.py)
-  extracts the loaded bare frequencies, applies the simulated/extracted filter loading
-  shift to `Z21`, and reports `half_hybrid_split_mhz` as a diagnostic. It does
-  not identify half of the corrected hybrid split as $J$.
+## Resolve a Procedure
 
-- [`d3_purcell_common.jl`](d3_purcell_common.jl)
-  contains shared circuit construction helpers, Q2D case loading, and the
-  small CSV reader used by the Pluto notebooks.
-
-- [`d3_coupled_evaluator.jl`](d3_coupled_evaluator.jl)
-  owns the real single-slot HB evaluation, loaded-bare references, complex-S21
-  $J$ fit, fixed nominal floating-qubit loading, closed modal-Hamiltonian
-  extraction of linearized $g$, and the no-free-parameter full three-mode
-  closure. Its A/B/C circuit models share one coupling-off readout loaded-bare
-  identity; finite/open readout-pole shifts are diagnostics only, and only
-  System B owns the objective notch. Physical extraction validity and reduced-
-  model eligibility are separate artifact statuses. Unavailable source $R'/G'$
-  remains zero for lossless exploration.
-
-- [`d3_coupled_optimizer.jl`](d3_coupled_optimizer.jl)
-  owns the generic bounded cost accounting, exact cache, CMA-ES search,
-  Nelder-Mead refinement, and structured convergence/promotion outcomes. It
-  does not own D3 physics or threshold decisions.
-
-- [`07_coupled_cost_optimization.jl`](07_coupled_cost_optimization.jl)
-  displays all five canonical Slots, defaults to the first unfinished Slot,
-  derives the selected seed, targets, bounds, full-row hash, and execution
-  manifest, and exposes two explicit buttons. Completed target-satisfying Slots
-  are reusable view-only evidence and cannot be rerun. Failed Slots may retry.
-
-- [`d3_optimizer_conditions.json`](d3_optimizer_conditions.json)
-  owns Slot-independent evaluator gates, seed-relative bounds, metric scales
-  and weights, HB settings, CMA-ES/Nelder-Mead budgets, promotion conditions,
-  and exact-eight output filenames. It contains no selected Slot or seed row.
-
-- [`../../python/08_d3_design_review.ipynb`](../../python/08_d3_design_review.ipynb)
-  is the final Human review handoff. It separates optimizer-time history from
-  independent nominal validation, then ends with the frozen
-  `layout_specs.json`. Opening or executing it is read-only by default; it never
-  runs optimization.
-
-## Optimizer To Validation Handoff
-
-The review sequence has four explicit boundaries:
-
-1. Notebook 07 runs CMA-ES → Nelder–Mead and persists optimizer evidence.
-2. The selected `layout_specs.json` freezes exactly six Layout variables. Search
-   history and cost remain provenance; they are not Final Validation.
-3. A fresh process may evaluate that frozen candidate exactly once and persist
-   the independent exact-six nominal-validation artifact set. Only a completed,
-   matching, non-stale nominal record backed by the current
-   `d3-slot-execution-manifest.v1` optimizer schema may be labeled **Final
-   Validation**. Legacy optimizer runs remain historical reproduction only and
-   cannot back an independent nominal-validation claim.
-4. Fabrication tolerance is a future, separate final check. Its perturbation
-   contract and Condition Threshold require Human or Sol-level review and stay
-   outside the Cost Function. No nominal result implies a tolerance pass.
-
-Current optimizer and nominal semantic identities use
-`d3-semantic-value-sha256-v1`: values are type-framed across Julia and Python,
-while source-file identities remain raw byte SHA-256. Integral finite Float64
-values normalize to the same integer framing across a JSON write/read boundary;
-non-integral Float64 values retain their exact IEEE-754 bits.
-
-Artifacts that do not declare
-`d3-three-circuit-model-dark-mode-aware-physical-vs-reduced-eligibility.v4` are
-semantically incompatible with the current shared loaded-bare A/B/C contract.
-System C requires the two observable pair-window poles, while its q-like pole
-is retained only as a fixed-$g/J$ reduced-model prediction. A captured q-window
-trace reports magnitude and phase observability for Human review without
-fitting a feedline pole or gating physical validity. The validator rejects
-older contracts explicitly; it does not relabel dark-mode evidence as a
-physical feedline observation.
-
-To review without writes, set `DESIGN_TARGET_JSON` and
-`OPTIMIZER_RUN_DIRECTORY` in Notebook 08, leave
-`NOMINAL_VALIDATION_DIRECTORY=None` and `RUN_NOMINAL_VALIDATION=False`, then run
-all cells. Zero matching nominal directories is reported as `not_performed`;
-one may be selected automatically; more than one requires an explicit
-`NOMINAL_VALIDATION_DIRECTORY`. Nominal directories for other optimizer runs or
-Slots are counted as unrelated and ignored, while invalid directories that
-claim the selected run remain visible as rejected evidence.
-
-To request the single fresh nominal evaluation from the command line, run from
-this Workbench root:
+List the currently declared Procedures:
 
 ```bash
-julia --startup-file=no scripts/build/run_d3_nominal_validation.jl <persisted_optimizer_run_directory>
+python scripts/build/d3_design_platform.py list
 ```
 
-The equivalent Notebook 08 action is to set `RUN_NOMINAL_VALIDATION=True` and
-execute only the clearly marked **Explicit nominal-validation action
-(guarded)** cell, then return the flag to `False` and run the read-only review
-cells. The guarded action calls the nominal runner only; it cannot invoke the
-optimizer. Failed, stale, candidate-mismatched, or source-mismatched directories
-remain visible rejected evidence and are never substituted for Final
-Validation.
+A request contains exactly `schema_version`, `topology`, `goal`, and `paths`.
+Use `plan REQUEST.json` to resolve and preflight it without creating outputs;
+use `run REQUEST.json` only after the plan is understood. The canonical
+forward-design route refuses a legacy qubit input or an initializer whose
+readout length is not referenced to the open-side local cut plane.
+The request shape is
+[`contracts/d3-design-procedure-request.v1.schema.json`](contracts/d3-design-procedure-request.v1.schema.json).
 
-An isolated direct optimizer run may enter this nominal handoff only when it
-was produced by the same persisted `optimize_d3` runtime after the formal UI
-was blocked by a recorded discovery/governance defect. Such a run must retain
-the distinct `isolated_direct_optimizer_final_reproduction` analysis kind,
-record the exact formal blocker and unchanged optimizer settings in
-`hash_inventory.json`, and pass the same manifest, source-hash, candidate, and
-final-physical-evaluation checks. It is never relabeled as an internal UI run
-and never becomes reusable evidence in Notebook 07. This narrow provenance
-path exists so a fresh nominal solve can audit real completed computation
-without mutating its immutable artifact or repeating an unchanged full-budget
-search.
-
-## Nominal Floating-Qubit Loading
-
-The original no-qubit / with-qubit comparison remains historical diagnostic
-provenance. Current optimization always connects the reduced linearized qubit
-to `readout_open_tail`; its five reduced branches and per-junction $L_J$ are
-fixed private input, not optimizer variables. Closed System A keeps identical
-qubit/readout nodes and stiffness in its off/on topologies. The off topology
-uses one Schur-reduced $C_{r,\mathrm{attach,LB}}$ shunt plus qubit-side endpoint
-loading; the on topology restores physical $C_{r1}$ and $C_{r2}$ cross
-branches. Generalized coupling-off modes own $f_{q,\mathrm{LB}}$ and
-$f_{r,\mathrm{LB}}$. Projecting the physical-on quadratic Hamiltonian into the
-complete off-mode basis owns primitive $g$; exact physical modes and the RWA
-approximation are compared against the existing 1 MHz thresholds to classify
-the reduced two-mode model. A mismatch remains visible but does not reject a
-valid physical candidate or replace primitive $g$.
-
-Artificial feedline-probe readout and qubit poles remain observable
-diagnostics. Their zero-probe intercepts and shift-derived $g$ neither own the
-reported parameters nor reject a candidate. The local two-mode $J$ fit still
-fails fast if the qubit-like pole enters its trace window.
-
-System A finite-probe readout poles must remain assignable inside their declared
-scan and pass vector-fit quality, but they are not individually subjected to
-the final Slot-ownership window. The unchanged ownership condition is applied
-to the closed coupling-off readout mode.
-
-The evaluator then uses three explicit circuit systems. Closed System A
-contains only qubit and distributed readout and owns primitive $g$. System B
-contains readout, filter, and feedline, retains the same single Schur-reduced
-readout attachment shunt, and owns
-$f_{p,\mathrm{LB}}$, $\kappa_{p,\mathrm{LB}}$, primitive $J$, and the no-qubit
-notch used by the Cost Function. System C restores both physical exchange
-channels and checks three poles plus complex $S_{21}$ using A's $g$ and B's $J$
-without refitting either coupling. Failure to extract the physical HB/vector
-poles still rejects the candidate. A fixed-$g/J$ pole or response mismatch only
-marks the reduced three-mode explanation ineligible; it does not create another
-scalar objective or invalidate the full distributed-circuit result.
-
-The Human-reviewed primitive-$g$ objective remains centered at 90 MHz and uses
-a 10 MHz cost scale. No other target center, evaluator threshold, or optimizer
-algorithm changes with that tolerance.
-
-The private JSON uses schema `d3-floating-qubit-maxwell.v1`. It carries the
-labeled full Maxwell matrix, a reference conductor, exactly four disconnected
-floating Coupler-pad labels, ordered qubit-island/readout roles, the explicit
-`distributed_resonator_owns_self_capacitance` ownership, and the per-junction
-inductance measured by the canonical Design Target. The loader fixes the reference voltage and eliminates
-only the four pads with $Q_f=0$ by a Schur-complement linear solve. It maps the
-retained 3x3 matrix to $C_{01},C_{02},C_{12},C_{r1},C_{r2}$; the retained
-readout diagonal is persisted as provenance and is never added as a shunt.
-The ignored input remains at `build/private_inputs/d3_floating_qubit_nominal.json`,
-and every run hash-binds its bytes and loader source.
-
-The canonical-target first-order transmon $f_{01}$ and residual are diagnostics because
-the six Layout variables cannot change the fixed qubit model. The intrinsic
-notch first requires a unique no-qubit reference root. The qubit-loaded result
-then owns the root nearest that reference, preserves every loaded root, and
-rejects an assignment margin below 1 MHz. It never chooses a root merely because
-it is nearest the Human notch target.
-
-The following CLI only reproduces the historical comparison; it is not the
-current optimizer entrypoint.
-
-Run from the Workbench root and choose a new output directory under `build/`:
-
-```bash
-julia --startup-file=no \
-  "notebooks/pluto/D3 Intrinsic Purcell Filter Design/run_d3_floating_qubit_nominal_comparison.jl" \
-  <frozen_optimizer_run_directory> \
-  <private_floating_qubit_json> \
-  <new_build_output_directory>
-```
-
-The output contains `model_inputs.csv`/`.json`,
-`metric_comparison.csv`/`.json`, the fresh common-grid raw and normalized
-`s21_traces.csv`, fit details, identities, and run status. The readout-response
-shift is explicitly a paired-pole proximity diagnostic; it is not mislabeled
-as loaded-bare mode ownership or a Condition Threshold decision.
-
-## Running another Slot
+## Legacy interactive optimizer
 
 1. Start Pluto and open `07_coupled_cost_optimization.jl`.
-2. Confirm the status table. The selector defaults to the first unfinished
-   Slot (currently 5.52 GHz); the existing target-satisfying 6.0 GHz result is
-   labeled `completed`, `unapproved_exploration`, and `view-only`.
-3. Select one unfinished or failed Slot and inspect the derived target, exact
-   CSV seed row, seed-relative bounds, and execution SHA.
-4. Click **Evaluate selected seed — no writes** to isolate the real
-   Simulation → evaluator → cost path.
-5. Click **Run selected Slot optimization** only when the preview is correct.
-   The notebook rechecks existing evidence immediately before creating a run
-   and writes exactly eight files, including the generated
-   `condition_manifest.json` snapshot and final `layout_specs.json`.
-6. Open the Python review notebook for plots and Human judgment. Do not rerun a
-   completed Slot merely because CMA-ES or Nelder-Mead reported
-   `not_converged`; the target evidence and Human decision are separate.
+2. Select one unfinished or rejected Slot.
+3. Inspect its target, seed row, bounds, conditions identity, and execution
+   identity.
+4. Click **Evaluate selected seed — no writes** to run one complete
+   Simulation → extraction → metric → Cost path.
+5. Click **Run selected Slot optimization** only after the single evaluation is
+   physically understandable.
+6. Review the persisted optimizer result and frozen `layout_specs.json` in
+   Notebook 08.
 
-## Plot And Fit Conventions
+Opening the notebook or changing the Slot selector does not start a run.
+Completed evidence is view-only and is not silently rerun.
 
-Simulation data should be shown as markers or scatter points. Fitting results
-may be shown as continuous or dashed curves. For one simulated case, use the
-same color for raw data and fit; distinguish them by marker versus line style.
+## Optimizer to validation handoff
 
-Vector fitting can provide a scalar pole diagnostic or independent cross-check;
-it is not a fallback notch fitter or an accepted network model. The evaluator
-uses the reusable calibrated complex-`$S_{21}$` API for $J$ extraction, while
-Notebook 07 owns the exact metric-selection adapter and review boundary.
+1. Notebook 07 persists the optimizer evidence and selected Layout Specs.
+2. The selected `layout_specs.json` freezes the six Layout variables; the
+   optimizer directory remains immutable.
+3. A fresh process evaluates that frozen candidate once with trace capture and
+   without optimizer/cache state:
 
-## Optimization Integration Boundary
+   ```bash
+   julia --startup-file=no scripts/build/run_d3_nominal_validation.jl <optimizer_run_directory>
+   ```
 
-The physical evaluator and optimizer are real implementation, but approval is
-not inferred from successful execution. Generic conditions may move from
-`pending` to a hash-bound `sol_reviewed` state and authorize exploration.
-Every generated per-Slot execution manifest remains `agent_proposed`, and all
-current outputs remain `unapproved_exploration`. Human promotion stays outside
-Notebook 07 and is impossible while the consumed LC artifact declares
-`promotion_eligible=false`.
+4. Notebook 08 reads the fresh artifact, displays parameter tables and response
+   plots, and ends with the frozen Layout Specs.
+5. Human review owns acceptance. Fabrication tolerance remains a separate final
+   check outside the Cost Function.
 
-The present exploration consumes an LC-only Q2D envelope. Missing source
-$R'/G'$ values remain explicitly unavailable and are assumed zero only for the
-lossless exploration model; they are not presented as extracted RLGC evidence.
-Fabrication tolerance, yield, and a future true-RLGC artifact remain separate
-Human review concerns rather than hidden optimizer defaults.
+Conditions may be Sol-reviewed for execution, but promotion requires
+`human_approved`. A successful optimizer or evaluator run does not imply
+physical acceptance.
 
-## Fast Failure Isolation
+## Plot and fit conventions
 
-Run [`scripts/test/test_d3_coupled_optimizer_analytical.jl`](../../../scripts/test/test_d3_coupled_optimizer_analytical.jl)
-first. It sends bounded parameters through a deterministic analytic cost with a
-known optimum, a promotion-only condition, and an expected rejected region. A
-passing result isolates the generic cost, cache, CMA-ES, Nelder-Mead, and
-structured-outcome machinery without loading HB.
+Plot simulation samples as markers and fitted responses as lines. Use the same
+color for the same physical case, changing marker/line style to distinguish
+data from fit. Every plot and table must name its circuit system, observable,
+mode layer, and estimator.
 
-Notebook 07 then exposes two separate explicit actions. `evaluate_d3_seed_cost(runtime)`
-runs one real Simulation → evaluator → metric projection → cost path without an
-optimizer. `run_d3_slot_optimization(runtime)` runs the selected Slot's full simulation-backed search.
-This order distinguishes optimizer defects from circuit, artifact, fitting, or
-adapter failures before an expensive exploration is started.
+Scalar Vector Fitting may own an eligible, uniquely continued response-pole
+frequency and total linewidth after its sampling/refinement gates. In the
+full-QRP topology it is parallel bright-pole evidence against the poles derived
+from the fitted physical model. It never owns the bare decomposition, the
+intrinsic notch, $g$, $G$, or $J$.
+
+## Fast failure isolation
+
+Run
+[`scripts/test/test_d3_coupled_optimizer_analytical.jl`](../../../scripts/test/test_d3_coupled_optimizer_analytical.jl)
+to verify the generic cost/cache/CMA-ES/Nelder--Mead path without HB. Then use
+Notebook 07's one-seed action to isolate the real circuit and extraction path
+before spending a full optimization budget.

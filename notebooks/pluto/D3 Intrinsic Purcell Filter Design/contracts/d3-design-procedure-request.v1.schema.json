@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "d3-design-procedure-request.v1.schema.json",
+  "title": "D3 Design Procedure Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "topology",
+    "goal",
+    "paths"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "d3-design-procedure-request.v1"
+    },
+    "topology": {
+      "enum": [
+        "same_die"
+      ]
+    },
+    "goal": {
+      "enum": [
+        "design_candidate",
+        "fabrication_tolerance_hybrid",
+        "fabrication_tolerance_q2d",
+        "render_review_figures"
+      ]
+    },
+    "paths": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

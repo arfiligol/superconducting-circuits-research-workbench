@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "d3-readout-open-side-maxwell.v2.schema.json",
+  "title": "D3 Readout Open-Side Local Maxwell Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "model_id",
+    "capacitance_source_id",
+    "capacitance_unit",
+    "conductor_labels",
+    "maxwell_capacitance_matrix_fF",
+    "role_mapping",
+    "readout_self_capacitance_ownership",
+    "region_ownership",
+    "L_J_per_junction_nH"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "d3-readout-open-side-maxwell.v2"
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capacitance_source_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capacitance_unit": {
+      "const": "fF"
+    },
+    "conductor_labels": {
+      "type": "array",
+      "minItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "maxwell_capacitance_matrix_fF": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "array",
+        "minItems": 8,
+        "items": {
+          "type": "number"
+        }
+      }
+    },
+    "role_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference_conductor",
+        "floating_coupler_pads",
+        "qubit_island_1",
+        "qubit_island_2",
+        "readout_attachment"
+      ],
+      "properties": {
+        "reference_conductor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "floating_coupler_pads": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "qubit_island_1": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qubit_island_2": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readout_attachment": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "readout_self_capacitance_ownership": {
+      "const": "localized_open_side_interface_owns_reduced_readout_shunt"
+    },
+    "region_ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modeling_mode",
+        "local_region_id",
+        "readout_line_cut_plane_id",
+        "distributed_readout_length_reference",
+        "distributed_line_excludes_local_region",
+        "electric_energy_owner",
+        "magnetic_phase_treatment",
+        "valid_frequency_range_hz",
+        "source_artifact_sha256"
+      ],
+      "properties": {
+        "modeling_mode": {
+          "const": "full_region_replacement"
+        },
+        "local_region_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readout_line_cut_plane_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "distributed_readout_length_reference": {
+          "const": "shorted_end_to_open_side_local_cut_plane"
+        },
+        "distributed_line_excludes_local_region": {
+          "const": true
+        },
+        "electric_energy_owner": {
+          "const": "this_maxwell_matrix"
+        },
+        "magnetic_phase_treatment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "evidence_id",
+            "evaluation_frequency_hz",
+            "max_abs_phase_error_rad"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "negligible_with_bound",
+                "restored_by_local_equivalent"
+              ]
+            },
+            "evidence_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evaluation_frequency_hz": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "max_abs_phase_error_rad": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "valid_frequency_range_hz": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "source_artifact_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "L_J_per_junction_nH": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    }
+  }
+}

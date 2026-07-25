@@ -350,7 +350,76 @@ function reduce_free_charge_coordinates(model::LinearNodalModel)
     return _reduce_with_bases(model, retained_basis, free_charge_basis, tolerance)
 end
 
-"""Reduce coupling-off and physical-on models in one shared K-null frame."""
+function _require_shared_stiffness_nullspace(
+    coupling_off::LinearNodalModel,
+    physical_on::LinearNodalModel,
+    retained_basis,
+    free_charge_basis,
+)
+    on_retained_basis, on_free_charge_basis, on_tolerance = _stiffness_coordinate_bases(
+        physical_on.inverse_inductance,
+    )
+    size(free_charge_basis, 2) == size(on_free_charge_basis, 2) || _validation_error(
+        "Coupling-off and physical-on stiffness operators must have the same number of free-charge coordinates.",
+    )
+    size(retained_basis, 2) == size(on_retained_basis, 2) || _validation_error(
+        "Coupling-off and physical-on stiffness operators must have the same number of positive-stiffness coordinates.",
+    )
+
+    if !isempty(free_charge_basis)
+        annihilation_residual = norm(
+            physical_on.inverse_inductance * free_charge_basis,
+            Inf,
+        )
+        annihilation_tolerance = max(
+            on_tolerance,
+            _matrix_relative_tolerance(
+                physical_on.inverse_inductance;
+                multiplier=256.0,
+            ),
+        )
+        annihilation_residual <= annihilation_tolerance || _validation_error(
+            "Physical-on stiffness must annihilate the coupling-off free-charge basis in the shared coordinate frame.",
+        )
+
+        off_null_projector = free_charge_basis * transpose(free_charge_basis)
+        on_null_projector = on_free_charge_basis * transpose(on_free_charge_basis)
+        projector_tolerance = 1024.0 * max(size(off_null_projector)...) * eps(Float64)
+        norm(off_null_projector - on_null_projector, Inf) <= projector_tolerance ||
+            _validation_error(
+                "Coupling-off and physical-on stiffness operators must have the same free-charge nullspace.",
+            )
+    end
+    return nothing
+end
+
+function _require_shared_reduction_frame(
+    coupling_off::ReducedLinearModel,
+    physical_on::ReducedLinearModel,
+)
+    coupling_off.source.node_names == physical_on.source.node_names || _validation_error(
+        "Selected modal projection requires identical off/on ordered nodes.",
+    )
+    coupling_off.retained_basis == physical_on.retained_basis || _validation_error(
+        "Selected modal projection requires one shared off/on retained-coordinate basis.",
+    )
+    coupling_off.free_charge_basis == physical_on.free_charge_basis || _validation_error(
+        "Selected modal projection requires one shared off/on free-charge basis.",
+    )
+    coupling_off.stiffness_null_tolerance == physical_on.stiffness_null_tolerance ||
+        _validation_error(
+            "Selected modal projection requires one shared off/on stiffness-null frame tolerance.",
+        )
+    return nothing
+end
+
+"""Reduce coupling-off and physical-on models in one shared K-null frame.
+
+The ordered nodes must match. The physical stiffness may differ from the
+coupling-off stiffness, but it must have exactly the same numerical nullspace.
+The coupling-off eigenspaces then own the retained and free-charge coordinate
+frame used to reduce both capacitance/stiffness pairs.
+"""
 function reduce_linear_model_pair(
     coupling_off::LinearNodalModel,
     physical_on::LinearNodalModel,
@@ -358,11 +427,14 @@ function reduce_linear_model_pair(
     coupling_off.node_names == physical_on.node_names || _validation_error(
         "Coupling-off and physical-on closed models must have identical ordered nodes.",
     )
-    coupling_off.inverse_inductance == physical_on.inverse_inductance || _validation_error(
-        "Coupling-off and physical-on closed models must have one identical inverse-inductance operator.",
-    )
     retained_basis, free_charge_basis, tolerance = _stiffness_coordinate_bases(
         coupling_off.inverse_inductance,
+    )
+    _require_shared_stiffness_nullspace(
+        coupling_off,
+        physical_on,
+        retained_basis,
+        free_charge_basis,
     )
     return (
         coupling_off=_reduce_with_bases(
@@ -442,12 +514,7 @@ function project_selected_modes(
     all(index -> 1 <= index <= length(coupling_off_modes.frequencies_hz), indices) ||
         _validation_error("Selected modal projection index is out of bounds.")
     off_model = coupling_off_modes.model
-    off_model.source.node_names == physical_on.source.node_names || _validation_error(
-        "Selected modal projection requires identical off/on ordered nodes.",
-    )
-    off_model.inverse_inductance == physical_on.inverse_inductance || _validation_error(
-        "Selected modal projection requires identical reduced off/on stiffness operators.",
-    )
+    _require_shared_reduction_frame(off_model, physical_on)
 
     vectors = coupling_off_modes.vectors[:, indices]
     angular_frequencies = coupling_off_modes.angular_frequencies_rad_s[indices]

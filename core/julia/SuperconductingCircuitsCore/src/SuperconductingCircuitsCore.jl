@@ -20,6 +20,7 @@ include("simulation/hb_problem.jl")
 include("compiler/topology_key.jl")
 include("compiler/josephson_compiler.jl")
 include("analysis/linear_modes.jl")
+include("analysis/linear_response.jl")
 include("authoring/macro_dsl.jl")
 include("sweeps/executors.jl")
 include("sweeps/sweep_spec.jl")
@@ -171,6 +172,15 @@ export reduce_linear_model_pair
 export solve_generalized_modes
 export project_selected_modes
 export linear_projection_closure
+export schur_dynamic_stiffness
+export linear_terminal_response
+export matched_port_response
+export scattering_to_impedance
+export impedance_to_scattering
+export matched_open_poles
+export match_parallel_lc
+export match_bridge_lc
+export bracketed_bisection
 
 export PumpAxis
 export HBSourceSlot
@@ -233,6 +243,7 @@ export TransmissionLineSectionOverride
 export MTLCoupledRLGCSpec
 export CoupledTransmissionWindow
 export ParallelLCResonator
+export LinearizedFloatingQubit
 export ReflectiveJPA
 export HalfWaveResonator
 export QuarterWaveResonator
@@ -251,6 +262,7 @@ export node_at_distance
 export section_index_at_distance
 export section_range_from_window
 export add_parallel_lc_resonator!
+export add_linearized_floating_qubit!
 export add_reflective_jpa!
 export add_half_wave_resonator!
 export add_quarter_wave_resonator!
