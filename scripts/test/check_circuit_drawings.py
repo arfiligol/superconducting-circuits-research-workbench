@@ -15,7 +15,7 @@ CIRCUIT_DRAW_DIR = ROOT / "docs" / "assets" / "circuit_draw"
 REGISTRY_PATH = CIRCUIT_DRAW_DIR / "registry.yml"
 LEGACY_SCRIPT_DIR = ROOT / "scripts" / "docs"
 THEMES = ("light", "dark")
-FORMATS = ("svg", "png")
+FORMATS = ("svg",)
 
 FORBIDDEN_IMPORT_ROOTS = {
     "app_backend",
@@ -135,7 +135,7 @@ def _manifest_outputs(
     failures: list[str] = []
     if "output_path" in manifest:
         failures.append(
-            f"{manifest_rel} must use outputs.light.svg/png and outputs.dark.svg/png, "
+            f"{manifest_rel} must use outputs.light.svg and outputs.dark.svg, "
             "not output_path."
         )
 

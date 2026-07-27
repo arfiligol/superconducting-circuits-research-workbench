@@ -219,6 +219,10 @@ class TransmissionLineSegment(elm.ElementCompound):
         right_label: str | None = None,
         left_terminal: str = "open",
         right_terminal: str = "open",
+        boxed: bool = False,
+        box_height_units: float = 0.8,
+        line_color: str | None = None,
+        line_width: float | None = None,
         show_nodes: bool = True,
         show_labels: bool = True,
         **kwargs: Any,
@@ -226,13 +230,18 @@ class TransmissionLineSegment(elm.ElementCompound):
         self.component_id = component_id
         self.unit_length = unit_length
         self.length_units = length_units
-        self.length = unit_length * length_units
+        self.lead_length = unit_length * 0.5 if boxed else 0
+        self.length = unit_length * length_units + 2 * self.lead_length
         self.theme: Theme = theme
         self.line_label = label
         self.left_label = left_label
         self.right_label = right_label
         self.left_terminal = left_terminal
         self.right_terminal = right_terminal
+        self.boxed = boxed
+        self.box_height = unit_length * box_height_units
+        self.line_color = line_color
+        self.line_width = line_width
         self.show_nodes = show_nodes
         self.show_labels = show_labels
         super().__init__(**kwargs)
@@ -240,7 +249,7 @@ class TransmissionLineSegment(elm.ElementCompound):
     def setup(self) -> None:
         u = self.unit_length
         length = self.length
-        color = theme_color(self.theme)
+        color = self.line_color or theme_color(self.theme)
         dot_radius = SCHEMATIC_DOT_RADIUS
         ground_drop = u * 0.45
 
@@ -255,10 +264,41 @@ class TransmissionLineSegment(elm.ElementCompound):
         }
         self.anchors.update(A)
 
-        line = elm.Line(color=color).endpoints(A["head"], A["tail"])
-        if self.show_labels and self.line_label is not None:
-            line = line.label(self.line_label, loc="top", color=color)
-        self.line = self.add(line)
+        if self.boxed:
+            half_height = self.box_height / 2
+            lead_length = self.lead_length
+            box_left = (lead_length, 0)
+            box_right = (length - lead_length, 0)
+            self.add(
+                elm.Rect(
+                    (box_left[0], half_height),
+                    (box_right[0], -half_height),
+                    color=color,
+                    lw=1.8,
+                )
+            )
+            self.add(
+                elm.Line(color=color, lw=self.line_width).endpoints(
+                    A["head"],
+                    box_left,
+                )
+            )
+            self.add(
+                elm.Line(color=color, lw=self.line_width).endpoints(
+                    box_right,
+                    A["tail"],
+                )
+            )
+            if self.show_labels and self.line_label is not None:
+                self.add(elm.Label(self.line_label, color=color).at(A["mid"]))
+        else:
+            line = elm.Line(color=color, lw=self.line_width).endpoints(
+                A["head"],
+                A["tail"],
+            )
+            if self.show_labels and self.line_label is not None:
+                line = line.label(self.line_label, loc="top", color=color)
+            self.line = self.add(line)
         if self.show_nodes:
             self.head_dot = self.add(elm.Dot(radius=dot_radius, color=color).at(A["head"]))
             self.tail_dot = self.add(elm.Dot(radius=dot_radius, color=color).at(A["tail"]))
@@ -294,6 +334,9 @@ class TransmissionLineSegment(elm.ElementCompound):
             if self.show_labels and label is not None:
                 dot = dot.label(label, loc=loc, color=color)
             self.add(dot)
+            return
+        if terminal != "none":
+            raise ValueError("TransmissionLineSegment terminal must be open, ground, or none.")
 
 
 PREVIEW_CASES: tuple[PreviewCase, ...] = (

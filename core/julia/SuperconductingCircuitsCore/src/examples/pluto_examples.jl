@@ -154,6 +154,9 @@ function _schemdraw_schematic!(
     unit_length,
     labels,
     parameters=Dict{Symbol,Any}(),
+    tracks=NamedTuple[],
+    segments=NamedTuple[],
+    coupled_spans=NamedTuple[],
     terminals=NamedTuple[],
     node_labels=NamedTuple[],
 )
@@ -171,6 +174,15 @@ function _schemdraw_schematic!(
             ),
         ),
     ) do intent
+        for track in tracks
+            record_schematic_track!(intent; track...)
+        end
+        for segment in segments
+            record_schematic_segment!(intent; segment...)
+        end
+        for span in coupled_spans
+            record_schematic_coupled_span!(intent; span...)
+        end
         for terminal in terminals
             record_schematic_terminal!(
                 intent;
@@ -895,5 +907,366 @@ function build_readout_purcell_hanging_qwr_mtl_example(;
             window=component.window,
             window_model=mtl_model,
         ),
+    )
+end
+
+"""
+    build_interdigitated_capacitor_example(; kwargs...)
+
+Build the renderer/export-facing three-branch IDC equivalent without adding a
+feedline, external port, or simulation intent.
+"""
+function build_interdigitated_capacitor_example(;
+    id="interdigitated-capacitor-example",
+    c1g_f=35.0e-15,
+    c2g_f=34.5e-15,
+    c12_f=38.0e-15,
+)
+    plan = CircuitPlan(id)
+    terminal_1 = external_node("terminal_1")
+    terminal_2 = external_node("terminal_2")
+    component = add_interdigitated_capacitor!(
+        plan;
+        id="feedline_idc",
+        terminal_1=terminal_1,
+        terminal_2=terminal_2,
+        c1g_f=c1g_f,
+        c2g_f=c2g_f,
+        c12_f=c12_f,
+    )
+    _schemdraw_schematic!(
+        plan;
+        id=:reusable_interdigitated_capacitor,
+        component_type=:InterdigitatedCapacitor,
+        component_id=component.id,
+        unit_length=2.2,
+        labels=Dict(
+            :c1g_label => _engineering_relation_label(plan, component.c1g.id),
+            :c2g_label => _engineering_relation_label(plan, component.c2g.id),
+            :c12_label => _engineering_relation_label(plan, component.c12.id),
+            :terminal_1_label => raw"$1$",
+            :terminal_2_label => raw"$2$",
+        ),
+        terminals=[
+            (id=:terminal_1, endpoint=terminal_1, side=:left, label=raw"$1$"),
+            (id=:terminal_2, endpoint=terminal_2, side=:right, label=raw"$2$"),
+        ],
+        node_labels=[
+            (id=:terminal_1_node, target=terminal_1, label="terminal_1"),
+            (id=:terminal_2_node, target=terminal_2, label="terminal_2"),
+        ],
+    )
+    return (; plan=plan, graph=engineering_graph(plan), component=component)
+end
+
+"""
+    build_intrinsic_interferometric_purcell_filter_example(; kwargs...)
+
+Build the reusable filter candidate and its schematic-export intent. The
+feedline attachment remains an exposed node; no feedline or port is added.
+`C0r` belongs to the filter and defaults to an omitted zero-valued branch.
+"""
+function build_intrinsic_interferometric_purcell_filter_example(;
+    id="intrinsic-interferometric-purcell-filter-example",
+    readout_length_m=6.0e-3,
+    filter_length_m=6.0e-3,
+    section_length_m=0.75e-3,
+    readout_l_per_m_h=DEFAULT_CPW_L_PER_M_H,
+    readout_c_per_m_f=DEFAULT_CPW_C_PER_M_F,
+    filter_l_per_m_h=DEFAULT_CPW_L_PER_M_H,
+    filter_c_per_m_f=DEFAULT_CPW_C_PER_M_F,
+    window_start_readout_m=2.25e-3,
+    window_start_filter_m=2.25e-3,
+    window_length_m=1.5e-3,
+    l_matrix_per_m_h=DEFAULT_COUPLED_MTL_L_MATRIX_PER_M_H,
+    c_matrix_per_m_f=DEFAULT_COUPLED_MTL_C_MATRIX_PER_M_F,
+    coupling_orientation=:same_direction,
+    c1g_f=35.0e-15,
+    c2g_f=34.5e-15,
+    c12_f=38.0e-15,
+    c0r_f=0.0,
+)
+    plan = CircuitPlan(id)
+    readout_attachment = external_node("readout_attachment")
+    feedline_attachment = external_node("feedline_attachment")
+    mtl_model = MTLCoupledRLGCSpec(
+        start1_m=window_start_readout_m,
+        start2_m=window_start_filter_m,
+        length_m=window_length_m,
+        section_length_m=section_length_m,
+        l_matrix_per_m_h=l_matrix_per_m_h,
+        c_matrix_per_m_f=c_matrix_per_m_f,
+    )
+    component = add_intrinsic_interferometric_purcell_filter!(
+        plan;
+        id="intrinsic_filter",
+        readout_attachment=readout_attachment,
+        feedline_attachment=feedline_attachment,
+        readout_spec=_default_line_spec(
+            length_m=readout_length_m,
+            section_length_m=section_length_m,
+            l_per_m_h=readout_l_per_m_h,
+            c_per_m_f=readout_c_per_m_f,
+        ),
+        filter_spec=_default_line_spec(
+            length_m=filter_length_m,
+            section_length_m=section_length_m,
+            l_per_m_h=filter_l_per_m_h,
+            c_per_m_f=filter_c_per_m_f,
+        ),
+        mtl_model=mtl_model,
+        coupling_orientation=coupling_orientation,
+        c1g_f=c1g_f,
+        c2g_f=c2g_f,
+        c12_f=c12_f,
+        c0r_f=c0r_f,
+    )
+    labels = Dict(
+        :readout_label => raw"$\lambda/4\ \mathrm{readout}$",
+        :filter_label => raw"$\lambda/4\ \mathrm{filter}$",
+        :capacitive_label => raw"$C_m$",
+        :inductive_label => raw"$M$",
+        :readout_head_label => raw"$\mathrm{CPW}\ \ell_r^0$",
+        :readout_tail_label => raw"$\mathrm{CPW}\ \ell_r^s$",
+        :filter_head_label => raw"$\mathrm{CPW}\ \ell_p^0$",
+        :filter_tail_label => raw"$\mathrm{CPW}\ \ell_p^s$",
+        :mtl_label => raw"$\mathrm{MTL}\ \ell_c$",
+        :c1g_label => _engineering_relation_label(plan, component.feedline_capacitor.c1g.id),
+        :c2g_label => _engineering_relation_label(plan, component.feedline_capacitor.c2g.id),
+        :c12_label => _engineering_relation_label(plan, component.feedline_capacitor.c12.id),
+        :readout_attachment_label => raw"$r$",
+        :feedline_attachment_label => raw"$f_{\mathrm{attach}}$",
+    )
+    isnothing(component.c0r) ||
+        (labels[:c0r_label] = _engineering_relation_label(plan, component.c0r.id))
+    _schemdraw_schematic!(
+        plan;
+        id=:reusable_intrinsic_interferometric_purcell_filter,
+        component_type=:IntrinsicInterferometricPurcellFilter,
+        component_id=component.id,
+        unit_length=1.7,
+        labels=labels,
+        parameters=Dict(
+            :coupling_orientation => component.window.coupling_orientation,
+            :c0r_f => c0r_f,
+            :contains_feedline => false,
+        ),
+        tracks=[
+            (
+                id=:readout,
+                line=component.readout_resonator.line.id,
+                orientation=:left_to_right,
+                relative_order=:top,
+                role=:quarter_wave_resonator,
+                label="readout",
+            ),
+            (
+                id=:filter,
+                line=component.filter_resonator.line.id,
+                orientation=:left_to_right,
+                relative_order=:bottom,
+                role=:quarter_wave_resonator,
+                label="filter",
+            ),
+        ],
+        segments=[
+            (
+                id=:readout_head_cpw,
+                track=:readout,
+                from=0.0,
+                to=mtl_model.start1_m,
+                role=:plain_cpw,
+                label=labels[:readout_head_label],
+            ),
+            (
+                id=:readout_tail_cpw,
+                track=:readout,
+                from=mtl_model.start1_m + mtl_model.length_m,
+                to=component.readout_resonator.line.spec.length_m,
+                role=:plain_cpw,
+                label=labels[:readout_tail_label],
+            ),
+            (
+                id=:filter_head_cpw,
+                track=:filter,
+                from=0.0,
+                to=mtl_model.start2_m,
+                role=:plain_cpw,
+                label=labels[:filter_head_label],
+            ),
+            (
+                id=:filter_tail_cpw,
+                track=:filter,
+                from=mtl_model.start2_m + mtl_model.length_m,
+                to=component.filter_resonator.line.spec.length_m,
+                role=:plain_cpw,
+                label=labels[:filter_tail_label],
+            ),
+        ],
+        coupled_spans=[
+            (
+                id=:mtl_window,
+                relation=component.window.id,
+                track1=:readout,
+                track2=:filter,
+                from1=mtl_model.start1_m,
+                to1=mtl_model.start1_m + mtl_model.length_m,
+                from2=mtl_model.start2_m,
+                to2=mtl_model.start2_m + mtl_model.length_m,
+                align=:start_and_end,
+                label=labels[:mtl_label],
+                render=:coupled_cpw_transmission_line,
+                hints=Dict(
+                    :coupling_orientation => component.window.coupling_orientation,
+                ),
+            ),
+        ],
+        terminals=[
+            (
+                id=:readout_attachment,
+                endpoint=component.readout_attachment,
+                side=:right,
+                kind=:attachment,
+                label=raw"$r$",
+            ),
+            (
+                id=:feedline_attachment,
+                endpoint=component.feedline_attachment,
+                side=:right,
+                kind=:attachment,
+                label=raw"$f_{\mathrm{attach}}$",
+            ),
+        ],
+        node_labels=[
+            (
+                id=:readout_attachment_node,
+                target=component.readout_attachment,
+                label="readout_attachment",
+            ),
+            (
+                id=:feedline_attachment_node,
+                target=component.feedline_attachment,
+                label="feedline_attachment",
+            ),
+        ],
+    )
+    return (;
+        plan=plan,
+        graph=engineering_graph(plan),
+        component=component,
+        mtl_model=mtl_model,
+    )
+end
+
+"""
+    build_intrinsic_interferometric_purcell_filter_with_qubit_example(; kwargs...)
+
+Build the filter candidate and compose its readout attachment with the
+linearized floating-qubit component. `C0r` remains filter-owned.
+"""
+function build_intrinsic_interferometric_purcell_filter_with_qubit_example(;
+    id="intrinsic-interferometric-purcell-filter-with-qubit-example",
+    c0r_f=18.0e-15,
+    c01_f=65.0e-15,
+    c02_f=64.0e-15,
+    c12_qubit_f=12.0e-15,
+    cr1_f=4.2e-15,
+    cr2_f=3.8e-15,
+    l_j_per_junction_h=24.0e-9,
+    filter_kwargs...,
+)
+    filter_example = build_intrinsic_interferometric_purcell_filter_example(;
+        id=id,
+        c0r_f=c0r_f,
+        filter_kwargs...,
+    )
+    plan = filter_example.plan
+    delete!(schematic_layout_intent(plan).terminals, :readout_attachment)
+    island_1 = external_node("island_1")
+    island_2 = external_node("island_2")
+    component = add_intrinsic_interferometric_purcell_filter_with_qubit!(
+        plan;
+        id="intrinsic_filter_with_qubit",
+        filter=filter_example.component,
+        island_1=island_1,
+        island_2=island_2,
+        c0r_f=c0r_f,
+        c01_f=c01_f,
+        c02_f=c02_f,
+        c12_f=c12_qubit_f,
+        cr1_f=cr1_f,
+        cr2_f=cr2_f,
+        l_j_per_junction_h=l_j_per_junction_h,
+    )
+    labels = Dict(
+        :readout_label => raw"$\lambda/4\ \mathrm{readout}$",
+        :filter_label => raw"$\lambda/4\ \mathrm{filter}$",
+        :capacitive_label => raw"$C_m$",
+        :inductive_label => raw"$M$",
+        :readout_head_label => raw"$\mathrm{CPW}\ \ell_r^0$",
+        :readout_tail_label => raw"$\mathrm{CPW}\ \ell_r^s$",
+        :filter_head_label => raw"$\mathrm{CPW}\ \ell_p^0$",
+        :filter_tail_label => raw"$\mathrm{CPW}\ \ell_p^s$",
+        :mtl_label => raw"$\mathrm{MTL}\ \ell_c$",
+        :c1g_label => _engineering_relation_label(plan, component.filter.feedline_capacitor.c1g.id),
+        :c2g_label => _engineering_relation_label(plan, component.filter.feedline_capacitor.c2g.id),
+        :c12_label => _engineering_relation_label(plan, component.filter.feedline_capacitor.c12.id),
+        :c01_label => _engineering_relation_label(plan, component.qubit.c01.id),
+        :c02_label => _engineering_relation_label(plan, component.qubit.c02.id),
+        :qubit_c12_label => _engineering_relation_label(plan, component.qubit.c12.id),
+        :cr1_label => _engineering_relation_label(plan, component.qubit.cr1.id),
+        :cr2_label => _engineering_relation_label(plan, component.qubit.cr2.id),
+        :lj1_label => _engineering_relation_label(plan, component.qubit.lj1.id),
+        :lj2_label => _engineering_relation_label(plan, component.qubit.lj2.id),
+        :readout_attachment_label => raw"$r$",
+        :feedline_attachment_label => raw"$f_{\mathrm{attach}}$",
+        :island_1_label => raw"$q_1$",
+        :island_2_label => raw"$q_2$",
+    )
+    isnothing(component.c0r) ||
+        (labels[:c0r_label] = _engineering_relation_label(plan, component.c0r.id))
+    _schemdraw_schematic!(
+        plan;
+        id=:reusable_intrinsic_interferometric_purcell_filter_with_qubit,
+        component_type=:IntrinsicInterferometricPurcellFilterWithQubit,
+        component_id=component.id,
+        unit_length=1.55,
+        labels=labels,
+        parameters=Dict(
+            :coupling_orientation => component.filter.window.coupling_orientation,
+            :contains_feedline => false,
+            :c0r_f => c0r_f,
+        ),
+        terminals=[
+            (id=:island_1, endpoint=island_1, side=:top, kind=:attachment, label=raw"$q_1$"),
+            (id=:island_2, endpoint=island_2, side=:top, kind=:attachment, label=raw"$q_2$"),
+            (
+                id=:feedline_attachment,
+                endpoint=component.filter.feedline_attachment,
+                side=:right,
+                kind=:attachment,
+                label=raw"$f_{\mathrm{attach}}$",
+            ),
+        ],
+        node_labels=[
+            (id=:island_1_node, target=island_1, label="island_1"),
+            (id=:island_2_node, target=island_2, label="island_2"),
+            (
+                id=:readout_attachment_node,
+                target=component.filter.readout_attachment,
+                label="readout_attachment",
+            ),
+            (
+                id=:feedline_attachment_node,
+                target=component.filter.feedline_attachment,
+                label="feedline_attachment",
+            ),
+        ],
+    )
+    return (;
+        plan=plan,
+        graph=engineering_graph(plan),
+        component=component,
+        mtl_model=filter_example.mtl_model,
     )
 end

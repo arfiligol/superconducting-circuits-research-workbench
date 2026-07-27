@@ -1,0 +1,35 @@
+schema_version: 1
+diagram_id: reusable.intrinsic_interferometric_purcell_filter
+title: Intrinsic interferometric Purcell filter
+source_path: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter/draw.py
+core_export_fixture: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter/schematic_export.json
+outputs:
+  light:
+    svg: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter/diagram.light.svg
+  dark:
+    svg: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter/diagram.dark.svg
+owning_docs:
+  - docs/reference/julia-core/intrinsic-interferometric-purcell-components.md
+julia_core_semantics:
+  docs:
+    - docs/reference/julia-core/components-and-composition.mdx
+    - docs/reference/julia-core/coupling-models.mdx
+    - docs/reference/julia-core/schematic-layout-intent.md
+    - docs/reference/julia-core/transmission-line-ladder.md
+  source_refs:
+    - core/julia/SuperconductingCircuitsCore/src/components/reusable_components.jl
+    - core/julia/SuperconductingCircuitsCore/src/examples/pluto_examples.jl
+    - core/julia/SuperconductingCircuitsCore/src/components/transmission_lines.jl
+physical_model_refs:
+  - docs/reference/julia-core/coupling-models.mdx
+  - docs/reference/julia-core/transmission-line-ladder.md
+canonical_physics_urls:
+  - https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/worked-examples/d3-feedline-hook-quarter-wave-resonator.qmd
+  - https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/design-workflows/localized-electrostatic-component-modeling.qmd
+  - https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd
+implementation_refs:
+  - core/python/circuit_libraries/schemdraw_circuit_library/components/transmission_lines/systems.py
+  - core/python/circuit_libraries/schemdraw_circuit_library/rendering/from_schematic_export.py
+review:
+  status: draft
+  notes: V1.1 five-component CPW/MTL and filter-owned C0r candidate; Human review pending.

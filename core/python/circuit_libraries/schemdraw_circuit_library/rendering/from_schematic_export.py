@@ -12,6 +12,9 @@ from ..components import (
     CapacitivelyCoupledGroundedLCResonator,
     FloatingLCXYResonator,
     GroundedLCResonator,
+    InterdigitatedCapacitor,
+    IntrinsicInterferometricPurcellFilter,
+    IntrinsicInterferometricPurcellFilterWithQubit,
 )
 from ..components.lumped import InductiveBranchKind
 from ..theme import Theme
@@ -133,6 +136,85 @@ def _build_component(
             pad2_label=_optional_string(labels, "pad2_label"),
             xy_label=_optional_string(labels, "xy_label"),
             port_resistance_label=_optional_string(labels, "port_resistance_label"),
+        )
+
+    if component_type == InterdigitatedCapacitor.component_kind:
+        return InterdigitatedCapacitor(
+            component_id=_string_value(parameters, "component_id", default="idc"),
+            unit_length=unit_length,
+            theme=theme,
+            c1g_label=_string_value(labels, "c1g_label", default=r"$C_{1g}$"),
+            c2g_label=_string_value(labels, "c2g_label", default=r"$C_{2g}$"),
+            c12_label=_string_value(labels, "c12_label", default=r"$C_{12}$"),
+            terminal_1_label=_optional_string(labels, "terminal_1_label"),
+            terminal_2_label=_optional_string(labels, "terminal_2_label"),
+        )
+
+    if component_type == IntrinsicInterferometricPurcellFilter.component_kind:
+        return IntrinsicInterferometricPurcellFilter(
+            component_id=_string_value(parameters, "component_id", default="intrinsic_filter"),
+            unit_length=unit_length,
+            theme=theme,
+            readout_label=_optional_string(labels, "readout_label"),
+            filter_label=_optional_string(labels, "filter_label"),
+            readout_head_label=_optional_string(labels, "readout_head_label"),
+            readout_tail_label=_optional_string(labels, "readout_tail_label"),
+            filter_head_label=_optional_string(labels, "filter_head_label"),
+            filter_tail_label=_optional_string(labels, "filter_tail_label"),
+            mtl_label=_string_value(labels, "mtl_label", default=r"$\mathrm{MTL}\ \ell_c$"),
+            capacitive_label=_string_value(labels, "capacitive_label", default=r"$C_m$"),
+            inductive_label=_string_value(labels, "inductive_label", default=r"$M$"),
+            c1g_label=_string_value(labels, "c1g_label", default=r"$C_{1g}$"),
+            c2g_label=_string_value(labels, "c2g_label", default=r"$C_{2g}$"),
+            c12_label=_string_value(labels, "c12_label", default=r"$C_{12}$"),
+            c0r_label=_optional_string(labels, "c0r_label"),
+            readout_attachment_label=_optional_string(
+                labels, "readout_attachment_label"
+            ),
+            feedline_attachment_label=_optional_string(
+                labels, "feedline_attachment_label"
+            ),
+        )
+
+    if component_type == IntrinsicInterferometricPurcellFilterWithQubit.component_kind:
+        return IntrinsicInterferometricPurcellFilterWithQubit(
+            component_id=_string_value(
+                parameters,
+                "component_id",
+                default="intrinsic_filter_with_qubit",
+            ),
+            unit_length=unit_length,
+            theme=theme,
+            readout_label=_optional_string(labels, "readout_label"),
+            filter_label=_optional_string(labels, "filter_label"),
+            readout_head_label=_optional_string(labels, "readout_head_label"),
+            readout_tail_label=_optional_string(labels, "readout_tail_label"),
+            filter_head_label=_optional_string(labels, "filter_head_label"),
+            filter_tail_label=_optional_string(labels, "filter_tail_label"),
+            mtl_label=_string_value(labels, "mtl_label", default=r"$\mathrm{MTL}\ \ell_c$"),
+            capacitive_label=_string_value(labels, "capacitive_label", default=r"$C_m$"),
+            inductive_label=_string_value(labels, "inductive_label", default=r"$M$"),
+            c1g_label=_string_value(labels, "c1g_label", default=r"$C_{1g}$"),
+            c2g_label=_string_value(labels, "c2g_label", default=r"$C_{2g}$"),
+            c12_label=_string_value(labels, "c12_label", default=r"$C_{12}$"),
+            c01_label=_string_value(labels, "c01_label", default=r"$C_{01}$"),
+            c02_label=_string_value(labels, "c02_label", default=r"$C_{02}$"),
+            qubit_c12_label=_string_value(
+                labels,
+                "qubit_c12_label",
+                default=r"$C_{12,q}$",
+            ),
+            cr1_label=_string_value(labels, "cr1_label", default=r"$C_{r1}$"),
+            cr2_label=_string_value(labels, "cr2_label", default=r"$C_{r2}$"),
+            lj1_label=_string_value(labels, "lj1_label", default=r"$L_{J1}$"),
+            lj2_label=_string_value(labels, "lj2_label", default=r"$L_{J2}$"),
+            c0r_label=_optional_string(labels, "c0r_label"),
+            readout_attachment_label=_optional_string(
+                labels, "readout_attachment_label"
+            ),
+            feedline_attachment_label=_optional_string(
+                labels, "feedline_attachment_label"
+            ),
         )
 
     raise UnsupportedSchematicComponentError(

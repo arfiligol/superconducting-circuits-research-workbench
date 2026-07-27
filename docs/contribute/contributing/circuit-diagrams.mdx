@@ -21,9 +21,8 @@ sidebar:
 # Contributing Circuit Diagrams
 
 Circuit diagrams are documentation assets. They are generated from pure Python
-Schemdraw sources and committed as SVG files for docs rendering plus PNG files
-for quick repository preview. The source and generated figures are reviewable
-in ordinary code review.
+Schemdraw sources and committed as light and dark SVG files. The source and
+generated figures are reviewable in ordinary code review.
 
 Schemdraw is not an application workflow, backend service, simulation runtime,
 or circuit-authoring model. Reusable circuit semantics belong to Julia Core and
@@ -42,9 +41,7 @@ docs/assets/circuit_draw/
   ├── draw.py
   ├── diagram.yml
   ├── diagram.light.svg
-  ├── diagram.dark.svg
-  ├── diagram.light.png
-  └── diagram.dark.png
+  └── diagram.dark.svg
 ```
 
 `draw.py` must define `build_drawing(theme="light")` and return a
@@ -58,7 +55,7 @@ manual `push()` / `pop()` pairs for branches.
 
 `diagram.yml` records the reviewable traceability for the figure: owning docs,
 Julia Core semantics references, physical/circuit model references,
-implementation references, light/dark SVG and PNG output paths, and review
+implementation references, light/dark SVG output paths, and review
 status. When reusable physics is owned by the SCQ_Design Super Repo, keep a
 child-local `physical_model_refs` adapter for standalone docs and add the
 canonical HTTPS `.qmd` path under `canonical_physics_urls`. The local adapter
@@ -69,7 +66,7 @@ does not become a second physics source of truth.
 1. Add or edit the diagram source under `docs/assets/circuit_draw/<topic>/<diagram_id>/draw.py`.
 2. Add or update `diagram.yml`.
 3. Add the manifest path to `docs/assets/circuit_draw/registry.yml`.
-4. Render SVG and PNG outputs:
+4. Render the light and dark SVG outputs:
 
 ```bash
 uv run python scripts/build/render_circuit_drawings.py
@@ -83,8 +80,7 @@ uv run python scripts/build/render_circuit_drawings.py --check
 ```
 
 6. Reference `diagram.light.svg` and `diagram.dark.svg` from the owning docs
-  using the shared `circuit-figure` wrapper. PNG outputs are committed for
-  repo-local preview, not for docs site rendering.
+  using the shared `circuit-figure` wrapper.
 
 ## Authoring Style
 
@@ -143,7 +139,7 @@ dependencies for documentation drawing.
 ```markdown
 ## Circuit Diagrams
 - Schemdraw circuit diagrams are docs assets under `docs/assets/circuit_draw/`.
-- Each diagram has `draw.py`, `diagram.yml`, committed `diagram.light.svg`, committed `diagram.dark.svg`, committed `diagram.light.png`, and committed `diagram.dark.png`.
+- Each diagram has `draw.py`, `diagram.yml`, committed `diagram.light.svg`, and committed `diagram.dark.svg`.
 - `draw.py` must define `build_drawing(theme="light")`, use `_lib.style.circuit_drawing(...)`, and must not import infrastructure services, Julia, archived simulation runtimes, or legacy Python circuit visualizer modules.
 - Write Schemdraw sources with context-manager placement and chained element methods; do not use `d += ...` placement or `push()` / `pop()` branch pairs.
 - Register diagrams in `docs/assets/circuit_draw/registry.yml`.

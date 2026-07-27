@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .components import (
     CapacitivelyCoupledGroundedLCResonator,
+    CoupledCPWTransmissionLine,
     CoupledLineLadderSection,
     FloatingLCResonator,
     FloatingLCXYResonator,
@@ -10,6 +11,9 @@ from .components import (
     InductanceLoopElementKind,
     InductiveBranch,
     InductiveBranchKind,
+    InterdigitatedCapacitor,
+    IntrinsicInterferometricPurcellFilter,
+    IntrinsicInterferometricPurcellFilterWithQubit,
     LabelLocation,
     PiSectionChain,
     PointCoupledReadoutPurcell,
@@ -26,6 +30,7 @@ from .theme import SCHEMATIC_DOT_RADIUS, Theme, theme_color
 __all__ = [
     "SCHEMATIC_DOT_RADIUS",
     "CapacitivelyCoupledGroundedLCResonator",
+    "CoupledCPWTransmissionLine",
     "CoupledLineLadderSection",
     "FloatingLCResonator",
     "FloatingLCXYResonator",
@@ -34,6 +39,9 @@ __all__ = [
     "InductanceLoopElementKind",
     "InductiveBranch",
     "InductiveBranchKind",
+    "InterdigitatedCapacitor",
+    "IntrinsicInterferometricPurcellFilter",
+    "IntrinsicInterferometricPurcellFilterWithQubit",
     "LabelLocation",
     "PiSectionChain",
     "PointCoupledReadoutPurcell",

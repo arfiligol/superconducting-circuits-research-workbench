@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CIRCUIT_DRAW_DIR = ROOT / "docs" / "assets" / "circuit_draw"
 REGISTRY_PATH = CIRCUIT_DRAW_DIR / "registry.yml"
 THEMES = ("light", "dark")
-FORMATS = ("svg", "png")
+FORMATS = ("svg",)
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -99,11 +99,8 @@ def _render_manifest(manifest: dict[str, Any], output_path: Path, *, theme: str)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        if output_path.suffix == ".png":
-            save(str(output_path), transparent=True, dpi=384)
-        else:
-            save(str(output_path), transparent=True)
-            _normalize_svg_file(output_path)
+        save(str(output_path), transparent=True)
+        _normalize_svg_file(output_path)
     finally:
         from matplotlib import pyplot as plt
 
@@ -144,19 +141,10 @@ def _check_svg_output(expected_path: Path, rendered_path: Path) -> str | None:
     return f"Rendered SVG differs for {expected_path.relative_to(ROOT)}:\n{diff}"
 
 
-def _check_binary_output(expected_path: Path, rendered_path: Path) -> str | None:
-    if expected_path.read_bytes() == rendered_path.read_bytes():
-        return None
-    file_type = expected_path.suffix[1:].upper()
-    return f"Rendered {file_type} differs for {expected_path.relative_to(ROOT)}."
-
-
 def _check_output(expected_path: Path, rendered_path: Path) -> str | None:
     if not expected_path.exists():
         return f"Missing committed output: {expected_path.relative_to(ROOT)}"
-    if expected_path.suffix == ".svg":
-        return _check_svg_output(expected_path, rendered_path)
-    return _check_binary_output(expected_path, rendered_path)
+    return _check_svg_output(expected_path, rendered_path)
 
 
 def _selected_entries(diagram_ids: set[str] | None) -> list[dict[str, str]]:
