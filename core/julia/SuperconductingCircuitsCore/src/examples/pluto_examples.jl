@@ -159,20 +159,39 @@ function _schemdraw_schematic!(
     coupled_spans=NamedTuple[],
     terminals=NamedTuple[],
     node_labels=NamedTuple[],
+    node_bindings=nothing,
 )
     render_parameters = Dict{Symbol,Any}(:component_id => string(component_id))
     merge!(render_parameters, Dict{Symbol,Any}(parameters))
+    schemdraw_hints = Dict{Symbol,Any}(
+        :component_type => string(component_type),
+        :unit_length => Float64(unit_length),
+        :labels => Dict{Symbol,Any}(labels),
+        :parameters => render_parameters,
+    )
+    if !isnothing(node_bindings)
+        serialized_bindings = Dict(
+            _engineering_symbol(role) => _schematic_endpoint_ref(endpoint)
+            for (role, endpoint) in pairs(node_bindings)
+        )
+        label_roles = [_engineering_symbol(label.id) for label in node_labels]
+        length(unique(label_roles)) == length(label_roles) ||
+            _validation_error("Schematic physical-node label roles must be unique.")
+        Set(keys(serialized_bindings)) == Set(label_roles) ||
+            _validation_error("Schematic node_bindings must cover every physical-node label role exactly.")
+        length(unique(values(serialized_bindings))) == length(serialized_bindings) ||
+            _validation_error("Schematic node_bindings endpoints must be unique.")
+        for label in node_labels
+            role = _engineering_symbol(label.id)
+            serialized_bindings[role] == _schematic_endpoint_ref(label.target) ||
+                _validation_error("Schematic node binding '$(role)' must match its physical-node label target.")
+        end
+        schemdraw_hints[:node_bindings] = serialized_bindings
+    end
     return schematic!(
         plan;
         id=id,
-        render_hints=Dict(
-            :schemdraw => Dict(
-                :component_type => string(component_type),
-                :unit_length => Float64(unit_length),
-                :labels => Dict{Symbol,Any}(labels),
-                :parameters => render_parameters,
-            ),
-        ),
+        render_hints=Dict(:schemdraw => schemdraw_hints),
     ) do intent
         for track in tracks
             record_schematic_track!(intent; track...)
@@ -194,12 +213,7 @@ function _schemdraw_schematic!(
             )
         end
         for label in node_labels
-            record_schematic_node_label!(
-                intent;
-                id=label.id,
-                target=label.target,
-                label=label.label,
-            )
+            record_schematic_node_label!(intent; label...)
         end
     end
 end
@@ -247,7 +261,8 @@ function build_parallel_lc_resonator_example(;
             :resistance_label => _port_resistance_label(signal_port),
         ),
         parameters=Dict(
-            :inductive_branch_kind => :linear,
+            :inductive_branch_kind =>
+                engineering_graph(plan).components[:resonator].parameters[:inductive_branch_kind],
             :port_resistance_ohm => signal_port.resistance,
         ),
         terminals=[
@@ -312,7 +327,8 @@ function build_reflective_jpa_capacitive_coupled_lc_example(;
             :resistance_label => _port_resistance_label(signal_port),
         ),
         parameters=Dict(
-            :inductive_branch_kind => :josephson,
+            :inductive_branch_kind =>
+                engineering_graph(plan).components[:jpa].parameters[:inductive_branch_kind],
             :port_resistance_ohm => signal_port.resistance,
         ),
         terminals=[
@@ -511,7 +527,8 @@ function build_floating_lc_xy_line_example(;
             :xy_label => raw"$XY$",
         ),
         parameters=Dict(
-            :inductive_branch_kind => :linear,
+            :inductive_branch_kind =>
+                engineering_graph(plan).components[:floating_lc_xy].parameters[:inductive_branch_kind],
             :port_resistance_ohm => port_resistance,
         ),
         terminals=[
@@ -1034,8 +1051,6 @@ function build_intrinsic_interferometric_purcell_filter_example(;
         :c1g_label => _engineering_relation_label(plan, component.feedline_capacitor.c1g.id),
         :c2g_label => _engineering_relation_label(plan, component.feedline_capacitor.c2g.id),
         :c12_label => _engineering_relation_label(plan, component.feedline_capacitor.c12.id),
-        :readout_attachment_label => raw"$r$",
-        :feedline_attachment_label => raw"$f_{\mathrm{attach}}$",
     )
     isnothing(component.c0r) ||
         (labels[:c0r_label] = _engineering_relation_label(plan, component.c0r.id))
@@ -1127,28 +1142,56 @@ function build_intrinsic_interferometric_purcell_filter_example(;
                 endpoint=component.readout_attachment,
                 side=:right,
                 kind=:attachment,
-                label=raw"$r$",
+                label="",
             ),
             (
                 id=:feedline_attachment,
                 endpoint=component.feedline_attachment,
                 side=:right,
                 kind=:attachment,
-                label=raw"$f_{\mathrm{attach}}$",
+                label="",
             ),
         ],
         node_labels=[
             (
-                id=:readout_attachment_node,
+                id=:readout_attachment,
                 target=component.readout_attachment,
-                label="readout_attachment",
+                label=raw"$r$",
+                hints=Dict(
+                    :placement => :terminal,
+                    :placement_target => :readout_attachment,
+                    :loc => :right,
+                    :offset => 0.28,
+                ),
             ),
             (
-                id=:feedline_attachment_node,
+                id=:filter_open_tail,
+                target=component.filter_resonator.line.tail,
+                label=raw"$p$",
+                hints=Dict(
+                    :placement => :marker,
+                    :placement_target => :filter_open_tail,
+                    :loc => :top,
+                    :offset => (0.28, 0.5),
+                ),
+            ),
+            (
+                id=:feedline_attachment,
                 target=component.feedline_attachment,
-                label="feedline_attachment",
+                label=raw"$f_c$",
+                hints=Dict(
+                    :placement => :terminal,
+                    :placement_target => :feedline_attachment,
+                    :loc => :right,
+                    :offset => 0.28,
+                ),
             ),
         ],
+        node_bindings=Dict(
+            :readout_attachment => component.readout_attachment,
+            :filter_open_tail => component.filter_resonator.line.tail,
+            :feedline_attachment => component.feedline_attachment,
+        ),
     )
     return (;
         plan=plan,
@@ -1218,10 +1261,6 @@ function build_intrinsic_interferometric_purcell_filter_with_qubit_example(;
         :cr2_label => _engineering_relation_label(plan, component.qubit.cr2.id),
         :lj1_label => _engineering_relation_label(plan, component.qubit.lj1.id),
         :lj2_label => _engineering_relation_label(plan, component.qubit.lj2.id),
-        :readout_attachment_label => raw"$r$",
-        :feedline_attachment_label => raw"$f_{\mathrm{attach}}$",
-        :island_1_label => raw"$q_1$",
-        :island_2_label => raw"$q_2$",
     )
     isnothing(component.c0r) ||
         (labels[:c0r_label] = _engineering_relation_label(plan, component.c0r.id))
@@ -1236,32 +1275,84 @@ function build_intrinsic_interferometric_purcell_filter_with_qubit_example(;
             :coupling_orientation => component.filter.window.coupling_orientation,
             :contains_feedline => false,
             :c0r_f => c0r_f,
+            :qubit_inductive_branch_kind =>
+                engineering_graph(plan).components[Symbol(component.qubit.id)].parameters[:inductive_branch_kind],
         ),
         terminals=[
-            (id=:island_1, endpoint=island_1, side=:top, kind=:attachment, label=raw"$q_1$"),
-            (id=:island_2, endpoint=island_2, side=:top, kind=:attachment, label=raw"$q_2$"),
+            (id=:island_1, endpoint=island_1, side=:top, kind=:attachment, label=""),
+            (id=:island_2, endpoint=island_2, side=:top, kind=:attachment, label=""),
             (
                 id=:feedline_attachment,
                 endpoint=component.filter.feedline_attachment,
                 side=:right,
                 kind=:attachment,
-                label=raw"$f_{\mathrm{attach}}$",
+                label="",
             ),
         ],
         node_labels=[
-            (id=:island_1_node, target=island_1, label="island_1"),
-            (id=:island_2_node, target=island_2, label="island_2"),
             (
-                id=:readout_attachment_node,
+                id=:readout_attachment,
                 target=component.filter.readout_attachment,
-                label="readout_attachment",
+                label=raw"$r$",
+                hints=Dict(
+                    :placement => :marker,
+                    :placement_target => :readout_attachment,
+                    :loc => :left,
+                    :offset => 0.28,
+                ),
             ),
             (
-                id=:feedline_attachment_node,
+                id=:filter_open_tail,
+                target=component.filter.filter_resonator.line.tail,
+                label=raw"$p$",
+                hints=Dict(
+                    :placement => :marker,
+                    :placement_target => :filter_open_tail,
+                    :loc => :top,
+                    :offset => (0.28, 0.5),
+                ),
+            ),
+            (
+                id=:island_1,
+                target=island_1,
+                label=raw"$q_1$",
+                hints=Dict(
+                    :placement => :marker,
+                    :placement_target => :qubit_q1_terminal,
+                    :loc => :top,
+                    :offset => 0.28,
+                ),
+            ),
+            (
+                id=:island_2,
+                target=island_2,
+                label=raw"$q_2$",
+                hints=Dict(
+                    :placement => :marker,
+                    :placement_target => :qubit_q2_terminal,
+                    :loc => :bottom,
+                    :offset => 0.28,
+                ),
+            ),
+            (
+                id=:feedline_attachment,
                 target=component.filter.feedline_attachment,
-                label="feedline_attachment",
+                label=raw"$f_c$",
+                hints=Dict(
+                    :placement => :terminal,
+                    :placement_target => :feedline_attachment,
+                    :loc => :right,
+                    :offset => 0.28,
+                ),
             ),
         ],
+        node_bindings=Dict(
+            :readout_attachment => component.filter.readout_attachment,
+            :filter_open_tail => component.filter.filter_resonator.line.tail,
+            :island_1 => island_1,
+            :island_2 => island_2,
+            :feedline_attachment => component.filter.feedline_attachment,
+        ),
     )
     return (;
         plan=plan,
@@ -1269,4 +1360,282 @@ function build_intrinsic_interferometric_purcell_filter_with_qubit_example(;
         component=component,
         mtl_model=filter_example.mtl_model,
     )
+end
+
+"""
+    build_intrinsic_interferometric_purcell_filter_equivalent_example(; kwargs...)
+
+Build the response-matched lumped intrinsic-filter equivalent with the
+complete three-branch feedline IDC and no feedline or port.
+"""
+function build_intrinsic_interferometric_purcell_filter_equivalent_example(;
+    id="intrinsic-interferometric-purcell-filter-equivalent-example",
+    readout_capacitance_f=500.0e-15,
+    readout_inductance_h=1.40e-9,
+    filter_capacitance_f=480.0e-15,
+    filter_inductance_h=1.46e-9,
+    bridge_capacitance_f=8.0e-15,
+    bridge_inductance_h=35.0e-9,
+    idc_filter_ground_capacitance_f=35.0e-15,
+    idc_feedline_ground_capacitance_f=34.5e-15,
+    idc_mutual_capacitance_f=38.0e-15,
+    c0r_f=0.0,
+)
+    plan = CircuitPlan(id)
+    readout_attachment = external_node("readout_attachment")
+    feedline_attachment = external_node("feedline_attachment")
+    component = add_intrinsic_interferometric_purcell_filter_equivalent!(
+        plan;
+        id="intrinsic_filter_equivalent",
+        readout_attachment=readout_attachment,
+        feedline_attachment=feedline_attachment,
+        readout_capacitance_f=readout_capacitance_f,
+        readout_inductance_h=readout_inductance_h,
+        filter_capacitance_f=filter_capacitance_f,
+        filter_inductance_h=filter_inductance_h,
+        bridge_capacitance_f=bridge_capacitance_f,
+        bridge_inductance_h=bridge_inductance_h,
+        idc_filter_ground_capacitance_f=idc_filter_ground_capacitance_f,
+        idc_feedline_ground_capacitance_f=idc_feedline_ground_capacitance_f,
+        idc_mutual_capacitance_f=idc_mutual_capacitance_f,
+        c0r_f=c0r_f,
+    )
+    labels = Dict(
+        :cr_label => _engineering_relation_label(plan, component.readout_resonator.capacitor.id),
+        :lr_label => _engineering_relation_label(plan, component.readout_resonator.inductor.id),
+        :cp_label => _engineering_relation_label(plan, component.filter_resonator.capacitor.id),
+        :lp_label => _engineering_relation_label(plan, component.filter_resonator.inductor.id),
+        :cn_label => _engineering_relation_label(plan, component.bridge_capacitor.id),
+        :ln_label => _engineering_relation_label(plan, component.bridge_inductor.id),
+        :cpg_label => _engineering_relation_label(plan, component.feedline_capacitor.c1g.id),
+        :cfcg_label => _engineering_relation_label(plan, component.feedline_capacitor.c2g.id),
+        :cpfc_label => _engineering_relation_label(plan, component.feedline_capacitor.c12.id),
+    )
+    isnothing(component.c0r) ||
+        (labels[:c0r_label] = _engineering_relation_label(plan, component.c0r.id))
+    _schemdraw_schematic!(
+        plan;
+        id=:reusable_intrinsic_interferometric_purcell_filter_equivalent,
+        component_type=:IntrinsicInterferometricPurcellFilterEquivalent,
+        component_id=component.id,
+        unit_length=1.7,
+        labels=labels,
+        parameters=Dict(
+            :model_family => :response_matched_parallel_lc_bridge,
+            :c0r_f => c0r_f,
+            :contains_feedline => false,
+            :feedline_coupling_kind => :interdigitated_three_branch,
+        ),
+        terminals=[
+            (
+                id=:readout_attachment,
+                endpoint=component.readout_attachment,
+                side=:left,
+                kind=:attachment,
+                label="",
+            ),
+            (
+                id=:feedline_attachment,
+                endpoint=component.feedline_attachment,
+                side=:right,
+                kind=:attachment,
+                label="",
+            ),
+        ],
+        node_labels=[
+            (
+                id=:readout_attachment,
+                target=component.readout_attachment,
+                label=raw"$r$",
+                hints=Dict(
+                    :placement => :bus_middle,
+                    :placement_target => :readout_signal,
+                    :loc => :top,
+                    :offset => 0.28,
+                ),
+            ),
+            (
+                id=:filter,
+                target=component.filter_resonator.node,
+                label=raw"$p$",
+                hints=Dict(
+                    :placement => :bus_middle,
+                    :placement_target => :filter_signal,
+                    :loc => :top,
+                    :offset => (0.28, 0.5),
+                ),
+            ),
+            (
+                id=:feedline_attachment,
+                target=component.feedline_attachment,
+                label=raw"$f_c$",
+                hints=Dict(
+                    :placement => :terminal,
+                    :placement_target => :feedline_attachment,
+                    :loc => :right,
+                    :offset => 0.28,
+                ),
+            ),
+        ],
+        node_bindings=Dict(
+            :readout_attachment => component.readout_attachment,
+            :filter => component.filter_resonator.node,
+            :feedline_attachment => component.feedline_attachment,
+        ),
+    )
+    return (; plan=plan, graph=engineering_graph(plan), component=component)
+end
+
+"""
+    build_intrinsic_interferometric_purcell_filter_equivalent_with_qubit_example(; kwargs...)
+
+Compose the response-matched lumped intrinsic-filter equivalent with the
+linearized floating qubit. `C0r` remains equivalent-filter-owned.
+"""
+function build_intrinsic_interferometric_purcell_filter_equivalent_with_qubit_example(;
+    id="intrinsic-interferometric-purcell-filter-equivalent-with-qubit-example",
+    c0r_f=18.0e-15,
+    c01_f=65.0e-15,
+    c02_f=64.0e-15,
+    c12_qubit_f=12.0e-15,
+    cr1_f=4.2e-15,
+    cr2_f=3.8e-15,
+    l_j_per_junction_h=24.0e-9,
+    filter_kwargs...,
+)
+    filter_example = build_intrinsic_interferometric_purcell_filter_equivalent_example(;
+        id=id,
+        c0r_f=c0r_f,
+        filter_kwargs...,
+    )
+    plan = filter_example.plan
+    delete!(schematic_layout_intent(plan).terminals, :readout_attachment)
+    island_1 = external_node("island_1")
+    island_2 = external_node("island_2")
+    component = add_intrinsic_interferometric_purcell_filter_equivalent_with_qubit!(
+        plan;
+        id="intrinsic_filter_equivalent_with_qubit",
+        filter=filter_example.component,
+        island_1=island_1,
+        island_2=island_2,
+        c0r_f=c0r_f,
+        c01_f=c01_f,
+        c02_f=c02_f,
+        c12_f=c12_qubit_f,
+        cr1_f=cr1_f,
+        cr2_f=cr2_f,
+        l_j_per_junction_h=l_j_per_junction_h,
+    )
+    labels = Dict(
+        :cr_label => _engineering_relation_label(plan, component.filter.readout_resonator.capacitor.id),
+        :lr_label => _engineering_relation_label(plan, component.filter.readout_resonator.inductor.id),
+        :cp_label => _engineering_relation_label(plan, component.filter.filter_resonator.capacitor.id),
+        :lp_label => _engineering_relation_label(plan, component.filter.filter_resonator.inductor.id),
+        :cn_label => _engineering_relation_label(plan, component.filter.bridge_capacitor.id),
+        :ln_label => _engineering_relation_label(plan, component.filter.bridge_inductor.id),
+        :cpg_label => _engineering_relation_label(plan, component.filter.feedline_capacitor.c1g.id),
+        :cfcg_label => _engineering_relation_label(plan, component.filter.feedline_capacitor.c2g.id),
+        :cpfc_label => _engineering_relation_label(plan, component.filter.feedline_capacitor.c12.id),
+        :c01_label => _engineering_relation_label(plan, component.qubit.c01.id),
+        :c02_label => _engineering_relation_label(plan, component.qubit.c02.id),
+        :qubit_c12_label => _engineering_relation_label(plan, component.qubit.c12.id),
+        :cr1_label => _engineering_relation_label(plan, component.qubit.cr1.id),
+        :cr2_label => _engineering_relation_label(plan, component.qubit.cr2.id),
+        :lj1_label => _engineering_relation_label(plan, component.qubit.lj1.id),
+        :lj2_label => _engineering_relation_label(plan, component.qubit.lj2.id),
+    )
+    isnothing(component.c0r) ||
+        (labels[:c0r_label] = _engineering_relation_label(plan, component.c0r.id))
+    _schemdraw_schematic!(
+        plan;
+        id=:reusable_intrinsic_interferometric_purcell_filter_equivalent_with_qubit,
+        component_type=:IntrinsicInterferometricPurcellFilterEquivalentWithQubit,
+        component_id=component.id,
+        unit_length=1.55,
+        labels=labels,
+        parameters=Dict(
+            :model_family => :response_matched_parallel_lc_bridge,
+            :c0r_f => c0r_f,
+            :contains_feedline => false,
+            :feedline_coupling_kind => :interdigitated_three_branch,
+            :qubit_inductive_branch_kind =>
+                engineering_graph(plan).components[Symbol(component.qubit.id)].parameters[:inductive_branch_kind],
+        ),
+        terminals=[
+            (id=:island_1, endpoint=island_1, side=:top, kind=:attachment, label=""),
+            (id=:island_2, endpoint=island_2, side=:top, kind=:attachment, label=""),
+            (
+                id=:feedline_attachment,
+                endpoint=component.filter.feedline_attachment,
+                side=:right,
+                kind=:attachment,
+                label="",
+            ),
+        ],
+        node_labels=[
+            (
+                id=:readout_attachment,
+                target=component.filter.readout_attachment,
+                label=raw"$r$",
+                hints=Dict(
+                    :placement => :bus_middle,
+                    :placement_target => :readout_signal,
+                    :loc => :top,
+                    :offset => 0.28,
+                ),
+            ),
+            (
+                id=:filter,
+                target=component.filter.filter_resonator.node,
+                label=raw"$p$",
+                hints=Dict(
+                    :placement => :bus_middle,
+                    :placement_target => :filter_signal,
+                    :loc => :top,
+                    :offset => (0.28, 0.5),
+                ),
+            ),
+            (
+                id=:island_1,
+                target=island_1,
+                label=raw"$q_1$",
+                hints=Dict(
+                    :placement => :marker,
+                    :placement_target => :qubit_q1_terminal,
+                    :loc => :top,
+                    :offset => 0.28,
+                ),
+            ),
+            (
+                id=:island_2,
+                target=island_2,
+                label=raw"$q_2$",
+                hints=Dict(
+                    :placement => :marker,
+                    :placement_target => :qubit_q2_terminal,
+                    :loc => :bottom,
+                    :offset => 0.28,
+                ),
+            ),
+            (
+                id=:feedline_attachment,
+                target=component.filter.feedline_attachment,
+                label=raw"$f_c$",
+                hints=Dict(
+                    :placement => :terminal,
+                    :placement_target => :feedline_attachment,
+                    :loc => :right,
+                    :offset => 0.28,
+                ),
+            ),
+        ],
+        node_bindings=Dict(
+            :readout_attachment => component.filter.readout_attachment,
+            :filter => component.filter.filter_resonator.node,
+            :island_1 => island_1,
+            :island_2 => island_2,
+            :feedline_attachment => component.filter.feedline_attachment,
+        ),
+    )
+    return (; plan=plan, graph=engineering_graph(plan), component=component)
 end

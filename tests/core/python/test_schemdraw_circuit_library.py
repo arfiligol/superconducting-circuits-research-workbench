@@ -55,6 +55,7 @@ def _grounded_lc(theme: Theme) -> GroundedLCResonator:
         name="r",
         unit_length=3.0,
         theme=theme,
+        port_label=r"$P_1$",
     )
 
 
@@ -338,10 +339,76 @@ def test_grounded_lc_resonator_contract() -> None:
     assert resonator.height == resonator.unit_length
     assert resonator.c_label == r"$C_{r}$"
     assert resonator.branch_label == r"$L_{r}$"
+    assert isinstance(resonator.port, PortTerminal)
+    assert resonator.anchors["signal"] != resonator.anchors["cap_top"]
+    assert not hasattr(resonator, "signal_dot")
+    assert not hasattr(resonator, "cap_top_dot")
+    assert not hasattr(resonator, "ind_top_dot")
     assert resonator.physical_nodes == {
-        "signal": ["signal", "cap_top", "ind_top"],
+        "signal": ["start", "end", "signal", "cap_top", "ind_top"],
         "gnd": ["cap_bot", "ind_bot", "gnd"],
     }
+
+
+def test_capacitively_coupled_grounded_lc_node_policy() -> None:
+    resonator = _capacitively_coupled_grounded_lc("light")
+    without_nodes = CapacitivelyCoupledGroundedLCResonator(show_nodes=False)
+
+    assert (
+        resonator.anchors["resonator"][0]
+        < resonator.anchors["branch_top"][0]
+        < resonator.anchors["port_node"][0]
+        < resonator.anchors["port_terminal"][0]
+    )
+    assert resonator.port.load_direction == "down"
+    assert not hasattr(resonator, "resonator_dot")
+    assert not hasattr(resonator, "branch_top_dot")
+    assert not hasattr(resonator.port, "node_dot")
+    assert not hasattr(without_nodes, "branch_top_dot")
+    assert not hasattr(without_nodes.port, "node_dot")
+
+
+def test_floating_lc_xy_tile_and_node_policy() -> None:
+    resonator = _floating_lc_xy("light")
+
+    assert (
+        resonator.anchors["pad1_port"][0]
+        < resonator.anchors["pad1_port_node"][0]
+        < resonator.anchors["pad1"][0]
+        < resonator.anchors["c_q_top"][0]
+        < resonator.anchors["inductance_loop_top"][0]
+        < resonator.anchors["top_bus_end"][0]
+        < resonator.anchors["xy"][0]
+        < resonator.anchors["xy_port_node"][0]
+        < resonator.anchors["xy_port"][0]
+    )
+    assert resonator.pad1_port_terminal.load_direction == "up"
+    assert resonator.pad2_port_terminal.load_direction == "down"
+    assert resonator.xy_port_terminal.load_direction == "down"
+    assert all(
+        not hasattr(resonator, dot)
+        for dot in ("pad1_dot", "pad2_dot", "c_q_top_dot", "c_q_bot_dot", "xy_dot")
+    )
+    assert not hasattr(resonator.pad1_port_terminal, "node_dot")
+    assert not hasattr(resonator.parallel_inductor_branch, "top_dot")
+
+
+def test_inductance_loop_attributes_match_element_kind() -> None:
+    linear = _inductance_loop_linear("light")
+    josephson = _inductance_loop_josephson("light")
+
+    assert isinstance(linear.left_inductor, elm.Inductor)
+    assert not hasattr(linear, "left_junction")
+    assert isinstance(josephson.left_junction, elm.Josephson)
+    assert not hasattr(josephson, "left_inductor")
+
+
+def test_upward_grounds_use_half_turn_orientation() -> None:
+    assert (
+        Port50Ohm(load_direction="up").ground.transform.theta,
+        FloatingLCResonator().ground_upper.transform.theta,
+        FloatingLCXYResonator().ground1.transform.theta,
+    ) == (180, 180, 180)
 
 
 @pytest.mark.parametrize(
@@ -389,6 +456,30 @@ def test_renderer_adapter_consumes_core_schematic_export(
 
     assert rendered[0].component_kind == expected_kind
     assert _metadata(rendered[0]) == _metadata(rendered[1])
+    if expected_branch_kind == "josephson":
+        assert any(
+            relation["relation_type"] == "josephson_junction"
+            for relation in export_data["relations"]
+        )
+        assert isinstance(rendered[0].inductive_branch.branch, elm.Josephson)
+
+
+def test_grounded_lc_renderer_preserves_port_labels() -> None:
+    fixture = (
+        ROOT / "docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/schematic_export.json"
+    )
+    with schemdraw.Drawing(show=False, transparent=True) as drawing:
+        component = add_schematic_export_to_drawing(
+            drawing,
+            load_schematic_export(fixture),
+            theme="light",
+        )
+
+    assert isinstance(component, GroundedLCResonator)
+    assert isinstance(component.port, Port50Ohm)
+    assert component.port.load_direction == "down"
+    assert component.port.labels == {"port": r"$P_1$", "resistance": r"$R_{50}$"}
+    assert not hasattr(component, "signal_dot")
 
 
 def test_renderer_adapter_rejects_unknown_component_type() -> None:

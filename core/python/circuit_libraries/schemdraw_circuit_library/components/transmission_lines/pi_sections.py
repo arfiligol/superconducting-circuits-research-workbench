@@ -4,6 +4,16 @@ from typing import Any, ClassVar
 
 import schemdraw.elements as elm
 
+from schemdraw_circuit_library.metadata import (
+    BusSpec,
+    ConnectionMarkerSpec,
+    NodeLabelSpec,
+    NodeMarkerSpec,
+    TerminalSpec,
+    render_connection_markers,
+    render_physical_node_labels,
+    validate_component_metadata,
+)
 from schemdraw_circuit_library.rendering.preview import PreviewCase, run_preview_cli
 from schemdraw_circuit_library.theme import SCHEMATIC_DOT_RADIUS, Theme, theme_color
 
@@ -30,6 +40,7 @@ class PiSectionChain(elm.ElementCompound):
         c_reduced_label: str = r"$C_{\Delta}$",
         left_port_label: str | None = None,
         right_port_label: str | None = None,
+        show_terminals: bool = True,
         show_nodes: bool = True,
         show_labels: bool = True,
         **kwargs: Any,
@@ -52,6 +63,7 @@ class PiSectionChain(elm.ElementCompound):
         self.c_reduced_label = c_reduced_label
         self.left_port_label = left_port_label
         self.right_port_label = right_port_label
+        self.show_terminals = show_terminals
         self.show_nodes = show_nodes
         self.show_labels = show_labels
         super().__init__(**kwargs)
@@ -95,12 +107,6 @@ class PiSectionChain(elm.ElementCompound):
         self.right_stub_line = self.add(
             elm.Line(color=color).endpoints(A[f"node{n}"], A["right_couple"])
         )
-        self.left_port_dot = self._port_dot(A["left_couple"], self.left_port_label, "left")
-        self.right_port_dot = self._port_dot(A["right_couple"], self.right_port_label, "right")
-
-        if self.show_nodes:
-            for k in range(n + 1):
-                self.add(elm.Dot(radius=dot_radius, color=color).at(A[f"node{k}"]))
 
         for k in range(n):
             inductor = elm.Inductor(color=color).endpoints(A[f"node{k}"], A[f"node{k + 1}"])
@@ -120,24 +126,91 @@ class PiSectionChain(elm.ElementCompound):
         self.physical_nodes = {}
         for k in range(n + 1):
             node_anchors = [f"node{k}", f"cap{k}_top"]
+            if k == 0:
+                node_anchors.append("left_couple")
+            if k == n:
+                node_anchors.append("right_couple")
             if not self.reduce_capacitance and 0 < k < n:
                 node_anchors.extend([f"cap{k}_split", f"cap{k}_left_top", f"cap{k}_right_top"])
             self.physical_nodes[f"n{k}"] = node_anchors
-        self.physical_nodes["gnd"] = [f"gnd{k}" for k in range(n + 1)]
+        ground_anchors = [f"gnd{k}" for k in range(n + 1)]
+        ground_anchors.extend([f"cap{k}_bot" for k in (0, n)])
+        if self.reduce_capacitance:
+            ground_anchors.extend(f"cap{k}_bot" for k in range(1, n))
+        else:
+            for k in range(1, n):
+                ground_anchors.extend([f"cap{k}_left_bot", f"cap{k}_right_bot"])
+        self.physical_nodes["gnd"] = ground_anchors
         self.ports = {"left": "n0", "right": f"n{n}"}
+        self.public_terminals = {
+            "left": TerminalSpec("n0", "left_couple", "left"),
+            "right": TerminalSpec(f"n{n}", "right_couple", "right"),
+        }
+        self.buses = {
+            "left_stub": BusSpec("n0", ("left_couple", "node0")),
+            "right_stub": BusSpec(f"n{n}", (f"node{n}", "right_couple")),
+        }
+        if not self.reduce_capacitance:
+            for k in range(1, n):
+                self.buses[f"cap{k}_top"] = BusSpec(
+                    f"n{k}",
+                    (f"cap{k}_left_top", f"cap{k}_split", f"cap{k}_right_top"),
+                )
+                self.buses[f"cap{k}_tap"] = BusSpec(
+                    f"n{k}",
+                    (f"node{k}", f"cap{k}_split"),
+                )
+                self.buses[f"cap{k}_ground"] = BusSpec(
+                    "gnd",
+                    (f"cap{k}_left_bot", f"gnd{k}", f"cap{k}_right_bot"),
+                )
+        self.node_markers = {
+            f"node{k}": NodeMarkerSpec(f"n{k}", f"node{k}", "junction")
+            for k in range(n + 1)
+        }
+        self.physical_node_labels = {
+            node: NodeLabelSpec(
+                label,
+                "terminal",
+                terminal,
+                loc=loc,
+                offset=2 * dot_radius,
+            )
+            for node, terminal, label, loc in (
+                ("n0", "left", self.left_port_label, "left"),
+                (f"n{n}", "right", self.right_port_label, "right"),
+            )
+            if self.show_terminals and label is not None
+        }
+        validate_component_metadata(self)
+        markers = []
+        if self.show_nodes:
+            markers.extend(
+                ConnectionMarkerSpec(
+                    A[spec.anchor],
+                    "junction",
+                    node=spec.node,
+                )
+                for spec in self.node_markers.values()
+            )
+        if self.show_terminals:
+            markers.extend(
+                ConnectionMarkerSpec(
+                    A[spec.anchor],
+                    "exposed",
+                    node=spec.node,
+                )
+                for spec in self.public_terminals.values()
+            )
+        render_connection_markers(
+            self,
+            markers,
+            color=color,
+            radius=dot_radius,
+        )
+        if self.show_labels:
+            render_physical_node_labels(self, color=color)
         self.elmparams["drop"] = A["end"]
-
-    def _port_dot(
-        self,
-        anchor: tuple[float, float],
-        label: str | None,
-        loc: str,
-    ) -> elm.Element:
-        color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
-        if self.show_labels and label is not None:
-            dot = dot.label(label, loc=loc, color=color)
-        return self.add(dot)
 
     def _draw_reduced_capacitances(self, anchors: dict[str, tuple[float, float]]) -> None:
         color = theme_color(self.theme)
@@ -224,6 +297,7 @@ class TransmissionLineSegment(elm.ElementCompound):
         line_color: str | None = None,
         line_width: float | None = None,
         show_nodes: bool = True,
+        show_terminals: bool = True,
         show_labels: bool = True,
         **kwargs: Any,
     ):
@@ -243,6 +317,7 @@ class TransmissionLineSegment(elm.ElementCompound):
         self.line_color = line_color
         self.line_width = line_width
         self.show_nodes = show_nodes
+        self.show_terminals = show_terminals
         self.show_labels = show_labels
         super().__init__(**kwargs)
 
@@ -259,6 +334,8 @@ class TransmissionLineSegment(elm.ElementCompound):
             "head": (0, 0),
             "tail": (length, 0),
             "mid": (length / 2, 0),
+            "body_head": (self.lead_length, 0),
+            "body_tail": (length - self.lead_length, 0),
             "head_ground": (0, -ground_drop),
             "tail_ground": (length, -ground_drop),
         }
@@ -299,21 +376,79 @@ class TransmissionLineSegment(elm.ElementCompound):
             if self.show_labels and self.line_label is not None:
                 line = line.label(self.line_label, loc="top", color=color)
             self.line = self.add(line)
-        if self.show_nodes:
-            self.head_dot = self.add(elm.Dot(radius=dot_radius, color=color).at(A["head"]))
-            self.tail_dot = self.add(elm.Dot(radius=dot_radius, color=color).at(A["tail"]))
-
-        self._terminal(A["head"], A["head_ground"], self.left_terminal, self.left_label, "left")
+        self._terminal(A["head"], A["head_ground"], self.left_terminal)
         self._terminal(
             A["tail"],
             A["tail_ground"],
             self.right_terminal,
-            self.right_label,
-            "right",
         )
 
-        self.physical_nodes = {"head": ["head"], "tail": ["tail"]}
-        self.ports = {"head": "head", "tail": "tail"}
+        left_node = "gnd" if self.left_terminal == "ground" else "head"
+        right_node = "gnd" if self.right_terminal == "ground" else "tail"
+        self.physical_nodes = {}
+        for node, anchors in (
+            (left_node, ["head"]),
+            (right_node, ["tail"]),
+        ):
+            self.physical_nodes.setdefault(node, []).extend(anchors)
+        if self.boxed:
+            self.physical_nodes[left_node].append("body_head")
+            self.physical_nodes[right_node].append("body_tail")
+        if self.left_terminal == "ground":
+            self.physical_nodes["gnd"].append("head_ground")
+        if self.right_terminal == "ground":
+            self.physical_nodes["gnd"].append("tail_ground")
+        self.ports = {"head": left_node, "tail": right_node}
+        self.public_terminals = {
+            "head": TerminalSpec(left_node, "head", "left"),
+            "tail": TerminalSpec(right_node, "tail", "right"),
+        }
+        self.buses = {}
+        if self.boxed:
+            self.buses["head_lead"] = BusSpec(left_node, ("head", "body_head"))
+            self.buses["tail_lead"] = BusSpec(right_node, ("body_tail", "tail"))
+        if self.left_terminal == "ground":
+            self.buses["head_ground"] = BusSpec("gnd", ("head", "head_ground"))
+        if self.right_terminal == "ground":
+            self.buses["tail_ground"] = BusSpec("gnd", ("tail", "tail_ground"))
+        self.node_markers = {}
+        self.physical_node_labels = {
+            node: NodeLabelSpec(
+                label,
+                "terminal",
+                terminal,
+                loc=loc,
+                offset=2 * dot_radius,
+            )
+            for node, terminal, kind, label, loc in (
+                (left_node, "head", self.left_terminal, self.left_label, "left"),
+                (right_node, "tail", self.right_terminal, self.right_label, "right"),
+            )
+            if kind == "open" and label is not None
+        }
+        validate_component_metadata(self)
+        markers = []
+        if self.show_terminals:
+            markers.extend(
+                ConnectionMarkerSpec(
+                    A[self.public_terminals[terminal].anchor],
+                    "exposed",
+                    node=self.public_terminals[terminal].node,
+                )
+                for terminal, kind in (
+                    ("head", self.left_terminal),
+                    ("tail", self.right_terminal),
+                )
+                if kind == "open"
+            )
+        render_connection_markers(
+            self,
+            markers,
+            color=color,
+            radius=dot_radius,
+        )
+        if self.show_terminals and self.show_labels:
+            render_physical_node_labels(self, color=color)
         self.elmparams["drop"] = A["end"]
 
     def _terminal(
@@ -321,8 +456,6 @@ class TransmissionLineSegment(elm.ElementCompound):
         node: tuple[float, float],
         ground: tuple[float, float],
         terminal: str,
-        label: str | None,
-        loc: str,
     ) -> None:
         color = theme_color(self.theme)
         if terminal == "ground":
@@ -330,10 +463,6 @@ class TransmissionLineSegment(elm.ElementCompound):
             self.add(elm.Ground(color=color).at(ground))
             return
         if terminal == "open":
-            dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(node)
-            if self.show_labels and label is not None:
-                dot = dot.label(label, loc=loc, color=color)
-            self.add(dot)
             return
         if terminal != "none":
             raise ValueError("TransmissionLineSegment terminal must be open, ground, or none.")

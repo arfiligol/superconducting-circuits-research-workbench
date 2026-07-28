@@ -4,6 +4,14 @@ from typing import Any, ClassVar
 
 import schemdraw.elements as elm
 
+from schemdraw_circuit_library.metadata import (
+    BusSpec,
+    ConnectionMarkerSpec,
+    NodeMarkerSpec,
+    TerminalSpec,
+    render_connection_markers,
+    validate_component_metadata,
+)
 from schemdraw_circuit_library.rendering.preview import PreviewCase, run_preview_cli
 from schemdraw_circuit_library.theme import SCHEMATIC_DOT_RADIUS, Theme, theme_color
 
@@ -31,6 +39,7 @@ class CoupledLineLadderSection(elm.ElementCompound):
         capacitive_label: str = r"$C_{AB}$",
         inductive_label: str = r"$M_{AB}$",
         show_nodes: bool = True,
+        show_terminals: bool = True,
         show_labels: bool = True,
         **kwargs: Any,
     ):
@@ -49,6 +58,7 @@ class CoupledLineLadderSection(elm.ElementCompound):
         self.capacitive_label = capacitive_label
         self.inductive_label = inductive_label
         self.show_nodes = show_nodes
+        self.show_terminals = show_terminals
         self.show_labels = show_labels
         super().__init__(**kwargs)
 
@@ -90,10 +100,6 @@ class CoupledLineLadderSection(elm.ElementCompound):
         self.add(elm.Line(color=color).endpoints(A["a_out"], A["a_out_port"]))
         self.add(elm.Line(color=color).endpoints(A["b_in_port"], A["b_in"]))
         self.add(elm.Line(color=color).endpoints(A["b_out"], A["b_out_port"]))
-        self._port_dot(A["a_in_port"], self.top_input_label, "left")
-        self._port_dot(A["a_out_port"], self.top_output_label, "right")
-        self._port_dot(A["b_in_port"], self.bottom_input_label, "left")
-        self._port_dot(A["b_out_port"], self.bottom_output_label, "right")
 
         self._inductor(A["a_in"], A["a_mid"], rf"$L_{{{self.top_name}}}$", "top")
         self._line(A["a_mid"], A["a_out"], None, "top")
@@ -120,15 +126,11 @@ class CoupledLineLadderSection(elm.ElementCompound):
         )
         self._capacitor(A["cap_top"], A["cap_bottom"], self.capacitive_label, "bottom")
 
-        if self.show_nodes:
-            for anchor in ["a_in", "a_mid", "a_out", "b_in", "b_mid", "b_out"]:
-                self.add(elm.Dot(radius=dot_radius, color=color).at(A[anchor]))
-
         self.physical_nodes = {
             "a_in": ["a_in_port", "a_in"],
-            "a_out": ["a_out", "a_out_port"],
+            "a_out": ["a_mid", "cap_top", "a_out", "a_out_port"],
             "b_in": ["b_in_port", "b_in"],
-            "b_out": ["b_out", "b_out_port"],
+            "b_out": ["b_mid", "cap_bottom", "b_out", "b_out_port"],
             "gnd": ["a_shunt_bot", "a_ground", "b_shunt_bot", "b_ground"],
         }
         self.ports = {
@@ -137,6 +139,68 @@ class CoupledLineLadderSection(elm.ElementCompound):
             "b_in": "b_in",
             "b_out": "b_out",
         }
+        self.public_terminals = {
+            "a_in": TerminalSpec("a_in", "a_in_port", "left"),
+            "a_out": TerminalSpec("a_out", "a_out_port", "right"),
+            "b_in": TerminalSpec("b_in", "b_in_port", "left"),
+            "b_out": TerminalSpec("b_out", "b_out_port", "right"),
+        }
+        self.buses = {
+            "a_in_stub": BusSpec("a_in", ("a_in_port", "a_in")),
+            "a_out_bus": BusSpec(
+                "a_out",
+                ("a_mid", "cap_top", "a_out", "a_out_port"),
+            ),
+            "b_in_stub": BusSpec("b_in", ("b_in_port", "b_in")),
+            "b_out_bus": BusSpec(
+                "b_out",
+                ("b_mid", "cap_bottom", "b_out", "b_out_port"),
+            ),
+        }
+        self.node_markers = {
+            "a_coupling_tap": NodeMarkerSpec("a_out", "cap_top", "junction"),
+            "a_shunt_tap": NodeMarkerSpec("a_out", "a_out", "junction"),
+            "b_coupling_tap": NodeMarkerSpec("b_out", "cap_bottom", "junction"),
+            "b_shunt_tap": NodeMarkerSpec("b_out", "b_out", "junction"),
+        }
+        self.physical_node_labels = {}
+        validate_component_metadata(self)
+        markers = []
+        if self.show_nodes:
+            markers.extend(
+                ConnectionMarkerSpec(A[spec.anchor], "junction", node=spec.node)
+                for spec in self.node_markers.values()
+            )
+        if self.show_terminals:
+            markers.extend(
+                ConnectionMarkerSpec(A[spec.anchor], "exposed", node=spec.node)
+                for spec in self.public_terminals.values()
+            )
+        render_connection_markers(
+            self,
+            markers,
+            color=color,
+            radius=dot_radius,
+        )
+        if self.show_terminals and self.show_labels:
+            terminal_labels = (
+                (self.top_input_label, "left"),
+                (self.top_output_label, "right"),
+                (self.bottom_input_label, "left"),
+                (self.bottom_output_label, "right"),
+            )
+            for spec, (label, loc) in zip(
+                self.public_terminals.values(),
+                terminal_labels,
+                strict=True,
+            ):
+                if label is not None:
+                    self.add(
+                        elm.Dot(open=True, radius=0, color=color)
+                        .at(A[spec.anchor])
+                        .label(label, loc=loc, color=color)
+                        .hold()
+                    )
         self.elmparams["drop"] = A["end"]
 
     def _line(
@@ -204,14 +268,6 @@ class CoupledLineLadderSection(elm.ElementCompound):
         if self.show_labels:
             relation = relation.label(label, loc=loc, color=color)
         self.add(relation)
-
-    def _port_dot(self, anchor: tuple[float, float], label: str | None, loc: str) -> None:
-        color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
-        if self.show_labels and label is not None:
-            dot = dot.label(label, loc=loc, color=color)
-        self.add(dot)
-
 
 PREVIEW_CASES: tuple[PreviewCase, ...] = (
     PreviewCase(

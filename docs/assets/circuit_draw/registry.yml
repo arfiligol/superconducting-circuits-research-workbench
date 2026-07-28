@@ -20,3 +20,7 @@ diagrams:
     manifest: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter/diagram.yml
   - diagram_id: reusable.intrinsic_interferometric_purcell_filter_with_qubit
     manifest: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_with_qubit/diagram.yml
+  - diagram_id: reusable.intrinsic_interferometric_purcell_filter_equivalent
+    manifest: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_equivalent/diagram.yml
+  - diagram_id: reusable.intrinsic_interferometric_purcell_filter_equivalent_with_qubit
+    manifest: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_equivalent_with_qubit/diagram.yml

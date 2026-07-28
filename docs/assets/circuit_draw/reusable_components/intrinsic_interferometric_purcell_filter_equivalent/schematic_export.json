@@ -1,0 +1,292 @@
+{
+    "schema_version": 1,
+    "components": [
+        {
+            "label": "intrinsic_filter_equivalent",
+            "role": "purcell_filter_equivalent",
+            "parameters": {
+                "feedline_coupling_kind": "interdigitated_three_branch",
+                "contains_feedline": false,
+                "model_family": "response_matched_parallel_lc_bridge",
+                "c0r_f": 0
+            },
+            "pins": [
+                "readout_attachment",
+                "feedline_attachment"
+            ],
+            "id": "intrinsic_filter_equivalent",
+            "component_type": "IntrinsicInterferometricPurcellFilterEquivalent"
+        },
+        {
+            "label": "intrinsic_filter_equivalent_feedline_idc",
+            "role": "localized_capacitive_coupler",
+            "parameters": {
+                "terminal_order": [
+                    "terminal_1",
+                    "terminal_2"
+                ],
+                "c1g_f": 3.5e-14,
+                "c12_f": 3.8e-14,
+                "c2g_f": 3.45e-14
+            },
+            "pins": [
+                "terminal_1",
+                "terminal_2"
+            ],
+            "id": "intrinsic_filter_equivalent_feedline_idc",
+            "component_type": "InterdigitatedCapacitor"
+        },
+        {
+            "label": "intrinsic_filter_equivalent_filter_resonator",
+            "role": "resonator",
+            "parameters": {
+                "capacitance_f": 4.8e-13,
+                "inductive_branch_kind": "linear",
+                "inductance_h": 1.46e-9
+            },
+            "pins": [
+                "signal"
+            ],
+            "id": "intrinsic_filter_equivalent_filter_resonator",
+            "component_type": "GroundedLCResonator"
+        },
+        {
+            "label": "intrinsic_filter_equivalent_readout_resonator",
+            "role": "resonator",
+            "parameters": {
+                "capacitance_f": 5.0e-13,
+                "inductive_branch_kind": "linear",
+                "inductance_h": 1.4e-9
+            },
+            "pins": [
+                "signal"
+            ],
+            "id": "intrinsic_filter_equivalent_readout_resonator",
+            "component_type": "GroundedLCResonator"
+        }
+    ],
+    "relations": [
+        {
+            "label": "$C_r$",
+            "role": "parallel_lc_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 5.0e-13
+            },
+            "id": "intrinsic_filter_equivalent_readout_resonator_capacitance",
+            "to": "ground",
+            "from": "readout_attachment",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$L_r$",
+            "role": "parallel_lc_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 1.4e-9
+            },
+            "id": "intrinsic_filter_equivalent_readout_resonator_inductance",
+            "to": "ground",
+            "from": "readout_attachment",
+            "relation_type": "terminates",
+            "through": "inductance"
+        },
+        {
+            "label": "$C_p$",
+            "role": "parallel_lc_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 4.8e-13
+            },
+            "id": "intrinsic_filter_equivalent_filter_resonator_capacitance",
+            "to": "ground",
+            "from": "intrinsic_filter_equivalent_filter",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$L_p$",
+            "role": "parallel_lc_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 1.46e-9
+            },
+            "id": "intrinsic_filter_equivalent_filter_resonator_inductance",
+            "to": "ground",
+            "from": "intrinsic_filter_equivalent_filter",
+            "relation_type": "terminates",
+            "through": "inductance"
+        },
+        {
+            "label": "$C_n$",
+            "role": "response_matched_bridge_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 8.0e-15
+            },
+            "id": "intrinsic_filter_equivalent_bridge_capacitor",
+            "to": "intrinsic_filter_equivalent_filter",
+            "from": "readout_attachment",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_equivalent_bridge_capacitor"
+        },
+        {
+            "label": "$L_n$",
+            "role": "response_matched_bridge_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.5e-8
+            },
+            "id": "intrinsic_filter_equivalent_bridge_inductor",
+            "to": "intrinsic_filter_equivalent_filter",
+            "from": "readout_attachment",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "$C_{pG}^{\\mathrm{IDC}}$",
+            "role": "interdigitated_capacitor_terminal_ground_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 3.5e-14
+            },
+            "id": "intrinsic_filter_equivalent_feedline_idc_c1g",
+            "to": "ground",
+            "from": "intrinsic_filter_equivalent_filter",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$C_{f_cG}^{\\mathrm{IDC}}$",
+            "role": "interdigitated_capacitor_terminal_ground_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 3.45e-14
+            },
+            "id": "intrinsic_filter_equivalent_feedline_idc_c2g",
+            "to": "ground",
+            "from": "feedline_attachment",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$C_{pf_c}^{\\mathrm{IDC}}$",
+            "role": "interdigitated_capacitor_mutual_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 3.8e-14
+            },
+            "id": "intrinsic_filter_equivalent_feedline_idc_c12",
+            "to": "feedline_attachment",
+            "from": "intrinsic_filter_equivalent_filter",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_equivalent_feedline_idc_c12"
+        }
+    ],
+    "ports": [
+    ],
+    "groups": [
+    ],
+    "tracks": [
+    ],
+    "segments": [
+    ],
+    "coupled_spans": [
+    ],
+    "terminals": [
+        {
+            "label": "",
+            "kind": "attachment",
+            "side": "right",
+            "id": "feedline_attachment",
+            "hints": {
+            },
+            "endpoint": "feedline_attachment",
+            "track": null
+        },
+        {
+            "label": "",
+            "kind": "attachment",
+            "side": "left",
+            "id": "readout_attachment",
+            "hints": {
+            },
+            "endpoint": "readout_attachment",
+            "track": null
+        }
+    ],
+    "node_labels": [
+        {
+            "label": "$f_c$",
+            "id": "feedline_attachment",
+            "hints": {
+                "placement_target": "feedline_attachment",
+                "placement": "terminal",
+                "offset": 0.28,
+                "loc": "right"
+            },
+            "target": "feedline_attachment"
+        },
+        {
+            "label": "$p$",
+            "id": "filter",
+            "hints": {
+                "placement_target": "filter_signal",
+                "placement": "bus_middle",
+                "offset": [
+                    0.28,
+                    0.5
+                ],
+                "loc": "top"
+            },
+            "target": "intrinsic_filter_equivalent_filter"
+        },
+        {
+            "label": "$r$",
+            "id": "readout_attachment",
+            "hints": {
+                "placement_target": "readout_signal",
+                "placement": "bus_middle",
+                "offset": 0.28,
+                "loc": "top"
+            },
+            "target": "readout_attachment"
+        }
+    ],
+    "segment_labels": [
+    ],
+    "anchors": [
+    ],
+    "layout_hints": {
+    },
+    "render_hints": {
+        "schemdraw": {
+            "parameters": {
+                "component_id": "intrinsic_filter_equivalent",
+                "feedline_coupling_kind": "interdigitated_three_branch",
+                "contains_feedline": false,
+                "model_family": "response_matched_parallel_lc_bridge",
+                "c0r_f": 0
+            },
+            "unit_length": 1.7,
+            "labels": {
+                "lp_label": "$L_p$",
+                "ln_label": "$L_n$",
+                "cpg_label": "$C_{pG}^{\\mathrm{IDC}}$",
+                "cp_label": "$C_p$",
+                "cn_label": "$C_n$",
+                "lr_label": "$L_r$",
+                "cpfc_label": "$C_{pf_c}^{\\mathrm{IDC}}$",
+                "cfcg_label": "$C_{f_cG}^{\\mathrm{IDC}}$",
+                "cr_label": "$C_r$"
+            },
+            "node_bindings": {
+                "filter": "intrinsic_filter_equivalent_filter",
+                "feedline_attachment": "feedline_attachment",
+                "readout_attachment": "readout_attachment"
+            },
+            "component_type": "IntrinsicInterferometricPurcellFilterEquivalent"
+        }
+    }
+}

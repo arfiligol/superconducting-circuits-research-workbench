@@ -1166,7 +1166,7 @@
     ],
     "terminals": [
         {
-            "label": "$f_{\\mathrm{attach}}$",
+            "label": "",
             "kind": "attachment",
             "side": "right",
             "id": "feedline_attachment",
@@ -1176,7 +1176,7 @@
             "track": null
         },
         {
-            "label": "$q_1$",
+            "label": "",
             "kind": "attachment",
             "side": "top",
             "id": "island_1",
@@ -1186,7 +1186,7 @@
             "track": null
         },
         {
-            "label": "$q_2$",
+            "label": "",
             "kind": "attachment",
             "side": "top",
             "id": "island_2",
@@ -1198,30 +1198,60 @@
     ],
     "node_labels": [
         {
-            "label": "feedline_attachment",
-            "id": "feedline_attachment_node",
+            "label": "$f_c$",
+            "id": "feedline_attachment",
             "hints": {
+                "placement_target": "feedline_attachment",
+                "placement": "terminal",
+                "offset": 0.28,
+                "loc": "right"
             },
             "target": "feedline_attachment"
         },
         {
-            "label": "island_1",
-            "id": "island_1_node",
+            "label": "$p$",
+            "id": "filter_open_tail",
             "hints": {
+                "placement_target": "filter_open_tail",
+                "placement": "marker",
+                "offset": [
+                    0.28,
+                    0.5
+                ],
+                "loc": "top"
+            },
+            "target": "intrinsic_filter_filter_open_tail"
+        },
+        {
+            "label": "$q_1$",
+            "id": "island_1",
+            "hints": {
+                "placement_target": "qubit_q1_terminal",
+                "placement": "marker",
+                "offset": 0.28,
+                "loc": "top"
             },
             "target": "island_1"
         },
         {
-            "label": "island_2",
-            "id": "island_2_node",
+            "label": "$q_2$",
+            "id": "island_2",
             "hints": {
+                "placement_target": "qubit_q2_terminal",
+                "placement": "marker",
+                "offset": 0.28,
+                "loc": "bottom"
             },
             "target": "island_2"
         },
         {
-            "label": "readout_attachment",
-            "id": "readout_attachment_node",
+            "label": "$r$",
+            "id": "readout_attachment",
             "hints": {
+                "placement_target": "readout_attachment",
+                "placement": "marker",
+                "offset": 0.28,
+                "loc": "left"
             },
             "target": "readout_attachment"
         }
@@ -1237,6 +1267,7 @@
             "parameters": {
                 "coupling_orientation": "same_direction",
                 "component_id": "intrinsic_filter_with_qubit",
+                "qubit_inductive_branch_kind": "linearized_josephson",
                 "contains_feedline": false,
                 "c0r_f": 1.8e-14
             },
@@ -1244,13 +1275,10 @@
             "labels": {
                 "cr2_label": "$C_{r2}$",
                 "lj1_label": "$L_{J1}$",
-                "island_1_label": "$q_1$",
                 "capacitive_label": "$C_m$",
                 "inductive_label": "$M$",
-                "island_2_label": "$q_2$",
                 "filter_tail_label": "$\\mathrm{CPW}\\ \\ell_p^s$",
                 "readout_tail_label": "$\\mathrm{CPW}\\ \\ell_r^s$",
-                "readout_attachment_label": "$r$",
                 "c02_label": "$C_{02}$",
                 "lj2_label": "$L_{J2}$",
                 "filter_label": "$\\lambda/4\\ \\mathrm{filter}$",
@@ -1259,13 +1287,19 @@
                 "c1g_label": "$C_{1G}$",
                 "c12_label": "$C_{12}$",
                 "readout_label": "$\\lambda/4\\ \\mathrm{readout}$",
-                "feedline_attachment_label": "$f_{\\mathrm{attach}}$",
                 "readout_head_label": "$\\mathrm{CPW}\\ \\ell_r^0$",
                 "filter_head_label": "$\\mathrm{CPW}\\ \\ell_p^0$",
                 "c01_label": "$C_{01}$",
                 "c2g_label": "$C_{2G}$",
                 "cr1_label": "$C_{r1}$",
                 "c0r_label": "$C_{0r}$"
+            },
+            "node_bindings": {
+                "island_2": "island_2",
+                "filter_open_tail": "intrinsic_filter_filter_open_tail",
+                "island_1": "island_1",
+                "feedline_attachment": "feedline_attachment",
+                "readout_attachment": "readout_attachment"
             },
             "component_type": "IntrinsicInterferometricPurcellFilterWithQubit"
         }

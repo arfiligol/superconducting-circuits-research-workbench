@@ -1,0 +1,33 @@
+schema_version: 1
+diagram_id: reusable.intrinsic_interferometric_purcell_filter_equivalent_with_qubit
+title: Intrinsic interferometric Purcell filter equivalent with floating qubit
+source_path: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_equivalent_with_qubit/draw.py
+core_export_fixture: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_equivalent_with_qubit/schematic_export.json
+outputs:
+  light:
+    svg: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_equivalent_with_qubit/diagram.light.svg
+  dark:
+    svg: docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_equivalent_with_qubit/diagram.dark.svg
+owning_docs:
+  - docs/reference/julia-core/intrinsic-interferometric-purcell-components.md
+julia_core_semantics:
+  docs:
+    - docs/reference/julia-core/components-and-composition.mdx
+    - docs/reference/julia-core/schematic-layout-intent.md
+  source_refs:
+    - core/julia/SuperconductingCircuitsCore/src/components/reusable_components.jl
+    - core/julia/SuperconductingCircuitsCore/src/examples/pluto_examples.jl
+physical_model_refs:
+  - docs/reference/research-contracts/equivalent-circuit-model-contract.md
+canonical_physics_urls:
+  - https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/worked-examples/d3-full-qrp-node-flux-to-bare-coordinates.qmd
+  - https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/bare-vs-hybridized-readout-filter-modes.qmd
+  - https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/design-workflows/localized-electrostatic-component-modeling.qmd
+implementation_refs:
+  - core/python/circuit_libraries/schemdraw_circuit_library/components/transmission_lines/systems.py
+  - core/python/circuit_libraries/schemdraw_circuit_library/rendering/from_schematic_export.py
+review:
+  status: accepted
+  verified_by: Human
+  verified_at: "2026-07-28"
+  notes: Accepted as part of the bus-aware Intrinsic Interferometric Purcell Components V1.4.

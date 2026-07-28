@@ -31,5 +31,7 @@ implementation_refs:
   - core/python/circuit_libraries/schemdraw_circuit_library/components/transmission_lines/systems.py
   - core/python/circuit_libraries/schemdraw_circuit_library/rendering/from_schematic_export.py
 review:
-  status: draft
-  notes: V1.1 five-component CPW/MTL and filter-owned C0r candidate; Human review pending.
+  status: accepted
+  verified_by: Human
+  verified_at: "2026-07-28"
+  notes: Accepted as part of the bus-aware Intrinsic Interferometric Purcell Components V1.4.

@@ -4,6 +4,16 @@ from typing import Any, ClassVar
 
 import schemdraw.elements as elm
 
+from schemdraw_circuit_library.metadata import (
+    BusSpec,
+    ConnectionMarkerSpec,
+    NodeLabelSpec,
+    NodeMarkerSpec,
+    TerminalSpec,
+    render_connection_markers,
+    render_physical_node_labels,
+    validate_component_metadata,
+)
 from schemdraw_circuit_library.theme import SCHEMATIC_DOT_RADIUS, Theme, theme_color
 
 
@@ -52,7 +62,6 @@ class InterdigitatedCapacitor(elm.ElementCompound):
         height = self.shunt_height
         stub = self.port_stub
         color = theme_color(self.theme)
-        dot_radius = SCHEMATIC_DOT_RADIUS
         terminal_1 = (0, 0)
         terminal_2 = (width, 0)
         A = {
@@ -69,18 +78,11 @@ class InterdigitatedCapacitor(elm.ElementCompound):
 
         self.add(elm.Line(color=color).endpoints(A["terminal_1_port"], terminal_1))
         self.add(elm.Line(color=color).endpoints(terminal_2, A["terminal_2_port"]))
-        if self.show_terminals:
-            self._terminal_dot(A["terminal_1_port"], self.terminal_1_label, "left")
-            self._terminal_dot(A["terminal_2_port"], self.terminal_2_label, "right")
         self._capacitor(terminal_1, terminal_2, self.c12_label, "top")
         self._capacitor(terminal_1, A["terminal_1_ground"], self.c1g_label, "top")
         self._capacitor(terminal_2, A["terminal_2_ground"], self.c2g_label, "bottom")
         self.add(elm.Ground(color=color).at(A["terminal_1_ground"]))
         self.add(elm.Ground(color=color).at(A["terminal_2_ground"]))
-
-        if self.show_nodes:
-            self.add(elm.Dot(radius=dot_radius, color=color).at(terminal_1))
-            self.add(elm.Dot(radius=dot_radius, color=color).at(terminal_2))
 
         self.physical_nodes = {
             "terminal_1": ["terminal_1_port", "terminal_1"],
@@ -88,6 +90,74 @@ class InterdigitatedCapacitor(elm.ElementCompound):
             "gnd": ["terminal_1_ground", "terminal_2_ground"],
         }
         self.ports = {"terminal_1": "terminal_1", "terminal_2": "terminal_2"}
+        self.public_terminals = {
+            "terminal_1": TerminalSpec("terminal_1", "terminal_1_port", "left"),
+            "terminal_2": TerminalSpec("terminal_2", "terminal_2_port", "right"),
+        }
+        self.buses = {
+            "terminal_1_stub": BusSpec(
+                "terminal_1",
+                ("terminal_1_port", "terminal_1"),
+            ),
+            "terminal_2_stub": BusSpec(
+                "terminal_2",
+                ("terminal_2", "terminal_2_port"),
+            ),
+        }
+        self.node_markers = {
+            "terminal_1_junction": NodeMarkerSpec(
+                "terminal_1",
+                "terminal_1",
+                "junction",
+            ),
+            "terminal_2_junction": NodeMarkerSpec(
+                "terminal_2",
+                "terminal_2",
+                "junction",
+            ),
+        }
+        self.physical_node_labels = {
+            node: NodeLabelSpec(
+                label,
+                "terminal",
+                node,
+                loc=loc,
+                offset=2 * SCHEMATIC_DOT_RADIUS,
+            )
+            for node, label, loc in (
+                ("terminal_1", self.terminal_1_label, "left"),
+                ("terminal_2", self.terminal_2_label, "right"),
+            )
+            if self.show_terminals and label is not None
+        }
+        validate_component_metadata(self)
+        markers = []
+        if self.show_nodes:
+            markers.extend(
+                ConnectionMarkerSpec(
+                    A[spec.anchor],
+                    "junction",
+                    node=spec.node,
+                )
+                for spec in self.node_markers.values()
+            )
+        if self.show_terminals:
+            markers.extend(
+                ConnectionMarkerSpec(
+                    A[spec.anchor],
+                    "exposed",
+                    node=spec.node,
+                )
+                for spec in self.public_terminals.values()
+            )
+        render_connection_markers(
+            self,
+            markers,
+            color=color,
+            radius=SCHEMATIC_DOT_RADIUS,
+        )
+        if self.show_labels:
+            render_physical_node_labels(self, color=color)
         self.elmparams["drop"] = A["end"]
 
     def _capacitor(
@@ -102,18 +172,5 @@ class InterdigitatedCapacitor(elm.ElementCompound):
         if self.show_labels:
             capacitor = capacitor.label(label, loc=loc, color=color)
         self.add(capacitor)
-
-    def _terminal_dot(
-        self,
-        anchor: tuple[float, float],
-        label: str | None,
-        loc: str,
-    ) -> None:
-        color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
-        if self.show_labels and label is not None:
-            dot = dot.label(label, loc=loc, color=color)
-        self.add(dot)
-
 
 __all__ = ["InterdigitatedCapacitor"]

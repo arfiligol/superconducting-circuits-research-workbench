@@ -4,6 +4,13 @@ from typing import Any, ClassVar, Literal
 
 import schemdraw.elements as elm
 
+from schemdraw_circuit_library.metadata import (
+    BusSpec,
+    ConnectionMarkerSpec,
+    TerminalSpec,
+    render_connection_markers,
+    validate_component_metadata,
+)
 from schemdraw_circuit_library.rendering.preview import PreviewCase, run_preview_cli
 from schemdraw_circuit_library.theme import SCHEMATIC_DOT_RADIUS, Theme, theme_color
 
@@ -27,6 +34,7 @@ class PortTerminal(elm.ElementCompound):
         theme: Theme = "light",
         port_label: str | None = None,
         show_nodes: bool = True,
+        show_terminals: bool = True,
         show_labels: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -38,6 +46,7 @@ class PortTerminal(elm.ElementCompound):
         self.theme: Theme = theme
         self.port_label = port_label
         self.show_nodes = show_nodes
+        self.show_terminals = show_terminals
         self.show_labels = show_labels
         self.labels = {"port": self.port_label}
         super().__init__(**kwargs)
@@ -60,16 +69,29 @@ class PortTerminal(elm.ElementCompound):
         self.anchors.update(A)
 
         self.stub_line = self.add(elm.Line(color=color).endpoints(A["node"], A["terminal"]))
-        terminal = elm.Dot(open=True, radius=dot_radius, color=color).at(A["terminal"])
-        if self.show_labels and self.port_label is not None:
-            terminal = terminal.label(self.port_label, loc=terminal_label_loc, color=color)
-        self.terminal_dot = self.add(terminal)
-
-        if self.show_nodes:
-            self.node_dot = self.add(elm.Dot(radius=dot_radius, color=color).at(A["node"]))
-
         self.physical_nodes = {"port": ["node", "terminal"]}
         self.ports = {"signal": "port"}
+        self.public_terminals = {
+            "signal": TerminalSpec("port", "terminal", self.side),
+        }
+        self.buses = {"stub": BusSpec("port", ("node", "terminal"))}
+        self.node_markers = {}
+        self.physical_node_labels = {}
+        validate_component_metadata(self)
+        if self.show_terminals:
+            (self.terminal_dot,) = render_connection_markers(
+                self,
+                [ConnectionMarkerSpec(A["terminal"], "exposed", node="port")],
+                color=color,
+                radius=dot_radius,
+            )
+            if self.show_labels and self.port_label is not None:
+                self.terminal_label = self.add(
+                    elm.Dot(open=True, radius=0, color=color)
+                    .at(A["terminal"])
+                    .label(self.port_label, loc=terminal_label_loc, color=color)
+                    .hold()
+                )
         self.elmparams["drop"] = A["end"]
 
 
@@ -92,6 +114,7 @@ class Port50Ohm(elm.ElementCompound):
         resistance_label: str | None = None,
         resistance_label_loc: LabelLocation = "bottom",
         show_nodes: bool = True,
+        show_terminals: bool = True,
         show_labels: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -108,6 +131,7 @@ class Port50Ohm(elm.ElementCompound):
         self.resistance_label = resistance_label if resistance_label is not None else r"$R_{50}$"
         self.resistance_label_loc: LabelLocation = resistance_label_loc
         self.show_nodes = show_nodes
+        self.show_terminals = show_terminals
         self.show_labels = show_labels
         self.labels = {"port": self.port_label, "resistance": self.resistance_label}
         super().__init__(**kwargs)
@@ -137,14 +161,6 @@ class Port50Ohm(elm.ElementCompound):
         self.anchors.update(A)
 
         self.stub_line = self.add(elm.Line(color=color).endpoints(A["node"], A["terminal"]))
-        terminal = elm.Dot(open=True, radius=dot_radius, color=color).at(A["terminal"])
-        if self.show_labels and self.port_label is not None:
-            terminal = terminal.label(self.port_label, loc=terminal_label_loc, color=color)
-        self.terminal_dot = self.add(terminal)
-
-        if self.show_nodes:
-            self.node_dot = self.add(elm.Dot(radius=dot_radius, color=color).at(A["node"]))
-
         resistor = elm.Resistor(color=color).endpoints(A["res_top"], A["res_bot"])
         if self.show_labels:
             resistor = resistor.label(
@@ -153,7 +169,7 @@ class Port50Ohm(elm.ElementCompound):
         self.resistor = self.add(resistor)
         ground = elm.Ground(color=color).at(A["gnd"])
         if self.load_direction == "up":
-            ground = ground.up()
+            ground = ground.theta(180)
         self.ground = self.add(ground)
 
         self.physical_nodes = {
@@ -161,6 +177,27 @@ class Port50Ohm(elm.ElementCompound):
             "gnd": ["res_bot", "gnd"],
         }
         self.ports = {"signal": "port"}
+        self.public_terminals = {
+            "signal": TerminalSpec("port", "terminal", self.side),
+        }
+        self.buses = {"stub": BusSpec("port", ("node", "terminal"))}
+        self.node_markers = {}
+        self.physical_node_labels = {}
+        validate_component_metadata(self)
+        if self.show_terminals:
+            (self.terminal_dot,) = render_connection_markers(
+                self,
+                [ConnectionMarkerSpec(A["terminal"], "exposed", node="port")],
+                color=color,
+                radius=dot_radius,
+            )
+            if self.show_labels and self.port_label is not None:
+                self.terminal_label = self.add(
+                    elm.Dot(open=True, radius=0, color=color)
+                    .at(A["terminal"])
+                    .label(self.port_label, loc=terminal_label_loc, color=color)
+                    .hold()
+                )
         self.elmparams["drop"] = A["end"]
 
 

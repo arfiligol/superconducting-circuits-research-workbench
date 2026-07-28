@@ -27,5 +27,5 @@ implementation_refs:
 review:
   status: accepted
   verified_by: docs-team
-  verified_at: "2026-06-12"
-  notes: Component-only ideal LC view; physical_model_refs keeps the standalone child-doc adapter, canonical_physics_urls names the Super Repo authority, and compiled P1/R_port_1 rows remain visible in notebook evidence.
+  verified_at: "2026-07-16"
+  notes: The derived view includes the CircuitPlan-defined P1 port and R_port_1 50-ohm termination alongside the grounded parallel LC resonator.

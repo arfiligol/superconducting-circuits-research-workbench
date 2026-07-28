@@ -81,6 +81,25 @@ struct IntrinsicInterferometricPurcellFilterWithQubit
     c0r::Union{Nothing,ShuntCapacitor}
 end
 
+struct IntrinsicInterferometricPurcellFilterEquivalent
+    id::String
+    readout_resonator::ParallelLCResonator
+    filter_resonator::ParallelLCResonator
+    bridge_capacitor::CapacitiveCoupling
+    bridge_inductor::SeriesInductor
+    feedline_capacitor::InterdigitatedCapacitor
+    c0r::Union{Nothing,ShuntCapacitor}
+    readout_attachment::AbstractNodeEndpoint
+    feedline_attachment::AbstractNodeEndpoint
+end
+
+struct IntrinsicInterferometricPurcellFilterEquivalentWithQubit
+    id::String
+    filter::IntrinsicInterferometricPurcellFilterEquivalent
+    qubit::LinearizedFloatingQubit
+    c0r::Union{Nothing,ShuntCapacitor}
+end
+
 struct ReadoutLineWithPurcellFilter
     id::String
     input_line::TransmissionLineLadder
@@ -106,7 +125,8 @@ function _component_node(id, name)
 end
 
 """
-    add_parallel_lc_resonator!(plan; id, node, capacitance, inductance)
+    add_parallel_lc_resonator!(plan; id, node, capacitance, inductance,
+        capacitor_label, inductor_label)
 
 Insert an ideal capacitor and ideal inductor in parallel from `node` to ground
 and record one inspectable resonator component. This function owns only that
@@ -119,6 +139,8 @@ function add_parallel_lc_resonator!(
     node,
     capacitance,
     inductance,
+    capacitor_label=raw"$C_r$",
+    inductor_label=raw"$L_r$",
 )
     node isa AbstractNodeEndpoint || _validation_error("add_parallel_lc_resonator! requires node to be a NodeEndpoint.")
     capacitor = shunt_capacitor!(
@@ -127,7 +149,7 @@ function add_parallel_lc_resonator!(
         at=node,
         capacitance=capacitance,
         role=:parallel_lc_capacitance,
-        label=raw"$C_r$",
+        label=capacitor_label,
     )
     inductor = shunt_inductor!(
         plan;
@@ -135,7 +157,7 @@ function add_parallel_lc_resonator!(
         at=node,
         inductance=inductance,
         role=:parallel_lc_inductance,
-        label=raw"$L_r$",
+        label=inductor_label,
     )
     record_engineering_component!(
         plan;
@@ -151,6 +173,144 @@ function add_parallel_lc_resonator!(
         pins=[:signal],
     )
     return ParallelLCResonator(string(id), node, capacitor, inductor)
+end
+
+"""
+    add_intrinsic_interferometric_purcell_filter_equivalent!(plan; id,
+        readout_attachment, feedline_attachment, readout_capacitance_f,
+        readout_inductance_h, filter_capacitance_f, filter_inductance_h,
+        bridge_capacitance_f, bridge_inductance_h,
+        idc_filter_ground_capacitance_f, idc_feedline_ground_capacitance_f,
+        idc_mutual_capacitance_f, c0r_f=0.0)
+
+Insert the response-matched finite equivalent of the intrinsic filter. The
+readout and filter are grounded parallel LC branches, their coupling is a
+parallel `Cn`/`Ln` bridge, and the filter-to-feedline attachment is the
+complete three-branch IDC. The component contains no feedline or port.
+"""
+function add_intrinsic_interferometric_purcell_filter_equivalent!(
+    plan::CircuitPlan;
+    id,
+    readout_attachment,
+    feedline_attachment,
+    readout_capacitance_f,
+    readout_inductance_h,
+    filter_capacitance_f,
+    filter_inductance_h,
+    bridge_capacitance_f,
+    bridge_inductance_h,
+    idc_filter_ground_capacitance_f,
+    idc_feedline_ground_capacitance_f,
+    idc_mutual_capacitance_f,
+    c0r_f=0.0,
+)
+    component_id = strip(string(id))
+    isempty(component_id) &&
+        _validation_error("IntrinsicInterferometricPurcellFilterEquivalent id must be nonempty.")
+    readout_attachment isa AbstractNodeEndpoint &&
+        feedline_attachment isa AbstractNodeEndpoint ||
+        _validation_error("IntrinsicInterferometricPurcellFilterEquivalent attachments must be NodeEndpoints.")
+    readout_attachment != feedline_attachment ||
+        _validation_error("IntrinsicInterferometricPurcellFilterEquivalent attachments must be distinct.")
+    numeric = Float64[
+        readout_capacitance_f,
+        readout_inductance_h,
+        filter_capacitance_f,
+        filter_inductance_h,
+        bridge_capacitance_f,
+        bridge_inductance_h,
+        idc_filter_ground_capacitance_f,
+        idc_feedline_ground_capacitance_f,
+        idc_mutual_capacitance_f,
+    ]
+    all(value -> isfinite(value) && value > 0, numeric) ||
+        _validation_error("IntrinsicInterferometricPurcellFilterEquivalent element values must be finite and positive.")
+    c0r_value = Float64(c0r_f)
+    isfinite(c0r_value) && c0r_value >= 0 ||
+        _validation_error("IntrinsicInterferometricPurcellFilterEquivalent c0r_f must be finite and nonnegative.")
+
+    filter_node = _component_node(component_id, "filter")
+    readout_resonator = add_parallel_lc_resonator!(
+        plan;
+        id="$(component_id)_readout_resonator",
+        node=readout_attachment,
+        capacitance=numeric[1],
+        inductance=numeric[2],
+        capacitor_label=raw"$C_r$",
+        inductor_label=raw"$L_r$",
+    )
+    filter_resonator = add_parallel_lc_resonator!(
+        plan;
+        id="$(component_id)_filter_resonator",
+        node=filter_node,
+        capacitance=numeric[3],
+        inductance=numeric[4],
+        capacitor_label=raw"$C_p$",
+        inductor_label=raw"$L_p$",
+    )
+    bridge_capacitor = couple_capacitive!(
+        plan;
+        id="$(component_id)_bridge_capacitor",
+        from=readout_attachment,
+        to=filter_node,
+        capacitance=numeric[5],
+        role=:response_matched_bridge_capacitance,
+        label=raw"$C_n$",
+    )
+    bridge_inductor = series_inductor!(
+        plan;
+        id="$(component_id)_bridge_inductor",
+        from=readout_attachment,
+        to=filter_node,
+        inductance=numeric[6],
+        role=:response_matched_bridge_inductance,
+        label=raw"$L_n$",
+    )
+    feedline_capacitor = add_interdigitated_capacitor!(
+        plan;
+        id="$(component_id)_feedline_idc",
+        terminal_1=filter_node,
+        terminal_2=feedline_attachment,
+        c1g_f=numeric[7],
+        c2g_f=numeric[8],
+        c12_f=numeric[9],
+        c1g_label=raw"$C_{pG}^{\mathrm{IDC}}$",
+        c2g_label=raw"$C_{f_cG}^{\mathrm{IDC}}$",
+        c12_label=raw"$C_{pf_c}^{\mathrm{IDC}}$",
+    )
+    c0r = c0r_value == 0 ? nothing : shunt_capacitor!(
+        plan;
+        id="$(component_id)_c0r",
+        at=readout_attachment,
+        capacitance=c0r_value,
+        role=:readout_attachment_ground_capacitance,
+        label=raw"$C_{0r}$",
+    )
+    record_engineering_component!(
+        plan;
+        id=component_id,
+        display_name=component_id,
+        component_type=:IntrinsicInterferometricPurcellFilterEquivalent,
+        role=:purcell_filter_equivalent,
+        parameters=Dict(
+            :model_family => :response_matched_parallel_lc_bridge,
+            :c0r_f => c0r_value,
+            :contains_feedline => false,
+            :feedline_coupling_kind => :interdigitated_three_branch,
+        ),
+        pins=[:readout_attachment, :feedline_attachment],
+    )
+    return IntrinsicInterferometricPurcellFilterEquivalent(
+        component_id,
+        readout_resonator,
+        filter_resonator,
+        bridge_capacitor,
+        bridge_inductor,
+        feedline_capacitor,
+        c0r,
+        readout_attachment,
+        feedline_attachment,
+    )
 end
 
 """
@@ -398,7 +558,7 @@ end
 
 """
     add_interdigitated_capacitor!(plan; id, terminal_1, terminal_2,
-        c1g_f, c2g_f, c12_f)
+        c1g_f, c2g_f, c12_f, c1g_label, c2g_label, c12_label)
 
 Insert the complete positive-branch π equivalent of one two-terminal
 interdigitated capacitor. Terminal order is preserved: `c1g_f` belongs to
@@ -412,6 +572,9 @@ function add_interdigitated_capacitor!(
     c1g_f,
     c2g_f,
     c12_f,
+    c1g_label=raw"$C_{1G}$",
+    c2g_label=raw"$C_{2G}$",
+    c12_label=raw"$C_{12}$",
 )
     component_id = strip(string(id))
     isempty(component_id) && _validation_error("InterdigitatedCapacitor id must be nonempty.")
@@ -430,7 +593,7 @@ function add_interdigitated_capacitor!(
         at=terminal_1,
         capacitance=c1g_value,
         role=:interdigitated_capacitor_terminal_ground_capacitance,
-        label=raw"$C_{1G}$",
+        label=c1g_label,
     )
     c2g = shunt_capacitor!(
         plan;
@@ -438,7 +601,7 @@ function add_interdigitated_capacitor!(
         at=terminal_2,
         capacitance=c2g_value,
         role=:interdigitated_capacitor_terminal_ground_capacitance,
-        label=raw"$C_{2G}$",
+        label=c2g_label,
     )
     c12 = couple_capacitive!(
         plan;
@@ -447,7 +610,7 @@ function add_interdigitated_capacitor!(
         to=terminal_2,
         capacitance=c12_value,
         role=:interdigitated_capacitor_mutual_capacitance,
-        label=raw"$C_{12}$",
+        label=c12_label,
     )
     record_engineering_component!(
         plan;
@@ -699,6 +862,107 @@ function add_intrinsic_interferometric_purcell_filter_with_qubit!(
         pins=[:island_1, :island_2, :feedline_attachment],
     )
     return IntrinsicInterferometricPurcellFilterWithQubit(
+        component_id,
+        filter,
+        qubit,
+        filter.c0r,
+    )
+end
+
+function _intrinsic_equivalent_belongs_to_plan(
+    plan::CircuitPlan,
+    filter::IntrinsicInterferometricPurcellFilterEquivalent,
+)
+    filter.readout_resonator.node == filter.readout_attachment || return false
+    filter.feedline_capacitor.terminal_1 == filter.filter_resonator.node || return false
+    filter.feedline_capacitor.terminal_2 == filter.feedline_attachment || return false
+    relations = (
+        filter.readout_resonator.capacitor,
+        filter.readout_resonator.inductor,
+        filter.filter_resonator.capacitor,
+        filter.filter_resonator.inductor,
+        filter.bridge_capacitor,
+        filter.bridge_inductor,
+        filter.feedline_capacitor.c1g,
+        filter.feedline_capacitor.c2g,
+        filter.feedline_capacitor.c12,
+    )
+    all(relation -> any(stored -> stored === relation, plan.relations), relations) ||
+        return false
+    isnothing(filter.c0r) && return true
+    return filter.c0r.at == filter.readout_attachment &&
+        any(stored -> stored === filter.c0r, plan.relations)
+end
+
+"""
+    add_intrinsic_interferometric_purcell_filter_equivalent_with_qubit!(
+        plan; id, filter, island_1, island_2, c0r_f=nothing, c01_f, c02_f,
+        c12_f, cr1_f, cr2_f, l_j_per_junction_h)
+
+Compose an equivalent intrinsic filter with the existing linearized
+floating-qubit component. The equivalent filter owns `C0r`; the optional
+`c0r_f` keyword is only a compatibility assertion.
+"""
+function add_intrinsic_interferometric_purcell_filter_equivalent_with_qubit!(
+    plan::CircuitPlan;
+    id,
+    filter::IntrinsicInterferometricPurcellFilterEquivalent,
+    island_1,
+    island_2,
+    c0r_f=nothing,
+    c01_f,
+    c02_f,
+    c12_f,
+    cr1_f,
+    cr2_f,
+    l_j_per_junction_h,
+)
+    component_id = strip(string(id))
+    isempty(component_id) &&
+        _validation_error("IntrinsicInterferometricPurcellFilterEquivalentWithQubit id must be nonempty.")
+    _intrinsic_equivalent_belongs_to_plan(plan, filter) ||
+        _validation_error("IntrinsicInterferometricPurcellFilterEquivalent must belong to the supplied CircuitPlan.")
+    island_1 isa AbstractNodeEndpoint && island_2 isa AbstractNodeEndpoint ||
+        _validation_error("IntrinsicInterferometricPurcellFilterEquivalentWithQubit islands must be NodeEndpoints.")
+    length(Set((island_1, island_2, filter.readout_attachment))) == 3 ||
+        _validation_error("Qubit islands and equivalent-filter readout attachment must be distinct.")
+    c0r_value = isnothing(filter.c0r) ? 0.0 : Float64(filter.c0r.capacitance)
+    if !isnothing(c0r_f)
+        asserted_c0r_value = Float64(c0r_f)
+        isfinite(asserted_c0r_value) && asserted_c0r_value >= 0 ||
+            _validation_error("c0r_f must be finite and nonnegative.")
+        asserted_c0r_value == c0r_value ||
+            _validation_error("c0r_f is owned by IntrinsicInterferometricPurcellFilterEquivalent; pass it when constructing the filter, or omit this compatibility assertion.")
+    end
+
+    qubit = add_linearized_floating_qubit!(
+        plan;
+        id="$(component_id)_qubit",
+        island_1=island_1,
+        island_2=island_2,
+        readout_attachment=filter.readout_attachment,
+        c01_f=c01_f,
+        c02_f=c02_f,
+        c12_f=c12_f,
+        cr1_f=cr1_f,
+        cr2_f=cr2_f,
+        l_j_per_junction_h=l_j_per_junction_h,
+    )
+    record_engineering_component!(
+        plan;
+        id=component_id,
+        display_name=component_id,
+        component_type=:IntrinsicInterferometricPurcellFilterEquivalentWithQubit,
+        role=:qubit_readout_filter_equivalent_system,
+        parameters=Dict(
+            :c0r_f => c0r_value,
+            :contains_feedline => false,
+            :filter_id => filter.id,
+            :qubit_id => qubit.id,
+        ),
+        pins=[:island_1, :island_2, :feedline_attachment],
+    )
+    return IntrinsicInterferometricPurcellFilterEquivalentWithQubit(
         component_id,
         filter,
         qubit,

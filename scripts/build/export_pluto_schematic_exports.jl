@@ -43,6 +43,16 @@ const EXAMPLES = (
         output="docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_with_qubit/schematic_export.json",
         kwargs=(;),
     ),
+    (
+        builder=build_intrinsic_interferometric_purcell_filter_equivalent_example,
+        output="docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_equivalent/schematic_export.json",
+        kwargs=(;),
+    ),
+    (
+        builder=build_intrinsic_interferometric_purcell_filter_equivalent_with_qubit_example,
+        output="docs/assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_equivalent_with_qubit/schematic_export.json",
+        kwargs=(;),
+    ),
 )
 
 function _export_json(example)

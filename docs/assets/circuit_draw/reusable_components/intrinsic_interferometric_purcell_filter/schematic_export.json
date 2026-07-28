@@ -1025,7 +1025,7 @@
     ],
     "terminals": [
         {
-            "label": "$f_{\\mathrm{attach}}$",
+            "label": "",
             "kind": "attachment",
             "side": "right",
             "id": "feedline_attachment",
@@ -1035,7 +1035,7 @@
             "track": null
         },
         {
-            "label": "$r$",
+            "label": "",
             "kind": "attachment",
             "side": "right",
             "id": "readout_attachment",
@@ -1047,16 +1047,38 @@
     ],
     "node_labels": [
         {
-            "label": "feedline_attachment",
-            "id": "feedline_attachment_node",
+            "label": "$f_c$",
+            "id": "feedline_attachment",
             "hints": {
+                "placement_target": "feedline_attachment",
+                "placement": "terminal",
+                "offset": 0.28,
+                "loc": "right"
             },
             "target": "feedline_attachment"
         },
         {
-            "label": "readout_attachment",
-            "id": "readout_attachment_node",
+            "label": "$p$",
+            "id": "filter_open_tail",
             "hints": {
+                "placement_target": "filter_open_tail",
+                "placement": "marker",
+                "offset": [
+                    0.28,
+                    0.5
+                ],
+                "loc": "top"
+            },
+            "target": "intrinsic_filter_filter_open_tail"
+        },
+        {
+            "label": "$r$",
+            "id": "readout_attachment",
+            "hints": {
+                "placement_target": "readout_attachment",
+                "placement": "terminal",
+                "offset": 0.28,
+                "loc": "right"
             },
             "target": "readout_attachment"
         }
@@ -1081,16 +1103,19 @@
                 "inductive_label": "$M$",
                 "filter_tail_label": "$\\mathrm{CPW}\\ \\ell_p^s$",
                 "readout_tail_label": "$\\mathrm{CPW}\\ \\ell_r^s$",
-                "readout_attachment_label": "$r$",
                 "filter_label": "$\\lambda/4\\ \\mathrm{filter}$",
                 "mtl_label": "$\\mathrm{MTL}\\ \\ell_c$",
                 "c1g_label": "$C_{1G}$",
                 "c12_label": "$C_{12}$",
                 "readout_label": "$\\lambda/4\\ \\mathrm{readout}$",
-                "feedline_attachment_label": "$f_{\\mathrm{attach}}$",
                 "readout_head_label": "$\\mathrm{CPW}\\ \\ell_r^0$",
                 "filter_head_label": "$\\mathrm{CPW}\\ \\ell_p^0$",
                 "c2g_label": "$C_{2G}$"
+            },
+            "node_bindings": {
+                "filter_open_tail": "intrinsic_filter_filter_open_tail",
+                "feedline_attachment": "feedline_attachment",
+                "readout_attachment": "readout_attachment"
             },
             "component_type": "IntrinsicInterferometricPurcellFilter"
         }

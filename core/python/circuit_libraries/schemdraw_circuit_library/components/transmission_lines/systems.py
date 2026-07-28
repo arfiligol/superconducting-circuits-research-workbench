@@ -1,10 +1,29 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, ClassVar
 
 import schemdraw.elements as elm
 
 from schemdraw_circuit_library.components.couplers import InterdigitatedCapacitor
+from schemdraw_circuit_library.components.lumped import (
+    FloatingParallelLC,
+    GroundedLCResonator,
+    InductiveBranchKind,
+    LinearizedFloatingQubit,
+)
+from schemdraw_circuit_library.metadata import (
+    BusSpec,
+    ConnectionMarkerSpec,
+    NodeLabelSpec,
+    NodeMarkerSpec,
+    TerminalSpec,
+    public_terminal_point,
+    render_connection_markers,
+    render_physical_node_labels,
+    validate_block_clearance,
+    validate_component_metadata,
+)
 from schemdraw_circuit_library.rendering.preview import PreviewCase, run_preview_cli
 from schemdraw_circuit_library.theme import SCHEMATIC_DOT_RADIUS, Theme, theme_color
 
@@ -37,6 +56,7 @@ class PointCoupledReadoutPurcell(elm.ElementCompound):
         left_port_label: str | None = None,
         right_port_label: str | None = None,
         show_nodes: bool = True,
+        show_terminals: bool = True,
         show_labels: bool = True,
         **kwargs: Any,
     ):
@@ -55,6 +75,7 @@ class PointCoupledReadoutPurcell(elm.ElementCompound):
         self.left_port_label = left_port_label
         self.right_port_label = right_port_label
         self.show_nodes = show_nodes
+        self.show_terminals = show_terminals
         self.show_labels = show_labels
         super().__init__(**kwargs)
 
@@ -86,16 +107,9 @@ class PointCoupledReadoutPurcell(elm.ElementCompound):
 
         self.add(elm.Line(color=color).endpoints(A["input_port"], A["input"]))
         self.add(elm.Line(color=color).endpoints(A["output"], A["output_port"]))
-        self._port_dot(A["input_port"], self.left_port_label, "left")
-        self._port_dot(A["output_port"], self.right_port_label, "right")
-
         self._line(A["input"], A["input_tail"], self.input_line_label, "top")
         self._line(A["filter_head"], A["filter_tail"], self.filter_label, "bottom")
         self._line(A["output_head"], A["output"], self.output_line_label, "top")
-        self._open_dot(A["input_tail"])
-        self._open_dot(A["filter_head"])
-        self._open_dot(A["filter_tail"])
-        self._open_dot(A["output_head"])
 
         self._capacitor(
             A["input_tail"],
@@ -110,10 +124,6 @@ class PointCoupledReadoutPurcell(elm.ElementCompound):
             "bottom",
         )
 
-        if self.show_nodes:
-            self.add(elm.Dot(radius=dot_radius, color=color).at(A["input"]))
-            self.add(elm.Dot(radius=dot_radius, color=color).at(A["output"]))
-
         self.physical_nodes = {
             "input": ["input_port", "input"],
             "input_tail": ["input_tail"],
@@ -123,6 +133,38 @@ class PointCoupledReadoutPurcell(elm.ElementCompound):
             "output": ["output", "output_port"],
         }
         self.ports = {"input": "input", "output": "output"}
+        self.public_terminals = {
+            "input": TerminalSpec("input", "input_port", "left"),
+            "output": TerminalSpec("output", "output_port", "right"),
+        }
+        self.buses = {
+            "input_stub": BusSpec("input", ("input_port", "input")),
+            "output_stub": BusSpec("output", ("output", "output_port")),
+        }
+        self.node_markers: dict[str, NodeMarkerSpec] = {}
+        self.physical_node_labels = {
+            node: NodeLabelSpec(label, "terminal", terminal, loc=loc)
+            for node, terminal, label, loc in (
+                ("input", "input", self.left_port_label, "left"),
+                ("output", "output", self.right_port_label, "right"),
+            )
+            if label is not None
+        }
+        validate_component_metadata(self)
+        markers = []
+        if self.show_terminals:
+            markers.extend(
+                ConnectionMarkerSpec(A[spec.anchor], "exposed", node=spec.node)
+                for spec in self.public_terminals.values()
+            )
+        render_connection_markers(
+            self,
+            markers,
+            color=color,
+            radius=dot_radius,
+        )
+        if self.show_labels:
+            render_physical_node_labels(self, color=color)
         self.elmparams["drop"] = A["end"]
 
     def _line(
@@ -151,24 +193,6 @@ class PointCoupledReadoutPurcell(elm.ElementCompound):
             capacitor = capacitor.label(label, loc=loc, color=color)
         self.add(capacitor)
 
-    def _port_dot(self, anchor: tuple[float, float], label: str | None, loc: str) -> None:
-        color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
-        if self.show_labels and label is not None:
-            dot = dot.label(label, loc=loc, color=color)
-        self.add(dot)
-
-    def _open_dot(self, anchor: tuple[float, float]) -> None:
-        if self.show_nodes:
-            self.add(
-                elm.Dot(
-                    open=True,
-                    radius=SCHEMATIC_DOT_RADIUS,
-                    color=theme_color(self.theme),
-                ).at(anchor)
-            )
-
-
 class ReadoutLineHangingQWRMTL(elm.ElementCompound):
     """Through readout CPW coupled to a grounded-head/open-tail QWR by an MTL window."""
 
@@ -193,6 +217,7 @@ class ReadoutLineHangingQWRMTL(elm.ElementCompound):
         right_port_label: str | None = None,
         show_window_markers: bool = False,
         show_nodes: bool = True,
+        show_terminals: bool = True,
         show_labels: bool = True,
         **kwargs: Any,
     ):
@@ -212,6 +237,7 @@ class ReadoutLineHangingQWRMTL(elm.ElementCompound):
         self.right_port_label = right_port_label
         self.show_window_markers = show_window_markers
         self.show_nodes = show_nodes
+        self.show_terminals = show_terminals
         self.show_labels = show_labels
         super().__init__(**kwargs)
 
@@ -252,14 +278,10 @@ class ReadoutLineHangingQWRMTL(elm.ElementCompound):
 
         self.add(elm.Line(color=color).endpoints(A["input_port"], A["readout_head"]))
         self.add(elm.Line(color=color).endpoints(A["readout_tail"], A["output_port"]))
-        self._port_dot(A["input_port"], self.left_port_label, "left")
-        self._port_dot(A["output_port"], self.right_port_label, "right")
-
         self._line(A["readout_head"], A["readout_tail"], self.readout_label, "top")
         self._line(A["qwr_grounded_head"], A["qwr_open_tail"], self.qwr_label, "bottom")
         self.add(elm.Line(color=color).endpoints(A["qwr_grounded_head"], A["qwr_ground"]))
         self.add(elm.Ground(color=color).at(A["qwr_ground"]))
-        self.add(elm.Dot(open=True, radius=dot_radius, color=color).at(A["qwr_open_tail"]))
 
         if self.show_window_markers:
             self._window_marker(A["readout_window_left"], A["qwr_window_left"])
@@ -272,23 +294,71 @@ class ReadoutLineHangingQWRMTL(elm.ElementCompound):
             "bottom",
         )
 
-        if self.show_nodes:
-            for anchor in [
-                "readout_head",
-                "readout_tail",
-                "qwr_grounded_head",
-                "readout_window_left",
-                "readout_window_right",
-            ]:
-                self.add(elm.Dot(radius=dot_radius, color=color).at(A[anchor]))
-
         self.physical_nodes = {
             "input": ["input_port", "readout_head"],
             "output": ["readout_tail", "output_port"],
             "qwr_grounded_head": ["qwr_grounded_head", "qwr_ground"],
             "qwr_open_tail": ["qwr_open_tail"],
+            "readout_coupling": ["cap_top"],
+            "qwr_coupling": ["cap_bottom"],
         }
         self.ports = {"input": "input", "output": "output"}
+        self.public_terminals = {
+            "input": TerminalSpec("input", "input_port", "left"),
+            "output": TerminalSpec("output", "output_port", "right"),
+        }
+        self.buses = {
+            "input_stub": BusSpec("input", ("input_port", "readout_head")),
+            "output_stub": BusSpec("output", ("readout_tail", "output_port")),
+            "qwr_ground_stub": BusSpec(
+                "qwr_grounded_head",
+                ("qwr_grounded_head", "qwr_ground"),
+            ),
+        }
+        self.node_markers = {
+            "readout_coupling": NodeMarkerSpec(
+                "readout_coupling",
+                "cap_top",
+                "junction",
+            ),
+            "qwr_coupling": NodeMarkerSpec(
+                "qwr_coupling",
+                "cap_bottom",
+                "junction",
+            ),
+        }
+        self.physical_node_labels = {
+            node: NodeLabelSpec(label, "terminal", terminal, loc=loc)
+            for node, terminal, label, loc in (
+                ("input", "input", self.left_port_label, "left"),
+                ("output", "output", self.right_port_label, "right"),
+            )
+            if label is not None
+        }
+        validate_component_metadata(self)
+        markers = []
+        if self.show_terminals:
+            markers.extend(
+                ConnectionMarkerSpec(A[spec.anchor], "exposed", node=spec.node)
+                for spec in self.public_terminals.values()
+            )
+        if self.show_nodes:
+            markers.extend(
+                ConnectionMarkerSpec(
+                    self.anchors[spec.anchor],
+                    "junction" if spec.role == "junction" else "connected",
+                    node=spec.node,
+                )
+                for spec in self.node_markers.values()
+            )
+        render_connection_markers(
+            self,
+            markers,
+            color=color,
+            radius=dot_radius,
+        )
+        if self.show_labels:
+            render_physical_node_labels(self, color=color)
         self.elmparams["drop"] = A["end"]
 
     def _line(
@@ -303,13 +373,6 @@ class ReadoutLineHangingQWRMTL(elm.ElementCompound):
         if self.show_labels and label is not None:
             line = line.label(label, loc=loc, color=color)
         self.add(line)
-
-    def _port_dot(self, anchor: tuple[float, float], label: str | None, loc: str) -> None:
-        color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
-        if self.show_labels and label is not None:
-            dot = dot.label(label, loc=loc, color=color)
-        self.add(dot)
 
     def _window_marker(
         self,
@@ -382,6 +445,7 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
         inductive_label: str = r"$M_{12}$",
         show_window_markers: bool = False,
         show_nodes: bool = True,
+        show_terminals: bool = True,
         show_labels: bool = True,
         **kwargs: Any,
     ):
@@ -407,6 +471,7 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
         self.inductive_label = inductive_label
         self.show_window_markers = show_window_markers
         self.show_nodes = show_nodes
+        self.show_terminals = show_terminals
         self.show_labels = show_labels
         super().__init__(**kwargs)
 
@@ -460,8 +525,6 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
 
         self.add(elm.Line(color=color).endpoints(A["input_port"], A["input"]))
         self.add(elm.Line(color=color).endpoints(A["output"], A["output_port"]))
-        self._port_dot(A["input_port"], self.left_port_label, "left")
-        self._port_dot(A["output_port"], self.right_port_label, "right")
         self._line(A["input"], A["input_tail"], self.input_line_label, "top")
         self._line(A["filter_head"], A["filter_tail"], self.filter_label, "bottom")
         self._line(A["output_head"], A["output"], self.output_line_label, "top")
@@ -486,7 +549,6 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
         )
         self.add(elm.Line(color=color).endpoints(A["qwr_grounded_head"], A["qwr_ground"]))
         self.add(elm.Ground(color=color).at(A["qwr_ground"]))
-        self.add(elm.Dot(open=True, radius=dot_radius, color=color).at(A["qwr_open_tail"]))
         if self.show_window_markers:
             self._window_marker(A["filter_window_left"], A["qwr_window_left"])
             self._window_marker(A["filter_window_right"], A["qwr_window_right"])
@@ -498,20 +560,6 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
             "bottom",
         )
 
-        if self.show_nodes:
-            for anchor in [
-                "input",
-                "input_tail",
-                "filter_head",
-                "filter_tail",
-                "output_head",
-                "output",
-                "qwr_grounded_head",
-                "filter_window_left",
-                "filter_window_right",
-            ]:
-                self.add(elm.Dot(radius=dot_radius, color=color).at(A[anchor]))
-
         self.physical_nodes = {
             "input": ["input_port", "input"],
             "input_tail": ["input_tail"],
@@ -521,8 +569,66 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
             "output": ["output", "output_port"],
             "qwr_grounded_head": ["qwr_grounded_head", "qwr_ground"],
             "qwr_open_tail": ["qwr_open_tail"],
+            "filter_coupling": ["cap_top"],
+            "qwr_coupling": ["cap_bottom"],
         }
         self.ports = {"input": "input", "output": "output"}
+        self.public_terminals = {
+            "input": TerminalSpec("input", "input_port", "left"),
+            "output": TerminalSpec("output", "output_port", "right"),
+        }
+        self.buses = {
+            "input_stub": BusSpec("input", ("input_port", "input")),
+            "output_stub": BusSpec("output", ("output", "output_port")),
+            "qwr_ground_stub": BusSpec(
+                "qwr_grounded_head",
+                ("qwr_grounded_head", "qwr_ground"),
+            ),
+        }
+        self.node_markers = {
+            "filter_coupling": NodeMarkerSpec(
+                "filter_coupling",
+                "cap_top",
+                "junction",
+            ),
+            "qwr_coupling": NodeMarkerSpec(
+                "qwr_coupling",
+                "cap_bottom",
+                "junction",
+            ),
+        }
+        self.physical_node_labels = {
+            node: NodeLabelSpec(label, "terminal", terminal, loc=loc)
+            for node, terminal, label, loc in (
+                ("input", "input", self.left_port_label, "left"),
+                ("output", "output", self.right_port_label, "right"),
+            )
+            if label is not None
+        }
+        validate_component_metadata(self)
+        markers = []
+        if self.show_terminals:
+            markers.extend(
+                ConnectionMarkerSpec(A[spec.anchor], "exposed", node=spec.node)
+                for spec in self.public_terminals.values()
+            )
+        if self.show_nodes:
+            markers.extend(
+                ConnectionMarkerSpec(
+                    self.anchors[spec.anchor],
+                    "junction" if spec.role == "junction" else "connected",
+                    node=spec.node,
+                )
+                for spec in self.node_markers.values()
+            )
+        render_connection_markers(
+            self,
+            markers,
+            color=color,
+            radius=dot_radius,
+        )
+        if self.show_labels:
+            render_physical_node_labels(self, color=color)
         self.elmparams["drop"] = A["end"]
 
     def _line(
@@ -537,13 +643,6 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
         if self.show_labels and label is not None:
             line = line.label(label, loc=loc, color=color)
         self.add(line)
-
-    def _port_dot(self, anchor: tuple[float, float], label: str | None, loc: str) -> None:
-        color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
-        if self.show_labels and label is not None:
-            dot = dot.label(label, loc=loc, color=color)
-        self.add(dot)
 
     def _window_marker(
         self,
@@ -602,6 +701,7 @@ class CoupledCPWTransmissionLine(elm.ElementCompound):
         theme: Theme = "light",
         label: str | None = r"$\mathrm{MTL}\ \ell_c$",
         show_label: bool = True,
+        show_terminals: bool = True,
         **kwargs: Any,
     ) -> None:
         self.component_id = component_id
@@ -612,6 +712,7 @@ class CoupledCPWTransmissionLine(elm.ElementCompound):
         self.theme: Theme = theme
         self.window_label = label
         self.show_label = show_label
+        self.show_terminals = show_terminals
         super().__init__(**kwargs)
 
     def setup(self) -> None:
@@ -679,7 +780,59 @@ class CoupledCPWTransmissionLine(elm.ElementCompound):
             "filter_start": "filter_start",
             "filter_end": "filter_end",
         }
+        self.public_terminals = {
+            "readout_start": TerminalSpec(
+                "readout_start",
+                "readout_start",
+                "left",
+            ),
+            "readout_end": TerminalSpec(
+                "readout_end",
+                "readout_end",
+                "right",
+            ),
+            "filter_start": TerminalSpec(
+                "filter_start",
+                "filter_start",
+                "left",
+            ),
+            "filter_end": TerminalSpec(
+                "filter_end",
+                "filter_end",
+                "right",
+            ),
+        }
+        self.buses: dict[str, BusSpec] = {}
+        self.node_markers: dict[str, NodeMarkerSpec] = {}
+        self.physical_node_labels: dict[str, NodeLabelSpec] = {}
+        validate_component_metadata(self)
+        markers = []
+        if self.show_terminals:
+            markers.extend(
+                ConnectionMarkerSpec(
+                    self.anchors[spec.anchor],
+                    "exposed",
+                    node=spec.node,
+                )
+                for spec in self.public_terminals.values()
+            )
+        render_connection_markers(
+            self,
+            markers,
+            color=theme_color(self.theme),
+            radius=SCHEMATIC_DOT_RADIUS,
+        )
         self.elmparams["drop"] = readout_end
+
+
+def _finish_physical_node_labels(component: Any) -> None:
+    component.physical_node_labels = component._pending_physical_node_labels
+    del component._pending_physical_node_labels
+    if hasattr(component, "_defer_physical_node_labels"):
+        del component._defer_physical_node_labels
+    validate_component_metadata(component)
+    if component.show_labels:
+        render_physical_node_labels(component, color=theme_color(component.theme))
 
 
 class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
@@ -711,8 +864,7 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
         c2g_label: str = r"$C_{2g}$",
         c12_label: str = r"$C_{12}$",
         c0r_label: str | None = None,
-        readout_attachment_label: str | None = r"$r$",
-        feedline_attachment_label: str | None = r"$f_{\mathrm{attach}}$",
+        physical_node_labels: Mapping[str, NodeLabelSpec] | None = None,
         show_readout_terminal: bool = True,
         show_window_markers: bool = False,
         show_nodes: bool = True,
@@ -741,8 +893,8 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
         self.c2g_label = c2g_label
         self.c12_label = c12_label
         self.c0r_label = c0r_label
-        self.readout_attachment_label = readout_attachment_label
-        self.feedline_attachment_label = feedline_attachment_label
+        self._pending_physical_node_labels = dict(physical_node_labels or {})
+        self.physical_node_labels: dict[str, NodeLabelSpec] = {}
         self.show_readout_terminal = show_readout_terminal
         self.show_window_markers = show_window_markers
         self.show_nodes = show_nodes
@@ -840,6 +992,7 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
                 theme=self.theme,
                 label=None,
                 show_label=False,
+                show_terminals=False,
             ).at(A["readout_window_left"])
         )
         self._record_visual_branch(
@@ -979,11 +1132,27 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
                 c2g_label=self.c2g_label,
                 c12_label=self.c12_label,
                 show_terminals=False,
-                show_nodes=self.show_nodes,
+                show_nodes=False,
                 show_labels=self.show_labels,
             )
             .at((A["filter_open_tail"][0] + idc_stub, A["filter_open_tail"][1]))
             .right()
+        )
+        idc_filter_terminal = public_terminal_point(
+            self.feedline_idc,
+            "terminal_1",
+            transformed=True,
+        )
+        idc_feedline_terminal = public_terminal_point(
+            self.feedline_idc,
+            "terminal_2",
+            transformed=True,
+        )
+        self.anchors.update(
+            {
+                "idc_filter_terminal": idc_filter_terminal,
+                "idc_feedline_terminal": idc_feedline_terminal,
+            }
         )
         self._record_visual_branch(
             "idc_c1g",
@@ -1003,18 +1172,6 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
             "filter_open_tail",
             "feedline_attachment",
         )
-        self._terminal_dot(
-            A["feedline_attachment"],
-            self.feedline_attachment_label,
-            "right",
-        )
-        if self.show_readout_terminal:
-            self._terminal_dot(
-                A["readout_attachment"],
-                self.readout_attachment_label,
-                "right",
-            )
-
         if self.c0r_label is not None:
             self._capacitor(
                 A["readout_attachment"],
@@ -1036,33 +1193,104 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
                 "ground",
             )
 
-        if self.show_nodes:
-            for anchor in [
-                "readout_grounded_head",
-                "filter_grounded_head",
-                "filter_open_tail",
-                "readout_window_left",
-                "readout_window_right",
-                "filter_window_left",
-                "filter_window_right",
-            ]:
-                self.add(elm.Dot(radius=dot_radius, color=color).at(A[anchor]))
-            if not self.show_readout_terminal:
-                self.add(
-                    elm.Dot(radius=dot_radius, color=color).at(A["readout_attachment"])
-                )
-
         self.physical_nodes = {
             "readout_grounded_head": ["readout_grounded_head", "readout_ground"],
             "readout_attachment": ["readout_attachment"],
+            "readout_window_left": ["readout_window_left"],
+            "readout_window_right": ["readout_window_right"],
             "filter_grounded_head": ["filter_grounded_head", "filter_ground"],
-            "filter_open_tail": ["filter_open_tail"],
-            "feedline_attachment": ["feedline_attachment"],
+            "filter_window_left": ["filter_window_left"],
+            "filter_window_right": ["filter_window_right"],
+            "filter_open_tail": ["filter_open_tail", "idc_filter_terminal"],
+            "feedline_attachment": [
+                "feedline_attachment",
+                "idc_feedline_terminal",
+            ],
         }
         self.ports = {
             "readout_attachment": "readout_attachment",
             "feedline_attachment": "feedline_attachment",
         }
+        self.public_terminals = {
+            "readout_attachment": TerminalSpec(
+                "readout_attachment",
+                "readout_attachment",
+                "right",
+            ),
+            "feedline_attachment": TerminalSpec(
+                "feedline_attachment",
+                "feedline_attachment",
+                "right",
+            ),
+        }
+        self.buses = {
+            "filter_to_idc": BusSpec(
+                "filter_open_tail",
+                ("filter_open_tail", "idc_filter_terminal"),
+            ),
+            "idc_to_feedline": BusSpec(
+                "feedline_attachment",
+                ("idc_feedline_terminal", "feedline_attachment"),
+            ),
+        }
+        self.node_markers = {
+            name: NodeMarkerSpec(name, name, "connection")
+            for name in (
+                "readout_grounded_head",
+                "readout_window_left",
+                "readout_window_right",
+                "filter_grounded_head",
+                "filter_window_left",
+                "filter_window_right",
+                "filter_open_tail",
+            )
+        }
+        self.node_markers["idc_filter_terminal"] = NodeMarkerSpec(
+            "filter_open_tail",
+            "idc_filter_terminal",
+            "connection",
+        )
+        validate_component_metadata(self)
+        markers = [
+            ConnectionMarkerSpec(
+                A["feedline_attachment"],
+                "exposed",
+                node="feedline_attachment",
+            )
+        ]
+        if self.show_readout_terminal:
+            markers.append(
+                ConnectionMarkerSpec(
+                    A["readout_attachment"],
+                    "exposed",
+                    node="readout_attachment",
+                )
+            )
+        elif self.show_nodes:
+            markers.append(
+                ConnectionMarkerSpec(
+                    A["readout_attachment"],
+                    "connected",
+                    node="readout_attachment",
+                )
+            )
+        if self.show_nodes:
+            markers.extend(
+                ConnectionMarkerSpec(
+                    self.anchors[spec.anchor],
+                    "connected",
+                    node=spec.node,
+                )
+                for spec in self.node_markers.values()
+            )
+        render_connection_markers(
+            self,
+            markers,
+            color=color,
+            radius=dot_radius,
+        )
+        if not getattr(self, "_defer_physical_node_labels", False):
+            _finish_physical_node_labels(self)
         self.visual_components = (
             "readout_head_cpw",
             "filter_head_cpw",
@@ -1136,18 +1364,6 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
             relation = relation.label(label, loc=loc, color=color)
         self.add(relation)
 
-    def _terminal_dot(
-        self,
-        anchor: tuple[float, float],
-        label: str | None,
-        loc: str,
-    ) -> None:
-        color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
-        if self.show_labels and label is not None:
-            dot = dot.label(label, loc=loc, color=color)
-        self.add(dot)
-
     def _window_marker(
         self,
         top: tuple[float, float],
@@ -1162,9 +1378,163 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
         )
 
 
-class IntrinsicInterferometricPurcellFilterWithQubit(
-    IntrinsicInterferometricPurcellFilter
-):
+def _add_floating_qubit_projection(component: Any) -> None:
+    if component.qubit_inductive_branch_kind != "linearized_josephson":
+        raise ValueError(
+            "The linearized floating qubit requires two ordinary "
+            "Josephson-inductance branches."
+        )
+    u = component.unit_length
+    color = theme_color(component.theme)
+    dot_radius = SCHEMATIC_DOT_RADIUS
+    readout = component.anchors["readout_attachment"]
+    qubit_origin = (readout[0] + u * 4.0, u * 4.8)
+    component.qubit_block = component.add(
+        LinearizedFloatingQubit(
+            component_id=f"{component.component_id}_qubit",
+            unit_length=u,
+            theme=component.theme,
+            c01_label=component.c01_label,
+            c02_label=component.c02_label,
+            c12_label=component.qubit_c12_label,
+            lj1_label=component.lj1_label,
+            lj2_label=component.lj2_label,
+            q1_label=None,
+            q2_label=None,
+            show_nodes=False,
+            show_terminals=False,
+            show_labels=component.show_labels,
+        )
+        .at(qubit_origin)
+        .theta(0)
+    )
+    island_1 = public_terminal_point(component.qubit_block, "q1", transformed=True)
+    island_2 = public_terminal_point(component.qubit_block, "q2", transformed=True)
+    trunk_q1 = (readout[0], island_1[1])
+    trunk_q2 = (readout[0], island_2[1])
+    anchors = {
+        "island_1": island_1,
+        "island_2": island_2,
+        "qubit_trunk_start": readout,
+        "qubit_trunk_q1": trunk_q1,
+        "qubit_trunk_q2": trunk_q2,
+    }
+    component.anchors.update(anchors)
+
+    component.qubit_readout_trunk = component.add(
+        elm.Line(color=color).endpoints(readout, trunk_q1)
+    )
+    component._capacitor(trunk_q1, island_1, component.cr1_label, "top")
+    component._record_visual_branch("qubit_cr1", "capacitor", "readout_attachment", "island_1")
+    component._capacitor(trunk_q2, island_2, component.cr2_label, "bottom")
+    component._record_visual_branch("qubit_cr2", "capacitor", "readout_attachment", "island_2")
+    component._record_visual_branch("qubit_c12", "capacitor", "island_1", "island_2")
+    component._record_visual_branch(
+        "qubit_lj1",
+        "inductor",
+        "island_1",
+        "island_2",
+    )
+    component._record_visual_branch(
+        "qubit_lj2",
+        "inductor",
+        "island_1",
+        "island_2",
+    )
+    component._record_visual_branch("qubit_c01", "capacitor", "island_1", "ground")
+    component._record_visual_branch("qubit_c02", "capacitor", "island_2", "ground")
+    component.physical_nodes["readout_attachment"].extend(
+        ["qubit_trunk_start", "qubit_trunk_q1", "qubit_trunk_q2"]
+    )
+    component.physical_nodes.update({"island_1": ["island_1"], "island_2": ["island_2"]})
+    component.ports = {
+        "island_1": "island_1",
+        "island_2": "island_2",
+        "feedline_attachment": "feedline_attachment",
+    }
+    component.public_terminals = {
+        "feedline_attachment": TerminalSpec(
+            "feedline_attachment",
+            "feedline_attachment",
+            "right",
+        )
+    }
+    component.buses = {
+        **getattr(component, "buses", {}),
+        "qubit_readout_trunk": BusSpec(
+            "readout_attachment",
+            ("qubit_trunk_start", "qubit_trunk_q2", "qubit_trunk_q1"),
+        ),
+    }
+    component.node_markers.update(
+        {
+            "readout_attachment": NodeMarkerSpec(
+                "readout_attachment",
+                "readout_attachment",
+                "connection",
+            ),
+            "qubit_q1_terminal": NodeMarkerSpec(
+                "island_1",
+                "island_1",
+                "connection",
+            ),
+            "qubit_q2_terminal": NodeMarkerSpec(
+                "island_2",
+                "island_2",
+                "connection",
+            ),
+        }
+    )
+
+    base_blocks = {
+        name: getattr(component, name)
+        for name in (
+            "readout_head_cpw",
+            "filter_head_cpw",
+            "mtl_window",
+            "readout_tail_cpw",
+            "filter_tail_cpw",
+            "readout_resonator",
+            "filter_resonator",
+            "bridge_resonator",
+            "feedline_idc",
+        )
+        if hasattr(component, name)
+    }
+    for name, block in base_blocks.items():
+        validate_block_clearance(
+            {name: block, "qubit": component.qubit_block},
+            clearance=u * 0.25,
+            include_labels=False,
+        )
+    validate_component_metadata(component)
+    if component.show_nodes:
+        render_connection_markers(
+            component,
+            [
+                ConnectionMarkerSpec(
+                    island_1,
+                    "connected",
+                    node="island_1",
+                ),
+                ConnectionMarkerSpec(
+                    island_2,
+                    "connected",
+                    node="island_2",
+                ),
+            ],
+            color=color,
+            radius=dot_radius,
+        )
+    _finish_physical_node_labels(component)
+    qubit_bbox = component.qubit_block.get_bbox(transform=True, includetext=False)
+    component.elmparams["drop"] = (
+        max(component.anchors["feedline_attachment"][0], qubit_bbox.xmax),
+        0,
+    )
+
+
+class IntrinsicInterferometricPurcellFilterWithQubit(IntrinsicInterferometricPurcellFilter):
     """Intrinsic interferometric Purcell filter composed with a floating qubit."""
 
     component_kind: ClassVar[str] = "IntrinsicInterferometricPurcellFilterWithQubit"
@@ -1179,9 +1549,8 @@ class IntrinsicInterferometricPurcellFilterWithQubit(
         cr2_label: str = r"$C_{r2}$",
         lj1_label: str = r"$L_{J1}$",
         lj2_label: str = r"$L_{J2}$",
+        qubit_inductive_branch_kind: InductiveBranchKind = "linearized_josephson",
         c0r_label: str | None = r"$C_{0r}$",
-        island_1_label: str | None = r"$q_1$",
-        island_2_label: str | None = r"$q_2$",
         **kwargs: Any,
     ) -> None:
         self.c01_label = c01_label
@@ -1191,8 +1560,8 @@ class IntrinsicInterferometricPurcellFilterWithQubit(
         self.cr2_label = cr2_label
         self.lj1_label = lj1_label
         self.lj2_label = lj2_label
-        self.island_1_label = island_1_label
-        self.island_2_label = island_2_label
+        self.qubit_inductive_branch_kind = qubit_inductive_branch_kind
+        self._defer_physical_node_labels = True
         super().__init__(
             c0r_label=c0r_label,
             show_readout_terminal=False,
@@ -1201,120 +1570,7 @@ class IntrinsicInterferometricPurcellFilterWithQubit(
 
     def setup(self) -> None:
         super().setup()
-        u = self.unit_length
-        color = theme_color(self.theme)
-        dot_radius = SCHEMATIC_DOT_RADIUS
-        readout = self.anchors["readout_attachment"]
-        island_left_x = readout[0] + u * 2.0
-        island_right_x = island_left_x + u * 2.4
-        island_1 = (island_right_x, u * 2.7)
-        island_2 = (island_right_x, u * 1.2)
-        lj1_x = island_left_x + u * 0.55
-        c12_x = island_left_x + u * 1.2
-        lj2_x = island_left_x + u * 1.85
-        c01_x = island_left_x + u * 0.2
-        c02_x = island_right_x - u * 0.2
-        A = {
-            "island_1": island_1,
-            "island_2": island_2,
-            "island_1_bus_left": (island_left_x, island_1[1]),
-            "island_2_bus_left": (island_left_x, island_2[1]),
-            "lj1_top": (lj1_x, island_1[1]),
-            "lj1_bottom": (lj1_x, island_2[1]),
-            "c12_top": (c12_x, island_1[1]),
-            "c12_bottom": (c12_x, island_2[1]),
-            "lj2_top": (lj2_x, island_1[1]),
-            "lj2_bottom": (lj2_x, island_2[1]),
-            "c01_top": (c01_x, island_1[1]),
-            "c01_ground": (c01_x, island_1[1] + u * 0.8),
-            "c02_top": (c02_x, island_2[1]),
-            "c02_ground": (c02_x, island_2[1] - u * 0.8),
-        }
-        self.anchors.update(A)
-
-        self._capacitor(readout, A["island_1_bus_left"], self.cr1_label, "top")
-        self._record_visual_branch(
-            "qubit_cr1",
-            "capacitor",
-            "readout_attachment",
-            "island_1",
-        )
-        self._capacitor(readout, A["island_2_bus_left"], self.cr2_label, "bottom")
-        self._record_visual_branch(
-            "qubit_cr2",
-            "capacitor",
-            "readout_attachment",
-            "island_2",
-        )
-        self.add(
-            elm.Line(color=color).endpoints(A["island_1_bus_left"], island_1)
-        )
-        self.add(
-            elm.Line(color=color).endpoints(A["island_2_bus_left"], island_2)
-        )
-        self._capacitor(
-            A["c12_top"],
-            A["c12_bottom"],
-            self.qubit_c12_label,
-            "bottom",
-        )
-        self._record_visual_branch(
-            "qubit_c12",
-            "capacitor",
-            "island_1",
-            "island_2",
-        )
-        self._inductor(A["lj1_top"], A["lj1_bottom"], self.lj1_label, "top")
-        self._record_visual_branch(
-            "qubit_lj1",
-            "inductor",
-            "island_1",
-            "island_2",
-        )
-        self._inductor(A["lj2_top"], A["lj2_bottom"], self.lj2_label, "bottom")
-        self._record_visual_branch(
-            "qubit_lj2",
-            "inductor",
-            "island_1",
-            "island_2",
-        )
-        self._capacitor(A["c01_top"], A["c01_ground"], self.c01_label, "top")
-        self._record_visual_branch(
-            "qubit_c01",
-            "capacitor",
-            "island_1",
-            "ground",
-        )
-        self._capacitor(A["c02_top"], A["c02_ground"], self.c02_label, "bottom")
-        self._record_visual_branch(
-            "qubit_c02",
-            "capacitor",
-            "island_2",
-            "ground",
-        )
-        self.add(elm.Ground(color=color).at(A["c01_ground"]).theta(180))
-        self.add(elm.Ground(color=color).at(A["c02_ground"]))
-
-        self._terminal_dot(island_1, self.island_1_label, "right")
-        self._terminal_dot(island_2, self.island_2_label, "right")
-        if self.show_nodes:
-            self.add(elm.Dot(radius=dot_radius, color=color).at(readout))
-
-        self.physical_nodes.update(
-            {
-                "island_1": ["island_1", "lj1_top", "lj2_top"],
-                "island_2": ["island_2", "lj1_bottom", "lj2_bottom"],
-            }
-        )
-        self.ports = {
-            "island_1": "island_1",
-            "island_2": "island_2",
-            "feedline_attachment": "feedline_attachment",
-        }
-        self.elmparams["drop"] = (
-            max(self.anchors["feedline_attachment"][0], island_right_x),
-            0,
-        )
+        _add_floating_qubit_projection(self)
 
     def _inductor(
         self,
@@ -1328,6 +1584,413 @@ class IntrinsicInterferometricPurcellFilterWithQubit(
         if self.show_labels:
             inductor = inductor.label(label, loc=loc, color=color)
         self.add(inductor)
+
+
+class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
+    """Response-matched two-resonator LC equivalent with a three-branch IDC."""
+
+    component_kind: ClassVar[str] = "IntrinsicInterferometricPurcellFilterEquivalent"
+
+    def __init__(
+        self,
+        *,
+        component_id: str = "",
+        unit_length: float = 3.0,
+        resonator_separation_units: float = 4.4,
+        bridge_connection_units: float = 0.5,
+        idc_width_units: float = 1.55,
+        theme: Theme = "light",
+        cr_label: str = r"$C_r$",
+        lr_label: str = r"$L_r$",
+        cp_label: str = r"$C_p$",
+        lp_label: str = r"$L_p$",
+        cn_label: str = r"$C_n$",
+        ln_label: str = r"$L_n$",
+        cpg_label: str = r"$C_{pG}^{\mathrm{IDC}}$",
+        cfcg_label: str = r"$C_{f_cG}^{\mathrm{IDC}}$",
+        cpfc_label: str = r"$C_{pf_c}^{\mathrm{IDC}}$",
+        c0r_label: str | None = None,
+        physical_node_labels: Mapping[str, NodeLabelSpec] | None = None,
+        show_readout_terminal: bool = True,
+        show_nodes: bool = True,
+        show_labels: bool = True,
+        **kwargs: Any,
+    ) -> None:
+        self.component_id = component_id
+        self.unit_length = unit_length
+        self.resonator_separation = unit_length * resonator_separation_units
+        self.bridge_connection = unit_length * bridge_connection_units
+        self.idc_width_units = idc_width_units
+        self.idc_width = unit_length * idc_width_units
+        self.theme: Theme = theme
+        self.cr_label = cr_label
+        self.lr_label = lr_label
+        self.cp_label = cp_label
+        self.lp_label = lp_label
+        self.cn_label = cn_label
+        self.ln_label = ln_label
+        self.cpg_label = cpg_label
+        self.cfcg_label = cfcg_label
+        self.cpfc_label = cpfc_label
+        self.c0r_label = c0r_label
+        self._pending_physical_node_labels = dict(physical_node_labels or {})
+        self.physical_node_labels: dict[str, NodeLabelSpec] = {}
+        self.show_readout_terminal = show_readout_terminal
+        self.show_nodes = show_nodes
+        self.show_labels = show_labels
+        super().__init__(**kwargs)
+
+    def setup(self) -> None:
+        u = self.unit_length
+        color = theme_color(self.theme)
+        dot_radius = SCHEMATIC_DOT_RADIUS
+        idc_stub_units = 1.3
+        readout = (0.0, 0.0)
+        filter_node = (
+            self.resonator_separation + (u if self.c0r_label is not None else 0.0),
+            0.0,
+        )
+        self.visual_netlist: list[dict[str, str]] = []
+
+        self.readout_resonator = self.add(
+            GroundedLCResonator(
+                component_id=f"{self.component_id}_readout_resonator",
+                unit_length=u,
+                spacing_units=1.0,
+                height_units=1.15,
+                theme=self.theme,
+                c0_label=self.c0r_label,
+                c_label=self.cr_label,
+                l_label=self.lr_label,
+                show_nodes=False,
+                show_terminals=False,
+                show_labels=self.show_labels,
+            )
+            .at(readout)
+            .anchor("start")
+        )
+        self._record_visual_branch("readout_cr", "capacitor", "readout_attachment", "ground")
+        self._record_visual_branch("readout_lr", "inductor", "readout_attachment", "ground")
+        if self.c0r_label is not None:
+            self._record_visual_branch("c0r", "capacitor", "readout_attachment", "ground")
+
+        self.filter_resonator = self.add(
+            GroundedLCResonator(
+                component_id=f"{self.component_id}_filter_resonator",
+                unit_length=u,
+                spacing_units=1.0,
+                height_units=1.15,
+                theme=self.theme,
+                c_label=self.cp_label,
+                l_label=self.lp_label,
+                show_nodes=False,
+                show_terminals=False,
+                show_labels=self.show_labels,
+            )
+            .at(filter_node)
+            .anchor("start")
+        )
+        self._record_visual_branch("filter_cp", "capacitor", "filter", "ground")
+        self._record_visual_branch("filter_lp", "inductor", "filter", "ground")
+
+        readout_output = public_terminal_point(
+            self.readout_resonator,
+            "right",
+            transformed=True,
+        )
+        filter_input = public_terminal_point(
+            self.filter_resonator,
+            "left",
+            transformed=True,
+        )
+        bridge_left = readout_output
+        bridge_right = filter_input
+        bridge_width = bridge_right[0] - bridge_left[0] - 2 * self.bridge_connection
+        if bridge_width <= 0:
+            raise ValueError(
+                "resonator separation leaves no room for the bridge and its connections."
+            )
+        self.bridge_resonator = self.add(
+            FloatingParallelLC(
+                component_id=f"{self.component_id}_bridge_resonator",
+                unit_length=u,
+                width_units=bridge_width / u,
+                branch_offset_units=bridge_width / (2 * u),
+                terminal_stub_units=self.bridge_connection / u,
+                theme=self.theme,
+                inductive_branch_kind="linear",
+                c_label=self.cn_label,
+                l_label=self.ln_label,
+                show_nodes=False,
+                show_terminals=False,
+                show_labels=self.show_labels,
+            )
+            .at(bridge_left)
+            .anchor("start")
+        )
+        bridge_terminal_right = public_terminal_point(
+            self.bridge_resonator,
+            "right",
+            transformed=True,
+        )
+        if any(
+            abs(actual - expected) > 1e-9
+            for actual, expected in zip(bridge_terminal_right, filter_input, strict=True)
+        ):
+            raise ValueError("The bridge terminal stubs do not span the resonator gap.")
+        self._record_visual_branch("bridge_cn", "capacitor", "readout_attachment", "filter")
+        self._record_visual_branch("bridge_ln", "inductor", "readout_attachment", "filter")
+
+        filter_output = public_terminal_point(
+            self.filter_resonator,
+            "right",
+            transformed=True,
+        )
+        idc_start = filter_output
+        self.feedline_idc = self.add(
+            InterdigitatedCapacitor(
+                component_id=f"{self.component_id}_feedline_idc",
+                unit_length=u,
+                width_units=self.idc_width_units,
+                shunt_height_units=1.0,
+                port_stub_units=idc_stub_units,
+                theme=self.theme,
+                c1g_label=self.cpg_label,
+                c2g_label=self.cfcg_label,
+                c12_label=self.cpfc_label,
+                show_terminals=False,
+                show_nodes=False,
+                show_labels=self.show_labels,
+            )
+            .at(idc_start)
+            .anchor("terminal_1_port")
+        )
+        feedline = public_terminal_point(
+            self.feedline_idc,
+            "terminal_2",
+            transformed=True,
+        )
+        if (
+            public_terminal_point(
+                self.feedline_idc,
+                "terminal_1",
+                transformed=True,
+            )
+            != filter_output
+        ):
+            raise ValueError("The IDC must connect directly to the filter terminal.")
+        anchors = {
+            "start": readout,
+            "end": feedline,
+            "readout_attachment": readout,
+            "filter": filter_node,
+            "feedline_attachment": feedline,
+            "readout_terminal": readout,
+            "readout_output": readout_output,
+            "bridge_left": bridge_left,
+            "bridge_right": bridge_right,
+            "filter_input": filter_input,
+            "filter_output": filter_output,
+            "idc_start": idc_start,
+        }
+        self.anchors.update(anchors)
+        self._record_visual_branch("idc_cpg", "capacitor", "filter", "ground")
+        self._record_visual_branch("idc_cfcg", "capacitor", "feedline_attachment", "ground")
+        self._record_visual_branch("idc_cpfc", "capacitor", "filter", "feedline_attachment")
+
+        self.physical_nodes = {
+            "readout_attachment": [
+                "readout_attachment",
+                "readout_output",
+                "bridge_left",
+            ],
+            "filter": [
+                "filter",
+                "bridge_right",
+                "filter_input",
+                "filter_output",
+                "idc_start",
+            ],
+            "feedline_attachment": ["feedline_attachment"],
+        }
+        self.ports = {
+            "readout_attachment": "readout_attachment",
+            "feedline_attachment": "feedline_attachment",
+        }
+        self.public_terminals = {
+            "readout_attachment": TerminalSpec(
+                "readout_attachment",
+                "readout_attachment",
+                "left",
+            ),
+            "feedline_attachment": TerminalSpec(
+                "feedline_attachment",
+                "feedline_attachment",
+                "right",
+            ),
+        }
+        self.buses = {
+            "readout_signal": BusSpec(
+                "readout_attachment",
+                ("readout_attachment", "readout_output"),
+            ),
+            "filter_signal": BusSpec(
+                "filter",
+                ("filter_input", "filter_output"),
+            ),
+        }
+        self.node_markers = {
+            "readout_resonator_output": NodeMarkerSpec(
+                "readout_attachment",
+                "readout_output",
+                "connection",
+            ),
+            "bridge_readout_terminal": NodeMarkerSpec(
+                "readout_attachment",
+                "bridge_left",
+                "connection",
+            ),
+            "bridge_filter_terminal": NodeMarkerSpec(
+                "filter",
+                "bridge_right",
+                "connection",
+            ),
+            "filter_resonator_input": NodeMarkerSpec(
+                "filter",
+                "filter_input",
+                "connection",
+            ),
+            "filter_resonator_output": NodeMarkerSpec(
+                "filter",
+                "filter_output",
+                "connection",
+            ),
+            "idc_filter_terminal": NodeMarkerSpec(
+                "filter",
+                "idc_start",
+                "connection",
+            ),
+        }
+        validate_component_metadata(self)
+        markers = [
+            ConnectionMarkerSpec(
+                feedline,
+                "exposed",
+                node="feedline_attachment",
+            ),
+        ]
+        if self.show_readout_terminal:
+            markers.append(
+                ConnectionMarkerSpec(
+                    readout,
+                    "exposed",
+                    node="readout_attachment",
+                )
+            )
+        elif self.show_nodes:
+            markers.append(
+                ConnectionMarkerSpec(
+                    readout,
+                    "connected",
+                    node="readout_attachment",
+                )
+            )
+        if self.show_nodes:
+            markers.extend(
+                ConnectionMarkerSpec(
+                    anchors[spec.anchor],
+                    "connected",
+                    node=spec.node,
+                )
+                for spec in self.node_markers.values()
+            )
+        render_connection_markers(
+            self,
+            markers,
+            color=color,
+            radius=dot_radius,
+        )
+        if not getattr(self, "_defer_physical_node_labels", False):
+            _finish_physical_node_labels(self)
+        self.elmparams["drop"] = feedline
+
+    def _record_visual_branch(
+        self,
+        branch_id: str,
+        kind: str,
+        from_node: str,
+        to_node: str,
+    ) -> None:
+        self.visual_netlist.append(
+            {"id": branch_id, "kind": kind, "from": from_node, "to": to_node}
+        )
+
+    def _capacitor(
+        self,
+        start: tuple[float, float],
+        end: tuple[float, float],
+        label: str | None,
+        loc: str,
+    ) -> None:
+        color = theme_color(self.theme)
+        capacitor = elm.Capacitor(color=color).endpoints(start, end)
+        if self.show_labels and label is not None:
+            capacitor = capacitor.label(label, loc=loc, color=color)
+        self.add(capacitor)
+
+    def _inductor(
+        self,
+        start: tuple[float, float],
+        end: tuple[float, float],
+        label: str,
+        loc: str,
+    ) -> None:
+        color = theme_color(self.theme)
+        inductor = elm.Inductor(color=color).endpoints(start, end)
+        if self.show_labels:
+            inductor = inductor.label(label, loc=loc, color=color)
+        self.add(inductor)
+
+
+class IntrinsicInterferometricPurcellFilterEquivalentWithQubit(
+    IntrinsicInterferometricPurcellFilterEquivalent
+):
+    """Response-matched intrinsic-filter equivalent with a floating qubit."""
+
+    component_kind: ClassVar[str] = "IntrinsicInterferometricPurcellFilterEquivalentWithQubit"
+
+    def __init__(
+        self,
+        *,
+        c01_label: str = r"$C_{01}$",
+        c02_label: str = r"$C_{02}$",
+        qubit_c12_label: str = r"$C_{12,q}$",
+        cr1_label: str = r"$C_{r1}$",
+        cr2_label: str = r"$C_{r2}$",
+        lj1_label: str = r"$L_{J1}$",
+        lj2_label: str = r"$L_{J2}$",
+        qubit_inductive_branch_kind: InductiveBranchKind = "linearized_josephson",
+        c0r_label: str | None = r"$C_{0r}$",
+        **kwargs: Any,
+    ) -> None:
+        self.c01_label = c01_label
+        self.c02_label = c02_label
+        self.qubit_c12_label = qubit_c12_label
+        self.cr1_label = cr1_label
+        self.cr2_label = cr2_label
+        self.lj1_label = lj1_label
+        self.lj2_label = lj2_label
+        self.qubit_inductive_branch_kind = qubit_inductive_branch_kind
+        self._defer_physical_node_labels = True
+        super().__init__(
+            c0r_label=c0r_label,
+            show_readout_terminal=False,
+            **kwargs,
+        )
+
+    def setup(self) -> None:
+        super().setup()
+        _add_floating_qubit_projection(self)
 
 
 PREVIEW_CASES: tuple[PreviewCase, ...] = (
@@ -1386,6 +2049,22 @@ PREVIEW_CASES: tuple[PreviewCase, ...] = (
             theme=theme,
         ),
     ),
+    PreviewCase(
+        "intrinsic_interferometric_purcell_filter_equivalent",
+        lambda theme, unit_length: IntrinsicInterferometricPurcellFilterEquivalent(
+            component_id="intrinsic_filter_equivalent",
+            unit_length=unit_length,
+            theme=theme,
+        ),
+    ),
+    PreviewCase(
+        "intrinsic_interferometric_purcell_filter_equivalent_with_qubit",
+        lambda theme, unit_length: IntrinsicInterferometricPurcellFilterEquivalentWithQubit(
+            component_id="intrinsic_filter_equivalent_with_qubit",
+            unit_length=unit_length,
+            theme=theme,
+        ),
+    ),
 )
 
 
@@ -1400,6 +2079,8 @@ if __name__ == "__main__":
 __all__ = [
     "CoupledCPWTransmissionLine",
     "IntrinsicInterferometricPurcellFilter",
+    "IntrinsicInterferometricPurcellFilterEquivalent",
+    "IntrinsicInterferometricPurcellFilterEquivalentWithQubit",
     "IntrinsicInterferometricPurcellFilterWithQubit",
     "PointCoupledReadoutPurcell",
     "ReadoutLineHangingQWRMTL",
