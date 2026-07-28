@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core authoring architecture overview for Pluto direct research and Julia Runner execution.
-version: v1.6.0
-last_updated: 2026-05-30
+version: v1.7.0
+last_updated: 2026-07-28
 updated_by: codex
 ---
 
@@ -70,11 +70,23 @@ Julia Core is the authoring and simulation kernel. It defines the contracts for 
 
 Julia Core owns generic transmission-line / CPW modeling contracts such as `RLGCSpec`, ladder generation, coupling helpers, and the canonical reusable generators needed to express the notebook learning path without reimplementing Core conventions.
 
-Julia Core does not own a closed catalog of every lab-specific physical component family.
+Under the accepted V1 ownership contract, Julia Core may also own a
+bounded reusable component catalog. A component is eligible when it is a
+stable local topology with public endpoints and parameters that is used as a
+component inside a larger circuit topology. Concrete implementation is not a
+reason to exclude it from Core.
 
-Concrete components such as lab-specific SQUID arrays, SNAILs, process-specific Purcell filters, and device-family variants should live in user-space, lab-space, or project-space component libraries. Transmission-line-derived components such as readout CPW lines, quarter-wave resonators, and half-wave resonators should be built as semantic generators over the Core transmission-line model when they need Core coupling or ladder behavior.
+Lab-, process-, device-family-, and project-specific variants may remain in
+external Component Libraries, but specificity alone does not exclude a stable
+local topology that is actually used inside a larger topology from Core.
+Complete research circuits that return a `CircuitPlan` and own feedlines,
+external ports, targets, sweep policy, or simulation intent belong to project
+Plan Builders rather than the Core reusable component catalog.
 
 Component libraries depend on Julia Core. Julia Core must not depend on component libraries.
+
+The detailed candidate placement criteria and decision table are in
+[Component Libraries](component-libraries.md).
 
 ## Authoring Contract
 
@@ -96,7 +108,7 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
  <LinkCard title="Authoring Model" href="authoring-model/" description="Read the main source-of-truth for component, plan, compiler, and netlist ownership." />
  <LinkCard title="Circuit Plan" href="circuit-plan/" description="See what the plan stores and why it is not a JosephsonCircuits.jl netlist." />
  <LinkCard title="Components and Composition" href="components-and-composition/" description="Define reusable primitive and composite components, public pins, private nodes, and namespace rules." />
- <LinkCard title="Component Libraries" href="component-libraries/" description="Separate the Julia Core Kernel from user-space, lab-space, and project-space component libraries." />
+ <LinkCard title="Component Libraries" href="component-libraries/" description="Place reusable local topologies, lab variants, and complete project Plan Builders in the correct owner." />
  <LinkCard title="Endpoints" href="endpoints/" description="Use Endpoint as the top-level attachment abstraction for pins, line taps, spans, ground, external nodes, and loops." />
  <LinkCard title="Relations and Couplings" href="relations-and-couplings/" description="Specify node connections, capacitive couplings, shunts, inductive couplings, and distributed windows as plan-level intents." />
  <LinkCard title="Coupling Models" href="coupling-models/" description="Distinguish point capacitive coupling, branch mutual inductance, MTL coupled windows, and physical model generators." />
@@ -118,7 +130,9 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
 | Surface | Owns |
 | --- | --- |
 | Julia Core Kernel | component authoring contract, Circuit Plan concepts, endpoint model, compiler concepts, parameter sweep execution interfaces, simulation helpers, analysis helpers |
-| Component Libraries | concrete reusable components, component-specific parameters, reusable plan builders, component-specific validation helpers |
+| Julia Core Reusable Component Catalog | stable local topologies composed into larger circuit topologies |
+| Component Libraries | reusable variants intentionally kept in user, lab, process, device-family, or project space, plus local validation |
+| Project Plan Builders | complete research circuits, external ports, study targets, and project-owned parameter or simulation policy |
 | Pluto Notebook | direct research use of Julia Core, interactive inspection, local research plots |
 | Julia Runner | deterministic execution of Julia Core work and staged numeric output |
 | Publication layer | task lifecycle, metadata, publication, and result APIs |

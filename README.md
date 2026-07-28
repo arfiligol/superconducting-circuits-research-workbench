@@ -224,6 +224,10 @@ the notebook examples first.
 
 - Read the public site: <https://arfiligol.github.io/superconducting-circuits-research-workbench/>
 - Read the technical docs: <https://arfiligol.github.io/superconducting-circuits-research-workbench/docs/>
+- Follow the
+  [Reusable Circuit Authoring manual](docs/workflows/reusable-circuit-authoring/index.md)
+  to turn research intent into reusable components, `CircuitPlan` topology,
+  compiled netlists, circuit diagrams, and Pluto evidence.
 - Start with the Pluto notebooks under `notebooks/pluto/`.
 - Use the Julia Core reference when you need the current authoring and compiler
   contracts: `docs/reference/julia-core/`.

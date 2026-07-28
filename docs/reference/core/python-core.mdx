@@ -10,8 +10,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: Python core analysis package, external-result analysis responsibilities, and renderer-side Schemdraw visual library.
-version: v0.8.0
-last_updated: 2026-06-14
+version: v0.8.1
+last_updated: 2026-07-28
 updated_by: codex
 ---
 
@@ -63,12 +63,20 @@ without depending on notebook-local CSV files or application DTOs.
 | `schemdraw_circuit_library.components.transmission_lines` | transmission-line visual component families | pi sections, ladder visuals, and reducible chain drawings |
 | `schemdraw_circuit_library.components.couplers` | coupling visual component families | renderer-side coupling motifs and reusable coupler components |
 | `schemdraw_circuit_library.theme` | visual theme source of truth | light/dark stroke and text color selection without topology changes |
-| `schemdraw_circuit_library.rendering` | render helpers | light/dark SVG/PNG variant rendering from one composition function |
+| `schemdraw_circuit_library.rendering.from_schematic_export` | export-backed mapping | load Julia Core schematic-export JSON and dispatch supported `render_hints.schemdraw.component_type` values to visual components |
+| `schemdraw_circuit_library.rendering` | render helpers | local SVG/PNG preview helpers; the committed docs corpus uses light/dark SVG only |
 
 Schemdraw components consume renderer-neutral data and Julia Core export hints.
 They do not define circuit semantics, solver behavior, or reusable component topology.
+The export-backed mapper is explicit: it does not infer a drawing from arbitrary
+netlist rows, and unsupported component types fail.
 Stable reusable components are exported through the package root; internal family modules
 may hold work-in-progress visual families until their API is stable.
+
+The installable `schemdraw-circuit-library` project lives at
+`core/python/circuit_libraries/` as a dedicated uv workspace package. The root
+development dependency group installs it for docs rendering; Julia Core and
+application or production runtime packages do not depend on it.
 
 </TabItem>
 
@@ -89,3 +97,4 @@ may hold work-in-progress visual families until their API is stable.
 - [Core Reference](index.md)
 - [Julia Wrapper](julia-wrapper.md)
 - [Research Contracts](../research-contracts/index.md)
+- [Circuit Diagram Guide](../../contribute/contributing/circuit-diagrams.mdx)

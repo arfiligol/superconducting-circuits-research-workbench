@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: user
 scope: Pluto workflow for Julia Core SweepSpec preflight, explicit batch sweep execution, and SweepResult inspection.
-version: v1.1.0
-last_updated: 2026-05-28
+version: v1.1.1
+last_updated: 2026-07-28
 updated_by: codex
 sidebar:
  label: Parameter Sweep Workflow
@@ -90,7 +90,8 @@ This path is appropriate for quick design iteration and plots that update with o
 
 ## Simple Sweep Teaching Pattern
 
-Before introducing a full `SweepSpec`, teach the sweep idea with one explicit axis and one reusable plan builder:
+Before introducing a full `SweepSpec`, teach the sweep idea with one explicit
+axis and one project-owned Plan Builder:
 
 ```julia
 base_params = (

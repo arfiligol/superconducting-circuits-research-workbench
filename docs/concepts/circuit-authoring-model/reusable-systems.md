@@ -10,8 +10,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: reusable component, component library, reusable builder, CircuitPlan, schematic intent, and simulation mental model across Julia Core and Pluto.
-version: v1.0.0
-last_updated: 2026-06-12
+version: v1.1.0
+last_updated: 2026-07-28
 updated_by: codex
 title: Reusable Systems
 sidebar:
@@ -26,8 +26,8 @@ Reusable systems let the project describe circuit structure once, inspect it in 
 The reusable path is:
 
 ```text
-Component Library
-  -> reusable plan builder
+Reusable Component
+  -> project Plan Builder
   -> CircuitPlan
   -> EngineeringGraph / schematic intent
   -> compiler
@@ -38,9 +38,10 @@ Component Library
 
 | Layer | Responsibility |
 | --- | --- |
-| Component library | named reusable component vocabulary selected by a project, lab, or study |
-| Component | reusable local circuit unit with typed ports and parameters |
-| Plan builder | function or small API that assembles a reusable circuit idea into a `CircuitPlan` |
+| Julia Core reusable catalog | eligible stable local topologies already used as components inside larger circuit topologies |
+| External Component Library | reusable component variants intentionally kept in user, lab, process, device-family, or project space |
+| Reusable Component | local circuit topology with public endpoints, parameters, validation, and private internals |
+| Project Plan Builder | function or small API that assembles the complete research circuit into a `CircuitPlan` |
 | System | composition of components, couplings, endpoints, and simulation intent |
 | CircuitPlan | authoring contract that preserves engineering semantics |
 | Schematic intent | renderer-neutral diagram/export intent derived from the authored system |
@@ -51,7 +52,10 @@ Component Library
 
 Pluto users need reusable authoring without copying circuit construction logic into every notebook. The shared Julia Core model keeps component composition, compiler lowering, schematic evidence, and solver intent aligned.
 
-This is also how notebook prototypes become durable. A prototype cell can sketch a circuit once; a reusable builder should own the second version.
+This is also how notebook prototypes become durable. A prototype cell can
+sketch a circuit once; when a larger topology uses that stable local topology,
+a Reusable Component should own it. The complete circuit remains in its
+project Plan Builder.
 
 ## Related
 

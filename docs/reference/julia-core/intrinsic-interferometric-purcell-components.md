@@ -12,6 +12,10 @@ scope: V1.4 reusable distributed/lumped intrinsic-filter components, bus-aware c
 version: v1.4.0
 last_updated: 2026-07-28
 updated_by: codex
+title: Intrinsic Interferometric Purcell Components
+sidebar:
+  label: Intrinsic Purcell Components
+  order: 95
 ---
 
 # Intrinsic Interferometric Purcell Components
@@ -21,6 +25,16 @@ and applies one shared bus-aware composition and physical-node-label contract
 to every public Schemdraw reusable component. The filter variants contain no
 feedline or external port. They expose the filter-resonator IDC attachment so
 an enclosing circuit can add its own feedline.
+
+Use the [Reusable Circuit Authoring manual](../../workflows/reusable-circuit-authoring/index.md)
+for the end-to-end Human and Agent workflow. This page remains the precise
+component, drawing, failure, and acceptance reference.
+
+Canonical reusable physics is owned by the SCQ_Design Knowledge Base:
+
+- [Localized electrostatic component modeling](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/design-workflows/localized-electrostatic-component-modeling.qmd)
+- [Multiconductor RLGC matrix semantics](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/transmission-lines/multiconductor-rlgc-matrix-semantics.qmd)
+- [Bare versus hybridized readout-filter modes](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/bare-vs-hybridized-readout-filter-modes.qmd)
 
 ## V1 interfaces
 
@@ -196,8 +210,8 @@ its capacitor and selected `InductiveBranch` connected in parallel between
 the inner buses. Nested branch markers remain hidden in a system composition.
 
 `InterdigitatedCapacitor` likewise owns equal-length left and right terminal
-stubs. An exposed port marker belongs at the outer stub endpoint, not at the
-inner three-capacitor junction.
+stubs of `0.5` drawing unit each. An exposed port marker belongs at the outer
+stub endpoint, not at the inner three-capacitor junction.
 
 The `LinearizedFloatingQubit` projection groups `LJ1` and `LJ2` inside one
 two-branch loop and places that loop in parallel with `C12`. Its Julia builder
@@ -361,6 +375,11 @@ records the branches emitted by the Schemdraw helpers. Stabilization combines
 relation/type assertions with committed-output checks for terminal exposure,
 conditional `C0r`, and light/dark rendering.
 
+Each CPW and MTL tile keeps its box free of a thick center conductor and owns a
+`0.5` drawing-unit lead on each side. The box dimensions exclude those leads,
+so enclosing components connect at the outer endpoints without overlapping the
+child block.
+
 The pipeline is usable but not yet self-sealing:
 
 - Four older transmission-line diagrams still construct their top-level
@@ -391,7 +410,8 @@ remains excluded until its layout semantics are defined separately.
 - Prior state: `CONVERGING` V1.4.
 - Current state: `STABILIZED` V1.4.
 - State changed: 2026-07-28.
-- Human acceptance: “Okay！那就 Commit，這個版本我可以接受。”
+- Human acceptance: explicitly accepted V1.4 and requested its commit on
+  2026-07-28.
 - Accepted Junction contract: every Junction glyph in an export-backed diagram
   corresponds to an executable `JosephsonJunction`/JosephsonCircuits `Lj` row;
   linearized branches remain ordinary `L` rows and inductor glyphs.

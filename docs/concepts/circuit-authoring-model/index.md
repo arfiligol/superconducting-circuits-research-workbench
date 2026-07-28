@@ -10,8 +10,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: reusable circuit components, component libraries, plan builders, CircuitPlan, schematic intent, compiler, and simulation mental model.
-version: v1.0.0
-last_updated: 2026-06-12
+version: v1.1.0
+last_updated: 2026-07-28
 updated_by: codex
 title: Circuit Authoring Model
 sidebar:
@@ -23,7 +23,12 @@ sidebar:
 
 This area answers "How does a reusable circuit system work?" It provides a conceptual model; the formal contract remains in the Julia Core Reference.
 
-The core concept is: researchers first quickly explore in Pluto, but stable and reusable circuit construction should become component library and reusable plan builder. Notebook is an inspection surface, not a long-term reusable system owner.
+The core concept is: researchers may explore in Pluto, but a stable local
+topology used inside a larger topology becomes a Reusable Component, while the
+complete research circuit remains a project Plan Builder that produces a
+`CircuitPlan`. The component is eligible for Julia Core; eligibility does not
+force an external Component Library to move it. A notebook is an inspection
+surface, not a long-term reusable-system owner.
 
 ## Page Map
 

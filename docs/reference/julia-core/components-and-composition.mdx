@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Component authoring contract, composition rules, and Component Library examples built on Julia Core.
-version: v1.2.0
-last_updated: 2026-07-10
+scope: Component authoring contract, composition rules, and ownership examples built on Julia Core.
+version: v1.3.0
+last_updated: 2026-07-28
 updated_by: codex
 ---
 
@@ -36,15 +36,17 @@ Julia Core currently implements a single `JosephsonJunction` relation with Josep
 
 </Aside>
 
-## Example Component Library Families
+## Example Component Families
 
-<Aside type="caution" title="Examples, not Core-owned catalog">
+<Aside type="caution" title="Examples, not an ownership decision">
 
-The families below are examples of what a user-space, lab-space, or project-space component library may define. They are not a closed list owned by Julia Core.
+The families below may live in the Julia Core reusable component catalog or an
+external Component Library. Placement depends on the ownership boundary, not
+on whether the component is concrete.
 
 </Aside>
 
-A component library may define families such as:
+Reusable families may include:
 
 | Family | Examples |
 | --- | --- |
@@ -53,13 +55,20 @@ A component library may define families such as:
 | Lumped Resonator Components | `GroundedLCResonatorComponent`, `FloatingLCResonatorComponent` |
 | Distributed Components | `ReadoutLineComponent`, `CPWFluxLineComponent`, `QuarterWaveResonatorComponent`, `HalfWavePurcellFilterComponent` |
 
-These library-space examples may be used directly or inside composite components. Composite components may contain smaller components and primitive elements.
+These examples may be used directly or inside composite components. Composite
+components may contain smaller components and primitive elements.
 
-## Library Ownership Rule
+## Ownership Rule
 
-Julia Core owns the component authoring contract.
+Under the accepted V1 ownership contract, Julia Core owns the
+component authoring contract and may own stable local topologies used as
+components inside larger circuit topologies.
 
-Component libraries own concrete reusable components.
+External Component Libraries may own component variants intentionally kept in
+user, lab, process, device-family, or project space. Specificity alone does not
+exclude a stable local topology used by a larger topology from Core. Project
+Plan Builders own complete research circuits expressed as `CircuitPlan`,
+including their external ports, targets, and study policy.
 
 A component library may provide:
 
@@ -68,10 +77,13 @@ A component library may provide:
 - distributed line components;
 - nonlinear elements;
 - lab-specific chip blocks;
-- reusable plan builders;
+- project Plan Builders;
 - validation helpers specific to that component family.
 
-Julia Core should only require that these components satisfy the authoring, endpoint, validation, and compiler contracts.
+All components must satisfy the same authoring, endpoint, validation, and
+compiler contracts. See
+[Component Libraries](component-libraries.md) for the candidate ownership
+criteria and decision table.
 
 ## Composition Rules
 
@@ -93,7 +105,8 @@ Compiled netlist fragments should not be used as reusable components. Reuse the 
 
 ## Composite Examples
 
-The following examples describe component-library composition patterns built on the Julia Core Kernel:
+The following examples describe composition patterns built on the Julia Core
+Kernel:
 
 ```text
 SQUID

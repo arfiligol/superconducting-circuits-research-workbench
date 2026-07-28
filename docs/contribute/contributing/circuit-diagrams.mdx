@@ -9,9 +9,9 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Schemdraw-based docs asset corpus for circuit figures.
-version: v0.2.0
-last_updated: 2026-06-12
+scope: Export-backed Schemdraw workflow and legacy direct-Python docs figures.
+version: v0.3.0
+last_updated: 2026-07-28
 updated_by: codex
 sidebar:
  label: Circuit Diagrams
@@ -20,17 +20,35 @@ sidebar:
 
 # Contributing Circuit Diagrams
 
-Circuit diagrams are documentation assets. They are generated from pure Python
-Schemdraw sources and committed as light and dark SVG files. The source and
-generated figures are reviewable in ordinary code review.
+> **Semantic status:** the SVG-only export-backed renderer pipeline, Manual
+> integration, and Julia Core-versus-project placement guidance are
+> **STABILIZED V1**.
 
-Schemdraw is not an application workflow, backend service, simulation runtime,
-or circuit-authoring model. Reusable circuit semantics belong to Julia Core and
-Pluto-facing authoring paths.
+Circuit diagrams are committed light and dark SVG documentation assets. The
+default path starts from Julia Core circuit semantics:
+
+```text
+Julia Core builder
+  -> CircuitPlan + SchematicLayoutIntent
+  -> SchematicExportSpec
+  -> schematic_export.json
+  -> explicit Python visual mapping
+  -> Schemdraw
+  -> diagram.light.svg + diagram.dark.svg
+```
+
+The `CircuitPlan` remains the electrical source of truth.
+`SchematicLayoutIntent` supplies renderer-neutral presentation intent. The
+Python renderer selects a supported visual class from
+`render_hints.schemdraw.component_type` and its labels and parameters; it does
+not reconstruct arbitrary visual topology from netlist rows.
+
+Schemdraw is not an application workflow, simulation runtime, or second
+circuit-authoring model.
 
 ## Folder Contract
 
-Create each diagram under `docs/assets/circuit_draw/`:
+Create an export-backed diagram under `docs/assets/circuit_draw/`:
 
 ```text
 docs/assets/circuit_draw/
@@ -38,77 +56,125 @@ docs/assets/circuit_draw/
 │  └── style.py
 ├── registry.yml
 └── <topic>/<diagram_id>/
-  ├── draw.py
-  ├── diagram.yml
-  ├── diagram.light.svg
-  └── diagram.dark.svg
+   ├── draw.py
+   ├── diagram.yml
+   ├── schematic_export.json
+   ├── diagram.light.svg
+   └── diagram.dark.svg
 ```
 
-`draw.py` must define `build_drawing(theme="light")` and return a
-`schemdraw.Drawing`.
-It must not import Backend modules, Julia modules, archived simulation runtimes,
-or legacy Python circuit visualizers.
-Diagram sources use Schemdraw's documented context-manager and chained-method
-style through `_lib.style.circuit_drawing(...)`. Do not place elements with
-`d += ...` in new diagram sources, and use `with drawing.hold():` instead of
-manual `push()` / `pop()` pairs for branches.
+`schematic_export.json` is a committed, reviewable export fixture. `draw.py`
+loads it, delegates to `schemdraw_circuit_library`, and defines
+`build_drawing(theme="light") -> schemdraw.Drawing`.
 
 `diagram.yml` records the reviewable traceability for the figure: owning docs,
 Julia Core semantics references, physical/circuit model references,
-implementation references, light/dark SVG output paths, and review
-status. When reusable physics is owned by the SCQ_Design Super Repo, keep a
-child-local `physical_model_refs` adapter for standalone docs and add the
-canonical HTTPS `.qmd` path under `canonical_physics_urls`. The local adapter
-does not become a second physics source of truth.
+implementation references, `core_export_fixture`, light/dark SVG output paths,
+and review status. Register the manifest in
+`docs/assets/circuit_draw/registry.yml`.
+When SCQ_Design owns the reusable physics, include its canonical HTTPS `.qmd`
+path in `canonical_physics_urls` and keep `physical_model_refs` as the
+child-local routing adapter.
 
-## Add Or Update A Diagram
+## Export-Backed Authoring
 
-1. Add or edit the diagram source under `docs/assets/circuit_draw/<topic>/<diagram_id>/draw.py`.
-2. Add or update `diagram.yml`.
-3. Add the manifest path to `docs/assets/circuit_draw/registry.yml`.
-4. Render the light and dark SVG outputs:
+1. Build a reusable component in Julia Core, or build a complete research
+   `CircuitPlan` in its owning project, and return an inspectable plan with
+   `SchematicLayoutIntent`.
+2. Add an explicit producer for `schematic_export.json`. Workbench-owned
+   reusable components and Pluto examples register their builder and fixture
+   path in `scripts/build/export_pluto_schematic_exports.jl`.
+3. If `render_hints.schemdraw.component_type` is new, add one renderer-side
+   visual component and one explicit dispatch case in
+   `schemdraw_circuit_library.rendering.from_schematic_export`.
+4. Add `draw.py`, `diagram.yml`, and the registry entry.
+5. Export before rendering:
 
 ```bash
-uv run python scripts/build/render_circuit_drawings.py
+julia --project=core/julia/SuperconductingCircuitsCore \
+  scripts/build/export_pluto_schematic_exports.jl
 ```
 
-5. Check the corpus:
+The exporter currently writes its complete supported fixture set; it has no
+single-diagram selector.
+
+A minimal export-backed `draw.py` is:
+
+```python
+from pathlib import Path
+
+import schemdraw
+from _lib.style import Theme, circuit_drawing
+from schemdraw_circuit_library.rendering import (
+    add_schematic_export_to_drawing,
+    load_schematic_export,
+)
+
+SCHEMATIC_EXPORT_PATH = Path(__file__).with_name("schematic_export.json")
+
+
+def build_drawing(theme: Theme = "light") -> schemdraw.Drawing:
+    with circuit_drawing(theme=theme) as drawing:
+        add_schematic_export_to_drawing(
+            drawing,
+            load_schematic_export(SCHEMATIC_EXPORT_PATH),
+            theme=theme,
+        )
+    return drawing
+```
+
+Render and review one diagram first:
 
 ```bash
+uv run python scripts/build/render_circuit_drawings.py \
+  --diagram reusable.interdigitated_capacitor
+uv run python scripts/build/render_circuit_drawings.py \
+  --check --diagram reusable.interdigitated_capacitor
+```
+
+`--diagram` accepts a registry `diagram_id` and may be repeated. When the
+targeted result is correct, validate export freshness and manifest ownership:
+
+```bash
+julia --project=core/julia/SuperconductingCircuitsCore \
+  scripts/build/export_pluto_schematic_exports.jl --check
 uv run python scripts/test/check_circuit_drawings.py
 uv run python scripts/build/render_circuit_drawings.py --check
 ```
 
-6. Reference `diagram.light.svg` and `diagram.dark.svg` from the owning docs
-  using the shared `circuit-figure` wrapper.
+Finally, reference both SVG variants from each owning documentation page with
+the shared `circuit-figure` wrapper. Do not hand-edit generated SVG files.
 
-## Authoring Style
+## Legacy Direct-Python Figures
 
-Write diagram sources like the Schemdraw documentation examples:
+Four earlier Pluto teaching figures still construct a visual component directly
+inside `draw.py`:
 
-```python
-import schemdraw
-import schemdraw.elements as elm
-from _lib.style import Theme, circuit_drawing
+- `pluto.transmission_line_circuit_model`
+- `pluto.readout_line_purcell_filter`
+- `pluto.readout_line_hanging_qwr_mtl`
+- `pluto.readout_purcell_hanging_qwr_mtl`
 
+They remain supported documentation assets, but they are not the template for
+new reusable-component or Circuit Plan diagrams. Keep their existing
+`build_drawing` contract and migrate them only when a Julia export contract
+already exists; do not invent a parallel exporter merely to remove legacy code.
 
-def build_drawing(theme: Theme = "light") -> schemdraw.Drawing:
-  with circuit_drawing(theme=theme) as drawing:
-    elm.Dot(open=True).label("$P_1$", loc="left")
-    elm.Line().right(0.8)
-    node = elm.Dot()
+Direct sources must use `_lib.style.circuit_drawing(...)`, chained element
+methods, anchors, and `drawing.hold()`. They must not import Backend modules,
+Julia modules, archived runtimes, or legacy Python circuit visualizers.
 
-    with drawing.hold():
-      drawing.move_from(node.center)
-      elm.Capacitor().down().label("$C$", loc="right")
-      elm.Ground()
+## Failure Guide
 
-  return drawing
-```
-
-Prefer anchors, `at(...)`, `to(...)`, `tox(...)`, `toy(...)`, `Wire(...)`, and
-`with drawing.hold():` over raw coordinate patchwork. Use labels on elements or
-anchors, not free-floating text, unless the figure is explicitly an annotation.
+| Failure | Meaning and response |
+| --- | --- |
+| `stale .../schematic_export.json` | Julia semantics or layout intent changed. Run the exporter, review the JSON diff, then render and review both SVG themes. |
+| Missing `schematic_export.json` or `core_export_fixture does not exist` | Add the fixture path to the Julia exporter and run it before the renderer. |
+| Missing `render_hints.schemdraw` | The Julia export does not request a Schemdraw projection. Add explicit layout/render intent; do not infer it from netlist rows. |
+| Unsupported `component_type` | Add the matching visual component and explicit renderer dispatch. Do not add a permissive fallback. |
+| `Rendered SVG differs` | The committed SVG is stale. Render the named diagram and review the generated light/dark diff. |
+| Unknown diagram id | Use the exact `diagram_id` registered in `registry.yml`. |
+| Ownership, link, or review-status failure | Fix `diagram.yml`, owning-doc links, or the draft/accepted state. Do not promote review status merely to satisfy the checker. |
 
 ## Review Status
 
@@ -123,29 +189,46 @@ machine-verification contract.
 
 ## Dependency Boundary
 
-Schemdraw belongs to the root `dev` dependency group and is run through the root
-uv workspace environment:
+`core/python/circuit_libraries/` is the dedicated
+`schemdraw-circuit-library` uv workspace package. The root `dev` dependency
+group installs that workspace package, which owns the `schemdraw` dependency.
+Run docs rendering through the root uv environment:
 
 ```bash
 uv run python scripts/build/render_circuit_drawings.py
 ```
 
-Do not add Schemdraw to `app/backend`, Julia Core, or runtime package
-dependencies for documentation drawing.
+Do not add Schemdraw to Julia Core or application and production runtime
+package dependencies for documentation drawing.
 
 ---
 
 ## Agent Rule
 ```markdown
 ## Circuit Diagrams
-- Schemdraw circuit diagrams are docs assets under `docs/assets/circuit_draw/`.
-- Each diagram has `draw.py`, `diagram.yml`, committed `diagram.light.svg`, and committed `diagram.dark.svg`.
-- `draw.py` must define `build_drawing(theme="light")`, use `_lib.style.circuit_drawing(...)`, and must not import infrastructure services, Julia, archived simulation runtimes, or legacy Python circuit visualizer modules.
-- Write Schemdraw sources with context-manager placement and chained element methods; do not use `d += ...` placement or `push()` / `pop()` branch pairs.
+- New reusable-component and Circuit Plan figures use Julia export -> `schematic_export.json` -> explicit Schemdraw mapping -> light/dark SVG.
+- Julia `CircuitPlan` owns electrical semantics; Python visual mappings must not infer a second topology.
+- Export before rendering. Use renderer `--diagram <registry-id>` for targeted render/check.
+- Keep the four named direct-Python Pluto figures as legacy assets; do not copy that path for new diagrams.
 - Register diagrams in `docs/assets/circuit_draw/registry.yml`.
-- When SCQ_Design owns the reusable physics, declare its Knowledge `.qmd` URL in `canonical_physics_urls`; keep `physical_model_refs` as the child-local routing adapter.
-- Render with `uv run python scripts/build/render_circuit_drawings.py`.
-- Verify with `uv run python scripts/test/check_circuit_drawings.py` and `uv run python scripts/build/render_circuit_drawings.py --check`.
-- Schemdraw is a root dev dependency only; do not add it to product runtime packages.
-- This corpus is not a product Schemdraw workflow, service, product CLI, or second circuit-authoring model.
+- `schemdraw-circuit-library` is a dedicated uv workspace package used through the root dev environment, never a product runtime dependency.
 ```
+
+## Related
+
+- [Reusable Circuit Authoring](../../workflows/reusable-circuit-authoring/)
+- [Schematic Layout Intent](../../reference/julia-core/schematic-layout-intent.md)
+- [Python Core](../../reference/core/python-core.mdx)
+
+## Semantic Status
+
+- Existing accepted behavior retained: SVG-only documentation corpus,
+  Julia-owned electrical semantics, explicit Python visual mappings, and four
+  supported legacy direct-Python figures.
+- Current state: export-backed-first Manual integration and ownership wording
+  are `STABILIZED` V1.
+- Human acceptance: explicitly accepted the named V1 scope on 2026-07-28.
+- Test policy: `stabilization_tests_authorized`; existing docs and renderer
+  validation cover this documentation-only scope.
+- Excluded: D3 project topology and artifacts, automatic plan-wide layout, and
+  a generic netlist-to-drawing inference path.

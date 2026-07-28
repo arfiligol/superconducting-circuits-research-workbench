@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Astro + Starlight technical docs in-project writing, staging and presentation specifications.
-version: v2.2.0
-last_updated: 2026-06-12
+version: v2.3.0
+last_updated: 2026-07-28
 updated_by: codex
 ---
 
@@ -68,7 +68,12 @@ Use manual groups for `Start Here`, `Workflows`, `Concepts`, `Product App`, `Ref
 
 Every editable docs page must be reachable from the Starlight sidebar. A page is covered only when its route appears as an explicit `slug` or lives under an `autogenerate.directory` in `site/astro.config.mjs`. Do not create hidden pages that can only be reached by in-page links or direct URL input.
 
-`Start Here` is notebook-first and must stay focused on two onboarding steps: run the first Pluto notebook from a fresh checkout, then understand reusable circuit design through Component Library -> reusable plan builder -> `CircuitPlan` -> schematic/export intent -> simulation. Do not add product setup as a third onboarding step until the product lane is explicitly promoted.
+`Start Here` is notebook-first and must stay focused on two onboarding steps:
+run the first Pluto notebook from a fresh checkout, then understand the
+accepted reusable-circuit V1 through Reusable Component -> project
+Plan Builder -> `CircuitPlan` -> schematic/export intent -> simulation. Do not
+add product setup as a third onboarding step until the product lane is
+explicitly promoted.
 
 The main research docs should expose four route-first workflow groups: Reusable Circuit Authoring; FEM Result To Equivalent Circuit; Equivalent Circuit To Quantum Model; Quantum Dynamics / Pulse Simulation. Route 2 may be Pluto-visible after normalization, but Python notebooks are the Python-native home for scikit-rf-compatible ingestion, scqubits modeling, QuTiP dynamics, and qutip-qip pulse simulation.
 

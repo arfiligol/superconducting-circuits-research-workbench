@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Source-of-truth authoring model for reusable Julia Core circuit components, plans, and compiler lowering.
-version: v1.3.0
-last_updated: 2026-07-10
+version: v1.4.0
+last_updated: 2026-07-28
 updated_by: codex
 ---
 
@@ -85,7 +85,9 @@ flowchart LR
   Compiler --> Netlist["JosephsonCircuits.jl Netlist"]
 ```
 
-Users build a `CircuitPlan`, add components from a selected Component Library, connect endpoints, add couplings, validate the plan, and then call the compiler.
+Users build a `CircuitPlan`, add components from the Julia Core reusable
+catalog or a selected external Component Library, connect endpoints, add
+couplings, validate the plan, and then call the compiler.
 
 The following example assumes a component library provides `GroundedLCResonatorComponent` and `QuarterWaveResonatorComponent` builders:
 
@@ -152,9 +154,18 @@ Julia Core defines the framework:
 - how validation and compiler lowering are organized;
 - how compiled circuits preserve maps and provenance.
 
-Julia Core does not need to own every concrete component family.
+Julia Core may own a bounded catalog of stable local topologies that are used
+as components inside larger circuit topologies. Concrete implementation is not a reason to
+exclude a component from Core, and eligibility does not force every qualifying
+component to move there.
 
-Concrete families such as `GroundedLCResonatorComponent`, `FloatingLCResonatorComponent`, `QuarterWaveResonatorComponent`, and `CPWFluxLineComponent` should be treated as examples of component-library definitions, not as a closed Julia Core catalog.
+Lab-, process-, device-family-, and project-specific variants may remain in
+external Component Libraries; specificity alone is not a Core disqualifier.
+Complete research circuits, feedlines, ports, study targets, and simulation
+policy remain project-owned Plan Builders.
+`IntrinsicInterferometricPurcellFilter` is a Core-catalog example; it exposes
+stable attachment endpoints while the enclosing project owns the complete
+circuit.
 
 ## Transitional Names
 
