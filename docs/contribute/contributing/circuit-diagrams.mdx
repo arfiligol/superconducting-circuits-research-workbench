@@ -46,6 +46,29 @@ not reconstruct arbitrary visual topology from netlist rows.
 Schemdraw is not an application workflow, simulation runtime, or second
 circuit-authoring model.
 
+## Reusable-component clearance
+
+Reusable Schemdraw dimensions are expressed relative to `unit_length`; do not
+replace them with absolute drawing coordinates. A body-edge outward lead
+defaults to `0.5u`, including `PortTerminal`. `Port50Ohm` instead uses a
+`0.7u` terminal stub because its required clearance is measured from the
+occupied resistor glyph bounding box: the supported `unit_length` range
+`1.5–6` retains at least `0.5u` between that bound and the outer terminal.
+
+`Port50Ohm` also reserves a `0.25u` lead between its signal junction and
+resistor. Custom values must satisfy
+`0 < load_lead_units < height_units` and leave at least one native Schemdraw
+drawing unit for the IEEE resistor glyph:
+`(height_units - load_lead_units) * unit_length >= 1`. A shorter span leaves
+the electrical metadata connected but makes the fixed-minimum glyph overshoot
+its ground anchor. These dimensions change drawing geometry only; physical
+nodes, netlist topology, ports, and public terminals remain unchanged.
+
+Parents connect at the child's outward public terminal and keep sibling native
+glyph bounds disjoint. This is an explicit reusable-component contract, not a
+generic auto-layout system. Font and label bounds still require review at the
+rendered target size.
+
 ## Folder Contract
 
 Create an export-backed diagram under `docs/assets/circuit_draw/`:
@@ -232,3 +255,44 @@ package dependencies for documentation drawing.
   validation cover this documentation-only scope.
 - Excluded: D3 project topology and artifacts, automatic plan-wide layout, and
   a generic netlist-to-drawing inference path.
+
+### Reusable Schemdraw outward-clearance and Port50Ohm glyph-separation V1
+
+- Scope: `unit_length`-relative outward-terminal clearance and internal
+  resistor-glyph separation for reusable Schemdraw components.
+- State: `STABILIZED`.
+- State changed: 2026-07-29.
+- Human acceptance: directly accepted the named V1 scope on 2026-07-29.
+- Contract references: the reusable-component clearance section above,
+  `components/ports/terminations.py`, and the Intrinsic Interferometric Purcell
+  Components reference.
+- Test policy: `stabilization_tests_authorized`.
+- Validation evidence: 48 scoped Python tests, Ruff, multi-scale bbox
+  assertions, seven targeted light/dark SVG render checks, 14 drawing
+  manifests, Julia Core package tests, and the complete docs build.
+- Limitations: the clearance guarantee covers `unit_length` values from
+  `1.5–6`; generic auto-layout and D3 project geometry remain excluded.
+- Unresolved decisions: none within this accepted scope.
+
+### Reusable Schemdraw Parent–Child Public-Terminal Composition and Clearance V1
+
+- State: `STABILIZED`.
+- State changed: 2026-07-30.
+- Human acceptance: accepted the `signal`/`circuit` public-terminal contract on
+  2026-07-30.
+- Test policy: `stabilization_tests_authorized`.
+- Parent-owned electrical attachments place children with
+  `add_at_public_terminal(owner, component, terminal, point)`. Raw Schemdraw
+  anchor names remain child implementation details.
+- Port components expose `signal` toward the external measurement port and
+  `circuit` toward the parent circuit.
+- Applicable serial, axis-aligned reusable sibling body pairs must pass
+  `validate_block_clearance(..., clearance=0, include_labels=False)` so their
+  bodies may touch at the shared terminal but cannot overlap. Orthogonal
+  branch glyphs and `Port50Ohm` placement are not covered by this bbox gate.
+- Exported label placement is still reviewed in both light and dark renders;
+  this bounded contract does not introduce generic routing, label collision,
+  or auto-layout engines.
+- Validation evidence: 47 scoped Python tests, Ruff, Julia export freshness,
+  six targeted D3 light/dark render checks, and 18 drawing manifests.
+- Unresolved decisions: none within this accepted scope.

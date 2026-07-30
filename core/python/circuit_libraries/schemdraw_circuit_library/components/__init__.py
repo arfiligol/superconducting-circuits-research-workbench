@@ -17,6 +17,8 @@ from .lumped import (
 from .ports import LabelLocation, Port50Ohm, PortLoadDirection, PortTerminal
 from .transmission_lines import (
     CoupledCPWTransmissionLine,
+    D3IntrinsicPurcellEquivalentCircuitPlan,
+    D3IntrinsicPurcellHybridizedCircuitPlan,
     IntrinsicInterferometricPurcellFilter,
     IntrinsicInterferometricPurcellFilterEquivalent,
     IntrinsicInterferometricPurcellFilterEquivalentWithQubit,
@@ -32,6 +34,8 @@ __all__ = [
     "CapacitivelyCoupledGroundedLCResonator",
     "CoupledCPWTransmissionLine",
     "CoupledLineLadderSection",
+    "D3IntrinsicPurcellEquivalentCircuitPlan",
+    "D3IntrinsicPurcellHybridizedCircuitPlan",
     "FloatingLCResonator",
     "FloatingLCXYResonator",
     "FloatingParallelLC",

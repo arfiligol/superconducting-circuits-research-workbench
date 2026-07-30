@@ -13,9 +13,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CIRCUIT_DRAW_DIR = ROOT / "docs" / "assets" / "circuit_draw"
 REGISTRY_PATH = CIRCUIT_DRAW_DIR / "registry.yml"
-LEGACY_SCRIPT_DIR = ROOT / "scripts" / "docs"
 THEMES = ("light", "dark")
 FORMATS = ("svg",)
+AUXILIARY_DRAWING_MODULE = "circuit_plans.d3_auxiliary"
+AUXILIARY_DRAWING_HELPER = "build_auxiliary_drawing"
+AUXILIARY_DRAWING_PATH = CIRCUIT_DRAW_DIR / "circuit_plans" / "d3_auxiliary.py"
 
 FORBIDDEN_IMPORT_ROOTS = {
     "app_backend",
@@ -68,10 +70,49 @@ def _source_relative_link(from_doc: Path, to_asset: Path) -> str:
     return os.path.relpath(to_asset, from_doc.parent).replace(os.sep, "/")
 
 
+def _calls_name(tree: ast.AST, name: str) -> bool:
+    return any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == name
+        for node in ast.walk(tree)
+    )
+
+
+def _calls_function(tree: ast.AST, name: str) -> bool:
+    return _calls_name(tree, name) or any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == name
+        for node in ast.walk(tree)
+    )
+
+
+def _delegates_to_auxiliary_drawing(tree: ast.AST) -> bool:
+    imported_names = {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == AUXILIARY_DRAWING_MODULE
+        for alias in node.names
+        if alias.name == AUXILIARY_DRAWING_HELPER
+    }
+    if not any(_calls_name(tree, name) for name in imported_names):
+        return False
+    if not AUXILIARY_DRAWING_PATH.exists():
+        return False
+    helper_tree = ast.parse(
+        AUXILIARY_DRAWING_PATH.read_text(encoding="utf-8"),
+        filename=str(AUXILIARY_DRAWING_PATH),
+    )
+    return _calls_function(helper_tree, "circuit_drawing")
+
+
 def _check_draw_imports(path: Path) -> list[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     failures: list[str] = []
-    uses_circuit_drawing = False
+    uses_circuit_drawing = _calls_function(tree, "circuit_drawing") or (
+        _delegates_to_auxiliary_drawing(tree)
+    )
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -91,8 +132,6 @@ def _check_draw_imports(path: Path) -> list[str]:
                 call_name = node.func.id
             elif isinstance(node.func, ast.Attribute):
                 call_name = node.func.attr
-            if call_name == "circuit_drawing":
-                uses_circuit_drawing = True
             if call_name in {"push", "pop"}:
                 failures.append(f"{path.relative_to(ROOT)} uses {call_name}(); use drawing.hold().")
         elif isinstance(node, ast.AugAssign) and isinstance(node.op, ast.Add):
@@ -291,9 +330,6 @@ def _check_manifest(manifest_path: Path, expected_diagram_id: str) -> list[str]:
 
 def run() -> int:
     failures: list[str] = []
-
-    if LEGACY_SCRIPT_DIR.exists():
-        failures.append("scripts/docs must not exist; use scripts/build or scripts/test helpers.")
 
     registry = _load_yaml(REGISTRY_PATH)
     diagrams = registry.get("diagrams")

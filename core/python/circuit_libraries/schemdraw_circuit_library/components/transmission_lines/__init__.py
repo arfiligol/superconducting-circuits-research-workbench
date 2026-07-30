@@ -3,6 +3,8 @@ from __future__ import annotations
 from .pi_sections import PiSectionChain, TransmissionLineSegment
 from .systems import (
     CoupledCPWTransmissionLine,
+    D3IntrinsicPurcellEquivalentCircuitPlan,
+    D3IntrinsicPurcellHybridizedCircuitPlan,
     IntrinsicInterferometricPurcellFilter,
     IntrinsicInterferometricPurcellFilterEquivalent,
     IntrinsicInterferometricPurcellFilterEquivalentWithQubit,
@@ -14,6 +16,8 @@ from .systems import (
 
 __all__ = [
     "CoupledCPWTransmissionLine",
+    "D3IntrinsicPurcellEquivalentCircuitPlan",
+    "D3IntrinsicPurcellHybridizedCircuitPlan",
     "IntrinsicInterferometricPurcellFilter",
     "IntrinsicInterferometricPurcellFilterEquivalent",
     "IntrinsicInterferometricPurcellFilterEquivalentWithQubit",

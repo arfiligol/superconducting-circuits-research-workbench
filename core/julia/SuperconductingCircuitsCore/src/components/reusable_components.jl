@@ -723,6 +723,9 @@ function add_intrinsic_interferometric_purcell_filter!(
         c1g_f=numeric[1],
         c2g_f=numeric[2],
         c12_f=numeric[3],
+        c1g_label=raw"$C_{pG}^{\mathrm{IDC}}$",
+        c2g_label=raw"$C_{f_cG}^{\mathrm{IDC}}$",
+        c12_label=raw"$C_{pf_c}^{\mathrm{IDC}}$",
     )
     c0r = c0r_value == 0 ? nothing : shunt_capacitor!(
         plan;

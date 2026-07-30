@@ -1,5 +1,17 @@
 schema_version: 1
 diagrams:
+  - diagram_id: circuit_plan.d3_intrinsic_purcell_equivalent
+    manifest: docs/assets/circuit_draw/circuit_plans/d3_intrinsic_purcell_equivalent/diagram.yml
+  - diagram_id: circuit_plan.d3_intrinsic_purcell_hybridized
+    manifest: docs/assets/circuit_draw/circuit_plans/d3_intrinsic_purcell_hybridized/diagram.yml
+  - diagram_id: circuit_plan.d3_linewidth_la_equivalent
+    manifest: docs/assets/circuit_draw/circuit_plans/d3_linewidth_la_equivalent/diagram.yml
+  - diagram_id: circuit_plan.d3_linewidth_la_hybridized
+    manifest: docs/assets/circuit_draw/circuit_plans/d3_linewidth_la_hybridized/diagram.yml
+  - diagram_id: circuit_plan.d3_intrinsic_pair_notch_equivalent
+    manifest: docs/assets/circuit_draw/circuit_plans/d3_intrinsic_pair_notch_equivalent/diagram.yml
+  - diagram_id: circuit_plan.d3_intrinsic_pair_notch_hybridized
+    manifest: docs/assets/circuit_draw/circuit_plans/d3_intrinsic_pair_notch_hybridized/diagram.yml
   - diagram_id: pluto.grounded_lc_resonator
     manifest: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/diagram.yml
   - diagram_id: pluto.reflective_jpa_capacitive_coupled_lc

@@ -13,6 +13,7 @@ from schemdraw_circuit_library.metadata import (
     NodeLabelSpec,
     NodeMarkerSpec,
     TerminalSpec,
+    add_at_public_terminal,
     public_terminal_point,
     render_connection_markers,
     render_physical_node_labels,
@@ -524,6 +525,7 @@ class GroundedLCResonator(elm.ElementCompound):
                     theme=self.theme,
                     port_label=self.port_label,
                     show_nodes=False,
+                    show_terminals=self.show_terminals,
                     show_labels=self.show_labels,
                 )
             else:
@@ -537,11 +539,23 @@ class GroundedLCResonator(elm.ElementCompound):
                     resistance_label=self.resistance_label,
                     resistance_label_loc="top",
                     show_nodes=False,
+                    show_terminals=self.show_terminals,
                     show_labels=self.show_labels,
                 )
-            self.port = self.add(port.at(A["start"]))
+            self.port = add_at_public_terminal(
+                self,
+                port,
+                "circuit",
+                A["signal"],
+            )
+            A["start"] = public_terminal_point(
+                self.port,
+                "signal",
+                transformed=True,
+            )
+            self.anchors["start"] = A["start"]
 
-        self.top_bus = self.add(elm.Line(color=color).endpoints(A["start"], A["end"]))
+        self.top_bus = self.add(elm.Line(color=color).endpoints(A["signal"], A["end"]))
 
         if self.c0_label is not None:
             c0 = elm.Capacitor(color=color).endpoints(A["c0_top"], A["c0_bot"])
@@ -555,7 +569,8 @@ class GroundedLCResonator(elm.ElementCompound):
             capacitor = capacitor.label(self.c_label, loc="top", color=color)
         self.capacitor = self.add(capacitor)
 
-        self.inductive_branch = self.add(
+        self.inductive_branch = add_at_public_terminal(
+            self,
             InductiveBranch(
                 branch_kind=self.inductive_branch_kind,
                 unit_length=self.unit_length,
@@ -567,10 +582,9 @@ class GroundedLCResonator(elm.ElementCompound):
                 show_nodes=self.show_nodes,
                 show_terminals=False,
                 show_labels=self.show_labels,
-            )
-            .at(A["ind_top"])
-            .anchor("top")
-            .theta(0)
+            ).theta(0),
+            "top",
+            A["ind_top"],
         )
         if not _same_point(
             public_terminal_point(
@@ -629,7 +643,8 @@ class GroundedLCResonator(elm.ElementCompound):
         if self.show_terminals:
             markers.extend(
                 ConnectionMarkerSpec(A[spec.anchor], "exposed", node=spec.node)
-                for spec in self.public_terminals.values()
+                for name, spec in self.public_terminals.items()
+                if not (has_port and name == "left")
             )
         render_connection_markers(
             self,
@@ -652,7 +667,7 @@ class FloatingParallelLC(elm.ElementCompound):
         unit_length: float = 3.0,
         width_units: float = 1.8,
         branch_offset_units: float = 0.55,
-        terminal_stub_units: float = 0.4,
+        terminal_stub_units: float = 0.5,
         squid_width_units: float = 1.0,
         theme: Theme = "light",
         inductive_branch_kind: InductiveBranchKind = "linear",
@@ -719,7 +734,8 @@ class FloatingParallelLC(elm.ElementCompound):
         if self.show_labels:
             capacitor = capacitor.label(self.c_label, loc="top", color=color)
         self.capacitor = self.add(capacitor)
-        self.inductive_branch = self.add(
+        self.inductive_branch = add_at_public_terminal(
+            self,
             InductiveBranch(
                 branch_kind=self.inductive_branch_kind,
                 direction="right",
@@ -735,10 +751,9 @@ class FloatingParallelLC(elm.ElementCompound):
                 show_nodes=self.show_nodes,
                 show_terminals=False,
                 show_labels=self.show_labels,
-            )
-            .at(A["branch_left"])
-            .anchor("top")
-            .theta(0)
+            ).theta(0),
+            "top",
+            A["branch_left"],
         )
         if not _same_point(
             public_terminal_point(
@@ -907,7 +922,8 @@ class FloatingLCResonator(elm.ElementCompound):
         self.c_r = self._two_terminal(
             elm.Capacitor, A["c_r_top"], A["c_r_bot"], self.c_r_label, "top"
         )
-        self.inductive_branch = self.add(
+        self.inductive_branch = add_at_public_terminal(
+            self,
             InductiveBranch(
                 branch_kind=self.inductive_branch_kind,
                 unit_length=self.unit_length,
@@ -921,10 +937,9 @@ class FloatingLCResonator(elm.ElementCompound):
                 show_nodes=self.show_nodes,
                 show_terminals=False,
                 show_labels=self.show_labels,
-            )
-            .at(A["branch_top"])
-            .anchor("top")
-            .theta(0)
+            ).theta(0),
+            "top",
+            A["branch_top"],
         )
         if not _same_point(
             public_terminal_point(
@@ -1162,7 +1177,7 @@ class CapacitivelyCoupledGroundedLCResonator(elm.ElementCompound):
         w = self.spacing
         h = self.height
         color = theme_color(self.theme)
-        port_stub_units = 0.55
+        port_stub_units = 0.7
 
         A = {
             "start": (0, 0),
@@ -1179,7 +1194,8 @@ class CapacitivelyCoupledGroundedLCResonator(elm.ElementCompound):
         }
         self.anchors.update(A)
 
-        self.port = self.add(
+        self.port = add_at_public_terminal(
+            self,
             Port50Ohm(
                 unit_length=self.unit_length,
                 side="right",
@@ -1190,7 +1206,9 @@ class CapacitivelyCoupledGroundedLCResonator(elm.ElementCompound):
                 show_nodes=False,
                 show_terminals=False,
                 show_labels=self.show_labels,
-            ).at(A["port_node"])
+            ),
+            "circuit",
+            A["port_node"],
         )
 
         coupling = elm.Capacitor(color=color).endpoints(A["branch_top"], A["port_node"])
@@ -1299,7 +1317,7 @@ class FloatingLCXYResonator(elm.ElementCompound):
         width_units: float = 1.6,
         height_units: float = 1.25,
         xy_offset_units: float = 0.9,
-        port_stub_units: float = 0.45,
+        port_stub_units: float = 0.7,
         theme: Theme = "light",
         inductive_branch_kind: InductiveBranchKind = "linear",
         c_g1_label: str | None = None,
@@ -1427,7 +1445,8 @@ class FloatingLCXYResonator(elm.ElementCompound):
         }
         self.anchors.update(A)
 
-        self.pad1_port_terminal = self.add(
+        self.pad1_port_terminal = add_at_public_terminal(
+            self,
             Port50Ohm(
                 component_id=f"{self.component_id}_pad1_port",
                 unit_length=self.unit_length,
@@ -1442,9 +1461,12 @@ class FloatingLCXYResonator(elm.ElementCompound):
                 show_nodes=False,
                 show_terminals=False,
                 show_labels=self.show_labels,
-            ).at(A["pad1_port_node"])
+            ),
+            "circuit",
+            A["pad1_port_node"],
         )
-        self.pad2_port_terminal = self.add(
+        self.pad2_port_terminal = add_at_public_terminal(
+            self,
             Port50Ohm(
                 component_id=f"{self.component_id}_pad2_port",
                 unit_length=self.unit_length,
@@ -1459,9 +1481,12 @@ class FloatingLCXYResonator(elm.ElementCompound):
                 show_nodes=False,
                 show_terminals=False,
                 show_labels=self.show_labels,
-            ).at(A["pad2_port_node"])
+            ),
+            "circuit",
+            A["pad2_port_node"],
         )
-        self.xy_port_terminal = self.add(
+        self.xy_port_terminal = add_at_public_terminal(
+            self,
             Port50Ohm(
                 component_id=f"{self.component_id}_xy_port",
                 unit_length=self.unit_length,
@@ -1475,7 +1500,9 @@ class FloatingLCXYResonator(elm.ElementCompound):
                 show_nodes=False,
                 show_terminals=False,
                 show_labels=self.show_labels,
-            ).at(A["xy_port_node"])
+            ),
+            "circuit",
+            A["xy_port_node"],
         )
 
         self.pad1_port_connection = self.add(

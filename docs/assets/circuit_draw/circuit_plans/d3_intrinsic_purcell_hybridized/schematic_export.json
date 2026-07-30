@@ -1,0 +1,2134 @@
+{
+    "schema_version": 1,
+    "components": [
+        {
+            "label": "intrinsic_filter",
+            "role": "purcell_filter",
+            "parameters": {
+                "coupling_orientation": "same_direction",
+                "feedline_coupling_kind": "interdigitated_three_branch",
+                "contains_feedline": false,
+                "c0r_f": 1.8e-14
+            },
+            "pins": [
+                "readout_attachment",
+                "feedline_attachment"
+            ],
+            "id": "intrinsic_filter",
+            "component_type": "IntrinsicInterferometricPurcellFilter"
+        },
+        {
+            "label": "intrinsic_filter_feedline_idc",
+            "role": "localized_capacitive_coupler",
+            "parameters": {
+                "terminal_order": [
+                    "terminal_1",
+                    "terminal_2"
+                ],
+                "c1g_f": 3.5e-14,
+                "c12_f": 3.8e-14,
+                "c2g_f": 3.45e-14
+            },
+            "pins": [
+                "terminal_1",
+                "terminal_2"
+            ],
+            "id": "intrinsic_filter_feedline_idc",
+            "component_type": "InterdigitatedCapacitor"
+        },
+        {
+            "label": "intrinsic_filter_with_qubit",
+            "role": "qubit_readout_filter_system",
+            "parameters": {
+                "contains_feedline": false,
+                "qubit_id": "intrinsic_filter_with_qubit_qubit",
+                "filter_id": "intrinsic_filter",
+                "c0r_f": 1.8e-14
+            },
+            "pins": [
+                "island_1",
+                "island_2",
+                "feedline_attachment"
+            ],
+            "id": "intrinsic_filter_with_qubit",
+            "component_type": "IntrinsicInterferometricPurcellFilterWithQubit"
+        },
+        {
+            "label": "intrinsic_filter_with_qubit_qubit",
+            "role": "qubit",
+            "parameters": {
+                "inductive_branch_kind": "linearized_josephson",
+                "c02_f": 6.4e-14,
+                "cr2_f": 3.8e-15,
+                "l_j_per_junction_h": 2.4e-8,
+                "c12_f": 1.2e-14,
+                "cr1_f": 4.2e-15,
+                "c01_f": 6.5e-14
+            },
+            "pins": [
+                "island_1",
+                "island_2",
+                "readout_attachment"
+            ],
+            "id": "intrinsic_filter_with_qubit_qubit",
+            "component_type": "LinearizedFloatingQubit"
+        }
+    ],
+    "relations": [
+        {
+            "label": "intrinsic_filter_readout_resonator head short",
+            "role": "head_termination",
+            "parameters": {
+                "schematic_kind": "short_to_ground"
+            },
+            "id": "connect_1",
+            "to": "ground",
+            "from": "intrinsic_filter_readout_grounded_head",
+            "relation_type": "connect",
+            "through": null
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator L1",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323474999999996e-10
+            },
+            "id": "intrinsic_filter_readout_resonator_l_1",
+            "to": "intrinsic_filter_readout_resonator_node_1",
+            "from": "intrinsic_filter_readout_grounded_head",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator L2",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323474999999996e-10
+            },
+            "id": "intrinsic_filter_readout_resonator_l_2",
+            "to": "intrinsic_filter_readout_resonator_node_2",
+            "from": "intrinsic_filter_readout_resonator_node_1",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator L3",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323474999999996e-10
+            },
+            "id": "intrinsic_filter_readout_resonator_l_3",
+            "to": "intrinsic_filter_readout_resonator_node_3",
+            "from": "intrinsic_filter_readout_resonator_node_2",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator L4",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.08147805e-10
+            },
+            "id": "intrinsic_filter_readout_resonator_l_4",
+            "to": "intrinsic_filter_readout_resonator_node_4",
+            "from": "intrinsic_filter_readout_resonator_node_3",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator L5",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.08147805e-10
+            },
+            "id": "intrinsic_filter_readout_resonator_l_5",
+            "to": "intrinsic_filter_readout_resonator_node_5",
+            "from": "intrinsic_filter_readout_resonator_node_4",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator L6",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323475e-10
+            },
+            "id": "intrinsic_filter_readout_resonator_l_6",
+            "to": "intrinsic_filter_readout_resonator_node_6",
+            "from": "intrinsic_filter_readout_resonator_node_5",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator L7",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323475e-10
+            },
+            "id": "intrinsic_filter_readout_resonator_l_7",
+            "to": "intrinsic_filter_readout_resonator_node_7",
+            "from": "intrinsic_filter_readout_resonator_node_6",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator L8",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323475e-10
+            },
+            "id": "intrinsic_filter_readout_resonator_l_8",
+            "to": "readout_attachment",
+            "from": "intrinsic_filter_readout_resonator_node_7",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator C node 1",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.34895e-13
+            },
+            "id": "intrinsic_filter_readout_resonator_c_node_1",
+            "to": "ground",
+            "from": "intrinsic_filter_readout_resonator_node_1",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator C node 2",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.34895e-13
+            },
+            "id": "intrinsic_filter_readout_resonator_c_node_2",
+            "to": "ground",
+            "from": "intrinsic_filter_readout_resonator_node_2",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator C node 3",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.2827297625e-13
+            },
+            "id": "intrinsic_filter_readout_resonator_c_node_3",
+            "to": "ground",
+            "from": "intrinsic_filter_readout_resonator_node_3",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator C node 4",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.216509525e-13
+            },
+            "id": "intrinsic_filter_readout_resonator_c_node_4",
+            "to": "ground",
+            "from": "intrinsic_filter_readout_resonator_node_4",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator C node 5",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.2827297625000003e-13
+            },
+            "id": "intrinsic_filter_readout_resonator_c_node_5",
+            "to": "ground",
+            "from": "intrinsic_filter_readout_resonator_node_5",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator C node 6",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.3489500000000003e-13
+            },
+            "id": "intrinsic_filter_readout_resonator_c_node_6",
+            "to": "ground",
+            "from": "intrinsic_filter_readout_resonator_node_6",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator C node 7",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.3489500000000003e-13
+            },
+            "id": "intrinsic_filter_readout_resonator_c_node_7",
+            "to": "ground",
+            "from": "intrinsic_filter_readout_resonator_node_7",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator C node 8",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 6.744750000000001e-14
+            },
+            "id": "intrinsic_filter_readout_resonator_c_node_8",
+            "to": "ground",
+            "from": "readout_attachment",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_readout_resonator",
+            "role": "transmission_line_ladder",
+            "parameters": {
+                "g_per_m_s": 0,
+                "section_lengths_m": [
+                    0.0007499999999999999,
+                    0.0007499999999999999,
+                    0.0007499999999999999,
+                    0.00075,
+                    0.00075,
+                    0.0007500000000000001,
+                    0.0007500000000000001,
+                    0.0007500000000000001
+                ],
+                "section_rlgc_per_m": [
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.6220127e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.1086374000000003e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.6220127e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.1086374000000003e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    }
+                ],
+                "n_sections": 8,
+                "node_shunt_capacitance_f": [
+                    0,
+                    1.34895e-13,
+                    1.34895e-13,
+                    1.2827297625e-13,
+                    1.216509525e-13,
+                    1.2827297625000003e-13,
+                    1.3489500000000003e-13,
+                    1.3489500000000003e-13,
+                    6.744750000000001e-14
+                ],
+                "r_per_m_ohm": 0,
+                "l_per_m_h": 4.04313e-7,
+                "c_per_m_f": 1.7986e-10,
+                "section_length_m": 0.00075,
+                "head_termination": "short",
+                "tail_termination": "open",
+                "reference_section_length_m": 0.00075,
+                "length_m": 0.006,
+                "node_shunt_conductance_s": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "node_shunt_positions_m": [
+                    0,
+                    0.0007499999999999999,
+                    0.0014999999999999998,
+                    0.00225,
+                    0.003,
+                    0.00375,
+                    0.0045,
+                    0.0052499999999999995,
+                    0.005999999999999999
+                ],
+                "section_boundaries_m": [
+                    0,
+                    0.0007499999999999999,
+                    0.0014999999999999998,
+                    0.00225,
+                    0.003,
+                    0.00375,
+                    0.0045,
+                    0.0052499999999999995,
+                    0.005999999999999999
+                ],
+                "section_model": "pi"
+            },
+            "id": "intrinsic_filter_readout_resonator_ladder",
+            "to": "readout_attachment",
+            "from": "intrinsic_filter_readout_grounded_head",
+            "relation_type": "transmission_line_ladder",
+            "through": "intrinsic_filter_readout_resonator"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator head short",
+            "role": "head_termination",
+            "parameters": {
+                "schematic_kind": "short_to_ground"
+            },
+            "id": "connect_19",
+            "to": "ground",
+            "from": "intrinsic_filter_filter_grounded_head",
+            "relation_type": "connect",
+            "through": null
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator L1",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323474999999996e-10
+            },
+            "id": "intrinsic_filter_filter_resonator_l_1",
+            "to": "intrinsic_filter_filter_resonator_node_1",
+            "from": "intrinsic_filter_filter_grounded_head",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator L2",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323474999999996e-10
+            },
+            "id": "intrinsic_filter_filter_resonator_l_2",
+            "to": "intrinsic_filter_filter_resonator_node_2",
+            "from": "intrinsic_filter_filter_resonator_node_1",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator L3",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323474999999996e-10
+            },
+            "id": "intrinsic_filter_filter_resonator_l_3",
+            "to": "intrinsic_filter_filter_resonator_node_3",
+            "from": "intrinsic_filter_filter_resonator_node_2",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator L4",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0814090500000003e-10
+            },
+            "id": "intrinsic_filter_filter_resonator_l_4",
+            "to": "intrinsic_filter_filter_resonator_node_4",
+            "from": "intrinsic_filter_filter_resonator_node_3",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator L5",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0814090500000003e-10
+            },
+            "id": "intrinsic_filter_filter_resonator_l_5",
+            "to": "intrinsic_filter_filter_resonator_node_5",
+            "from": "intrinsic_filter_filter_resonator_node_4",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator L6",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323475e-10
+            },
+            "id": "intrinsic_filter_filter_resonator_l_6",
+            "to": "intrinsic_filter_filter_resonator_node_6",
+            "from": "intrinsic_filter_filter_resonator_node_5",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator L7",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323475e-10
+            },
+            "id": "intrinsic_filter_filter_resonator_l_7",
+            "to": "intrinsic_filter_filter_resonator_node_7",
+            "from": "intrinsic_filter_filter_resonator_node_6",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator L8",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.0323475e-10
+            },
+            "id": "intrinsic_filter_filter_resonator_l_8",
+            "to": "intrinsic_filter_filter_open_tail",
+            "from": "intrinsic_filter_filter_resonator_node_7",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator C node 1",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.34895e-13
+            },
+            "id": "intrinsic_filter_filter_resonator_c_node_1",
+            "to": "ground",
+            "from": "intrinsic_filter_filter_resonator_node_1",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator C node 2",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.34895e-13
+            },
+            "id": "intrinsic_filter_filter_resonator_c_node_2",
+            "to": "ground",
+            "from": "intrinsic_filter_filter_resonator_node_2",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator C node 3",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.28271975e-13
+            },
+            "id": "intrinsic_filter_filter_resonator_c_node_3",
+            "to": "ground",
+            "from": "intrinsic_filter_filter_resonator_node_3",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator C node 4",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.2164895e-13
+            },
+            "id": "intrinsic_filter_filter_resonator_c_node_4",
+            "to": "ground",
+            "from": "intrinsic_filter_filter_resonator_node_4",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator C node 5",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.28271975e-13
+            },
+            "id": "intrinsic_filter_filter_resonator_c_node_5",
+            "to": "ground",
+            "from": "intrinsic_filter_filter_resonator_node_5",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator C node 6",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.3489500000000003e-13
+            },
+            "id": "intrinsic_filter_filter_resonator_c_node_6",
+            "to": "ground",
+            "from": "intrinsic_filter_filter_resonator_node_6",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator C node 7",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.3489500000000003e-13
+            },
+            "id": "intrinsic_filter_filter_resonator_c_node_7",
+            "to": "ground",
+            "from": "intrinsic_filter_filter_resonator_node_7",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator C node 8",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 6.744750000000001e-14
+            },
+            "id": "intrinsic_filter_filter_resonator_c_node_8",
+            "to": "ground",
+            "from": "intrinsic_filter_filter_open_tail",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "intrinsic_filter_filter_resonator",
+            "role": "transmission_line_ladder",
+            "parameters": {
+                "g_per_m_s": 0,
+                "section_lengths_m": [
+                    0.0007499999999999999,
+                    0.0007499999999999999,
+                    0.0007499999999999999,
+                    0.00075,
+                    0.00075,
+                    0.0007500000000000001,
+                    0.0007500000000000001,
+                    0.0007500000000000001
+                ],
+                "section_rlgc_per_m": [
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.6219859999999999e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.1085454e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.6219859999999999e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.1085454e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    }
+                ],
+                "n_sections": 8,
+                "node_shunt_capacitance_f": [
+                    0,
+                    1.34895e-13,
+                    1.34895e-13,
+                    1.28271975e-13,
+                    1.2164895e-13,
+                    1.28271975e-13,
+                    1.3489500000000003e-13,
+                    1.3489500000000003e-13,
+                    6.744750000000001e-14
+                ],
+                "r_per_m_ohm": 0,
+                "l_per_m_h": 4.04313e-7,
+                "c_per_m_f": 1.7986e-10,
+                "section_length_m": 0.00075,
+                "head_termination": "short",
+                "tail_termination": "open",
+                "reference_section_length_m": 0.00075,
+                "length_m": 0.006,
+                "node_shunt_conductance_s": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "node_shunt_positions_m": [
+                    0,
+                    0.0007499999999999999,
+                    0.0014999999999999998,
+                    0.00225,
+                    0.003,
+                    0.00375,
+                    0.0045,
+                    0.0052499999999999995,
+                    0.005999999999999999
+                ],
+                "section_boundaries_m": [
+                    0,
+                    0.0007499999999999999,
+                    0.0014999999999999998,
+                    0.00225,
+                    0.003,
+                    0.00375,
+                    0.0045,
+                    0.0052499999999999995,
+                    0.005999999999999999
+                ],
+                "section_model": "pi"
+            },
+            "id": "intrinsic_filter_filter_resonator_ladder",
+            "to": "intrinsic_filter_filter_open_tail",
+            "from": "intrinsic_filter_filter_grounded_head",
+            "relation_type": "transmission_line_ladder",
+            "through": "intrinsic_filter_filter_resonator"
+        },
+        {
+            "label": "intrinsic_filter_mtl_window C12 1 start",
+            "role": "coupled_window_mutual_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 3.0362925000000002e-15
+            },
+            "id": "intrinsic_filter_mtl_window_c12_1_start",
+            "to": "intrinsic_filter_filter_resonator_node_3",
+            "from": "intrinsic_filter_readout_resonator_node_3",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_mtl_window_c12_1_start"
+        },
+        {
+            "label": "intrinsic_filter_mtl_window C12 1 stop",
+            "role": "coupled_window_mutual_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 3.0362925000000002e-15
+            },
+            "id": "intrinsic_filter_mtl_window_c12_1_stop",
+            "to": "intrinsic_filter_filter_resonator_node_4",
+            "from": "intrinsic_filter_readout_resonator_node_4",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_mtl_window_c12_1_stop"
+        },
+        {
+            "label": "intrinsic_filter_mtl_window M12 1",
+            "role": "coupled_window_mutual_inductance",
+            "parameters": {
+                "schematic_kind": "inductive_coupling",
+                "inductor_a": "intrinsic_filter_readout_resonator_l_4",
+                "mutual_inductance": 1.4313952500000002e-11,
+                "coupling_coefficient": 0.046452100350490404,
+                "inductor_b": "intrinsic_filter_filter_resonator_l_4"
+            },
+            "id": "intrinsic_filter_mtl_window_m12_1",
+            "to": "intrinsic_filter_filter_resonator_l_4",
+            "from": "intrinsic_filter_readout_resonator_l_4",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_mtl_window_m12_1"
+        },
+        {
+            "label": "intrinsic_filter_mtl_window C12 2 start",
+            "role": "coupled_window_mutual_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 3.0362925000000002e-15
+            },
+            "id": "intrinsic_filter_mtl_window_c12_2_start",
+            "to": "intrinsic_filter_filter_resonator_node_4",
+            "from": "intrinsic_filter_readout_resonator_node_4",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_mtl_window_c12_2_start"
+        },
+        {
+            "label": "intrinsic_filter_mtl_window C12 2 stop",
+            "role": "coupled_window_mutual_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 3.0362925000000002e-15
+            },
+            "id": "intrinsic_filter_mtl_window_c12_2_stop",
+            "to": "intrinsic_filter_filter_resonator_node_5",
+            "from": "intrinsic_filter_readout_resonator_node_5",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_mtl_window_c12_2_stop"
+        },
+        {
+            "label": "intrinsic_filter_mtl_window M12 2",
+            "role": "coupled_window_mutual_inductance",
+            "parameters": {
+                "schematic_kind": "inductive_coupling",
+                "inductor_a": "intrinsic_filter_readout_resonator_l_5",
+                "mutual_inductance": 1.4313952500000002e-11,
+                "coupling_coefficient": 0.046452100350490404,
+                "inductor_b": "intrinsic_filter_filter_resonator_l_5"
+            },
+            "id": "intrinsic_filter_mtl_window_m12_2",
+            "to": "intrinsic_filter_filter_resonator_l_5",
+            "from": "intrinsic_filter_readout_resonator_l_5",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_mtl_window_m12_2"
+        },
+        {
+            "label": "intrinsic_filter_mtl_window",
+            "role": "coupled_window",
+            "parameters": {
+                "coupling_orientation": "same_direction",
+                "section_lengths_m": [
+                    0.00075,
+                    0.00075
+                ],
+                "c12_per_m_f": 8.09678e-12,
+                "l_matrix_per_m_h": "[4.1086374000000003e-7 1.9085270000000002e-8; 1.9085270000000002e-8 4.1085454e-7]",
+                "lm_per_m_h": 1.9085270000000002e-8,
+                "capacitive_boundary_records": [
+                    {
+                        "boundary_side": "start",
+                        "capacitance": 3.0362925000000002e-15,
+                        "section_pair": [
+                            4,
+                            4
+                        ],
+                        "from": "intrinsic_filter_readout_resonator_node_3",
+                        "to": "intrinsic_filter_filter_resonator_node_3"
+                    },
+                    {
+                        "boundary_side": "stop",
+                        "capacitance": 3.0362925000000002e-15,
+                        "section_pair": [
+                            4,
+                            4
+                        ],
+                        "from": "intrinsic_filter_readout_resonator_node_4",
+                        "to": "intrinsic_filter_filter_resonator_node_4"
+                    },
+                    {
+                        "boundary_side": "start",
+                        "capacitance": 3.0362925000000002e-15,
+                        "section_pair": [
+                            5,
+                            5
+                        ],
+                        "from": "intrinsic_filter_readout_resonator_node_4",
+                        "to": "intrinsic_filter_filter_resonator_node_4"
+                    },
+                    {
+                        "boundary_side": "stop",
+                        "capacitance": 3.0362925000000002e-15,
+                        "section_pair": [
+                            5,
+                            5
+                        ],
+                        "from": "intrinsic_filter_readout_resonator_node_5",
+                        "to": "intrinsic_filter_filter_resonator_node_5"
+                    }
+                ],
+                "l1_per_m_h": 4.1086374000000003e-7,
+                "inductive_orientation_sign": 1,
+                "start2_m": 0.00225,
+                "c_matrix_per_m_f": "[1.7029805e-10 -8.09678e-12; -8.09678e-12 1.7029538e-10]",
+                "c1g_per_m_f": 1.6220127e-10,
+                "section_pairs": [
+                    [
+                        4,
+                        4
+                    ],
+                    [
+                        5,
+                        5
+                    ]
+                ],
+                "reference_section_length_m": 0.00075,
+                "length_m": 0.0015,
+                "c2g_per_m_f": 1.6219859999999999e-10,
+                "section_count": 2,
+                "l2_per_m_h": 4.1085454e-7,
+                "start1_m": 0.00225
+            },
+            "id": "intrinsic_filter_mtl_window",
+            "to": "(line = \"intrinsic_filter_filter_resonator\", sections = 4:5)",
+            "from": "(line = \"intrinsic_filter_readout_resonator\", sections = 4:5)",
+            "relation_type": "coupled_window",
+            "through": "MTLCoupledRLGCSpec"
+        },
+        {
+            "label": "$C_{pG}^{\\mathrm{IDC}}$",
+            "role": "interdigitated_capacitor_terminal_ground_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 3.5e-14
+            },
+            "id": "intrinsic_filter_feedline_idc_c1g",
+            "to": "ground",
+            "from": "intrinsic_filter_filter_open_tail",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$C_{f_cG}^{\\mathrm{IDC}}$",
+            "role": "interdigitated_capacitor_terminal_ground_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 3.45e-14
+            },
+            "id": "intrinsic_filter_feedline_idc_c2g",
+            "to": "ground",
+            "from": "feedline_attachment",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$C_{pf_c}^{\\mathrm{IDC}}$",
+            "role": "interdigitated_capacitor_mutual_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 3.8e-14
+            },
+            "id": "intrinsic_filter_feedline_idc_c12",
+            "to": "feedline_attachment",
+            "from": "intrinsic_filter_filter_open_tail",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_feedline_idc_c12"
+        },
+        {
+            "label": "$C_{0r}$",
+            "role": "readout_attachment_ground_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 1.8e-14
+            },
+            "id": "intrinsic_filter_c0r",
+            "to": "ground",
+            "from": "readout_attachment",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$C_{01}$",
+            "role": "floating_qubit_island_ground_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 6.5e-14
+            },
+            "id": "intrinsic_filter_with_qubit_qubit_c01",
+            "to": "ground",
+            "from": "island_1",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$C_{02}$",
+            "role": "floating_qubit_island_ground_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 6.4e-14
+            },
+            "id": "intrinsic_filter_with_qubit_qubit_c02",
+            "to": "ground",
+            "from": "island_2",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$C_{12}$",
+            "role": "floating_qubit_island_mutual_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 1.2e-14
+            },
+            "id": "intrinsic_filter_with_qubit_qubit_c12",
+            "to": "island_2",
+            "from": "island_1",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_with_qubit_qubit_c12"
+        },
+        {
+            "label": "$C_{r1}$",
+            "role": "readout_to_floating_qubit_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 4.2e-15
+            },
+            "id": "intrinsic_filter_with_qubit_qubit_cr1",
+            "to": "island_1",
+            "from": "readout_attachment",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_with_qubit_qubit_cr1"
+        },
+        {
+            "label": "$C_{r2}$",
+            "role": "readout_to_floating_qubit_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 3.8e-15
+            },
+            "id": "intrinsic_filter_with_qubit_qubit_cr2",
+            "to": "island_2",
+            "from": "readout_attachment",
+            "relation_type": "couple",
+            "through": "intrinsic_filter_with_qubit_qubit_cr2"
+        },
+        {
+            "label": "$L_{J1}$",
+            "role": "floating_qubit_linearized_josephson_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.4e-8
+            },
+            "id": "intrinsic_filter_with_qubit_qubit_lj1",
+            "to": "island_2",
+            "from": "island_1",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "$L_{J2}$",
+            "role": "floating_qubit_linearized_josephson_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.4e-8
+            },
+            "id": "intrinsic_filter_with_qubit_qubit_lj2",
+            "to": "island_2",
+            "from": "island_1",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left L1",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_left_l_1",
+            "to": "d3_design_target_distributed_feedline_left_node_1",
+            "from": "d3_design_target_f1",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left L2",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_left_l_2",
+            "to": "d3_design_target_distributed_feedline_left_node_2",
+            "from": "d3_design_target_distributed_feedline_left_node_1",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left L3",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_left_l_3",
+            "to": "d3_design_target_distributed_feedline_left_node_3",
+            "from": "d3_design_target_distributed_feedline_left_node_2",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left L4",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_left_l_4",
+            "to": "d3_design_target_distributed_feedline_left_node_4",
+            "from": "d3_design_target_distributed_feedline_left_node_3",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left L5",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_left_l_5",
+            "to": "d3_design_target_distributed_feedline_left_node_5",
+            "from": "d3_design_target_distributed_feedline_left_node_4",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left L6",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_left_l_6",
+            "to": "d3_design_target_distributed_feedline_left_node_6",
+            "from": "d3_design_target_distributed_feedline_left_node_5",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left L7",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_left_l_7",
+            "to": "d3_design_target_distributed_feedline_left_node_7",
+            "from": "d3_design_target_distributed_feedline_left_node_6",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left L8",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_left_l_8",
+            "to": "d3_design_target_distributed_feedline_left_node_8",
+            "from": "d3_design_target_distributed_feedline_left_node_7",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left L9",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_left_l_9",
+            "to": "d3_design_target_distributed_feedline_left_node_9",
+            "from": "d3_design_target_distributed_feedline_left_node_8",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left L10",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_left_l_10",
+            "to": "d3_design_target_fc_left_terminal",
+            "from": "d3_design_target_distributed_feedline_left_node_9",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 0",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 4.4965e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_0",
+            "to": "ground",
+            "from": "d3_design_target_f1",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 1",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_1",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_left_node_1",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 2",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_2",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_left_node_2",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 3",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_3",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_left_node_3",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 4",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_4",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_left_node_4",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 5",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_5",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_left_node_5",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 6",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_6",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_left_node_6",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 7",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_7",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_left_node_7",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 8",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_8",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_left_node_8",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 9",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_9",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_left_node_9",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left C node 10",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 4.4965e-15
+            },
+            "id": "d3_design_target_distributed_feedline_left_c_node_10",
+            "to": "ground",
+            "from": "d3_design_target_fc_left_terminal",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_left",
+            "role": "transmission_line_ladder",
+            "parameters": {
+                "g_per_m_s": 0,
+                "section_lengths_m": [
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5
+                ],
+                "section_rlgc_per_m": [
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    }
+                ],
+                "n_sections": 10,
+                "node_shunt_capacitance_f": [
+                    4.4965e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    4.4965e-15
+                ],
+                "r_per_m_ohm": 0,
+                "l_per_m_h": 4.04313e-7,
+                "c_per_m_f": 1.7986e-10,
+                "section_length_m": 5.0e-5,
+                "head_termination": "external",
+                "tail_termination": "external",
+                "reference_section_length_m": 5.0e-5,
+                "length_m": 0.0005,
+                "node_shunt_conductance_s": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "node_shunt_positions_m": [
+                    0,
+                    5.0e-5,
+                    0.0001,
+                    0.00015000000000000001,
+                    0.0002,
+                    0.00025,
+                    0.00030000000000000003,
+                    0.00035000000000000005,
+                    0.0004000000000000001,
+                    0.0004500000000000001,
+                    0.0005000000000000001
+                ],
+                "section_boundaries_m": [
+                    0,
+                    5.0e-5,
+                    0.0001,
+                    0.00015000000000000001,
+                    0.0002,
+                    0.00025,
+                    0.00030000000000000003,
+                    0.00035000000000000005,
+                    0.0004000000000000001,
+                    0.0004500000000000001,
+                    0.0005000000000000001
+                ],
+                "section_model": "pi"
+            },
+            "id": "d3_design_target_distributed_feedline_left_ladder",
+            "to": "d3_design_target_fc_left_terminal",
+            "from": "d3_design_target_f1",
+            "relation_type": "transmission_line_ladder",
+            "through": "d3_design_target_distributed_feedline_left"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right L1",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_right_l_1",
+            "to": "d3_design_target_distributed_feedline_right_node_1",
+            "from": "d3_design_target_fc_right_terminal",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right L2",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_right_l_2",
+            "to": "d3_design_target_distributed_feedline_right_node_2",
+            "from": "d3_design_target_distributed_feedline_right_node_1",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right L3",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_right_l_3",
+            "to": "d3_design_target_distributed_feedline_right_node_3",
+            "from": "d3_design_target_distributed_feedline_right_node_2",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right L4",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_right_l_4",
+            "to": "d3_design_target_distributed_feedline_right_node_4",
+            "from": "d3_design_target_distributed_feedline_right_node_3",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right L5",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_right_l_5",
+            "to": "d3_design_target_distributed_feedline_right_node_5",
+            "from": "d3_design_target_distributed_feedline_right_node_4",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right L6",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_right_l_6",
+            "to": "d3_design_target_distributed_feedline_right_node_6",
+            "from": "d3_design_target_distributed_feedline_right_node_5",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right L7",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_right_l_7",
+            "to": "d3_design_target_distributed_feedline_right_node_7",
+            "from": "d3_design_target_distributed_feedline_right_node_6",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right L8",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_right_l_8",
+            "to": "d3_design_target_distributed_feedline_right_node_8",
+            "from": "d3_design_target_distributed_feedline_right_node_7",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right L9",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_right_l_9",
+            "to": "d3_design_target_distributed_feedline_right_node_9",
+            "from": "d3_design_target_distributed_feedline_right_node_8",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right L10",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-11
+            },
+            "id": "d3_design_target_distributed_feedline_right_l_10",
+            "to": "d3_design_target_f2",
+            "from": "d3_design_target_distributed_feedline_right_node_9",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 0",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 4.4965e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_0",
+            "to": "ground",
+            "from": "d3_design_target_fc_right_terminal",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 1",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_1",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_right_node_1",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 2",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_2",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_right_node_2",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 3",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_3",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_right_node_3",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 4",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_4",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_right_node_4",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 5",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_5",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_right_node_5",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 6",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_6",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_right_node_6",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 7",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_7",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_right_node_7",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 8",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_8",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_right_node_8",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 9",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_9",
+            "to": "ground",
+            "from": "d3_design_target_distributed_feedline_right_node_9",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right C node 10",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 4.4965e-15
+            },
+            "id": "d3_design_target_distributed_feedline_right_c_node_10",
+            "to": "ground",
+            "from": "d3_design_target_f2",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_distributed_feedline_right",
+            "role": "transmission_line_ladder",
+            "parameters": {
+                "g_per_m_s": 0,
+                "section_lengths_m": [
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5,
+                    5.0e-5
+                ],
+                "section_rlgc_per_m": [
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    }
+                ],
+                "n_sections": 10,
+                "node_shunt_capacitance_f": [
+                    4.4965e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    8.993e-15,
+                    4.4965e-15
+                ],
+                "r_per_m_ohm": 0,
+                "l_per_m_h": 4.04313e-7,
+                "c_per_m_f": 1.7986e-10,
+                "section_length_m": 5.0e-5,
+                "head_termination": "external",
+                "tail_termination": "external",
+                "reference_section_length_m": 5.0e-5,
+                "length_m": 0.0005,
+                "node_shunt_conductance_s": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "node_shunt_positions_m": [
+                    0,
+                    5.0e-5,
+                    0.0001,
+                    0.00015000000000000001,
+                    0.0002,
+                    0.00025,
+                    0.00030000000000000003,
+                    0.00035000000000000005,
+                    0.0004000000000000001,
+                    0.0004500000000000001,
+                    0.0005000000000000001
+                ],
+                "section_boundaries_m": [
+                    0,
+                    5.0e-5,
+                    0.0001,
+                    0.00015000000000000001,
+                    0.0002,
+                    0.00025,
+                    0.00030000000000000003,
+                    0.00035000000000000005,
+                    0.0004000000000000001,
+                    0.0004500000000000001,
+                    0.0005000000000000001
+                ],
+                "section_model": "pi"
+            },
+            "id": "d3_design_target_distributed_feedline_right_ladder",
+            "to": "d3_design_target_f2",
+            "from": "d3_design_target_fc_right_terminal",
+            "relation_type": "transmission_line_ladder",
+            "through": "d3_design_target_distributed_feedline_right"
+        },
+        {
+            "label": "",
+            "role": "left_distributed_feedline_to_fc",
+            "parameters": {
+                "schematic_kind": "node_connection"
+            },
+            "id": "connect_99",
+            "to": "feedline_attachment",
+            "from": "d3_design_target_fc_left_terminal",
+            "relation_type": "connect",
+            "through": null
+        },
+        {
+            "label": "",
+            "role": "right_distributed_feedline_to_fc",
+            "parameters": {
+                "schematic_kind": "node_connection"
+            },
+            "id": "connect_100",
+            "to": "feedline_attachment",
+            "from": "d3_design_target_fc_right_terminal",
+            "relation_type": "connect",
+            "through": null
+        }
+    ],
+    "ports": [
+        {
+            "role": "signal",
+            "port_index": 1,
+            "id": "input_port",
+            "component": null,
+            "resistance": 50,
+            "endpoint": "d3_design_target_f1"
+        },
+        {
+            "role": "readout",
+            "port_index": 2,
+            "id": "output_port",
+            "component": null,
+            "resistance": 50,
+            "endpoint": "d3_design_target_f2"
+        }
+    ],
+    "groups": [
+    ],
+    "tracks": [
+    ],
+    "segments": [
+    ],
+    "coupled_spans": [
+    ],
+    "terminals": [
+        {
+            "label": "$P_1$",
+            "kind": "port",
+            "side": "left",
+            "id": "input_port",
+            "hints": {
+            },
+            "endpoint": "d3_design_target_f1",
+            "track": null
+        },
+        {
+            "label": "$P_2$",
+            "kind": "port",
+            "side": "right",
+            "id": "output_port",
+            "hints": {
+            },
+            "endpoint": "d3_design_target_f2",
+            "track": null
+        }
+    ],
+    "node_labels": [
+        {
+            "label": "$f_c$",
+            "id": "feedline_attachment",
+            "hints": {
+                "placement_target": "feedline_center",
+                "placement": "marker",
+                "offset": 0.28,
+                "loc": "top"
+            },
+            "target": "feedline_attachment"
+        },
+        {
+            "label": "$f_1$",
+            "id": "feedline_left",
+            "hints": {
+                "placement_target": "feedline_left_inner_bus",
+                "placement": "bus_middle",
+                "offset": 0.28,
+                "loc": "top"
+            },
+            "target": "d3_design_target_f1"
+        },
+        {
+            "label": "$f_2$",
+            "id": "feedline_right",
+            "hints": {
+                "placement_target": "feedline_right_inner_bus",
+                "placement": "bus_middle",
+                "offset": 0.28,
+                "loc": "top"
+            },
+            "target": "d3_design_target_f2"
+        },
+        {
+            "label": "$p$",
+            "id": "filter_open_tail",
+            "hints": {
+                "placement_target": "filter_open_tail",
+                "placement": "marker",
+                "offset": [
+                    0.28,
+                    0.5
+                ],
+                "loc": "top"
+            },
+            "target": "intrinsic_filter_filter_open_tail"
+        },
+        {
+            "label": "$q_1$",
+            "id": "island_1",
+            "hints": {
+                "placement_target": "qubit_q1_terminal",
+                "placement": "marker",
+                "offset": 0.28,
+                "loc": "top"
+            },
+            "target": "island_1"
+        },
+        {
+            "label": "$q_2$",
+            "id": "island_2",
+            "hints": {
+                "placement_target": "qubit_q2_terminal",
+                "placement": "marker",
+                "offset": 0.28,
+                "loc": "bottom"
+            },
+            "target": "island_2"
+        },
+        {
+            "label": "$r$",
+            "id": "readout_attachment",
+            "hints": {
+                "placement_target": "readout_attachment",
+                "placement": "marker",
+                "offset": 0.28,
+                "loc": "left"
+            },
+            "target": "readout_attachment"
+        }
+    ],
+    "segment_labels": [
+    ],
+    "anchors": [
+    ],
+    "layout_hints": {
+    },
+    "render_hints": {
+        "schemdraw": {
+            "parameters": {
+                "idc_parameterization": "one_geometry_coordinate_derives_three_capacitances",
+                "component_id": "intrinsic_filter_with_qubit",
+                "qubit_inductive_branch_kind": "linearized_josephson",
+                "feedline_coupling_kind": "interdigitated_three_branch",
+                "optimizer_parameterization": "three_branch_idc_mapping_only",
+                "feedline_model": "split_distributed_cpw",
+                "contains_feedline": true
+            },
+            "unit_length": 1.5,
+            "labels": {
+                "output_port_label": "$P_2$",
+                "cr2_label": "$C_{r2}$",
+                "lj1_label": "$L_{J1}$",
+                "capacitive_label": "$C_m$",
+                "inductive_label": "$M$",
+                "feedline_left_label": "$\\mathrm{CPW\\ feedline}\\ \\ell_f/2$",
+                "feedline_right_label": "$\\mathrm{CPW\\ feedline}\\ \\ell_f/2$",
+                "filter_tail_label": "$\\mathrm{CPW}\\ \\ell_p^o$",
+                "readout_tail_label": "$\\mathrm{CPW}\\ \\ell_r^o$",
+                "cpg_label": "$C_{pG}^{\\mathrm{IDC}}$",
+                "c02_label": "$C_{02}$",
+                "lj2_label": "$L_{J2}$",
+                "filter_label": "$\\lambda/4\\ \\mathrm{filter}$",
+                "cpfc_label": "$C_{pf_c}^{\\mathrm{IDC}}$",
+                "input_port_label": "$P_1$",
+                "mtl_label": "$\\mathrm{MTL}\\ \\ell_c$",
+                "qubit_c12_label": "$C_{12}$",
+                "input_port_resistance_label": "$R_{50}$",
+                "readout_label": "$\\lambda/4\\ \\mathrm{readout}$",
+                "readout_head_label": "$\\mathrm{CPW}\\ \\ell_r^s$",
+                "output_port_resistance_label": "$R_{50}$",
+                "c01_label": "$C_{01}$",
+                "filter_head_label": "$\\mathrm{CPW}\\ \\ell_p^s$",
+                "cr1_label": "$C_{r1}$",
+                "c0r_label": "$C_{0r}$",
+                "cfcg_label": "$C_{f_cG}^{\\mathrm{IDC}}$"
+            },
+            "node_bindings": {
+                "feedline_left": "d3_design_target_f1",
+                "island_2": "island_2",
+                "filter_open_tail": "intrinsic_filter_filter_open_tail",
+                "island_1": "island_1",
+                "feedline_attachment": "feedline_attachment",
+                "readout_attachment": "readout_attachment",
+                "feedline_right": "d3_design_target_f2"
+            },
+            "component_type": "D3IntrinsicPurcellHybridizedCircuitPlan"
+        }
+    }
+}

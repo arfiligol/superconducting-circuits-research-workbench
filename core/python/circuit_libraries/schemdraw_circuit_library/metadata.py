@@ -359,6 +359,34 @@ def public_terminal_point(
     return (round(float(point[0]), 12), round(float(point[1]), 12))
 
 
+def add_at_public_terminal(
+    owner: Any,
+    component: CircuitVisualComponent,
+    terminal: str,
+    point: AnchorPoint,
+) -> Any:
+    """Place and add a child by one of its public electrical terminals."""
+
+    try:
+        anchor = component.public_terminals[terminal].anchor
+    except KeyError as exc:
+        component_name = getattr(component, "component_id", "") or component.component_kind
+        raise CircuitVisualContractError(
+            f"{component_name}: unknown public terminal {terminal!r}."
+        ) from exc
+
+    expected = (round(float(point[0]), 12), round(float(point[1]), 12))
+    placed = owner.add(component.at(point).anchor(anchor))
+    actual = public_terminal_point(placed, terminal, transformed=True)
+    if actual != expected:
+        component_name = getattr(component, "component_id", "") or component.component_kind
+        raise CircuitVisualContractError(
+            f"{component_name}: public terminal {terminal!r} placement mismatch; "
+            f"expected {expected!r}, actual {actual!r}."
+        )
+    return placed
+
+
 def validate_block_clearance(
     blocks: Mapping[str, Any],
     *,
@@ -379,10 +407,14 @@ def validate_block_clearance(
         for right_name in names[index + 1 :]:
             right = bounds[right_name]
             separated = (
-                left.xmax + clearance <= right.xmin
-                or right.xmax + clearance <= left.xmin
-                or left.ymax + clearance <= right.ymin
-                or right.ymax + clearance <= left.ymin
+                round(float(left.xmax + clearance), 12)
+                <= round(float(right.xmin), 12)
+                or round(float(right.xmax + clearance), 12)
+                <= round(float(left.xmin), 12)
+                or round(float(left.ymax + clearance), 12)
+                <= round(float(right.ymin), 12)
+                or round(float(right.ymax + clearance), 12)
+                <= round(float(left.ymin), 12)
             )
             if not separated:
                 raise CircuitVisualContractError(
@@ -407,6 +439,7 @@ __all__ = [
     "PortMap",
     "TerminalFacing",
     "TerminalSpec",
+    "add_at_public_terminal",
     "public_terminal_point",
     "render_connection_markers",
     "render_physical_node_labels",

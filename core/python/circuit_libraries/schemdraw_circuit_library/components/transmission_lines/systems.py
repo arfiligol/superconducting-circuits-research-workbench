@@ -12,12 +12,14 @@ from schemdraw_circuit_library.components.lumped import (
     InductiveBranchKind,
     LinearizedFloatingQubit,
 )
+from schemdraw_circuit_library.components.ports import Port50Ohm
 from schemdraw_circuit_library.metadata import (
     BusSpec,
     ConnectionMarkerSpec,
     NodeLabelSpec,
     NodeMarkerSpec,
     TerminalSpec,
+    add_at_public_terminal,
     public_terminal_point,
     render_connection_markers,
     render_physical_node_labels,
@@ -28,9 +30,9 @@ from schemdraw_circuit_library.rendering.preview import PreviewCase, run_preview
 from schemdraw_circuit_library.theme import SCHEMATIC_DOT_RADIUS, Theme, theme_color
 
 if __package__:
-    from .pi_sections import TransmissionLineSegment
+    from .pi_sections import PiSectionChain, TransmissionLineSegment
 else:
-    from pi_sections import TransmissionLineSegment
+    from pi_sections import PiSectionChain, TransmissionLineSegment
 
 
 class PointCoupledReadoutPurcell(elm.ElementCompound):
@@ -46,7 +48,7 @@ class PointCoupledReadoutPurcell(elm.ElementCompound):
         line_units: float = 1.45,
         filter_units: float = 2.2,
         track_gap_units: float = 0.9,
-        port_stub_units: float = 0.45,
+        port_stub_units: float = 0.5,
         theme: Theme = "light",
         input_line_label: str | None = r"$\mathrm{input\ CPW}$",
         filter_label: str | None = r"$\mathrm{filter\ CPW}$",
@@ -207,7 +209,7 @@ class ReadoutLineHangingQWRMTL(elm.ElementCompound):
         track_gap_units: float = 1.0,
         window_start_units: float = 1.15,
         window_length_units: float = 0.9,
-        port_stub_units: float = 0.45,
+        port_stub_units: float = 0.5,
         theme: Theme = "light",
         readout_label: str | None = r"$\mathrm{readout\ CPW}$",
         qwr_label: str | None = r"$\lambda/4\ \mathrm{QWR}$",
@@ -431,7 +433,7 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
         qwr_gap_units: float = 1.75,
         window_start_fraction: float = 0.42,
         window_length_units: float = 0.8,
-        port_stub_units: float = 0.45,
+        port_stub_units: float = 0.5,
         theme: Theme = "light",
         left_port_label: str | None = None,
         right_port_label: str | None = None,
@@ -866,6 +868,7 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
         c0r_label: str | None = None,
         physical_node_labels: Mapping[str, NodeLabelSpec] | None = None,
         show_readout_terminal: bool = True,
+        show_feedline_terminal: bool = True,
         show_window_markers: bool = False,
         show_nodes: bool = True,
         show_labels: bool = True,
@@ -896,6 +899,7 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
         self._pending_physical_node_labels = dict(physical_node_labels or {})
         self.physical_node_labels: dict[str, NodeLabelSpec] = {}
         self.show_readout_terminal = show_readout_terminal
+        self.show_feedline_terminal = show_feedline_terminal
         self.show_window_markers = show_window_markers
         self.show_nodes = show_nodes
         self.show_labels = show_labels
@@ -1120,7 +1124,8 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
             self._window_marker(A["readout_window_left"], A["filter_window_left"])
             self._window_marker(A["readout_window_right"], A["filter_window_right"])
 
-        self.feedline_idc = self.add(
+        self.feedline_idc = add_at_public_terminal(
+            self,
             InterdigitatedCapacitor(
                 component_id=f"{self.component_id}_feedline_idc",
                 unit_length=u,
@@ -1134,9 +1139,9 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
                 show_terminals=False,
                 show_nodes=False,
                 show_labels=self.show_labels,
-            )
-            .at((A["filter_open_tail"][0] + idc_stub, A["filter_open_tail"][1]))
-            .right()
+            ).theta(0),
+            "terminal_1",
+            A["filter_open_tail"],
         )
         idc_filter_terminal = public_terminal_point(
             self.feedline_idc,
@@ -1181,7 +1186,7 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
             )
             if self.show_labels:
                 self._block_label(
-                    (visual_length - u * 0.25, -u * 0.48),
+                    (visual_length - u * 0.7, -u * 0.58),
                     self.c0r_label,
                     color,
                 )
@@ -1251,13 +1256,15 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
             "connection",
         )
         validate_component_metadata(self)
-        markers = [
-            ConnectionMarkerSpec(
-                A["feedline_attachment"],
-                "exposed",
-                node="feedline_attachment",
+        markers = []
+        if self.show_feedline_terminal:
+            markers.append(
+                ConnectionMarkerSpec(
+                    A["feedline_attachment"],
+                    "exposed",
+                    node="feedline_attachment",
+                )
             )
-        ]
         if self.show_readout_terminal:
             markers.append(
                 ConnectionMarkerSpec(
@@ -1526,7 +1533,8 @@ def _add_floating_qubit_projection(component: Any) -> None:
             color=color,
             radius=dot_radius,
         )
-    _finish_physical_node_labels(component)
+    if not getattr(component, "_defer_top_level_physical_node_labels", False):
+        _finish_physical_node_labels(component)
     qubit_bbox = component.qubit_block.get_bbox(transform=True, includetext=False)
     component.elmparams["drop"] = (
         max(component.anchors["feedline_attachment"][0], qubit_bbox.xmax),
@@ -1612,6 +1620,7 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
         c0r_label: str | None = None,
         physical_node_labels: Mapping[str, NodeLabelSpec] | None = None,
         show_readout_terminal: bool = True,
+        show_feedline_terminal: bool = True,
         show_nodes: bool = True,
         show_labels: bool = True,
         **kwargs: Any,
@@ -1636,6 +1645,7 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
         self._pending_physical_node_labels = dict(physical_node_labels or {})
         self.physical_node_labels: dict[str, NodeLabelSpec] = {}
         self.show_readout_terminal = show_readout_terminal
+        self.show_feedline_terminal = show_feedline_terminal
         self.show_nodes = show_nodes
         self.show_labels = show_labels
         super().__init__(**kwargs)
@@ -1652,7 +1662,8 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
         )
         self.visual_netlist: list[dict[str, str]] = []
 
-        self.readout_resonator = self.add(
+        self.readout_resonator = add_at_public_terminal(
+            self,
             GroundedLCResonator(
                 component_id=f"{self.component_id}_readout_resonator",
                 unit_length=u,
@@ -1665,16 +1676,17 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
                 show_nodes=False,
                 show_terminals=False,
                 show_labels=self.show_labels,
-            )
-            .at(readout)
-            .anchor("start")
+            ),
+            "left",
+            readout,
         )
         self._record_visual_branch("readout_cr", "capacitor", "readout_attachment", "ground")
         self._record_visual_branch("readout_lr", "inductor", "readout_attachment", "ground")
         if self.c0r_label is not None:
             self._record_visual_branch("c0r", "capacitor", "readout_attachment", "ground")
 
-        self.filter_resonator = self.add(
+        self.filter_resonator = add_at_public_terminal(
+            self,
             GroundedLCResonator(
                 component_id=f"{self.component_id}_filter_resonator",
                 unit_length=u,
@@ -1686,9 +1698,9 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
                 show_nodes=False,
                 show_terminals=False,
                 show_labels=self.show_labels,
-            )
-            .at(filter_node)
-            .anchor("start")
+            ),
+            "left",
+            filter_node,
         )
         self._record_visual_branch("filter_cp", "capacitor", "filter", "ground")
         self._record_visual_branch("filter_lp", "inductor", "filter", "ground")
@@ -1710,7 +1722,8 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
             raise ValueError(
                 "resonator separation leaves no room for the bridge and its connections."
             )
-        self.bridge_resonator = self.add(
+        self.bridge_resonator = add_at_public_terminal(
+            self,
             FloatingParallelLC(
                 component_id=f"{self.component_id}_bridge_resonator",
                 unit_length=u,
@@ -1724,9 +1737,9 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
                 show_nodes=False,
                 show_terminals=False,
                 show_labels=self.show_labels,
-            )
-            .at(bridge_left)
-            .anchor("start")
+            ),
+            "left",
+            bridge_left,
         )
         bridge_terminal_right = public_terminal_point(
             self.bridge_resonator,
@@ -1747,7 +1760,8 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
             transformed=True,
         )
         idc_start = filter_output
-        self.feedline_idc = self.add(
+        self.feedline_idc = add_at_public_terminal(
+            self,
             InterdigitatedCapacitor(
                 component_id=f"{self.component_id}_feedline_idc",
                 unit_length=u,
@@ -1761,9 +1775,9 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
                 show_terminals=False,
                 show_nodes=False,
                 show_labels=self.show_labels,
-            )
-            .at(idc_start)
-            .anchor("terminal_1_port")
+            ).theta(0),
+            "terminal_1",
+            idc_start,
         )
         feedline = public_terminal_point(
             self.feedline_idc,
@@ -1779,6 +1793,14 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
             != filter_output
         ):
             raise ValueError("The IDC must connect directly to the filter terminal.")
+        validate_block_clearance(
+            {
+                "filter_resonator": self.filter_resonator,
+                "feedline_idc": self.feedline_idc,
+            },
+            clearance=0,
+            include_labels=False,
+        )
         anchors = {
             "start": readout,
             "end": feedline,
@@ -1872,13 +1894,15 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
             ),
         }
         validate_component_metadata(self)
-        markers = [
-            ConnectionMarkerSpec(
-                feedline,
-                "exposed",
-                node="feedline_attachment",
-            ),
-        ]
+        markers = []
+        if self.show_feedline_terminal:
+            markers.append(
+                ConnectionMarkerSpec(
+                    feedline,
+                    "exposed",
+                    node="feedline_attachment",
+                )
+            )
         if self.show_readout_terminal:
             markers.append(
                 ConnectionMarkerSpec(
@@ -1993,6 +2017,318 @@ class IntrinsicInterferometricPurcellFilterEquivalentWithQubit(
         _add_floating_qubit_projection(self)
 
 
+def _d3_transmission_line_segment(**kwargs: Any) -> TransmissionLineSegment:
+    """Keep the D3 box label internal instead of duplicating Schemdraw's outer label."""
+
+    segment = TransmissionLineSegment(**kwargs)
+    segment._userparams.pop("label", None)
+    return segment
+
+
+def _add_d3_feedline(component: Any, *, distributed: bool) -> None:
+    """Finish a D3 system view with its model-specific feedline and ports."""
+
+    u = component.unit_length
+    color = theme_color(component.theme)
+    center_top = component.anchors["feedline_attachment"]
+    feedline_y = min(-3.2 * u, center_top[1] - 3.2 * u)
+    if distributed:
+        feedline_left = add_at_public_terminal(
+            component,
+            _d3_transmission_line_segment(
+                component_id=f"{component.component_id}_distributed_feedline_left",
+                unit_length=u,
+                length_units=2.5,
+                theme=component.theme,
+                label=component.feedline_left_label,
+                left_terminal="none",
+                right_terminal="none",
+                boxed=True,
+                show_terminals=False,
+                show_nodes=False,
+                show_labels=component.show_labels,
+            ),
+            "tail",
+            (center_top[0], feedline_y),
+        )
+        center = public_terminal_point(feedline_left, "tail", transformed=True)
+        feedline_right = add_at_public_terminal(
+            component,
+            _d3_transmission_line_segment(
+                component_id=f"{component.component_id}_distributed_feedline_right",
+                unit_length=u,
+                length_units=2.5,
+                theme=component.theme,
+                label=component.feedline_right_label,
+                left_terminal="none",
+                right_terminal="none",
+                boxed=True,
+                show_terminals=False,
+                show_nodes=False,
+                show_labels=component.show_labels,
+            ),
+            "head",
+            center,
+        )
+        left = public_terminal_point(feedline_left, "head", transformed=True)
+        right = public_terminal_point(feedline_right, "tail", transformed=True)
+        left_inner = (
+            round(float(feedline_left.absanchors["body_head"][0]), 12),
+            round(float(feedline_left.absanchors["body_head"][1]), 12),
+        )
+        right_inner = (
+            round(float(feedline_right.absanchors["body_tail"][0]), 12),
+            round(float(feedline_right.absanchors["body_tail"][1]), 12),
+        )
+        feedline = (feedline_left, feedline_right)
+    else:
+        feedline_port_stub_units = 1.2
+        feedline = add_at_public_terminal(
+            component,
+            PiSectionChain(
+                component_id=f"{component.component_id}_two_pi_feedline",
+                n=2,
+                unit_length=u,
+                spacing_units=2.0,
+                height_units=1.0,
+                port_stub_units=feedline_port_stub_units,
+                reduce_capacitance=True,
+                theme=component.theme,
+                l_label_template=component.feedline_l_label_template,
+                c_half_label=component.feedline_c_half_label,
+                c_reduced_label=component.feedline_c_center_label,
+                left_port_label=None,
+                right_port_label=None,
+                show_terminals=False,
+                show_nodes=False,
+                show_labels=component.show_labels,
+            ),
+            "tap_0",
+            (center_top[0] - 2.0 * u, feedline_y),
+        )
+        center = public_terminal_point(feedline, "tap_1", transformed=True)
+        left = public_terminal_point(feedline, "left", transformed=True)
+        right = public_terminal_point(feedline, "right", transformed=True)
+        left_inner = public_terminal_point(feedline, "tap_0", transformed=True)
+        right_inner = public_terminal_point(feedline, "tap_2", transformed=True)
+    input_port = add_at_public_terminal(
+        component,
+        Port50Ohm(
+            component_id=f"{component.component_id}_input_port",
+            unit_length=u,
+            side="left",
+            stub_units=0.7,
+            load_direction="up",
+            theme=component.theme,
+            port_label=component.input_port_label,
+            resistance_label=component.input_port_resistance_label,
+            resistance_label_loc="top",
+            show_nodes=False,
+            show_terminals=True,
+            show_labels=component.show_labels,
+        ),
+        "circuit",
+        left,
+    )
+    output_port = add_at_public_terminal(
+        component,
+        Port50Ohm(
+            component_id=f"{component.component_id}_output_port",
+            unit_length=u,
+            side="right",
+            stub_units=0.7,
+            load_direction="up",
+            theme=component.theme,
+            port_label=component.output_port_label,
+            resistance_label=component.output_port_resistance_label,
+            resistance_label_loc="bottom",
+            show_nodes=False,
+            show_terminals=True,
+            show_labels=component.show_labels,
+        ),
+        "circuit",
+        right,
+    )
+    input_terminal = public_terminal_point(input_port, "signal", transformed=True)
+    output_terminal = public_terminal_point(output_port, "signal", transformed=True)
+    component.add(elm.Line(color=color).endpoints(center_top, center))
+    component.feedline = feedline
+    component.input_port = input_port
+    component.output_port = output_port
+    component.anchors.update(
+        {
+            "feedline_center": center,
+            "feedline_left": left,
+            "feedline_right": right,
+            "feedline_left_inner": left_inner,
+            "feedline_right_inner": right_inner,
+            "input_port_terminal": input_terminal,
+            "output_port_terminal": output_terminal,
+        }
+    )
+    component.physical_nodes["feedline_attachment"].extend(
+        ["feedline_center"]
+    )
+    component.physical_nodes.update(
+        {
+            "feedline_left": [
+                "feedline_left",
+                "feedline_left_inner",
+                "input_port_terminal",
+            ],
+            "feedline_right": [
+                "feedline_right_inner",
+                "feedline_right",
+                "output_port_terminal",
+            ],
+        }
+    )
+    component.ports = {
+        "input_port": "feedline_left",
+        "output_port": "feedline_right",
+    }
+    component.public_terminals = {
+        "input_port": TerminalSpec("feedline_left", "input_port_terminal", "left"),
+        "output_port": TerminalSpec("feedline_right", "output_port_terminal", "right"),
+    }
+    component.buses["feedline_center_connection"] = BusSpec(
+        "feedline_attachment",
+        ("feedline_attachment", "feedline_center"),
+    )
+    component.buses["input_port_connection"] = BusSpec(
+        "feedline_left",
+        ("input_port_terminal", "feedline_left"),
+    )
+    component.buses["feedline_left_inner_bus"] = BusSpec(
+        "feedline_left",
+        ("feedline_left", "feedline_left_inner"),
+    )
+    component.buses["feedline_right_inner_bus"] = BusSpec(
+        "feedline_right",
+        ("feedline_right_inner", "feedline_right"),
+    )
+    component.buses["output_port_connection"] = BusSpec(
+        "feedline_right",
+        ("feedline_right", "output_port_terminal"),
+    )
+    component.node_markers["feedline_center"] = NodeMarkerSpec(
+        "feedline_attachment",
+        "feedline_center",
+        "junction",
+    )
+    component.node_markers["feedline_left"] = NodeMarkerSpec(
+        "feedline_left",
+        "feedline_left",
+        "junction",
+    )
+    component.node_markers["feedline_right"] = NodeMarkerSpec(
+        "feedline_right",
+        "feedline_right",
+        "junction",
+    )
+    validate_component_metadata(component)
+    render_connection_markers(
+        component,
+        [
+            ConnectionMarkerSpec(
+                component.anchors["readout_attachment"],
+                "connected",
+                node="readout_attachment",
+            ),
+            ConnectionMarkerSpec(
+                component.anchors[
+                    "filter" if "filter" in component.anchors else "filter_open_tail"
+                ],
+                "connected",
+                node="filter" if "filter" in component.physical_nodes else "filter_open_tail",
+            ),
+            ConnectionMarkerSpec(
+                component.anchors["island_1"],
+                "connected",
+                node="island_1",
+            ),
+            ConnectionMarkerSpec(
+                component.anchors["island_2"],
+                "connected",
+                node="island_2",
+            ),
+            ConnectionMarkerSpec(center, "junction", node="feedline_attachment"),
+            ConnectionMarkerSpec(left, "junction", node="feedline_left"),
+            ConnectionMarkerSpec(right, "junction", node="feedline_right"),
+        ],
+        color=color,
+        radius=SCHEMATIC_DOT_RADIUS,
+    )
+    _finish_physical_node_labels(component)
+    component.elmparams["drop"] = output_terminal
+
+
+class D3IntrinsicPurcellEquivalentCircuitPlan(
+    IntrinsicInterferometricPurcellFilterEquivalentWithQubit
+):
+    """Top-level full-IDC equivalent plan with two-pi feedline and ports."""
+
+    component_kind: ClassVar[str] = "D3IntrinsicPurcellEquivalentCircuitPlan"
+
+    def __init__(
+        self,
+        *,
+        feedline_l_label_template: str = r"$L_{{\Delta f,{index}}}$",
+        feedline_c_half_label: str = r"$C_{\Delta f}/2$",
+        feedline_c_center_label: str = r"$C_{\Delta f}$",
+        input_port_label: str = r"$P_1$",
+        output_port_label: str = r"$P_2$",
+        input_port_resistance_label: str = r"$R_{50}$",
+        output_port_resistance_label: str = r"$R_{50}$",
+        **kwargs: Any,
+    ) -> None:
+        self.feedline_l_label_template = feedline_l_label_template
+        self.feedline_c_half_label = feedline_c_half_label
+        self.feedline_c_center_label = feedline_c_center_label
+        self.input_port_label = input_port_label
+        self.output_port_label = output_port_label
+        self.input_port_resistance_label = input_port_resistance_label
+        self.output_port_resistance_label = output_port_resistance_label
+        self._defer_top_level_physical_node_labels = True
+        super().__init__(show_nodes=False, show_feedline_terminal=False, **kwargs)
+
+    def setup(self) -> None:
+        super().setup()
+        _add_d3_feedline(self, distributed=False)
+
+
+class D3IntrinsicPurcellHybridizedCircuitPlan(
+    IntrinsicInterferometricPurcellFilterWithQubit
+):
+    """Top-level distributed/lumped full-IDC plan with a split CPW feedline."""
+
+    component_kind: ClassVar[str] = "D3IntrinsicPurcellHybridizedCircuitPlan"
+
+    def __init__(
+        self,
+        *,
+        feedline_left_label: str = r"$\mathrm{CPW\ feedline}\ \ell_f/2$",
+        feedline_right_label: str = r"$\mathrm{CPW\ feedline}\ \ell_f/2$",
+        input_port_label: str = r"$P_1$",
+        output_port_label: str = r"$P_2$",
+        input_port_resistance_label: str = r"$R_{50}$",
+        output_port_resistance_label: str = r"$R_{50}$",
+        **kwargs: Any,
+    ) -> None:
+        self.feedline_left_label = feedline_left_label
+        self.feedline_right_label = feedline_right_label
+        self.input_port_label = input_port_label
+        self.output_port_label = output_port_label
+        self.input_port_resistance_label = input_port_resistance_label
+        self.output_port_resistance_label = output_port_resistance_label
+        self._defer_top_level_physical_node_labels = True
+        super().__init__(show_nodes=False, show_feedline_terminal=False, **kwargs)
+
+    def setup(self) -> None:
+        super().setup()
+        _add_d3_feedline(self, distributed=True)
+
+
 PREVIEW_CASES: tuple[PreviewCase, ...] = (
     PreviewCase(
         "point_coupled_readout_purcell",
@@ -2078,6 +2414,8 @@ if __name__ == "__main__":
 
 __all__ = [
     "CoupledCPWTransmissionLine",
+    "D3IntrinsicPurcellEquivalentCircuitPlan",
+    "D3IntrinsicPurcellHybridizedCircuitPlan",
     "IntrinsicInterferometricPurcellFilter",
     "IntrinsicInterferometricPurcellFilterEquivalent",
     "IntrinsicInterferometricPurcellFilterEquivalentWithQubit",

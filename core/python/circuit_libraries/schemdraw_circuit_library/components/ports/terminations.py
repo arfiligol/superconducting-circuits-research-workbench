@@ -30,7 +30,7 @@ class PortTerminal(elm.ElementCompound):
         component_id: str = "",
         unit_length: float = 3.0,
         side: PortSide = "right",
-        stub_units: float = 0.45,
+        stub_units: float = 0.5,
         theme: Theme = "light",
         port_label: str | None = None,
         show_nodes: bool = True,
@@ -73,6 +73,11 @@ class PortTerminal(elm.ElementCompound):
         self.ports = {"signal": "port"}
         self.public_terminals = {
             "signal": TerminalSpec("port", "terminal", self.side),
+            "circuit": TerminalSpec(
+                "port",
+                "node",
+                "left" if self.side == "right" else "right",
+            ),
         }
         self.buses = {"stub": BusSpec("port", ("node", "terminal"))}
         self.node_markers = {}
@@ -89,7 +94,12 @@ class PortTerminal(elm.ElementCompound):
                 self.terminal_label = self.add(
                     elm.Dot(open=True, radius=0, color=color)
                     .at(A["terminal"])
-                    .label(self.port_label, loc=terminal_label_loc, color=color)
+                    .label(
+                        self.port_label,
+                        loc=terminal_label_loc,
+                        ofst=0.15 * self.unit_length,
+                        color=color,
+                    )
                     .hold()
                 )
         self.elmparams["drop"] = A["end"]
@@ -106,8 +116,9 @@ class Port50Ohm(elm.ElementCompound):
         component_id: str = "",
         unit_length: float = 3.0,
         side: PortSide = "right",
-        stub_units: float = 0.45,
+        stub_units: float = 0.7,
         height_units: float = 1.0,
+        load_lead_units: float = 0.25,
         load_direction: PortLoadDirection = "down",
         theme: Theme = "light",
         port_label: str | None = None,
@@ -123,9 +134,11 @@ class Port50Ohm(elm.ElementCompound):
         self.side = side
         self.stub_units = stub_units
         self.height_units = height_units
+        self.load_lead_units = load_lead_units
         self.load_direction: PortLoadDirection = load_direction
         self.stub = unit_length * stub_units
         self.height = unit_length * height_units
+        self.load_lead = unit_length * load_lead_units
         self.theme: Theme = theme
         self.port_label = port_label
         self.resistance_label = resistance_label if resistance_label is not None else r"$R_{50}$"
@@ -141,6 +154,8 @@ class Port50Ohm(elm.ElementCompound):
             raise ValueError("Port50Ohm side must be 'left' or 'right'.")
         if self.load_direction not in {"up", "down"}:
             raise ValueError("Port50Ohm load_direction must be 'up' or 'down'.")
+        if not 0 < self.load_lead_units < self.height_units:
+            raise ValueError("Port50Ohm requires 0 < load_lead_units < height_units.")
 
         sign = 1 if self.side == "right" else -1
         load_sign = 1 if self.load_direction == "up" else -1
@@ -154,13 +169,14 @@ class Port50Ohm(elm.ElementCompound):
             "end": (sign * self.stub, 0),
             "node": (0, 0),
             "terminal": (sign * self.stub, 0),
-            "res_top": (0, 0),
+            "res_top": (0, load_sign * self.load_lead),
             "res_bot": load_end,
             "gnd": load_end,
         }
         self.anchors.update(A)
 
         self.stub_line = self.add(elm.Line(color=color).endpoints(A["node"], A["terminal"]))
+        self.add(elm.Line(color=color).endpoints(A["node"], A["res_top"]))
         resistor = elm.Resistor(color=color).endpoints(A["res_top"], A["res_bot"])
         if self.show_labels:
             resistor = resistor.label(
@@ -179,8 +195,16 @@ class Port50Ohm(elm.ElementCompound):
         self.ports = {"signal": "port"}
         self.public_terminals = {
             "signal": TerminalSpec("port", "terminal", self.side),
+            "circuit": TerminalSpec(
+                "port",
+                "node",
+                "left" if self.side == "right" else "right",
+            ),
         }
-        self.buses = {"stub": BusSpec("port", ("node", "terminal"))}
+        self.buses = {
+            "stub": BusSpec("port", ("node", "terminal")),
+            "load_lead": BusSpec("port", ("node", "res_top")),
+        }
         self.node_markers = {}
         self.physical_node_labels = {}
         validate_component_metadata(self)
@@ -195,7 +219,12 @@ class Port50Ohm(elm.ElementCompound):
                 self.terminal_label = self.add(
                     elm.Dot(open=True, radius=0, color=color)
                     .at(A["terminal"])
-                    .label(self.port_label, loc=terminal_label_loc, color=color)
+                    .label(
+                        self.port_label,
+                        loc=terminal_label_loc,
+                        ofst=0.15 * self.unit_length,
+                        color=color,
+                    )
                     .hold()
                 )
         self.elmparams["drop"] = A["end"]

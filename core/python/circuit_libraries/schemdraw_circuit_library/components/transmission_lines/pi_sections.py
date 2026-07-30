@@ -31,7 +31,7 @@ class PiSectionChain(elm.ElementCompound):
         unit_length: float = 3.0,
         spacing_units: float = 1.0,
         height_units: float = 0.9,
-        port_stub_units: float = 0.45,
+        port_stub_units: float = 0.5,
         reduce_capacitance: bool = True,
         cap_pair_offset_units: float = 0.12,
         theme: Theme = "light",
@@ -145,6 +145,10 @@ class PiSectionChain(elm.ElementCompound):
         self.public_terminals = {
             "left": TerminalSpec("n0", "left_couple", "left"),
             "right": TerminalSpec(f"n{n}", "right_couple", "right"),
+            **{
+                f"tap_{k}": TerminalSpec(f"n{k}", f"node{k}", "up")
+                for k in range(n + 1)
+            },
         }
         self.buses = {
             "left_stub": BusSpec("n0", ("left_couple", "node0")),
@@ -200,7 +204,8 @@ class PiSectionChain(elm.ElementCompound):
                     "exposed",
                     node=spec.node,
                 )
-                for spec in self.public_terminals.values()
+                for terminal in ("left", "right")
+                for spec in (self.public_terminals[terminal],)
             )
         render_connection_markers(
             self,

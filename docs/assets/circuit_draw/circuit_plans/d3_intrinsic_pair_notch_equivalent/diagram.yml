@@ -1,0 +1,30 @@
+schema_version: 1
+diagram_id: circuit_plan.d3_intrinsic_pair_notch_equivalent
+title: D3 equivalent intrinsic-pair notch Circuit Plan
+source_path: docs/assets/circuit_draw/circuit_plans/d3_intrinsic_pair_notch_equivalent/draw.py
+core_export_fixture: docs/assets/circuit_draw/circuit_plans/d3_intrinsic_pair_notch_equivalent/schematic_export.json
+outputs:
+  light:
+    svg: docs/assets/circuit_draw/circuit_plans/d3_intrinsic_pair_notch_equivalent/diagram.light.svg
+  dark:
+    svg: docs/assets/circuit_draw/circuit_plans/d3_intrinsic_pair_notch_equivalent/diagram.dark.svg
+owning_docs:
+  - docs/concepts/equivalent-circuit-modeling/d3-readout-filter-s21-fit-api.md
+julia_core_semantics:
+  docs:
+    - docs/reference/julia-core/components-and-composition.mdx
+    - docs/reference/julia-core/schematic-layout-intent.md
+  source_refs:
+    - core/julia/SuperconductingCircuitsCore/src/components/reusable_components.jl
+physical_model_refs:
+  - docs/reference/research-contracts/equivalent-circuit-model-contract.md
+canonical_physics_urls:
+  - https://github.com/arfiligol/SCQ_Design/blob/main/docs/design-targets/d3-intrinsic-interferometric-purcell-filter.qmd
+  - https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/finite-order-port-response-and-chain-realizations.qmd
+implementation_refs:
+  - notebooks/pluto/D3 Intrinsic Purcell Filter Design/d3_circuit_plans.jl
+  - scripts/build/export_d3_schematic_exports.jl
+  - docs/assets/circuit_draw/circuit_plans/d3_auxiliary.py
+review:
+  status: draft
+  notes: CONVERGING intrinsic RP-on Z21-zero authority; qubit, C0r, IDC and feedline are absent.

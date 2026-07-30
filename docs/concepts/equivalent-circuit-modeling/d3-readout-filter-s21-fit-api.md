@@ -26,6 +26,67 @@ before reviewing this implementation. The Super Repo owns the physics,
 identifiability, and interpretation. This page owns only the Workbench API,
 failure, and artifact boundaries.
 
+## Project-owned Circuit Plans
+
+D3 owns the complete Equivalent and Hybridized research circuits in
+`notebooks/pluto/D3 Intrinsic Purcell Filter Design/d3_circuit_plans.jl`.
+The project Plan Builders compose the reusable Julia Core qubit/filter
+components, then add the D3 feedline, two 50-ohm ports, physical-node labels,
+and top-level schematic intent. The complete circuits are not Core reusable
+components.
+
+The committed diagrams follow the Workbench export path:
+
+```text
+D3 project Plan Builder
+-> CircuitPlan + EngineeringGraph + SchematicLayoutIntent
+-> schematic_export.json
+-> explicit D3 Schemdraw projection
+-> light/dark SVG
+```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../../assets/circuit_draw/circuit_plans/d3_intrinsic_purcell_equivalent/diagram.dark.svg" />
+  <img alt="D3 equivalent full-QRP Circuit Plan" src="../../assets/circuit_draw/circuit_plans/d3_intrinsic_purcell_equivalent/diagram.light.svg" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../../assets/circuit_draw/circuit_plans/d3_intrinsic_purcell_hybridized/diagram.dark.svg" />
+  <img alt="D3 hybridized distributed and lumped full-QRP Circuit Plan" src="../../assets/circuit_draw/circuit_plans/d3_intrinsic_purcell_hybridized/diagram.light.svg" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../../assets/circuit_draw/circuit_plans/d3_linewidth_la_equivalent/diagram.dark.svg" />
+  <img alt="D3 equivalent linewidth L_A calibration Circuit Plan" src="../../assets/circuit_draw/circuit_plans/d3_linewidth_la_equivalent/diagram.light.svg" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../../assets/circuit_draw/circuit_plans/d3_linewidth_la_hybridized/diagram.dark.svg" />
+  <img alt="D3 hybridized linewidth L_A calibration Circuit Plan" src="../../assets/circuit_draw/circuit_plans/d3_linewidth_la_hybridized/diagram.light.svg" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../../assets/circuit_draw/circuit_plans/d3_intrinsic_pair_notch_equivalent/diagram.dark.svg" />
+  <img alt="D3 equivalent intrinsic-pair notch Circuit Plan" src="../../assets/circuit_draw/circuit_plans/d3_intrinsic_pair_notch_equivalent/diagram.light.svg" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../../assets/circuit_draw/circuit_plans/d3_intrinsic_pair_notch_hybridized/diagram.dark.svg" />
+  <img alt="D3 hybridized intrinsic-pair notch Circuit Plan" src="../../assets/circuit_draw/circuit_plans/d3_intrinsic_pair_notch_hybridized/diagram.light.svg" />
+</picture>
+
+These are topology-review fixtures, not optimized design results. Their
+three-branch IDC values are one coherent export fixture.
+The explicit visual mapping is required because generic netlist-to-diagram
+inference and plan-wide automatic layout are not implemented.
+
+The D3 projection keeps the shared `Port50Ohm` load height at its `1.0u`
+default. With this page's `unit_length = 1.5` and the reusable `0.25u` load
+lead, the resistor receives `1.125` native drawing units, so its rendered
+endpoint coincides with the ground anchor. Do not shorten the load height
+without preserving the reusable-component glyph-span constraint documented in
+the Circuit Diagrams Manual.
+
 ## Entry points
 
 - Python

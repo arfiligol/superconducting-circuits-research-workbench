@@ -1,0 +1,238 @@
+{
+    "schema_version": 1,
+    "components": [
+        {
+            "label": "D3 equivalent intrinsic-pair notch",
+            "role": "intrinsic_pair_notch_extraction",
+            "parameters": {
+                "observable": "z21",
+                "excluded_subsystems": [
+                    "qubit",
+                    "c0r",
+                    "idc",
+                    "feedline"
+                ],
+                "coupling_state": "rp_on"
+            },
+            "pins": [
+                "readout_open_tail",
+                "filter_open_tail"
+            ],
+            "id": "d3_intrinsic_pair_notch_equivalent",
+            "component_type": "D3IntrinsicPairNotchEquivalentCircuitPlan"
+        },
+        {
+            "label": "intrinsic_pair_filter_resonator",
+            "role": "resonator",
+            "parameters": {
+                "capacitance_f": 4.8e-13,
+                "inductive_branch_kind": "linear",
+                "inductance_h": 1.46e-9
+            },
+            "pins": [
+                "signal"
+            ],
+            "id": "intrinsic_pair_filter_resonator",
+            "component_type": "GroundedLCResonator"
+        },
+        {
+            "label": "intrinsic_pair_readout_resonator",
+            "role": "resonator",
+            "parameters": {
+                "capacitance_f": 5.0e-13,
+                "inductive_branch_kind": "linear",
+                "inductance_h": 1.4e-9
+            },
+            "pins": [
+                "signal"
+            ],
+            "id": "intrinsic_pair_readout_resonator",
+            "component_type": "GroundedLCResonator"
+        }
+    ],
+    "relations": [
+        {
+            "label": "$C_r$",
+            "role": "parallel_lc_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 5.0e-13
+            },
+            "id": "intrinsic_pair_readout_resonator_capacitance",
+            "to": "ground",
+            "from": "intrinsic_pair_readout_open_tail",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$L_r$",
+            "role": "parallel_lc_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 1.4e-9
+            },
+            "id": "intrinsic_pair_readout_resonator_inductance",
+            "to": "ground",
+            "from": "intrinsic_pair_readout_open_tail",
+            "relation_type": "terminates",
+            "through": "inductance"
+        },
+        {
+            "label": "$C_p$",
+            "role": "parallel_lc_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 4.8e-13
+            },
+            "id": "intrinsic_pair_filter_resonator_capacitance",
+            "to": "ground",
+            "from": "intrinsic_pair_filter_open_tail",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$L_p$",
+            "role": "parallel_lc_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 1.46e-9
+            },
+            "id": "intrinsic_pair_filter_resonator_inductance",
+            "to": "ground",
+            "from": "intrinsic_pair_filter_open_tail",
+            "relation_type": "terminates",
+            "through": "inductance"
+        },
+        {
+            "label": "$C_n$",
+            "role": "intrinsic_pair_bridge_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 8.0e-15
+            },
+            "id": "intrinsic_pair_bridge_capacitor",
+            "to": "intrinsic_pair_filter_open_tail",
+            "from": "intrinsic_pair_readout_open_tail",
+            "relation_type": "couple",
+            "through": "intrinsic_pair_bridge_capacitor"
+        },
+        {
+            "label": "$L_n$",
+            "role": "intrinsic_pair_bridge_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.5e-8
+            },
+            "id": "intrinsic_pair_bridge_inductor",
+            "to": "intrinsic_pair_filter_open_tail",
+            "from": "intrinsic_pair_readout_open_tail",
+            "relation_type": "series",
+            "through": "inductance"
+        }
+    ],
+    "ports": [
+        {
+            "role": "input_probe",
+            "port_index": 1,
+            "id": "input_port",
+            "component": null,
+            "resistance": 50,
+            "endpoint": "intrinsic_pair_readout_open_tail"
+        },
+        {
+            "role": "output_probe",
+            "port_index": 2,
+            "id": "output_port",
+            "component": null,
+            "resistance": 50,
+            "endpoint": "intrinsic_pair_filter_open_tail"
+        }
+    ],
+    "groups": [
+    ],
+    "tracks": [
+    ],
+    "segments": [
+    ],
+    "coupled_spans": [
+    ],
+    "terminals": [
+        {
+            "label": "$P_r$",
+            "kind": "port",
+            "side": "left",
+            "id": "input_port",
+            "hints": {
+            },
+            "endpoint": "intrinsic_pair_readout_open_tail",
+            "track": null
+        },
+        {
+            "label": "$P_p$",
+            "kind": "port",
+            "side": "right",
+            "id": "output_port",
+            "hints": {
+            },
+            "endpoint": "intrinsic_pair_filter_open_tail",
+            "track": null
+        }
+    ],
+    "node_labels": [
+        {
+            "label": "$p$",
+            "id": "filter",
+            "hints": {
+                "placement_target": "filter",
+                "placement": "marker",
+                "offset": 0.28,
+                "loc": "top"
+            },
+            "target": "intrinsic_pair_filter_open_tail"
+        },
+        {
+            "label": "$r$",
+            "id": "readout",
+            "hints": {
+                "placement_target": "readout",
+                "placement": "marker",
+                "offset": 0.28,
+                "loc": "top"
+            },
+            "target": "intrinsic_pair_readout_open_tail"
+        }
+    ],
+    "segment_labels": [
+    ],
+    "anchors": [
+    ],
+    "layout_hints": {
+    },
+    "render_hints": {
+        "schemdraw": {
+            "parameters": {
+                "component_id": "d3_intrinsic_pair_notch_equivalent",
+                "extraction_id": "intrinsic_pair_z21_zero",
+                "coupling_state": "rp_on"
+            },
+            "unit_length": 1.5,
+            "labels": {
+                "lp_label": "$L_p$",
+                "output_port_label": "$P_2$",
+                "input_port_label": "$P_1$",
+                "output_port_resistance_label": "$R_{50}$",
+                "ln_label": "$L_n$",
+                "input_port_resistance_label": "$R_{50}$",
+                "cp_label": "$C_p$",
+                "cn_label": "$C_n$",
+                "lr_label": "$L_r$",
+                "cr_label": "$C_r$"
+            },
+            "node_bindings": {
+                "filter": "intrinsic_pair_filter_open_tail",
+                "readout": "intrinsic_pair_readout_open_tail"
+            },
+            "component_type": "D3IntrinsicPairNotchEquivalentCircuitPlan"
+        }
+    }
+}

@@ -1,0 +1,436 @@
+{
+    "schema_version": 1,
+    "components": [
+        {
+            "label": "D3 linewidth L_A equivalent calibration",
+            "role": "linewidth_loaded_bare_calibration",
+            "parameters": {
+                "diagonal_loading": "retained",
+                "feedline_model": "two_pi",
+                "external_coupling_state": "on",
+                "internal_coupling_state": "off_diagonal_suppressed"
+            },
+            "pins": [
+                "filter",
+                "feedline_attachment"
+            ],
+            "id": "d3_linewidth_la_equivalent",
+            "component_type": "D3LinewidthLAEquivalentCircuitPlan"
+        },
+        {
+            "label": "linewidth_la_diagonal_bridge_loading",
+            "role": "resonator",
+            "parameters": {
+                "capacitance_f": 8.0e-15,
+                "inductive_branch_kind": "linear",
+                "inductance_h": 3.5e-8
+            },
+            "pins": [
+                "signal"
+            ],
+            "id": "linewidth_la_diagonal_bridge_loading",
+            "component_type": "GroundedLCResonator"
+        },
+        {
+            "label": "linewidth_la_feedline_idc",
+            "role": "localized_capacitive_coupler",
+            "parameters": {
+                "terminal_order": [
+                    "terminal_1",
+                    "terminal_2"
+                ],
+                "c1g_f": 3.5e-14,
+                "c12_f": 3.8e-14,
+                "c2g_f": 3.45e-14
+            },
+            "pins": [
+                "terminal_1",
+                "terminal_2"
+            ],
+            "id": "linewidth_la_feedline_idc",
+            "component_type": "InterdigitatedCapacitor"
+        },
+        {
+            "label": "linewidth_la_filter_resonator",
+            "role": "resonator",
+            "parameters": {
+                "capacitance_f": 4.8e-13,
+                "inductive_branch_kind": "linear",
+                "inductance_h": 1.46e-9
+            },
+            "pins": [
+                "signal"
+            ],
+            "id": "linewidth_la_filter_resonator",
+            "component_type": "GroundedLCResonator"
+        }
+    ],
+    "relations": [
+        {
+            "label": "$C_p$",
+            "role": "parallel_lc_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 4.8e-13
+            },
+            "id": "linewidth_la_filter_resonator_capacitance",
+            "to": "ground",
+            "from": "linewidth_la_filter",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$L_p$",
+            "role": "parallel_lc_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 1.46e-9
+            },
+            "id": "linewidth_la_filter_resonator_inductance",
+            "to": "ground",
+            "from": "linewidth_la_filter",
+            "relation_type": "terminates",
+            "through": "inductance"
+        },
+        {
+            "label": "$C_n^{\\mathrm{diag}}$",
+            "role": "parallel_lc_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.0e-15
+            },
+            "id": "linewidth_la_diagonal_bridge_loading_capacitance",
+            "to": "ground",
+            "from": "linewidth_la_filter",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$L_n^{\\mathrm{diag}}$",
+            "role": "parallel_lc_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 3.5e-8
+            },
+            "id": "linewidth_la_diagonal_bridge_loading_inductance",
+            "to": "ground",
+            "from": "linewidth_la_filter",
+            "relation_type": "terminates",
+            "through": "inductance"
+        },
+        {
+            "label": "$C_{pG}^{\\mathrm{IDC}}$",
+            "role": "interdigitated_capacitor_terminal_ground_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 3.5e-14
+            },
+            "id": "linewidth_la_feedline_idc_c1g",
+            "to": "ground",
+            "from": "linewidth_la_filter",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$C_{f_cG}^{\\mathrm{IDC}}$",
+            "role": "interdigitated_capacitor_terminal_ground_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 3.45e-14
+            },
+            "id": "linewidth_la_feedline_idc_c2g",
+            "to": "ground",
+            "from": "linewidth_la_feedline_attachment",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$C_{pf_c}^{\\mathrm{IDC}}$",
+            "role": "interdigitated_capacitor_mutual_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 3.8e-14
+            },
+            "id": "linewidth_la_feedline_idc_c12",
+            "to": "linewidth_la_feedline_attachment",
+            "from": "linewidth_la_filter",
+            "relation_type": "couple",
+            "through": "linewidth_la_feedline_idc_c12"
+        },
+        {
+            "label": "d3_design_target_two_pi_feedline L1",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-10
+            },
+            "id": "d3_design_target_two_pi_feedline_l_1",
+            "to": "d3_design_target_two_pi_feedline_node_1",
+            "from": "d3_design_target_f1",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_two_pi_feedline L2",
+            "role": "transmission_line_series_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.021565e-10
+            },
+            "id": "d3_design_target_two_pi_feedline_l_2",
+            "to": "d3_design_target_f2",
+            "from": "d3_design_target_two_pi_feedline_node_1",
+            "relation_type": "series",
+            "through": "inductance"
+        },
+        {
+            "label": "d3_design_target_two_pi_feedline C node 0",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 4.496500000000001e-14
+            },
+            "id": "d3_design_target_two_pi_feedline_c_node_0",
+            "to": "ground",
+            "from": "d3_design_target_f1",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_two_pi_feedline C node 1",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 8.993000000000001e-14
+            },
+            "id": "d3_design_target_two_pi_feedline_c_node_1",
+            "to": "ground",
+            "from": "d3_design_target_two_pi_feedline_node_1",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_two_pi_feedline C node 2",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 4.496500000000001e-14
+            },
+            "id": "d3_design_target_two_pi_feedline_c_node_2",
+            "to": "ground",
+            "from": "d3_design_target_f2",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_two_pi_feedline",
+            "role": "transmission_line_ladder",
+            "parameters": {
+                "g_per_m_s": 0,
+                "section_lengths_m": [
+                    0.0005,
+                    0.0005
+                ],
+                "section_rlgc_per_m": [
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    },
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7986e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.04313e-7
+                    }
+                ],
+                "n_sections": 2,
+                "node_shunt_capacitance_f": [
+                    4.496500000000001e-14,
+                    8.993000000000001e-14,
+                    4.496500000000001e-14
+                ],
+                "r_per_m_ohm": 0,
+                "l_per_m_h": 4.04313e-7,
+                "c_per_m_f": 1.7986e-10,
+                "section_length_m": 0.0005,
+                "head_termination": "external",
+                "tail_termination": "external",
+                "reference_section_length_m": 0.0005,
+                "length_m": 0.001,
+                "node_shunt_conductance_s": [
+                    0,
+                    0,
+                    0
+                ],
+                "node_shunt_positions_m": [
+                    0,
+                    0.0005,
+                    0.001
+                ],
+                "section_boundaries_m": [
+                    0,
+                    0.0005,
+                    0.001
+                ],
+                "section_model": "pi"
+            },
+            "id": "d3_design_target_two_pi_feedline_ladder",
+            "to": "d3_design_target_f2",
+            "from": "d3_design_target_f1",
+            "relation_type": "transmission_line_ladder",
+            "through": "d3_design_target_two_pi_feedline"
+        },
+        {
+            "label": "",
+            "role": "linewidth_la_idc_to_feedline_center",
+            "parameters": {
+                "schematic_kind": "node_connection"
+            },
+            "id": "connect_14",
+            "to": "d3_design_target_two_pi_feedline_node_1",
+            "from": "linewidth_la_feedline_attachment",
+            "relation_type": "connect",
+            "through": null
+        }
+    ],
+    "ports": [
+        {
+            "role": "signal",
+            "port_index": 1,
+            "id": "input_port",
+            "component": null,
+            "resistance": 50,
+            "endpoint": "d3_design_target_f1"
+        },
+        {
+            "role": "readout",
+            "port_index": 2,
+            "id": "output_port",
+            "component": null,
+            "resistance": 50,
+            "endpoint": "d3_design_target_f2"
+        }
+    ],
+    "groups": [
+    ],
+    "tracks": [
+    ],
+    "segments": [
+    ],
+    "coupled_spans": [
+    ],
+    "terminals": [
+        {
+            "label": "$P_1$",
+            "kind": "port",
+            "side": "left",
+            "id": "input_port",
+            "hints": {
+            },
+            "endpoint": "d3_design_target_f1",
+            "track": null
+        },
+        {
+            "label": "$P_2$",
+            "kind": "port",
+            "side": "right",
+            "id": "output_port",
+            "hints": {
+            },
+            "endpoint": "d3_design_target_f2",
+            "track": null
+        }
+    ],
+    "node_labels": [
+        {
+            "label": "$f_c$",
+            "id": "feedline_attachment",
+            "hints": {
+                "placement_target": "feedline_center",
+                "placement": "marker",
+                "offset": [
+                    -0.48,
+                    -0.28
+                ],
+                "loc": "bottom"
+            },
+            "target": "linewidth_la_feedline_attachment"
+        },
+        {
+            "label": "$f_1$",
+            "id": "feedline_left",
+            "hints": {
+                "placement_target": "feedline_left",
+                "placement": "bus_middle",
+                "offset": 0.28,
+                "loc": "top"
+            },
+            "target": "d3_design_target_f1"
+        },
+        {
+            "label": "$f_2$",
+            "id": "feedline_right",
+            "hints": {
+                "placement_target": "feedline_right",
+                "placement": "bus_middle",
+                "offset": 0.28,
+                "loc": "top"
+            },
+            "target": "d3_design_target_f2"
+        },
+        {
+            "label": "$p$",
+            "id": "filter",
+            "hints": {
+                "placement_target": "filter",
+                "placement": "marker",
+                "offset": 0.28,
+                "loc": "top"
+            },
+            "target": "linewidth_la_filter"
+        }
+    ],
+    "segment_labels": [
+    ],
+    "anchors": [
+    ],
+    "layout_hints": {
+    },
+    "render_hints": {
+        "schemdraw": {
+            "parameters": {
+                "component_id": "d3_linewidth_la_equivalent",
+                "extraction_id": "linewidth_la",
+                "feedline_model": "two_pi",
+                "external_coupling_state": "on",
+                "internal_coupling_state": "qrp_off"
+            },
+            "unit_length": 1.5,
+            "labels": {
+                "lp_label": "$L_p$",
+                "output_port_label": "$P_2$",
+                "cn_diag_label": "$C_n^{\\mathrm{diag}}$",
+                "cpg_label": "$C_{pG}^{\\mathrm{IDC}}$",
+                "cpfc_label": "$C_{pf_c}^{\\mathrm{IDC}}$",
+                "input_port_label": "$P_1$",
+                "ln_diag_label": "$L_n^{\\mathrm{diag}}$",
+                "input_port_resistance_label": "$R_{50}$",
+                "feedline_c_center_label": "$C_{\\Delta f}$",
+                "feedline_l_label_template": "$L_{{\\Delta f,{index}}}$",
+                "feedline_c_half_label": "$C_{\\Delta f}/2$",
+                "output_port_resistance_label": "$R_{50}$",
+                "cp_label": "$C_p$",
+                "cfcg_label": "$C_{f_cG}^{\\mathrm{IDC}}$"
+            },
+            "node_bindings": {
+                "feedline_left": "d3_design_target_f1",
+                "filter": "linewidth_la_filter",
+                "feedline_attachment": "linewidth_la_feedline_attachment",
+                "feedline_right": "d3_design_target_f2"
+            },
+            "component_type": "D3LinewidthLAEquivalentCircuitPlan"
+        }
+    }
+}

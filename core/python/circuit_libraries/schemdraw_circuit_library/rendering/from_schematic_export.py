@@ -10,6 +10,8 @@ from schemdraw.elements import ElementCompound
 
 from ..components import (
     CapacitivelyCoupledGroundedLCResonator,
+    D3IntrinsicPurcellEquivalentCircuitPlan,
+    D3IntrinsicPurcellHybridizedCircuitPlan,
     FloatingLCXYResonator,
     GroundedLCResonator,
     InterdigitatedCapacitor,
@@ -34,6 +36,8 @@ _PHYSICAL_NODE_LABEL_COMPONENTS = frozenset(
         IntrinsicInterferometricPurcellFilterWithQubit.component_kind,
         IntrinsicInterferometricPurcellFilterEquivalent.component_kind,
         IntrinsicInterferometricPurcellFilterEquivalentWithQubit.component_kind,
+        D3IntrinsicPurcellEquivalentCircuitPlan.component_kind,
+        D3IntrinsicPurcellHybridizedCircuitPlan.component_kind,
     }
 )
 
@@ -318,6 +322,102 @@ def _build_component(
             lj2_label=_string_value(labels, "lj2_label", default=r"$L_{J2}$"),
             qubit_inductive_branch_kind=qubit_branch_kind,
             c0r_label=_optional_string(labels, "c0r_label"),
+            physical_node_labels=physical_node_labels,
+        )
+
+    if component_type == D3IntrinsicPurcellEquivalentCircuitPlan.component_kind:
+        return D3IntrinsicPurcellEquivalentCircuitPlan(
+            component_id=_string_value(parameters, "component_id"),
+            unit_length=unit_length,
+            theme=theme,
+            cr_label=_string_value(labels, "cr_label", default=r"$C_r$"),
+            lr_label=_string_value(labels, "lr_label", default=r"$L_r$"),
+            cp_label=_string_value(labels, "cp_label", default=r"$C_p$"),
+            lp_label=_string_value(labels, "lp_label", default=r"$L_p$"),
+            cn_label=_string_value(labels, "cn_label", default=r"$C_n$"),
+            ln_label=_string_value(labels, "ln_label", default=r"$L_n$"),
+            cpg_label=_string_value(labels, "cpg_label", default=r"$C_{pG}^{\mathrm{IDC}}$"),
+            cfcg_label=_string_value(labels, "cfcg_label", default=r"$C_{f_cG}^{\mathrm{IDC}}$"),
+            cpfc_label=_string_value(labels, "cpfc_label", default=r"$C_{pf_c}^{\mathrm{IDC}}$"),
+            c01_label=_string_value(labels, "c01_label", default=r"$C_{01}$"),
+            c02_label=_string_value(labels, "c02_label", default=r"$C_{02}$"),
+            qubit_c12_label=_string_value(labels, "qubit_c12_label", default=r"$C_{12}$"),
+            cr1_label=_string_value(labels, "cr1_label", default=r"$C_{r1}$"),
+            cr2_label=_string_value(labels, "cr2_label", default=r"$C_{r2}$"),
+            lj1_label=_string_value(labels, "lj1_label", default=r"$L_{J1}$"),
+            lj2_label=_string_value(labels, "lj2_label", default=r"$L_{J2}$"),
+            qubit_inductive_branch_kind=cast(
+                InductiveBranchKind,
+                _string_value(parameters, "qubit_inductive_branch_kind"),
+            ),
+            c0r_label=_optional_string(labels, "c0r_label"),
+            feedline_l_label_template=_string_value(
+                labels, "feedline_l_label_template", default=r"$L_{{\Delta f,{index}}}$"
+            ),
+            feedline_c_half_label=_string_value(
+                labels, "feedline_c_half_label", default=r"$C_{\Delta f}/2$"
+            ),
+            feedline_c_center_label=_string_value(
+                labels, "feedline_c_center_label", default=r"$C_{\Delta f}$"
+            ),
+            input_port_label=_string_value(labels, "input_port_label", default=r"$P_1$"),
+            output_port_label=_string_value(labels, "output_port_label", default=r"$P_2$"),
+            input_port_resistance_label=_string_value(
+                labels, "input_port_resistance_label", default=r"$R_{50}$"
+            ),
+            output_port_resistance_label=_string_value(
+                labels, "output_port_resistance_label", default=r"$R_{50}$"
+            ),
+            physical_node_labels=physical_node_labels,
+        )
+
+    if component_type == D3IntrinsicPurcellHybridizedCircuitPlan.component_kind:
+        return D3IntrinsicPurcellHybridizedCircuitPlan(
+            component_id=_string_value(parameters, "component_id"),
+            unit_length=unit_length,
+            theme=theme,
+            readout_label=_optional_string(labels, "readout_label"),
+            filter_label=_optional_string(labels, "filter_label"),
+            readout_head_label=_optional_string(labels, "readout_head_label"),
+            readout_tail_label=_optional_string(labels, "readout_tail_label"),
+            filter_head_label=_optional_string(labels, "filter_head_label"),
+            filter_tail_label=_optional_string(labels, "filter_tail_label"),
+            mtl_label=_string_value(labels, "mtl_label", default=r"$\mathrm{MTL}\ \ell_c$"),
+            capacitive_label=_string_value(labels, "capacitive_label", default=r"$C_m$"),
+            inductive_label=_string_value(labels, "inductive_label", default=r"$M$"),
+            c1g_label=_string_value(labels, "cpg_label", default=r"$C_{pG}^{\mathrm{IDC}}$"),
+            c2g_label=_string_value(labels, "cfcg_label", default=r"$C_{f_cG}^{\mathrm{IDC}}$"),
+            c12_label=_string_value(labels, "cpfc_label", default=r"$C_{pf_c}^{\mathrm{IDC}}$"),
+            c01_label=_string_value(labels, "c01_label", default=r"$C_{01}$"),
+            c02_label=_string_value(labels, "c02_label", default=r"$C_{02}$"),
+            qubit_c12_label=_string_value(labels, "qubit_c12_label", default=r"$C_{12}$"),
+            cr1_label=_string_value(labels, "cr1_label", default=r"$C_{r1}$"),
+            cr2_label=_string_value(labels, "cr2_label", default=r"$C_{r2}$"),
+            lj1_label=_string_value(labels, "lj1_label", default=r"$L_{J1}$"),
+            lj2_label=_string_value(labels, "lj2_label", default=r"$L_{J2}$"),
+            qubit_inductive_branch_kind=cast(
+                InductiveBranchKind,
+                _string_value(parameters, "qubit_inductive_branch_kind"),
+            ),
+            c0r_label=_optional_string(labels, "c0r_label"),
+            feedline_left_label=_string_value(
+                labels,
+                "feedline_left_label",
+                default=r"$\mathrm{CPW\ feedline}\ \ell_f/2$",
+            ),
+            feedline_right_label=_string_value(
+                labels,
+                "feedline_right_label",
+                default=r"$\mathrm{CPW\ feedline}\ \ell_f/2$",
+            ),
+            input_port_label=_string_value(labels, "input_port_label", default=r"$P_1$"),
+            output_port_label=_string_value(labels, "output_port_label", default=r"$P_2$"),
+            input_port_resistance_label=_string_value(
+                labels, "input_port_resistance_label", default=r"$R_{50}$"
+            ),
+            output_port_resistance_label=_string_value(
+                labels, "output_port_resistance_label", default=r"$R_{50}$"
+            ),
             physical_node_labels=physical_node_labels,
         )
 

@@ -4,7 +4,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 import matplotlib
 import pytest
@@ -17,9 +17,11 @@ from schemdraw_circuit_library import (
     CoupledLineLadderSection,
     FloatingLCResonator,
     FloatingLCXYResonator,
+    FloatingParallelLC,
     GroundedLCResonator,
     InductanceLoop,
     InductiveBranch,
+    InterdigitatedCapacitor,
     PiSectionChain,
     PointCoupledReadoutPurcell,
     Port50Ohm,
@@ -29,6 +31,11 @@ from schemdraw_circuit_library import (
     TransmissionLineSegment,
     theme_color,
 )
+from schemdraw_circuit_library.components.transmission_lines import (
+    D3IntrinsicPurcellEquivalentCircuitPlan,
+    D3IntrinsicPurcellHybridizedCircuitPlan,
+)
+from schemdraw_circuit_library.metadata import BusSpec, TerminalSpec, public_terminal_point
 from schemdraw_circuit_library.rendering import (
     UnsupportedSchematicComponentError,
     add_schematic_export_to_drawing,
@@ -252,6 +259,119 @@ def test_schematic_dot_radius_is_project_wide_constant() -> None:
     assert SCHEMATIC_DOT_RADIUS == 0.1
 
 
+def test_reusable_component_outward_leads_default_to_half_a_unit() -> None:
+    components_and_leads = (
+        (PortTerminal(unit_length=2.0), "stub"),
+        (FloatingParallelLC(unit_length=2.0), "terminal_stub"),
+        (PiSectionChain(unit_length=2.0), "port_stub"),
+        (PointCoupledReadoutPurcell(unit_length=2.0), "port_stub"),
+        (ReadoutLineHangingQWRMTL(unit_length=2.0), "port_stub"),
+        (ReadoutPurcellHangingQWRMTL(unit_length=2.0), "port_stub"),
+        (CoupledLineLadderSection(unit_length=2.0), "port_stub"),
+        (InterdigitatedCapacitor(unit_length=2.0), "port_stub"),
+    )
+
+    for component, lead_attribute in components_and_leads:
+        assert getattr(component, lead_attribute) == pytest.approx(0.5 * component.unit_length)
+
+
+def test_reusable_component_port50_loads_default_to_seven_tenths_of_a_unit() -> None:
+    unit_length = 2.0
+    grounded = GroundedLCResonator(
+        unit_length=unit_length,
+        port_label=r"$P_1$",
+        resistance_label=r"$R_{50}$",
+    )
+    coupled = CapacitivelyCoupledGroundedLCResonator(unit_length=unit_length)
+    floating_xy = FloatingLCXYResonator(unit_length=unit_length)
+    loads = (
+        Port50Ohm(unit_length=unit_length),
+        grounded.port,
+        coupled.port,
+        floating_xy.pad1_port_terminal,
+        floating_xy.pad2_port_terminal,
+        floating_xy.xy_port_terminal,
+    )
+
+    for load in loads:
+        assert isinstance(load, Port50Ohm)
+        assert load.stub == pytest.approx(0.7 * unit_length)
+    assert public_terminal_point(grounded, "left") == pytest.approx(
+        public_terminal_point(grounded.port, "signal", transformed=True)
+    )
+
+
+def test_port50_geometry_and_electrical_metadata_contract() -> None:
+    unit_length = 4.0
+    terminal = PortTerminal(unit_length=unit_length)
+    port = Port50Ohm(unit_length=unit_length)
+
+    assert terminal.stub_units == 0.5
+    assert terminal.anchors["terminal"] == pytest.approx((0.5 * unit_length, 0))
+    assert terminal.public_terminals == {
+        "signal": TerminalSpec("port", "terminal", "right"),
+        "circuit": TerminalSpec("port", "node", "left"),
+    }
+    assert port.stub_units == 0.7
+    assert port.load_lead_units == 0.25
+    assert port.anchors["node"] == pytest.approx((0, 0))
+    assert port.anchors["terminal"] == pytest.approx((0.7 * unit_length, 0))
+    assert port.anchors["res_top"] == pytest.approx((0, -0.25 * unit_length))
+    assert port.anchors["res_bot"] == pytest.approx((0, -unit_length))
+    assert port.physical_nodes == {
+        "port": ["node", "terminal", "res_top"],
+        "gnd": ["res_bot", "gnd"],
+    }
+    assert port.ports == {"signal": "port"}
+    assert port.public_terminals == {
+        "signal": TerminalSpec("port", "terminal", "right"),
+        "circuit": TerminalSpec("port", "node", "left"),
+    }
+    assert port.buses == {
+        "stub": BusSpec("port", ("node", "terminal")),
+        "load_lead": BusSpec("port", ("node", "res_top")),
+    }
+
+
+@pytest.mark.parametrize("load_lead_units", (-0.1, 0, 1.0, 1.1))
+def test_port50_rejects_load_lead_outside_its_height(load_lead_units: float) -> None:
+    with pytest.raises(
+        ValueError,
+        match=r"requires 0 < load_lead_units < height_units",
+    ):
+        Port50Ohm(height_units=1.0, load_lead_units=load_lead_units)
+
+
+@pytest.mark.parametrize("unit_length", (1.5, 3.0, 6.0))
+@pytest.mark.parametrize(("side", "sign"), (("left", -1), ("right", 1)))
+def test_port50_terminal_clears_resistor_bbox_by_half_a_unit(
+    unit_length: float,
+    side: Literal["left", "right"],
+    sign: int,
+) -> None:
+    port = Port50Ohm(
+        unit_length=unit_length,
+        side=side,
+        show_labels=False,
+    )
+    resistor_bbox = port.resistor.get_bbox(transform=True, includetext=False)
+    occupied_edge = resistor_bbox.xmin if sign < 0 else resistor_bbox.xmax
+    clearance = sign * (port.anchors["terminal"][0] - occupied_edge)
+
+    assert clearance >= 0.5 * unit_length
+
+
+def test_d3_port50_resistor_glyphs_end_at_their_ground_anchors() -> None:
+    for component_type in (
+        D3IntrinsicPurcellEquivalentCircuitPlan,
+        D3IntrinsicPurcellHybridizedCircuitPlan,
+    ):
+        component = component_type(unit_length=1.5, show_labels=False)
+        for port in (component.input_port, component.output_port):
+            assert port.height_units == 1.0
+            assert tuple(port.resistor.absanchors["end"]) == pytest.approx(port.anchors["gnd"])
+
+
 @pytest.mark.parametrize("module_path", EXECUTABLE_COMPONENT_MODULES)
 def test_component_modules_are_directly_executable(module_path: str, tmp_path: Path) -> None:
     output_dir = tmp_path / Path(module_path).stem
@@ -344,10 +464,14 @@ def test_grounded_lc_resonator_contract() -> None:
     assert not hasattr(resonator, "signal_dot")
     assert not hasattr(resonator, "cap_top_dot")
     assert not hasattr(resonator, "ind_top_dot")
+    assert public_terminal_point(resonator, "left") == pytest.approx(
+        public_terminal_point(resonator.port, "signal", transformed=True)
+    )
     assert resonator.physical_nodes == {
         "signal": ["start", "end", "signal", "cap_top", "ind_top"],
         "gnd": ["cap_bot", "ind_bot", "gnd"],
     }
+    assert resonator.buses["signal"].anchors[0] == "start"
 
 
 def test_capacitively_coupled_grounded_lc_node_policy() -> None:

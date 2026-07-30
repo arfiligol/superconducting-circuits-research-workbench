@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="304.746pt" height="150.8pt" viewBox="0 0 304.746 150.8" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="318.516pt" height="150.8pt" viewBox="0 0 318.516 150.8" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -22,8 +22,8 @@
  <g id="figure_1">
   <g id="patch_1">
    <path d="M 0 150.8
-L 304.746 150.8
-L 304.746 0
+L 318.516 150.8
+L 318.516 0
 L 0 0
 L 0 150.8
 z
@@ -47,24 +47,30 @@ L 140.406 31.28
    </g>
    <g id="line2d_1">
     <path d="M 245.976 31.28
-L 271.221 31.28
-L 296.466 31.28
+L 278.106 31.28
+L 310.236 31.28
 " clip-path="url(#pNORMALIZED)" style="fill: none; stroke: #111827; stroke-width: 2; stroke-linecap: round"/>
    </g>
    <g id="line2d_2">
     <path d="M 245.976 31.28
-L 245.976 59.18
-L 254.976 62.18
-L 236.976 68.18
-L 254.976 74.18
-L 236.976 80.18
-L 254.976 86.18
-L 236.976 92.18
-L 245.976 95.18
-L 245.976 123.08
+L 245.976 42.755
+L 245.976 54.23
 " clip-path="url(#pNORMALIZED)" style="fill: none; stroke: #111827; stroke-width: 2; stroke-linecap: round"/>
    </g>
    <g id="line2d_3">
+    <path d="M 245.976 54.23
+L 245.976 70.655
+L 254.976 73.655
+L 236.976 79.655
+L 254.976 85.655
+L 236.976 91.655
+L 254.976 97.655
+L 236.976 103.655
+L 245.976 106.655
+L 245.976 123.08
+" clip-path="url(#pNORMALIZED)" style="fill: none; stroke: #111827; stroke-width: 2; stroke-linecap: round"/>
+   </g>
+   <g id="line2d_4">
     <path d="M 245.976 123.08
 L 245.976 137.48
 L 236.976 137.48
@@ -75,7 +81,7 @@ M 244.176 146.12
 L 247.776 146.12
 " clip-path="url(#pNORMALIZED)" style="fill: none; stroke: #111827; stroke-width: 2; stroke-linecap: round"/>
    </g>
-   <g id="line2d_4">
+   <g id="line2d_5">
     <path d="M 140.406 31.28
 L 189.951 31.28
 M 189.951 22.28
@@ -86,13 +92,13 @@ M 196.431 31.28
 L 245.976 31.28
 " clip-path="url(#pNORMALIZED)" style="fill: none; stroke: #111827; stroke-width: 2; stroke-linecap: round"/>
    </g>
-   <g id="line2d_5">
+   <g id="line2d_6">
     <path d="M 34.836 31.28
 L 87.621 31.28
 L 140.406 31.28
 " clip-path="url(#pNORMALIZED)" style="fill: none; stroke: #111827; stroke-width: 2; stroke-linecap: round"/>
    </g>
-   <g id="line2d_6">
+   <g id="line2d_7">
     <path d="M 34.836 31.28
 L 34.836 73.94
 M 43.836 73.94
@@ -103,7 +109,7 @@ M 34.836 80.42
 L 34.836 123.08
 " clip-path="url(#pNORMALIZED)" style="fill: none; stroke: #111827; stroke-width: 2; stroke-linecap: round"/>
    </g>
-   <g id="line2d_7">
+   <g id="line2d_8">
     <path d="M 140.406 31.28
 L 140.406 77.18
 M 149.406 68.18
@@ -114,13 +120,13 @@ M 140.406 77.18
 L 140.406 123.08
 " clip-path="url(#pNORMALIZED)" style="fill: none; stroke: #111827; stroke-width: 2; stroke-linecap: round"/>
    </g>
-   <g id="line2d_8">
+   <g id="line2d_9">
     <path d="M 34.836 123.08
 L 87.621 123.08
 L 140.406 123.08
 " clip-path="url(#pNORMALIZED)" style="fill: none; stroke: #111827; stroke-width: 2; stroke-linecap: round"/>
    </g>
-   <g id="line2d_9">
+   <g id="line2d_10">
     <path d="M 87.621 123.08
 L 87.621 137.48
 L 78.621 137.48
@@ -133,7 +139,7 @@ L 89.421 146.12
    </g>
    <g id="text_1">
     <!-- $R_{50}$ -->
-    <g style="fill: #111827" transform="translate(258.576 81.043125) scale(0.14 -0.14)">
+    <g style="fill: #111827" transform="translate(258.576 92.518125) scale(0.14 -0.14)">
      <defs>
       <path id="DejaVuSans-Oblique-52" d="M 1613 4147
 L 1294 2491
@@ -349,15 +355,15 @@ z
 " clip-path="url(#pNORMALIZED)" style="fill: #111827; stroke: #111827; stroke-width: 2; stroke-linejoin: miter"/>
    </g>
    <g id="patch_5">
-    <path d="M 296.466 34.88
-C 297.420731 34.88 298.336488 34.500681 299.011584 33.825584
-C 299.686681 33.150488 300.066 32.234731 300.066 31.28
-C 300.066 30.325269 299.686681 29.409512 299.011584 28.734416
-C 298.336488 28.059319 297.420731 27.68 296.466 27.68
-C 295.511269 27.68 294.595512 28.059319 293.920416 28.734416
-C 293.245319 29.409512 292.866 30.325269 292.866 31.28
-C 292.866 32.234731 293.245319 33.150488 293.920416 33.825584
-C 294.595512 34.500681 295.511269 34.88 296.466 34.88
+    <path d="M 310.236 34.88
+C 311.190731 34.88 312.106488 34.500681 312.781584 33.825584
+C 313.456681 33.150488 313.836 32.234731 313.836 31.28
+C 313.836 30.325269 313.456681 29.409512 312.781584 28.734416
+C 312.106488 28.059319 311.190731 27.68 310.236 27.68
+C 309.281269 27.68 308.365512 28.059319 307.690416 28.734416
+C 307.015319 29.409512 306.636 30.325269 306.636 31.28
+C 306.636 32.234731 307.015319 33.150488 307.690416 33.825584
+C 308.365512 34.500681 309.281269 34.88 310.236 34.88
 z
 " clip-path="url(#pNORMALIZED)" style="fill: #ffffff; stroke: #111827; stroke-width: 2; stroke-linejoin: miter"/>
    </g>
@@ -365,7 +371,7 @@ z
  </g>
  <defs>
   <clipPath id="pNORMALIZED">
-   <rect x="0" y="0" width="304.746" height="150.8"/>
+   <rect x="0" y="0" width="318.516" height="150.8"/>
   </clipPath>
  </defs>
 </svg>

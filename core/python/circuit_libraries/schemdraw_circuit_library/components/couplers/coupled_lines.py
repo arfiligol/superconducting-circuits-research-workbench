@@ -28,7 +28,7 @@ class CoupledLineLadderSection(elm.ElementCompound):
         unit_length: float = 3.0,
         spacing_units: float = 1.35,
         track_gap_units: float = 1.0,
-        port_stub_units: float = 0.45,
+        port_stub_units: float = 0.5,
         theme: Theme = "light",
         top_name: str = "A",
         bottom_name: str = "B",
