@@ -50,10 +50,13 @@ circuit-authoring model.
 
 Reusable Schemdraw dimensions are expressed relative to `unit_length`; do not
 replace them with absolute drawing coordinates. A body-edge outward lead
-defaults to `0.5u`, including `PortTerminal`. `Port50Ohm` instead uses a
-`0.7u` terminal stub because its required clearance is measured from the
-occupied resistor glyph bounding box: the supported `unit_length` range
-`1.5–6` retains at least `0.5u` between that bound and the outer terminal.
+defaults to `0.5u`, including `PortTerminal`. `InterdigitatedCapacitor` uses
+`1.8u`: its labels occupy approximately `1.3u`, followed by the standard
+`0.5u` block-to-block clearance at both public terminals.
+`Port50Ohm` uses a `0.7u` terminal stub because its required clearance is
+measured from the occupied resistor glyph bounding box: the supported
+`unit_length` range `1.5–6` retains at least `0.5u` between that bound and the
+outer terminal.
 
 `Port50Ohm` also reserves a `0.25u` lead between its signal junction and
 resistor. Custom values must satisfy

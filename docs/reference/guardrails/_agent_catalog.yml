@@ -32,6 +32,15 @@ rules:
     triggers: ["mission", "scope", "platform", "migration", "product"]
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "docs/**"]
 
+  - id: source-of-truth-order
+    file: project-basics/source-of-truth-order.mdx
+    tier: critical
+    load: on_demand
+    activation_mode: model_decision
+    description: Apply when resolving host-project context, owner precedence, or conflicts between research semantics and Workbench contracts.
+    triggers: ["source of truth", "owner", "host project", "super repo", "design target", "knowledge", "contract conflict"]
+    touched_paths: ["AGENTS.md", "docs/**", ".agent/rules/**", "app/**", "core/**", "notebooks/**", "scripts/**"]
+
   - id: tech-stack
     file: project-basics/tech-stack.mdx
     tier: critical

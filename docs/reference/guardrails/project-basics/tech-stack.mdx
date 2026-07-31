@@ -70,7 +70,7 @@ root-level runtime or app code must not be recreated there.
 | Backend | FastAPI + Pydantic + SQLAlchemy/Alembic + NumPy + Zarr |
 | Python analysis | uv workspace package under `core/python/analysis/superconducting_circuits_analysis/` |
 | Python Schemdraw circuit renderer | uv workspace package under `core/python/circuit_libraries/` |
-| Compute runner | Julia + HTTP.jl + JSON3.jl + StructTypes.jl + Zarr.jl |
+| Compute runner | Julia + HTTP.jl + JSON3.jl + Zarr.jl |
 | Local runtime | frontend + Python Backend + Julia Runner |
 | Scientific core | Julia package under `core/julia/SuperconductingCircuitsCore/` |
 | Scientific visualization | Julia package under `core/julia/SuperconductingCircuitsVisualizer/` |
@@ -119,8 +119,7 @@ All Application-triggered simulation must be submitted as persisted Backend task
 | `pydantic` | schema / validation |
 | `sqlalchemy`, `alembic` | metadata persistence and migration |
 | `pydantic-settings` | backend settings |
-| `numpy`, `zarr`, `fsspec` | TraceStore validation/publication |
-| `rich` | developer-facing logging output when useful |
+| `numpy`, `zarr` | TraceStore validation/publication |
 | `schemdraw` | renderer-side circuit visuals in `schemdraw_circuit_library`, not Backend/App/Julia Core runtime |
 | `ruff`, `basedpyright`, `pytest` | lint / type / test |
 
@@ -154,9 +153,8 @@ Python-native quantum-modeling dependencies such as scqubits, QuTiP, or scikit-r
 | `JosephsonCircuits.jl` | Core circuit simulation engine inside Julia Core/Runner |
 | `PlotlyJS.jl` | figure backend inside Julia Visualizer |
 | `HTTP.jl` | Runner client for backend task protocol |
-| `JSON3.jl`, `StructTypes.jl` | Runner task / manifest contracts |
+| `JSON3.jl` | Runner task / manifest contracts |
 | `Zarr.jl` | local filesystem Zarr v2 staging writer |
-| `DataFrames.jl` | tabular summaries when needed |
 | `Documenter.jl` | generated Julia package API reference under `/api/julia/` |
 
 QuantumToolbox.jl and QuantumOptics.jl are valid future Julia dynamics tools only when isolated from Julia Core. They are not current baseline Julia Core dependencies and must not be introduced into the reusable component/plan package without a new SoT decision.
@@ -358,7 +356,6 @@ This page only records the official baseline and does not list all frameworks th
   - Alembic
   - NumPy
   - Zarr
-  - fsspec
 - **Julia Core**:
   - `core/julia/SuperconductingCircuitsCore/`
   - docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers
@@ -369,9 +366,7 @@ This page only records the official baseline and does not list all frameworks th
   - Runner adapters must not create a separate circuit construction path or preserve outdated Core APIs as fallback paths
   - HTTP.jl
   - JSON3.jl
-  - StructTypes.jl
   - Zarr.jl
-  - DataFrames.jl
 - **Local runtime backbone**:
   - frontend
   - Python Backend

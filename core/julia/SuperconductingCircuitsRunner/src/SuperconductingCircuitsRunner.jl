@@ -13,7 +13,6 @@ using HTTP
 using JSON3
 using SHA
 import SuperconductingCircuitsCore
-using UUIDs
 
 export RunnerClaim
 export execute_task

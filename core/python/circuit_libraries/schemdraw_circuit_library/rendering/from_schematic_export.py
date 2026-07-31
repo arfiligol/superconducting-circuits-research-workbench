@@ -351,14 +351,20 @@ def _build_component(
                 _string_value(parameters, "qubit_inductive_branch_kind"),
             ),
             c0r_label=_optional_string(labels, "c0r_label"),
-            feedline_l_label_template=_string_value(
-                labels, "feedline_l_label_template", default=r"$L_{{\Delta f,{index}}}$"
+            feedline_regularizer_inductance_label=_string_value(
+                labels,
+                "feedline_regularizer_inductance_label",
+                default=r"$L_{\mathrm{sep}}$",
             ),
-            feedline_c_half_label=_string_value(
-                labels, "feedline_c_half_label", default=r"$C_{\Delta f}/2$"
+            feedline_regularizer_half_capacitance_label=_string_value(
+                labels,
+                "feedline_regularizer_half_capacitance_label",
+                default=r"$C_{\mathrm{sep}}/2$",
             ),
-            feedline_c_center_label=_string_value(
-                labels, "feedline_c_center_label", default=r"$C_{\Delta f}$"
+            feedline_regularizer_center_capacitance_label=_string_value(
+                labels,
+                "feedline_regularizer_center_capacitance_label",
+                default=r"$C_{\mathrm{sep}}$",
             ),
             input_port_label=_string_value(labels, "input_port_label", default=r"$P_1$"),
             output_port_label=_string_value(labels, "output_port_label", default=r"$P_2$"),

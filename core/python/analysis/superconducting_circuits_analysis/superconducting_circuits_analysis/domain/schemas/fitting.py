@@ -69,11 +69,3 @@ class Y11FitFailure(BaseModel):
 
 
 Y11FitResult = Y11FitSuccess | Y11FitFailure
-
-
-# === Analysis Entry ===
-
-
-class AnalysisEntry(BaseModel):
-    filename: str
-    fits: dict[str, ModeFitResult] = Field(default_factory=dict)

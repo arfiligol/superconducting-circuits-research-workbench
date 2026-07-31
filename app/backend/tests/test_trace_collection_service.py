@@ -1,4 +1,4 @@
-from app_backend.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
+from app_backend.infrastructure.runtime import get_catalog_repository
 from app_backend.services.trace_collection_service import TraceCollectionService
 
 
@@ -16,7 +16,7 @@ class _StubAxisValueLoader:
 
 
 def test_trace_collection_service_uses_injected_axis_loader_and_omits_dense_shared_axis_values():
-    repository = InMemoryRewriteCatalogRepository()
+    repository = get_catalog_repository()
     loader = _StubAxisValueLoader()
     service = TraceCollectionService(axis_value_loader=loader)
     measurement = repository.get_trace_detail(
@@ -29,6 +29,8 @@ def test_trace_collection_service_uses_injected_axis_loader_and_omits_dense_shar
         "design_local_flux_playground",
         "trace_local_flux_preview",
     )
+    assert measurement is not None
+    assert preview is not None
 
     payload = service.derive_input_collection_payload_from_trace_details((measurement, preview))
 

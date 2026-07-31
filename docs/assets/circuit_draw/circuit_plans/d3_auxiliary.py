@@ -141,7 +141,7 @@ def _port(
     )
 
 
-def _two_pi_feedline(
+def _matched_port_regularizer(
     drawing: schemdraw.Drawing,
     *,
     center_x: float,
@@ -150,10 +150,10 @@ def _two_pi_feedline(
     unit_length: float,
     theme: Theme,
 ) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
-    feedline = add_at_public_terminal(
+    regularizer = add_at_public_terminal(
         drawing,
         PiSectionChain(
-            component_id="d3_auxiliary_two_pi_feedline",
+            component_id="d3_auxiliary_matched_port_regularizer",
             n=2,
             unit_length=unit_length,
             spacing_units=2.0,
@@ -163,25 +163,31 @@ def _two_pi_feedline(
             theme=theme,
             l_label_template=_label(
                 labels,
-                "feedline_l_label_template",
-                r"$L_{{\Delta f,{index}}}$",
+                "feedline_regularizer_inductance_label",
+                r"$L_{\mathrm{sep}}$",
+            )
+            .replace("{", "{{")
+            .replace("}", "}}"),
+            c_half_label=_label(
+                labels,
+                "feedline_regularizer_half_capacitance_label",
+                r"$C_{\mathrm{sep}}/2$",
             ),
-            c_half_label=_label(labels, "feedline_c_half_label", r"$C_{\Delta f}/2$"),
             c_reduced_label=_label(
                 labels,
-                "feedline_c_center_label",
-                r"$C_{\Delta f}$",
+                "feedline_regularizer_center_capacitance_label",
+                r"$C_{\mathrm{sep}}$",
             ),
             show_terminals=False,
             show_nodes=False,
             show_labels=True,
         ),
-        "tap_0",
-        (center_x - 2.0 * unit_length, y),
+        "tap_1",
+        (center_x, y),
     )
-    center = _point(feedline, "tap_1")
-    left = _point(feedline, "left")
-    right = _point(feedline, "right")
+    center = _point(regularizer, "tap_1")
+    left = _point(regularizer, "left")
+    right = _point(regularizer, "right")
     return left, center, right
 
 
@@ -296,7 +302,7 @@ def build_linewidth_la_equivalent(
                 unit_length=unit_length,
                 width_units=1.55,
                 shunt_height_units=1.0,
-                port_stub_units=0.7,
+                port_stub_units=1.8,
                 theme=theme,
                 c1g_label=_label(labels, "cpg_label", r"$C_{pG}^{\mathrm{IDC}}$"),
                 c2g_label=_label(labels, "cfcg_label", r"$C_{f_cG}^{\mathrm{IDC}}$"),
@@ -308,7 +314,7 @@ def build_linewidth_la_equivalent(
             idc_left,
         )
         idc_right = _point(idc, "terminal_2")
-        left, center, right = _two_pi_feedline(
+        left, center, right = _matched_port_regularizer(
             drawing,
             center_x=idc_right[0],
             y=-1.0 * unit_length,
@@ -442,7 +448,7 @@ def build_linewidth_la_hybridized(
                 unit_length=unit_length,
                 width_units=1.55,
                 shunt_height_units=1.0,
-                port_stub_units=0.7,
+                port_stub_units=1.8,
                 theme=theme,
                 c1g_label=_label(labels, "cpg_label", r"$C_{pG}^{\mathrm{IDC}}$"),
                 c2g_label=_label(labels, "cfcg_label", r"$C_{f_cG}^{\mathrm{IDC}}$"),

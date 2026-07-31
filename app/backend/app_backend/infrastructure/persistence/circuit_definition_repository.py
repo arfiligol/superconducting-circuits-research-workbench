@@ -76,7 +76,7 @@ class SqliteCircuitDefinitionRepository:
     ) -> CircuitDefinitionRecord:
         definition_id = str(uuid4())
         created_at = _current_timestamp()
-        record = _build_circuit_definition_record(
+        record = build_circuit_definition_record(
             definition_id=definition_id,
             workspace_id=workspace_id,
             visibility_scope=draft.visibility_scope,
@@ -159,7 +159,7 @@ class SqliteCircuitDefinitionRepository:
             return None
         definition_id = str(uuid4())
         created_at = _current_timestamp()
-        cloned = _build_circuit_definition_record(
+        cloned = build_circuit_definition_record(
             definition_id=definition_id,
             workspace_id=workspace_id,
             visibility_scope="local" if workspace_id == "local-space" else "private",
@@ -277,7 +277,7 @@ class _CircuitInspectionResult:
         self.validation_summary = validation_summary
 
 
-def _build_circuit_definition_record(
+def build_circuit_definition_record(
     *,
     definition_id: DefinitionId,
     workspace_id: str,

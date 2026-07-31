@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import shutil
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,6 +24,7 @@ from app_backend.infrastructure.app_state_repository import (
 )
 from app_backend.infrastructure.catalog_seed_data import (
     build_seed_characterization_analysis_registry,
+    build_seed_characterization_artifact_surfaces,
     build_seed_characterization_result_details,
     build_seed_characterization_results,
     build_seed_characterization_run_history,
@@ -32,9 +33,6 @@ from app_backend.infrastructure.catalog_seed_data import (
     build_seed_designs,
     build_seed_trace_details,
     build_seed_trace_summaries,
-)
-from app_backend.infrastructure.rewrite_catalog_repository import (
-    _seed_characterization_artifact_surfaces,
 )
 from app_backend.infrastructure.task_seed_data import build_seed_tasks
 
@@ -185,7 +183,7 @@ def seed_durable_runtime_state() -> None:
         summaries_by_design=build_seed_characterization_results(),
         run_history_by_design=build_seed_characterization_run_history(),
         details_by_key=build_seed_characterization_result_details(),
-        artifact_surfaces_by_key=_seed_characterization_artifact_surfaces(),
+        artifact_surfaces_by_key=build_seed_characterization_artifact_surfaces(),
     )
 
     for task in build_seed_tasks():
@@ -205,7 +203,7 @@ def _seed_characterization_results_into_runtime(
     summaries_by_design: dict[tuple[str, str], tuple[CharacterizationResultSummary, ...]],
     run_history_by_design: dict[tuple[str, str], tuple[CharacterizationRunHistoryRow, ...]],
     details_by_key: dict[tuple[str, str, str], CharacterizationResultDetail],
-    artifact_surfaces_by_key: dict[tuple[str, str, str], object],
+    artifact_surfaces_by_key: Mapping[tuple[str, str, str], object],
 ) -> None:
     run_history_by_result: dict[
         tuple[str, str, str],

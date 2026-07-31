@@ -29,7 +29,7 @@ class InterdigitatedCapacitor(elm.ElementCompound):
         unit_length: float = 3.0,
         width_units: float = 1.5,
         shunt_height_units: float = 0.9,
-        port_stub_units: float = 0.5,
+        port_stub_units: float = 1.8,
         theme: Theme = "light",
         c1g_label: str = r"$C_{1g}$",
         c2g_label: str = r"$C_{2g}$",

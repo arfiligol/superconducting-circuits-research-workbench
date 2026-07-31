@@ -331,7 +331,8 @@ Build the combined public site artifact with Astro at `/` and Starlight docs at
 Preview the combined artifact locally with:
 
 ```bash
-uv run docs-site serve --build
+./scripts/build/build_public_site.sh
+npm run preview --prefix site
 ```
 
 ## Development Status

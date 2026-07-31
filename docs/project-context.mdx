@@ -1,0 +1,196 @@
+---
+aliases:
+ - Project Context
+ - Human Agent Project Workflow
+tags:
+ - diataxis/how-to
+ - audience/user
+ - sot/true
+ - topic/project-context
+status: incubating
+owner: docs-team
+audience: user
+scope: Discover host-project research semantics, use Circuit Workbench as a tool, and hand evidence back to the owning project.
+version: v1.0.0
+last_updated: 2026-07-29
+updated_by: codex
+title: Use Circuit Workbench In A Project
+description: Resolve project context before implementation, or ask only for the missing semantics required by the task.
+sidebar:
+ label: Use In A Project
+ order: 1
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Use Circuit Workbench In A Project
+
+Circuit Workbench provides circuit authoring, simulation, analysis, drawing,
+and notebook tools. The host Project or Super Repo owns the research direction
+that gives those tools meaning.
+
+<Aside type="caution" title="Do not create a second Knowledge Base">
+
+Keep Design Targets, reusable domain knowledge and conventions, Human
+acceptance, and project decision history in the host Project. Workbench docs
+own tool behavior, APIs, schemas, workflows, and artifact contracts, and link
+to the host owner when project semantics are required.
+
+</Aside>
+
+## Decide Whether Project Context Is Required
+
+| Task | Required context |
+| --- | --- |
+| Install, API lookup, build failure, or tool diagnostic | Workbench owner docs are normally sufficient. |
+| Implement or change a research topology, model, parameter meaning, or acceptance gate | Resolve the host Project's target and semantic owners first. |
+| Reproduce an existing artifact | Read the artifact contract and the project-owned claim it supports. |
+| Judge whether evidence is scientifically convincing | Return the evidence to the host Project and Human reviewer; Workbench validation cannot grant acceptance. |
+
+Do not block context-independent work merely because no parent repository is
+available. Do not treat missing project semantics as permission to guess.
+
+## Resolve The Host Project
+
+<Tabs>
+<TabItem label="Host Project is readable">
+
+1. Read the nearest host agent instructions and workspace ownership map.
+2. Find the active Design Target or equivalent goal owner.
+3. Read only the Knowledge, convention, parameter, and evidence nodes cited by
+   that target.
+4. Identify the Workbench API, workflow, or artifact contract that implements
+   the assigned capability.
+5. Keep reusable Workbench implementation and fixtures in Workbench-owned
+   paths. Keep project-specific evidence with its host owner, including the
+   replay command, limitations, and decision question.
+
+In the current SCQ_Design workspace, the root `docs/design-targets/` tree owns
+active design intent and `docs/knowledge/` owns reusable cross-repo physics,
+engineering, mathematics, algorithms, assumptions, limits, and evidence
+expectations. This is an example of host ownership, not a required directory
+layout for other projects.
+
+</TabItem>
+<TabItem label="Host Project is unavailable">
+
+First decide whether the task can be completed from Workbench contracts alone.
+For project-semantic work, ask the Human only for the missing information that
+changes the current task:
+
+- the research decision or target this work supports;
+- the relevant success or stop criteria;
+- required conventions, units, basis, topology, or parameter meaning;
+- the artifact the Human expects to review and any independent check;
+- excluded work and the owner to which the result should be returned.
+
+Reuse information already supplied by the Human. Do not require a universal
+brief or manifest, and do not ask for project details unrelated to the task.
+Stop before selecting an unstated research goal, physical convention,
+acceptance criterion, or decision owner.
+
+</TabItem>
+</Tabs>
+
+## Tell An Agent What You Need
+
+Use ordinary language and name the decision, owner, review surface, and stop
+condition. For example:
+
+> Use the active host Design Target and its linked conventions to add the
+> resonator subtopology as a reusable component. Keep the complete project
+> circuit outside Core, return the CircuitPlan, compiled-netlist,
+> schematic-export, and SVG comparison, and stop if endpoint or acceptance
+> semantics are missing.
+
+The Agent should resolve exact paths and commands from the host and Workbench
+owner documents instead of asking the Human to translate the request into a
+repository-specific form.
+
+## Share Authority Without Duplicating It
+
+| Role | Authority |
+| --- | --- |
+| Human Research Director | Sets the research direction and decides whether evidence is convincing. |
+| Main Agent / Semantic Lead | Resolves the host owners, lifecycle state, work scope, and stop conditions. |
+| Implementing Agent | Uses Workbench owner contracts to produce scoped implementation and inspectable artifacts. |
+| Independent Reviewing Agent | Replays the work and checks the claim through an independent representation or validator. |
+| Host Project | Owns Design Targets, reusable domain knowledge and conventions, acceptance, and decision history. |
+| Circuit Workbench | Owns tool APIs, Workbench-owned Julia Core catalog implementation, workflows, schemas, and artifact contracts. External Component Libraries and project Plan Builders keep their declared owners. |
+
+An Agent may make reversible implementation decisions inside a settled
+contract. It must return new research semantics, ownership changes, and
+acceptance decisions to the Human and the host owner.
+
+Detailed delegation and review responsibilities remain owned by
+[Multi-Agent Collaboration](reference/guardrails/execution-verification/multi-agent-collaboration.mdx).
+
+## Follow The Owning Lifecycle
+
+Use the lifecycle state recorded by the affected owner contract:
+
+- `CONVERGING`: implement a real candidate and run non-test validation, but do
+  not write tests that freeze unsettled semantics.
+- `ACCEPTED`: the Human explicitly accepted the named scope.
+- `STABILIZED`: accepted documentation, implementation, tests, and validation
+  agree.
+
+Workbench implementation cannot promote a host Design Target or Knowledge node.
+If the implementation exposes a missing physical choice or acceptance
+criterion, stop and return that question to the host Project.
+
+Use the [Circuit Workbench Manual](workflows/reusable-circuit-authoring/) for
+the existing component-to-plan-to-export lifecycle and
+[Guardrails](reference/guardrails/) for Workbench delivery rules.
+
+## Hand Back Reviewable Evidence
+
+A decision-bearing handoff should include only what another Human or Agent
+needs to understand and replay the claim:
+
+- the host target or owner contract used;
+- input identity, units, and provenance;
+- implementation and artifact paths;
+- the exact replay or validation command;
+- machine-checkable invariants and their results;
+- a distinct representation or independent validator when the claim requires
+  one;
+- known limitations, skipped checks, and the question returned to the Human.
+
+Independent review must not be two Agents inspecting the same projection. For
+an export-backed circuit diagram, compare the Julia `CircuitPlan` and its
+solver-facing compiled netlist projection with the schematic export and
+rendered SVG. These projections share the same plan and can reveal lowering or
+rendering mismatches; they are not independent electrical sources. The SVG is
+a Human review surface, not the electrical source of truth.
+
+This checklist is a handoff discipline, not a new universal evidence schema.
+Use an existing host or Workbench artifact contract when one exists.
+
+## Common Project Journeys
+
+| Journey | Host context first | Workbench execution and review |
+| --- | --- | --- |
+| Create a Reusable Component | Identify the larger topology that reuses it and the owner of its physical semantics. | Follow the [Circuit Workbench Manual](workflows/reusable-circuit-authoring/), inspect the `CircuitPlan`, compiled netlist, export, and diagram, then return evidence to the host target. |
+| Create a Project Plan Builder | Resolve the complete project topology, ports, targets, and study policy. | Compose Core components in the project-owned builder; keep the complete plan outside the Core reusable catalog. |
+| [Export a Circuit Diagram](contribute/contributing/circuit-diagrams.mdx) | Resolve the circuit contract and the Human review question. | Export from the same Julia plan, render with the drawing pipeline, and cross-check netlist connectivity against the visual projection. |
+| [Use Pluto](start/first-pluto-notebook.md) | Resolve the target, parameter meanings, and decision gate. | Call the shared component or project builder, show inputs, diagnostics, outputs, and links to the owning semantics; keep the notebook as a thin evidence narrative. |
+
+## Candidate Semantic Status
+
+- Scope: Workbench Project Context Discovery and Evidence Handoff V1.
+- Prior state: no explicit Workbench-wide host-project context contract.
+- Current state: `CONVERGING`.
+- Intended public behavior: Agents use readable host owners when available,
+  continue context-independent tool work without them, and ask only for
+  task-required missing research semantics.
+- Data and state ownership: the host Project owns research semantics and
+  decisions; Workbench owns its tool implementation and artifact contracts,
+  while external libraries and project builders keep their declared owners.
+- Failure behavior: stop before inventing missing project semantics,
+  acceptance criteria, or ownership.
+- Test policy: `no_test_writes`; documentation build and source checks are
+  diagnostic evidence only.
+- Excluded: a Workbench Knowledge Base, a universal project/evidence manifest,
+  automatic parent discovery, and changes to host Project content.
+- Unresolved: Human acceptance of this candidate contract.

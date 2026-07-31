@@ -14,6 +14,7 @@ export BridgeStatus,
     analysis_bridge_status,
     calibrate_d3_channel_residue_s21,
     extract_admittance_modes,
+    fit_d3_system_a_lj_sweep,
     fit_d3_through_line_s21,
     fit_notch_s21,
     fit_squid_modes,
@@ -98,6 +99,20 @@ function _py_to_julia(value)
     return pyconvert(Any, value)
 end
 
+function _require_vector_fit_v2(result)
+    result isa AbstractDict || error("Python vector fitting returned a non-dictionary payload.")
+    get(result, "schema_version", nothing) == "scalar-s21-vector-fit.v2" || error(
+        "Python vector fitting must return schema scalar-s21-vector-fit.v2.",
+    )
+    get(result, "model", nothing) == "scalar_s21_vector" || error(
+        "Python vector fitting must return model scalar_s21_vector.",
+    )
+    get(result, "status", nothing) in ("success", "failed") || error(
+        "Python vector fitting returned an invalid status.",
+    )
+    return result
+end
+
 function _dataframe_from_path(path::AbstractString)
     pandas = _py_module("pandas")
     return pandas.read_csv(path)
@@ -149,6 +164,44 @@ function _float_windows(values, name::AbstractString)
         _float_pair(window, "$(name)[$(index)]") for (index, window) in enumerate(values)
     ]
     isempty(converted) && error("$(name) must contain at least one window.")
+    return converted
+end
+
+function _required_mapping_value(mapping, key::AbstractString, name::AbstractString)
+    mapping isa AbstractDict || error("$(name) must be a dictionary.")
+    haskey(mapping, key) || error("$(name) is missing required key $(repr(key)).")
+    return mapping[key]
+end
+
+function _system_a_observations(observations::AbstractVector)
+    converted = Vector{Dict{String,Any}}()
+    fields = (
+        "trace_id",
+        "lj_per_junction_h",
+        "lower_frequency_hz",
+        "upper_frequency_hz",
+        "lower_response_parameter",
+        "lower_extraction_method",
+        "lower_source_trace_id",
+        "upper_response_parameter",
+        "upper_extraction_method",
+        "upper_source_trace_id",
+        "candidate_id",
+        "reference_contract_id",
+        "topology_id",
+        "port_plane",
+    )
+    for (index, observation) in enumerate(observations)
+        name = "observations[$(index)]"
+        push!(
+            converted,
+            Dict(
+                field => _required_mapping_value(observation, field, name) for
+                field in fields
+            ),
+        )
+    end
+    isempty(converted) && error("observations must not be empty.")
     return converted
 end
 
@@ -208,7 +261,9 @@ function fit_vector_s21(
     n_resonators,
     min_q,
     bg_poles,
+    max_iterations,
     restrict_to_input_span=true,
+    fit_window_hz=nothing,
 )
     mod = _s21_fitting_module()
     frequencies = _real_vector(frequencies_hz, "frequencies_hz")
@@ -219,21 +274,23 @@ function fit_vector_s21(
         imag_values;
         n_resonators=n_resonators,
         bg_poles=bg_poles,
+        max_iterations=max_iterations,
         min_q=min_q,
         restrict_to_input_span=restrict_to_input_span,
+        fit_window_hz=_optional_float_pair(fit_window_hz, "fit_window_hz"),
     )
-    return _py_to_julia(result)
+    return _require_vector_fit_v2(_py_to_julia(result))
 end
 
 function calibrate_d3_channel_residue_s21(
     frequencies_hz,
-    filter_only_s21,
+    filter_off_reference_s21,
     empty_feedline_s21;
     phasor_convention,
     fit_window_hz,
     background_windows_hz,
     fp_hz,
-    filter_loaded_linewidth_hz,
+    filter_off_reference_linewidth_hz,
     linear_ls_rcond,
     min_reference_magnitude,
     min_complex_r2,
@@ -246,7 +303,10 @@ function calibrate_d3_channel_residue_s21(
         "superconducting_circuits_analysis.application.analysis.fitting.d3_purcell",
     )
     frequencies = _real_vector(frequencies_hz, "frequencies_hz")
-    filter_real, filter_imag = _complex_parts(filter_only_s21, "filter_only_s21")
+    filter_real, filter_imag = _complex_parts(
+        filter_off_reference_s21,
+        "filter_off_reference_s21",
+    )
     reference_real, reference_imag = _complex_parts(
         empty_feedline_s21,
         "empty_feedline_s21",
@@ -264,7 +324,7 @@ function calibrate_d3_channel_residue_s21(
             "background_windows_hz",
         ),
         fp_hz=fp_hz,
-        filter_loaded_linewidth_hz=filter_loaded_linewidth_hz,
+        filter_off_reference_linewidth_hz=filter_off_reference_linewidth_hz,
         linear_ls_rcond=linear_ls_rcond,
         min_reference_magnitude=min_reference_magnitude,
         min_complex_r2=min_complex_r2,
@@ -276,6 +336,43 @@ function calibrate_d3_channel_residue_s21(
     return _py_to_julia(result)
 end
 
+"""
+Fit response-extracted lower/upper System-A frequencies over an L_J sweep.
+
+Each observation carries independent lower- and upper-branch S/Y/Z extraction
+provenance. The Python implementation owns contract validation and fitting;
+this bridge only transports the current v1 request and decodes its result.
+"""
+function fit_d3_system_a_lj_sweep(
+    observations::AbstractVector;
+    physical_bounds::AbstractDict,
+    physical_seeds::AbstractVector,
+    numerical_tolerances::AbstractDict,
+    gates::AbstractDict,
+    provenance::AbstractDict,
+)::Dict{String,Any}
+    mod = _py_module(
+        "superconducting_circuits_analysis.application.analysis.fitting.d3_purcell",
+    )
+    result = mod.fit_d3_system_a_lj_sweep(
+        _system_a_observations(observations);
+        physical_bounds=physical_bounds,
+        physical_seeds=physical_seeds,
+        numerical_tolerances=numerical_tolerances,
+        gates=gates,
+        provenance=provenance,
+    )
+    decoded = _py_to_julia(result)
+    decoded isa AbstractDict || error("Python System-A fit returned a non-dictionary payload.")
+    get(decoded, "schema", nothing) == "d3_system_a_frequency_lj_sweep_fit.v1" || error(
+        "Python System-A fit must return schema d3_system_a_frequency_lj_sweep_fit.v1.",
+    )
+    get(decoded, "status", nothing) in ("success", "rejected") || error(
+        "Python System-A fit returned an invalid status.",
+    )
+    return Dict{String,Any}(String(key) => value for (key, value) in decoded)
+end
+
 function fit_d3_through_line_s21(
     frequencies_hz,
     measured_s21,
@@ -285,8 +382,8 @@ function fit_d3_through_line_s21(
     background_windows_hz,
     fp_hz,
     fr_hz,
-    filter_loaded_linewidth_hz,
-    readout_loaded_linewidth_hz,
+    filter_off_reference_linewidth_hz,
+    readout_off_reference_linewidth_hz,
     channel_calibration,
     j_bounds_hz,
     j_seeds_hz,
@@ -333,8 +430,8 @@ function fit_d3_through_line_s21(
         ),
         fp_hz=fp_hz,
         fr_hz=fr_hz,
-        filter_loaded_linewidth_hz=filter_loaded_linewidth_hz,
-        readout_loaded_linewidth_hz=readout_loaded_linewidth_hz,
+        filter_off_reference_linewidth_hz=filter_off_reference_linewidth_hz,
+        readout_off_reference_linewidth_hz=readout_off_reference_linewidth_hz,
         channel_calibration=channel_calibration,
         j_bounds_hz=_float_pair(j_bounds_hz, "j_bounds_hz"),
         j_seeds_hz=_real_vector(j_seeds_hz, "j_seeds_hz"),

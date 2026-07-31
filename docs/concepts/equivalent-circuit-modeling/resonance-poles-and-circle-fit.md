@@ -12,8 +12,8 @@ status: provisional
 owner: docs-team
 audience: team
 scope: "Handoff from Workbench complex-notch fitting APIs to the canonical SCQ_Design Notch Resonator Complex S21 Fit node"
-version: v0.2.0
-last_updated: 2026-07-10
+version: v0.5.0
+last_updated: 2026-07-16
 updated_by: codex
 sidebar:
  label: S-Parameter Resonance Fit Theory
@@ -69,14 +69,30 @@ rejects a finite passive-$Q_i$ interpretation. This API does not encode RMSE,
 $R^2$, residual-shape, stability, or near-zero-$Q_i^{-1}$ acceptance
 thresholds; those remain Human decisions recorded by the consuming workflow.
 
+This topology-specific fit is an independent hanger-model interpretation of a
+complex response. An eligible scalar Vector Fitting pole may formally own the
+frequency and total linewidth of the same topology-isolated mode without
+requiring this fit to pass as a validator. Conversely, agreement in frequency
+does not make `fit_notch_s21`'s internal/external loss decomposition
+authoritative; complex $Q_c$, reference plane, background, and topology must
+still satisfy their own physical gates.
+
+Neither fitter repairs an under-resolved trace. A local frequency step larger
+than the extracted linewidth blocks promotion until the source response is
+rerun on a denser grid. Interpolating the coarse trace does not supply that
+evidence, and the current Workbench APIs do not implement an automatic
+source-grid-refinement gate.
+
 ## D3 Evidence Handoff
 
-[Python Notebook 02](https://github.com/arfiligol/superconducting-circuits-research-workbench/blob/main/notebooks/python/02_filter_frequency_loading_analysis.py)
-consumes only trace paths named by the current fine-sweep manifest and publishes
-candidate fit and residual tables. It does not own accepted loaded-bare
-frequencies, $C_{\mathrm{ext}}$ regression, linewidth, length correction, or
-design promotion. Those downstream steps fail explicitly until the required
-source metadata and Human decisions are recorded.
+[Pluto Notebook 02](https://github.com/arfiligol/superconducting-circuits-research-workbench/blob/main/notebooks/pluto/D3%20Intrinsic%20Purcell%20Filter%20Design/02_filter_frequency_loading_calibration.jl)
+publishes broad filter-only traces for loading and impedance-mismatch
+inspection. It does not own final Full-QRP diagonal frequencies,
+$C_{\mathrm{probe}}$ regression, linewidth, length correction, coupling, or
+design promotion. The canonical full-$\mathcal T_{\mathrm{QRP}}$ pointwise
+circuit-to-Hamiltonian/port map with complex-response closure owns the intended
+final quantities. The topology-constrained exact scalar-formula fit provides
+the independent response-recovery check.
 
 Do not duplicate the reusable fitting theory here; update the canonical page
 and keep only repository-specific contracts at these entry points.

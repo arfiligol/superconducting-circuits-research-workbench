@@ -7,12 +7,12 @@ tags:
  - audience/contributor
  - sot/true
  - topic/julia-core
-status: stable
+status: incubating
 owner: docs-team
 audience: contributor
-scope: Component authoring contract, composition rules, and ownership examples built on Julia Core.
-version: v1.3.0
-last_updated: 2026-07-28
+scope: Source-backed reusable component composition and catalog dependency contract for Julia Core.
+version: v1.4.0
+last_updated: 2026-07-29
 updated_by: codex
 ---
 
@@ -20,186 +20,203 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Components and Composition
 
-A reusable circuit component is a Plan-level object. It can expose public pins, own private internal nodes, contain primitive elements, contain subcomponents, and define local parameters.
+Julia Core reusable components are plan-stamping builders. An `add_...!`
+function adds relations and engineering records to a caller-owned
+`CircuitPlan`, then returns a typed handle that exposes the attachments and
+child handles needed by the enclosing topology.
 
-Component composition is Plan-level hierarchy. It is not compiled-netlist-level concatenation.
+The current implementation does not retain a generic component tree and the
+compiler does not recursively flatten one. Composition is ordinary builder
+calls that produce one inspectable flat plan.
 
-Canonical physics:
+## Ownership Boundary
 
-- [Josephson current, phase, energy, and inductance](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-current-phase-energy-and-inductance.qmd)
-- [Josephson cosine and quantum anharmonicity](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/josephson-cosine-and-quantum-anharmonicity.qmd)
-- [dc SQUID flux tunability](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/josephson-physics/dc-squid-flux-tunability.qmd)
+The accepted eligibility rule remains:
 
-<Aside type="caution" title="Current implementation boundary">
+- a stable local topology reused by a larger circuit topology may enter the
+  Julia Core reusable catalog;
+- a complete Project Plan Builder, including project ports, targets, study
+  policy, or simulation intent, remains outside Core;
+- an eligible lab, process, or device-family variant may remain in an external
+  Component Library when that is the better owner;
+- a compiled netlist fragment is not a reusable component.
 
-Julia Core currently implements a single `JosephsonJunction` relation with Josephson-inductance binding and nonlinear `Lj...` solver lowering. It does not provide `SQUID(...)`, `SingleJunction(...)`, `squid_loop(...)`, external-flux binding, junction-asymmetry, or loop-inductance lowering. Those names below are conceptual component-library sketches, not executable APIs.
+Specificity alone does not exclude a reused local topology from Core. See
+[Component Libraries](component-libraries.md) for the accepted ownership
+decision table.
+
+## Executable Composition Model
+
+```text
+caller-owned CircuitPlan
+  <- Core relation and transmission-line builders
+  <- basic reusable add_...! builders
+  <- composite reusable add_...! builders
+  <- project-owned complete Plan Builder
+```
+
+A reusable builder follows this contract:
+
+1. accept the caller's `CircuitPlan`;
+2. enforce its documented ID, attachment, value, and child-handle
+   preconditions;
+3. create topology through Core relation, transmission-line, or lower-level
+   reusable builders;
+4. record the public engineering component when the component owns such a
+   record;
+5. return a typed handle with the public attachments and child handles needed
+   by its caller.
+
+Internal node and relation IDs are created by the owning builder and prefixed
+with its component ID. Callers connect through returned attachments instead of
+depending on those internal names.
+
+<Aside type="caution" title="Builders are not transactional">
+
+Builders mutate the supplied plan as they compose relations. A later
+validation error does not guarantee rollback of earlier mutations. Build a
+candidate on a fresh plan and discard or rebuild that plan after a failed
+builder call.
 
 </Aside>
 
-## Example Component Families
+<Aside type="caution" title="Typed handles are not a retained hierarchy">
 
-<Aside type="caution" title="Examples, not an ownership decision">
-
-The families below may live in the Julia Core reusable component catalog or an
-external Component Library. Placement depends on the ownership boundary, not
-on whether the component is concrete.
+A composite result may store child handles for inspection. For example,
+`IntrinsicInterferometricPurcellFilterWithQubit` stores the filter and qubit
+handles. The electrical relations already live in the same supplied
+`CircuitPlan`; there is no later hierarchy-expansion pass.
 
 </Aside>
 
-Reusable families may include:
+## Current Catalog Strata
 
-| Family | Examples |
+| Stratum | Current examples | May depend on |
+| --- | --- | --- |
+| Kernel relations and distributed-line builders | capacitive and inductive relations, transmission-line ladders, coupled transmission windows | lower Core authoring primitives |
+| Basic reusable builders | `add_parallel_lc_resonator!`, `add_linearized_floating_qubit!`, `add_interdigitated_capacitor!`, `add_reflective_jpa!`, `add_half_wave_resonator!`, `add_quarter_wave_resonator!` | Kernel and distributed-line builders |
+| Composite reusable builders | intrinsic interferometric Purcell filter families, filter-with-qubit families, readout-line Purcell and QWR/MTL compositions | Kernel plus basic or lower composite builders |
+| Project Plan Builders | complete research circuits and their project-owned ports, targets, and intent | Public Julia Core catalog and selected external libraries |
+
+These strata describe dependency direction, not four required Julia modules.
+The current source keeps the reusable builders in
+`src/components/reusable_components.jl` and loads transmission-line support
+before that file.
+
+## Source-Backed Examples
+
+The interdigitated capacitor builder stamps its three-branch positive
+equivalent into the supplied plan and returns the actual terminals and branch
+handles:
+
+```julia
+idc = add_interdigitated_capacitor!(
+    plan;
+    id="feedline_idc",
+    terminal_1=filter_attachment,
+    terminal_2=feedline_attachment,
+    c1g_f=C1g,
+    c2g_f=C2g,
+    c12_f=C12,
+)
+```
+
+The intrinsic filter builder calls lower-level quarter-wave resonator,
+coupled-window, and interdigitated-capacitor builders. It contains no feedline
+or port:
+
+```julia
+filter = add_intrinsic_interferometric_purcell_filter!(
+    plan;
+    id="purcell_filter",
+    readout_attachment=readout_attachment,
+    feedline_attachment=feedline_attachment,
+    readout_spec=readout_spec,
+    filter_spec=filter_spec,
+    mtl_model=mtl_model,
+    c1g_f=CpG,
+    c2g_f=CfcG,
+    c12_f=Cpfc,
+)
+```
+
+The filter-with-qubit builder accepts an already-built filter handle, verifies
+that it belongs to the same `CircuitPlan`, and adds the qubit topology to that
+plan:
+
+```julia
+system = add_intrinsic_interferometric_purcell_filter_with_qubit!(
+    plan;
+    id="readout_system",
+    filter=filter,
+    island_1=q1,
+    island_2=q2,
+    c01_f=C01,
+    c02_f=C02,
+    c12_f=C12,
+    cr1_f=Cr1,
+    cr2_f=Cr2,
+    l_j_per_junction_h=Lj,
+)
+```
+
+The exact topology, defaults, and exclusions for this family are documented in
+[Intrinsic Interferometric Purcell Components](intrinsic-interferometric-purcell-components.md).
+
+## Dependency Rules
+
+| Rule | Required behavior |
 | --- | --- |
-| Primitive Elements | `Capacitor`, `LinearInductor`, `JosephsonJunction` |
-| Inductive Elements | `LinearInductor`, `SingleJunction`, `SQUID` |
-| Lumped Resonator Components | `GroundedLCResonatorComponent`, `FloatingLCResonatorComponent` |
-| Distributed Components | `ReadoutLineComponent`, `CPWFluxLineComponent`, `QuarterWaveResonatorComponent`, `HalfWavePurcellFilterComponent` |
+| One direction | Kernel → basic reusable → composite reusable → project plan is a consumer direction; dependencies point back toward the left. |
+| No project back-edge | Julia Core must not import a host Project, project Plan Builder, or external lab library. |
+| Caller owns the plan | Reusable builders mutate only the supplied `CircuitPlan`; they do not create a hidden second plan or netlist. |
+| Attachments stay explicit | Composite builders accept or return actual endpoint and child handles needed for composition. |
+| IDs stay local | A builder owns and prefixes private node, relation, and child IDs; callers must not construct against those names. |
+| Shared topology moves down only when reused | If two real components need the same local topology, extract one lower reusable builder; do not make the two composites depend on each other. |
+| Registration stays outward | Public exports, docs registries, and drawing registries may enumerate completed components; component implementation must not import those registries. |
 
-These examples may be used directly or inside composite components. Composite
-components may contain smaller components and primitive elements.
+Before adding a component, draw its dependency edge. Reject the placement if
+the edge points from Core to a project/library owner or from a lower stratum to
+a higher one. This keeps catalog growth acyclic without introducing a runtime
+hierarchy framework.
 
-## Ownership Rule
+## Inspection And Compilation
 
-Under the accepted V1 ownership contract, Julia Core owns the
-component authoring contract and may own stable local topologies used as
-components inside larger circuit topologies.
-
-External Component Libraries may own component variants intentionally kept in
-user, lab, process, device-family, or project space. Specificity alone does not
-exclude a stable local topology used by a larger topology from Core. Project
-Plan Builders own complete research circuits expressed as `CircuitPlan`,
-including their external ports, targets, and study policy.
-
-A component library may provide:
-
-- primitive physical elements;
-- composite resonator components;
-- distributed line components;
-- nonlinear elements;
-- lab-specific chip blocks;
-- project Plan Builders;
-- validation helpers specific to that component family.
-
-All components must satisfy the same authoring, endpoint, validation, and
-compiler contracts. See
-[Component Libraries](component-libraries.md) for the candidate ownership
-criteria and decision table.
-
-## Composition Rules
-
-| Rule | Contract |
-| --- | --- |
-| Public pins | Components expose stable user-facing attachment names such as `:signal`, `:plus`, `:minus`, or `:feed`. |
-| Private internal nodes | Components may own internal implementation nodes; users should not need those names. |
-| Subcomponents | Composite components may include smaller components and primitive elements. |
-| Local parameters | Components may carry local values, sweep knobs, and provenance. |
-| Line references | Distributed components with multiple internal lines must expose named line references such as `line_ref(component,:main)`. |
-| Namespacing | The compiler namespaces private nodes and subcomponent internals when it expands hierarchy. |
-| Flattening | Composite components are flattened by the global compiler after endpoint resolution and validation. |
-
-<Aside type="caution" title="Reusable units">
-
-Compiled netlist fragments should not be used as reusable components. Reuse the Plan-level component and let the global compiler lower the complete Circuit Plan.
-
-</Aside>
-
-## Composite Examples
-
-The following examples describe composition patterns built on the Julia Core
-Kernel:
-
-```text
-SQUID
-  = JosephsonJunction + JosephsonJunction + optional loop inductance + flux parameter
-
-GroundedLCResonator
-  = Capacitor(signal, ground) + InductiveElement(signal, ground)
-
-FloatingLCResonator
-  = Capacitor(plus, minus) + InductiveElement(plus, minus)
-```
-
-This hierarchy states the executable component topology. The reusable physics,
-mode impedance, and intrinsic/raw/PTC/wave observable layers are canonical in
-SCQ_Design [Ideal Parallel LC Resonator](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/ideal-parallel-lc-resonator.qmd).
-
-The same high-level resonator component can accept replaceable inductive elements.
-
-## Grounded LC With Replaceable Inductive Elements
-
-The following example assumes a component library provides a grounded LC resonator builder and replaceable inductive element definitions.
+The caller validates and compiles the completed plan once:
 
 ```julia
-lc1 = add_grounded_lc_resonator_component!(
-  plan;
-  id = "lc1",
-  capacitance = Capacitor(80.0fF),
-  inductive_element = LinearInductor(8.0nH),
-)
+validate_authoring(plan)
+inspect_plan(plan)
+inspect_endpoints(plan)
 
-lc2 = add_grounded_lc_resonator_component!(
-  plan;
-  id = "lc2",
-  capacitance = Capacitor(75.0fF),
-  inductive_element = SingleJunction(Ic = 25.0nA, Cj = 2.0fF),
-)
+compiled = compile_to_josephson(plan)
+compiled.netlist
 ```
 
-The user changes the inductive element without changing the resonator's public attachment model.
+Use `EngineeringGraph` and schematic export for Human inspection. Use the
+compiled netlist as a separate solver-facing electrical projection of the same
+plan, not as a second source of truth. A renderer may arrange or label the
+plan, but it must not add connectivity.
 
-## Conceptual Grounded LC With SQUID
+## Candidate Semantic Status
 
-The following non-executable sketch shows what a future component library would need to own.
-
-```text
-flux_line = add_cpw_flux_line_component!(plan; id = "flux", line_spec = flux_line_spec)
-
-lc = add_grounded_lc_resonator_component!(
-  plan;
-  id = "squid_lc",
-  capacitance = Capacitor(80.0fF),
-  inductive_element = SQUID(
-    junction_a = JosephsonJunction(Ic = 25.0nA, Cj = 2.0fF),
-    junction_b = JosephsonJunction(Ic = 25.0nA, Cj = 2.0fF),
-    external_flux = Parameter(:phi_ext),
-  ),
-)
-```
-
-A future SQUID would remain a component hierarchy in the plan. Core does not currently expose or lower its loop endpoint.
-
-Distributed components from a component library may also expose line references for taps and spans:
-
-```julia
-main_line = line_ref(flux_line,:main)
-tap = line_tap(main_line; at_m = 2.0mm)
-```
-
-The component-level shorthand `line_tap(flux_line; at_m = 2.0mm)` is valid only when the component has one unambiguous default line. Multi-line components must use `line_ref` or pass `line =:main`.
-
-## Floating LC With Replaceable Inductive Element
-
-The following non-executable sketch assumes a future component library provides a floating LC resonator builder and SQUID definition.
-
-```text
-flc = add_floating_lc_resonator_component!(
-  plan;
-  id = "flc",
-  capacitance = Capacitor(80.0fF),
-  inductive_element = SQUID(...),
-)
-```
-
-Floating components expose two public attachment points, commonly `:plus` and `:minus`.
-
-## Namespace Ownership
-
-User-facing code should use public pins and endpoints:
-
-```julia
-pin(lc,:signal)
-pin(flc,:plus)
-pin(flc,:minus)
-```
-
-It should not require internal node names from the component implementation. Private names are compiler-managed and may change when the component hierarchy changes.
+- Scope: Julia Core Reusable Catalog Dependency Layering V1.
+- Prior evidence: the accepted Core eligibility rule and current plan-stamping
+  implementation; the prior page described a nonexistent retained hierarchy
+  and compiler flattening pass.
+- Existing accepted scope: Core eligibility for stable local topologies reused
+  by larger topologies remains `STABILIZED`.
+- Current candidate scope: dependency strata and source-backed composition
+  description are `CONVERGING`.
+- Intended public behavior: builders stamp one caller-owned flat
+  `CircuitPlan`, return typed inspection handles, and depend only on lower Core
+  strata.
+- Failure behavior: builders enforce their documented preconditions, but do
+  not promise transactional rollback after a later failure; callers discard
+  or rebuild a partially modified plan. Catalog review rejects dependency
+  back-edges into projects or higher strata.
+- Test policy: `no_test_writes`; existing source inspection and documentation
+  checks are diagnostic evidence only.
+- Excluded: moving Julia source, adding a generic component tree, changing
+  public Julia APIs, and moving project Plan Builders into Core.
+- Unresolved: Human acceptance of the dependency-layering candidate.

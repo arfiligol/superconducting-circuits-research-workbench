@@ -1,5 +1,7 @@
 ## Source of Truth Order
 - Resolve conflicts by concern owner first:
+  - host-project goals, target assumptions, reusable domain knowledge/conventions, Human acceptance, and decision history -> the canonical owner declared by the readable host Project
+  - current SCQ_Design example -> Super Repo `docs/design-targets/*` for active design intent and `docs/knowledge/*` for reusable cross-repo semantics
   - app collaboration/session/auth/workspace/task runtime/audit/error -> `docs/app/shared/*` + `docs/app/backend/*`
   - product persisted payload/schema fields -> `docs/app/data-contracts/*`
   - Julia Core authoring invariants -> `docs/reference/julia-core/*`
@@ -7,6 +9,8 @@
   - circuit research route contracts, external-result contract, equivalent-circuit model contract, quantum-model boundary, notebook role boundaries -> `docs/reference/research-contracts/*`
   - page behavior/layout -> `docs/app/frontend/**/*`
   - notebook workflow behavior -> `docs/reference/notebooks/*`
+- If the host Project is unavailable, continue context-independent Workbench work and ask the Human only for missing project semantics required by the task.
+- Do not infer project goals, physical conventions, acceptance criteria, or decision ownership from Workbench examples or implementation.
 - Use `docs/app/architecture/contracts/*` only as owner-boundary and canonical contract registry guidance, not as the primary owner when owner docs already exist.
 - Treat implementation and old behavior as evidence, not automatic canonical truth.
 - If owner docs and consumer docs conflict, prefer the owner docs unless the user explicitly changes the spec.

@@ -13,14 +13,14 @@ from app_backend.domain.tasks import (
     TaskResultRefs,
     TaskSubmissionDraft,
 )
+from app_backend.infrastructure.catalog_seed_data import (
+    LOCAL_SPACE_RESONATOR_DEFINITION_ID,
+)
 from app_backend.infrastructure.durable_runtime_seed import rebuild_durable_runtime_state
 from app_backend.infrastructure.persistence import (
     RewriteTaskDispatchRecord,
     RewriteTaskEventRecord,
     create_metadata_session_factory,
-)
-from app_backend.infrastructure.rewrite_catalog_repository import (
-    LOCAL_SPACE_RESONATOR_DEFINITION_ID,
 )
 from app_backend.infrastructure.runtime import (
     get_app_state_repository,

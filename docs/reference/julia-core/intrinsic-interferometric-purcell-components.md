@@ -210,8 +210,31 @@ its capacitor and selected `InductiveBranch` connected in parallel between
 the inner buses. Nested branch markers remain hidden in a system composition.
 
 `InterdigitatedCapacitor` likewise owns equal-length left and right terminal
-stubs of `0.5` drawing unit each. An exposed port marker belongs at the outer
-stub endpoint, not at the inner three-capacitor junction.
+stubs of `1.8u` each: approximately `1.3u` spans its three capacitance labels
+and the remaining `0.5u` is reserved for block-to-block clearance. An exposed
+port marker belongs at the outer stub endpoint, not at the inner
+three-capacitor junction.
+
+### Outward-terminal clearance
+
+Reusable body-edge leads, including `PortTerminal`, default to `0.5u`, where
+`u` is the component's `unit_length`. `InterdigitatedCapacitor` uses `1.8u`
+to clear its element labels plus `0.5u` sibling spacing, and `Port50Ohm` uses
+a `0.7u` terminal stub
+because clearance is measured from the occupied resistor glyph bounding box,
+not merely from its signal junction. For supported `unit_length` values from
+`1.5–6`, the port-load outer endpoint remains at least `0.5u` beyond that
+bound.
+
+The port load also starts after a `0.25u` signal-to-resistor lead.
+`load_lead_units` remains adjustable for physical drawing calibration and must
+satisfy `0 < load_lead_units < height_units`. The remaining resistor span
+must also satisfy
+`(height_units - load_lead_units) * unit_length >= 1`, because the native
+Schemdraw IEEE resistor glyph does not contract below one drawing unit. These
+values affect visual geometry only; the component's physical nodes, netlist
+topology, ports, and public terminals do not change. Generic bbox-driven
+auto-layout and D3 project-specific geometry are outside this contract.
 
 The `LinearizedFloatingQubit` projection groups `LJ1` and `LJ2` inside one
 two-branch loop and places that loop in parallel with `C12`. Its Julia builder
@@ -285,7 +308,7 @@ r -- (Cn || Ln) -- p
 The filter node `p` connects to the exposed feedline attachment `f_c` through
 the complete IDC branches
 `C_pG^IDC`, `C_f_cG^IDC`, and `C_pf_c^IDC`. These three branches are distinct
-from the legacy scalar `Cext`; none may be silently dropped.
+and required; none may be silently dropped.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../../assets/circuit_draw/reusable_components/intrinsic_interferometric_purcell_filter_equivalent/diagram.dark.svg" />
@@ -325,9 +348,6 @@ branches at `r`.
   layout geometry, electromagnetic extraction, or nonlinear qubit dynamics.
 - The reusable SQUID is a declared visual device projection only; executable
   dc-SQUID and external-flux semantics remain excluded.
-- Existing D3 numerical workflows still accept scalar `Cext`; the new
-  equivalent component does not silently reinterpret those historical inputs.
-  A fresh three-branch IDC extraction and redesign run remain required.
 - The example element values generate inspectable fixtures only; they are not
   promoted D3 Slot parameters.
 - Durable tests freeze the accepted bus, marker, physical-node-label, and
@@ -420,3 +440,20 @@ remains excluded until its layout semantics are defined separately.
   export freshness, manifest validation, and committed-render checks.
 - Unresolved decisions: none within V1.4; pipeline hardening and generic
   plan-wide auto-layout remain excluded scopes.
+
+### Reusable Schemdraw outward-clearance and Port50Ohm glyph-separation V1
+
+- Scope: `unit_length`-relative outward-terminal clearance and internal
+  resistor-glyph separation without electrical-semantic changes.
+- State: `STABILIZED`.
+- State changed: 2026-07-29.
+- Human acceptance: directly accepted the named V1 scope on 2026-07-29.
+- Contract references: the outward-terminal-clearance section above, the
+  Circuit Diagrams Manual, and `components/ports/terminations.py`.
+- Test policy: `stabilization_tests_authorized`.
+- Validation evidence: 48 scoped Python tests, Ruff, multi-scale bbox
+  assertions, seven targeted light/dark SVG render checks, 14 drawing
+  manifests, Julia Core package tests, and the complete docs build.
+- Limitations: the clearance guarantee covers `unit_length` values from
+  `1.5–6`; generic auto-layout and D3 project geometry remain excluded.
+- Unresolved decisions: none within this accepted scope.

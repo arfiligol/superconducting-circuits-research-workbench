@@ -1,15 +1,14 @@
-"""Calibrate and fit one isolated D3 readout/filter pair from complex S21.
+"""Fit D3 initializer models from response data.
 
-This module owns the reusable filter-only channel calibration and single-pair
-fit promoted from the D3 notebook. Both require an empty-feedline trace at the
-same frequency grid and port plane. The pair fit holds the independently
-calibrated complex channel residue fixed; it never fits J and the residue
-together. This module does not own multi-pair propagation or optimizer targets.
+This module owns the response-frequency qubit/readout initializer, the
+filter-off channel calibration, and the isolated readout/filter through-line
+fit. It does not own the final Full-QRP Finite-Order Port-Response fit,
+multi-pair propagation, or optimizer targets.
 
 Canonical Knowledge:
 https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/readout-filter-s21-j-fit.qmd
 https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/resonator-decay-linewidth-and-quality-factor.qmd
-https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/loaded-bare-readout-filter-references.qmd
+https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/coupling-off-readout-filter-initial-references.qmd
 https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/readout/bare-vs-hybridized-readout-filter-modes.qmd
 https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-reference-impedance-semantics.qmd
 """
@@ -24,18 +23,251 @@ from numbers import Integral, Real
 from typing import Never, cast
 
 import numpy as np
-from scipy.optimize import OptimizeResult, least_squares
+from scipy.optimize import OptimizeResult, least_squares, lsq_linear
 
 _CHANNEL_CALIBRATION_SCHEMA = "d3_channel_calibration"
-_CHANNEL_CALIBRATION_FIT_METHOD = "d3_filter_only_complex_channel_residue_linear_ls"
+_CHANNEL_CALIBRATION_FIT_METHOD = "d3_filter_off_reference_complex_channel_residue_linear_ls"
 _PAIR_FIT_SCHEMA = "d3_through_line_j_fit"
 _PAIR_FIT_METHOD = "d3_through_line_complex_s21_fixed_calibrated_residue"
+_SYSTEM_A_FIT_SCHEMA = "d3_system_a_frequency_lj_sweep_fit.v1"
+_SYSTEM_A_FIT_METHOD = "d3_system_a_response_frequency_lj_sweep"
+_SYSTEM_A_PARAMETER_NAMES = (
+    "c_q_eff_system_a_on_f",
+    "f_r_lb_system_a_on_hz",
+    "g_system_a_on_hz",
+)
+
+
+def fit_d3_system_a_lj_sweep(
+    observations: Sequence[Mapping[str, object]],
+    *,
+    physical_bounds: Mapping[str, Sequence[float]],
+    physical_seeds: Sequence[Mapping[str, float]],
+    numerical_tolerances: Mapping[str, int | float],
+    gates: Mapping[str, int | float],
+    provenance: Mapping[str, object],
+) -> dict[str, object]:
+    """Fit the response-effective two-mode System-A ``L_J`` sweep.
+
+    Each observation supplies the lower and upper hybridized frequencies that
+    preceding S-, Y-, or Z-response extractions assigned to the two branches.
+    The shared fit determines the effective qubit capacitance, the System-A
+    coupling-on readout diagonal frequency, and the nonnegative q-r coupling
+    magnitude. It does not consume a closed-circuit eigenmode or invert a
+    one-point frequency shift.
+
+    Malformed contracts raise ``ValueError``. Expected optimizer, quality, or
+    identifiability failures return a structured rejected result that retains
+    any successfully fitted evidence.
+    """
+    parsed = _system_a_observations(observations)
+    bounds = _system_a_bounds(physical_bounds)
+    seeds = _system_a_seeds(physical_seeds, bounds)
+    tolerances = _system_a_numerical_tolerances(numerical_tolerances)
+    fit_gates = _system_a_gates(gates)
+    _require(
+        int(fit_gates["min_successful_seed_count"]) <= len(seeds),
+        "gates.min_successful_seed_count exceeds physical_seeds length.",
+    )
+    provenance_payload = _validated_provenance(
+        provenance,
+        frozenset(
+            {
+                "fit_id",
+                "candidate_id",
+                "reference_contract_id",
+                "topology_id",
+                "port_plane",
+            }
+        ),
+        "provenance",
+    )
+    _validate_system_a_observation_identity(parsed, provenance_payload)
+
+    lower = np.asarray([bounds[name][0] for name in _SYSTEM_A_PARAMETER_NAMES])
+    upper = np.asarray([bounds[name][1] for name in _SYSTEM_A_PARAMETER_NAMES])
+    widths = upper - lower
+    seed_vectors = [
+        (np.asarray([seed[name] for name in _SYSTEM_A_PARAMETER_NAMES]) - lower) / widths
+        for seed in seeds
+    ]
+    base: dict[str, object] = {
+        "schema": _SYSTEM_A_FIT_SCHEMA,
+        "fit_method": _SYSTEM_A_FIT_METHOD,
+        "fit_domain": "response_extracted_hybridized_frequencies",
+        "model_convention": {
+            "coordinate_order": ["q", "r"],
+            "coherent_edges": ["q-r"],
+            "qubit_tuning_law": "fq=1/(2*pi*sqrt((LJ_per_junction/2)*Cq_eff))",
+            "g_parameter": "nonnegative_coupling_magnitude_hz",
+            "observation_authority": "per_branch_caller_supplied_S_Y_or_Z_response_extraction",
+            "closed_circuit_eigenmode_consumed": False,
+            "one_point_shift_inversion_consumed": False,
+        },
+        "search": {
+            "physical_bounds": {name: list(bounds[name]) for name in _SYSTEM_A_PARAMETER_NAMES},
+            "physical_seeds": seeds,
+        },
+        "algorithm": {
+            "optimizer": "scipy.optimize.least_squares_trf",
+            "physical_parameterization": "unit_box",
+            "frequency_residual_scale_hz": tolerances["frequency_residual_scale_hz"],
+            "numerical_tolerances": tolerances,
+        },
+        "gates": fit_gates,
+        "provenance": provenance_payload,
+        "trace_provenance": [
+            {
+                "trace_id": item["trace_id"],
+                "lj_per_junction_h": item["lj_per_junction_h"],
+                "candidate_id": item["candidate_id"],
+                "reference_contract_id": item["reference_contract_id"],
+                "topology_id": item["topology_id"],
+                "port_plane": item["port_plane"],
+                "lower_branch": item["lower_branch"],
+                "upper_branch": item["upper_branch"],
+            }
+            for item in parsed
+        ],
+    }
+    if len(parsed) < int(fit_gates["min_trace_count"]):
+        return _system_a_rejected(
+            base,
+            ["trace_count_failure"],
+            ["observations contains fewer entries than gates.min_trace_count"],
+            seed_evidence=[],
+        )
+
+    seed_evidence, successful = _run_system_a_seed_fits(
+        parsed,
+        lower,
+        widths,
+        seed_vectors,
+        tolerances,
+    )
+    required_successes = max(
+        int(fit_gates["min_successful_seed_count"]),
+        math.ceil(float(fit_gates["min_successful_seed_fraction"]) * len(seeds)),
+    )
+    if len(successful) < required_successes:
+        return _system_a_rejected(
+            base,
+            ["seed_coverage_failure"],
+            [f"{len(successful)} successful seeds is below required {required_successes}."],
+            seed_evidence=seed_evidence,
+        )
+
+    best, best_record = min(successful, key=lambda item: float(item[0].cost))
+    best_u = np.asarray(best.x, dtype=float)
+    best_params = lower + widths * best_u
+    best_cost = float(best.cost)
+    near_optimal = [
+        (result, record)
+        for result, record in successful
+        if float(result.cost)
+        <= float(fit_gates["near_optimal_cost_ratio"]) * best_cost
+        + float(fit_gates["near_optimal_cost_absolute_tolerance"])
+    ]
+    near_optimal_ids = {id(result) for result, _ in near_optimal}
+    for result, record in successful:
+        record["near_optimal"] = id(result) in near_optimal_ids
+        record["max_parameter_distance_from_best_normalized"] = float(
+            np.max(np.abs(np.asarray(result.x, dtype=float) - best_u))
+        )
+    seed_spread = (
+        float(
+            np.max(
+                np.ptp(
+                    np.vstack([np.asarray(result.x, dtype=float) for result, _ in near_optimal]),
+                    axis=0,
+                )
+            )
+        )
+        if len(near_optimal) > 1
+        else 0.0
+    )
+
+    params = {
+        name: float(best_params[index]) for index, name in enumerate(_SYSTEM_A_PARAMETER_NAMES)
+    }
+    per_lj, residual_hz = _system_a_predictions(parsed, params)
+    metrics = _system_a_metrics(parsed, residual_hz)
+    margins = {
+        name: float(min(best_u[index], 1.0 - best_u[index]))
+        for index, name in enumerate(_SYSTEM_A_PARAMETER_NAMES)
+    }
+    bound_margins = {"physical": margins, "minimum": min(margins.values())}
+    identifiability = _system_a_identifiability(
+        np.asarray(best.jac, dtype=float),
+        float(tolerances["jacobian_rank_rtol"]),
+    )
+
+    failure_codes: list[str] = []
+    failure_reasons: list[str] = []
+    if len(near_optimal) < int(fit_gates["min_winning_seed_count"]):
+        failure_codes.append("insufficient_winning_seed_support")
+        failure_reasons.append("too few seeds reached the declared near-optimal basin")
+    if seed_spread > float(fit_gates["max_seed_spread_normalized"]):
+        failure_codes.append("ambiguous_near_optimal_basin")
+        failure_reasons.append("near-optimal seeds disagree beyond the normalized spread gate")
+    if float(bound_margins["minimum"]) < float(fit_gates["min_normalized_bound_margin"]):
+        failure_codes.append("bound_margin_failure")
+        failure_reasons.append("one or more physical parameters lie too close to a bound")
+    frequency_rmse_hz = cast(float, metrics["frequency_rmse_hz"])
+    max_frequency_error_hz = cast(float, metrics["max_abs_frequency_error_hz"])
+    if frequency_rmse_hz > float(fit_gates["max_frequency_rmse_hz"]):
+        failure_codes.append("quality_failure")
+        failure_reasons.append("frequency RMSE exceeds max_frequency_rmse_hz")
+    if max_frequency_error_hz > float(fit_gates["max_frequency_error_hz"]):
+        failure_codes.append("quality_failure")
+        failure_reasons.append("frequency error exceeds max_frequency_error_hz")
+    frequency_r2 = cast(float | None, metrics["frequency_r2"])
+    if frequency_r2 is None or frequency_r2 < float(fit_gates["min_frequency_r2"]):
+        failure_codes.append("quality_failure")
+        failure_reasons.append("frequency R2 is undefined or below min_frequency_r2")
+    if cast(int, identifiability["rank"]) < int(fit_gates["min_jacobian_rank"]):
+        failure_codes.append("identifiability_failure")
+        failure_reasons.append("Jacobian rank is below min_jacobian_rank")
+    if cast(float, identifiability["singular_value_ratio"]) < float(
+        fit_gates["min_jacobian_singular_ratio"]
+    ):
+        failure_codes.append("identifiability_failure")
+        failure_reasons.append("Jacobian singular-value ratio is below the gate")
+
+    return {
+        **base,
+        "status": "rejected" if failure_codes else "success",
+        "failure_codes": list(dict.fromkeys(failure_codes)),
+        "failure_reasons": failure_reasons,
+        "params": params,
+        "per_lj": per_lj,
+        "metrics": metrics,
+        "seed_evidence": seed_evidence,
+        "multi_start": {
+            "seed_count": len(seeds),
+            "required_successful_seed_count": required_successes,
+            "successful_seed_count": len(successful),
+            "near_optimal_seed_count": len(near_optimal),
+            "max_near_optimal_parameter_spread_normalized": seed_spread,
+        },
+        "bound_margins": bound_margins,
+        "identifiability": identifiability,
+        "optimizer": {
+            "best_seed_index": cast(int, best_record["seed_index"]),
+            "cost": best_cost,
+            "status": int(best.status),
+            "message": str(best.message),
+            "nfev": int(best.nfev),
+            "njev": int(best.njev) if best.njev is not None else None,
+            "optimality": float(best.optimality),
+        },
+    }
 
 
 def calibrate_d3_channel_residue_s21(
     frequency_hz: Sequence[float],
-    filter_only_s21_real: Sequence[float],
-    filter_only_s21_imag: Sequence[float],
+    filter_off_reference_s21_real: Sequence[float],
+    filter_off_reference_s21_imag: Sequence[float],
     empty_feedline_s21_real: Sequence[float],
     empty_feedline_s21_imag: Sequence[float],
     *,
@@ -43,7 +275,7 @@ def calibrate_d3_channel_residue_s21(
     fit_window_hz: Sequence[float],
     background_windows_hz: Sequence[Sequence[float]],
     fp_hz: float,
-    filter_loaded_linewidth_hz: float,
+    filter_off_reference_linewidth_hz: float,
     linear_ls_rcond: float,
     min_reference_magnitude: float,
     min_complex_r2: float,
@@ -52,7 +284,7 @@ def calibrate_d3_channel_residue_s21(
     min_phase_magnitude: float,
     provenance: Mapping[str, object],
 ) -> dict[str, object]:
-    """Calibrate the fixed complex through-line residue from filter-only S21.
+    """Calibrate the fixed complex through-line residue from filter off-reference S21.
 
     The empty-feedline ratio removes the shared cable/feedline response. An
     affine complex direct path and ``residue_hz / a_p`` are identified by one
@@ -61,10 +293,10 @@ def calibrate_d3_channel_residue_s21(
     successful result hashes its canonical JSON summary to detect accidental or
     mismatched payload mutation; raw-trace replay remains the physical evidence.
     """
-    frequency, filter_only, reference = _prepare_traces(
+    frequency, filter_off_reference, reference = _prepare_traces(
         frequency_hz,
-        filter_only_s21_real,
-        filter_only_s21_imag,
+        filter_off_reference_s21_real,
+        filter_off_reference_s21_imag,
         empty_feedline_s21_real,
         empty_feedline_s21_imag,
     )
@@ -73,8 +305,8 @@ def calibrate_d3_channel_residue_s21(
     background_windows = _windows(background_windows_hz, "background_windows_hz")
     _require_windows_inside_trace(frequency, [fit_window, *background_windows])
     fp = _positive_finite(fp_hz, "fp_hz")
-    filter_loaded_linewidth = _positive_finite(
-        filter_loaded_linewidth_hz, "filter_loaded_linewidth_hz"
+    filter_off_reference_linewidth = _positive_finite(
+        filter_off_reference_linewidth_hz, "filter_off_reference_linewidth_hz"
     )
     ls_rcond = _nonnegative_finite(linear_ls_rcond, "linear_ls_rcond")
     reference_floor = _positive_finite(min_reference_magnitude, "min_reference_magnitude")
@@ -107,9 +339,9 @@ def calibrate_d3_channel_residue_s21(
         "model_convention": {
             "phasor_convention": convention,
             "denominator_term": (
-                "a_p = loaded_linewidth_p_hz/2 + i*(f_hz - f_p_hz)"
+                "a_p = off_reference_linewidth_p_hz/2 + i*(f_hz - f_p_hz)"
                 if phasor_sign > 0.0
-                else "a_p = loaded_linewidth_p_hz/2 + i*(f_p_hz - f_hz)"
+                else "a_p = off_reference_linewidth_p_hz/2 + i*(f_p_hz - f_hz)"
             ),
             "model": "S21 = C21_affine + residue_hz / a_p",
             "linear_ls_basis": "[1, scaled_frequency, 1/a_p]",
@@ -130,7 +362,7 @@ def calibrate_d3_channel_residue_s21(
         "background_windows_hz": [list(window) for window in background_windows],
         "fixed_references": {
             "fp_hz": fp,
-            "filter_loaded_linewidth_hz": filter_loaded_linewidth,
+            "filter_off_reference_linewidth_hz": filter_off_reference_linewidth,
         },
         "algorithm": {
             "linear_least_squares": {
@@ -150,7 +382,7 @@ def calibrate_d3_channel_residue_s21(
 
     try:
         with np.errstate(divide="raise", invalid="raise", over="raise"):
-            normalized = filter_only / reference
+            normalized = filter_off_reference / reference
     except FloatingPointError as exc:
         return _rejected(base, "numerical_failure", str(exc))
 
@@ -161,9 +393,8 @@ def calibrate_d3_channel_residue_s21(
     background_scale = float(np.ptp(calibration_frequency))
     _require(background_scale > 0.0, "Calibration windows must span more than one frequency.")
     scaled_frequency = (calibration_frequency - background_center) / background_scale
-    calibration_a_p = (
-        filter_loaded_linewidth / 2.0
-        + 1j * phasor_sign * (calibration_frequency - fp)
+    calibration_a_p = filter_off_reference_linewidth / 2.0 + 1j * phasor_sign * (
+        calibration_frequency - fp
     )
     basis = np.column_stack(
         (
@@ -182,7 +413,7 @@ def calibrate_d3_channel_residue_s21(
         return _rejected(
             base,
             "rank_failure",
-            f"filter-only affine-plus-residue basis has rank {rank}; expected 3",
+            f"filter off-reference affine-plus-residue basis has rank {rank}; expected 3",
         )
     if not np.all(np.isfinite(coefficients)):
         return _rejected(base, "numerical_failure", "calibration coefficients are non-finite")
@@ -196,7 +427,7 @@ def calibrate_d3_channel_residue_s21(
     fit_frequency = frequency[fit_mask]
     fit_data = normalized[fit_mask]
     fit_background = _affine_background(fit_frequency, background)
-    a_p = filter_loaded_linewidth / 2.0 + 1j * phasor_sign * (fit_frequency - fp)
+    a_p = filter_off_reference_linewidth / 2.0 + 1j * phasor_sign * (fit_frequency - fp)
     fitted = fit_background + residue / a_p
     metrics, phase_residual = _metrics(fit_data, fitted, phase_magnitude_gate)
     failure_codes: list[str] = []
@@ -238,9 +469,7 @@ def calibrate_d3_channel_residue_s21(
         },
     }
     if not failure_codes:
-        result_payload["calibration_summary_sha256"] = _calibration_summary_sha256(
-            result_payload
-        )
+        result_payload["calibration_summary_sha256"] = _calibration_summary_sha256(result_payload)
     return result_payload
 
 
@@ -256,8 +485,8 @@ def fit_d3_through_line_s21(
     background_windows_hz: Sequence[Sequence[float]],
     fp_hz: float,
     fr_hz: float,
-    filter_loaded_linewidth_hz: float,
-    readout_loaded_linewidth_hz: float,
+    filter_off_reference_linewidth_hz: float,
+    readout_off_reference_linewidth_hz: float,
     channel_calibration: Mapping[str, object],
     j_bounds_hz: Sequence[float],
     j_seeds_hz: Sequence[float],
@@ -281,13 +510,13 @@ def fit_d3_through_line_s21(
     max_seed_spread_hz: float,
     provenance: Mapping[str, object],
 ) -> dict[str, object]:
-    """Fit J with fixed loaded-bare diagonal frequencies and channel residue.
+    """Fit J with fixed coupling-off diagonal references and channel residue.
 
     Malformed inputs raise immediately. Numerical, bound, quality, or seed
     stability failures return a structured rejected result so an outer design
     optimizer can reject the candidate without inventing replacement metrics.
-    The loaded-bare fp/fr references are the two-mode diagonal frequencies and
-    remain fixed throughout this fit.
+    The coupling-off fp/fr references are initializer frequencies and remain
+    fixed throughout this fit; they are not final Full-QRP loaded-bare values.
     """
     frequency, measured, reference = _prepare_traces(
         frequency_hz,
@@ -303,11 +532,11 @@ def fit_d3_through_line_s21(
 
     fp = _positive_finite(fp_hz, "fp_hz")
     fr = _positive_finite(fr_hz, "fr_hz")
-    filter_loaded_linewidth = _positive_finite(
-        filter_loaded_linewidth_hz, "filter_loaded_linewidth_hz"
+    filter_off_reference_linewidth = _positive_finite(
+        filter_off_reference_linewidth_hz, "filter_off_reference_linewidth_hz"
     )
-    readout_loaded_linewidth = _nonnegative_finite(
-        readout_loaded_linewidth_hz, "readout_loaded_linewidth_hz"
+    readout_off_reference_linewidth = _nonnegative_finite(
+        readout_off_reference_linewidth_hz, "readout_off_reference_linewidth_hz"
     )
     reference_floor = _positive_finite(min_reference_magnitude, "min_reference_magnitude")
     min_reference = float(np.min(np.abs(reference)))
@@ -321,13 +550,9 @@ def fit_d3_through_line_s21(
         channel_calibration,
         phasor_convention=convention,
         fp_hz=fp,
-        filter_loaded_linewidth_hz=filter_loaded_linewidth,
-        current_reference_contract_id=cast(
-            str, provenance_payload["reference_contract_id"]
-        ),
-        current_filter_loaded_bare_reference_id=cast(
-            str, provenance_payload["filter_loaded_bare_reference_id"]
-        ),
+        filter_off_reference_linewidth_hz=filter_off_reference_linewidth,
+        current_reference_contract_id=cast(str, provenance_payload["reference_contract_id"]),
+        current_filter_off_reference_id=cast(str, provenance_payload["filter_off_reference_id"]),
         current_port_plane=current_port_plane,
         actual_reference_min_magnitude=min_reference,
     )
@@ -419,8 +644,8 @@ def fit_d3_through_line_s21(
             "free_cable_delay": False,
             "free_complex_residue": False,
             "simultaneous_j_residue_fit": False,
-            "channel_residue_source": "independent_filter_only_complex_s21_calibration",
-            "loaded_bare_diagonal_frequencies_fixed": True,
+            "channel_residue_source": "independent_filter_off_reference_complex_s21_calibration",
+            "off_reference_diagonal_frequencies_fixed": True,
             "asymmetric_channel_identifiability": False,
         },
         "normalization": {
@@ -441,8 +666,8 @@ def fit_d3_through_line_s21(
         "fixed_references": {
             "fp_hz": fp,
             "fr_hz": fr,
-            "filter_loaded_linewidth_hz": filter_loaded_linewidth,
-            "readout_loaded_linewidth_hz": readout_loaded_linewidth,
+            "filter_off_reference_linewidth_hz": filter_off_reference_linewidth,
+            "readout_off_reference_linewidth_hz": readout_off_reference_linewidth,
         },
         "channel_calibration": channel_calibration_snapshot,
         "search": {
@@ -518,8 +743,8 @@ def fit_d3_through_line_s21(
             j_hz=float(values[0]),
             fp_hz=fp,
             fr_hz=fr,
-            filter_loaded_linewidth_hz=filter_loaded_linewidth,
-            readout_loaded_linewidth_hz=readout_loaded_linewidth,
+            filter_off_reference_linewidth_hz=filter_off_reference_linewidth,
+            readout_off_reference_linewidth_hz=readout_off_reference_linewidth,
             channel_residue_hz=channel_residue,
             phasor_sign=phasor_sign,
         )
@@ -642,8 +867,8 @@ def fit_d3_through_line_s21(
         j_hz=j_fit,
         fp_hz=fp,
         fr_hz=fr,
-        filter_loaded_linewidth_hz=filter_loaded_linewidth,
-        readout_loaded_linewidth_hz=readout_loaded_linewidth,
+        filter_off_reference_linewidth_hz=filter_off_reference_linewidth,
+        readout_off_reference_linewidth_hz=readout_off_reference_linewidth,
         channel_residue_hz=channel_residue,
         phasor_sign=phasor_sign,
     )
@@ -771,8 +996,8 @@ def fit_d3_through_line_s21(
         "derived_poles": _poles(
             fp,
             fr,
-            filter_loaded_linewidth,
-            readout_loaded_linewidth,
+            filter_off_reference_linewidth,
+            readout_off_reference_linewidth,
             j_fit,
             phasor_sign,
         ),
@@ -795,9 +1020,9 @@ def _validated_channel_calibration(
     *,
     phasor_convention: str,
     fp_hz: float,
-    filter_loaded_linewidth_hz: float,
+    filter_off_reference_linewidth_hz: float,
     current_reference_contract_id: str,
-    current_filter_loaded_bare_reference_id: str,
+    current_filter_off_reference_id: str,
     current_port_plane: str,
     actual_reference_min_magnitude: float,
 ) -> tuple[dict[str, object], complex]:
@@ -846,14 +1071,11 @@ def _validated_channel_calibration(
         "channel_calibration status must be 'success'.",
     )
     _require(
-        _string_values(calibration.get("failure_codes"), "channel_calibration.failure_codes")
-        == [],
+        _string_values(calibration.get("failure_codes"), "channel_calibration.failure_codes") == [],
         "channel_calibration.failure_codes must be empty for a successful calibration.",
     )
     _require(
-        _string_values(
-            calibration.get("failure_reasons"), "channel_calibration.failure_reasons"
-        )
+        _string_values(calibration.get("failure_reasons"), "channel_calibration.failure_reasons")
         == [],
         "channel_calibration.failure_reasons must be empty for a successful calibration.",
     )
@@ -881,13 +1103,12 @@ def _validated_channel_calibration(
         and model.get("linear_ls_basis") == "[1, scaled_frequency, 1/a_p]"
         and model.get("denominator_term")
         == (
-            "a_p = loaded_linewidth_p_hz/2 + i*(f_hz - f_p_hz)"
+            "a_p = off_reference_linewidth_p_hz/2 + i*(f_hz - f_p_hz)"
             if phasor_convention == "exp_plus_iomega_t"
-            else "a_p = loaded_linewidth_p_hz/2 + i*(f_p_hz - f_hz)"
+            else "a_p = off_reference_linewidth_p_hz/2 + i*(f_p_hz - f_hz)"
         )
         and model.get("input_s21_conjugated") is False
-        and model.get("calibration_samples")
-        == "union_of_explicit_fit_and_background_windows"
+        and model.get("calibration_samples") == "union_of_explicit_fit_and_background_windows"
         and model.get("free_cable_delay") is False,
         "channel_calibration model convention does not match the current calibration schema.",
     )
@@ -907,13 +1128,13 @@ def _validated_channel_calibration(
         calibration.get("fixed_references"), "channel_calibration.fixed_references"
     )
     _require(
-        set(fixed) == {"fp_hz", "filter_loaded_linewidth_hz"},
+        set(fixed) == {"fp_hz", "filter_off_reference_linewidth_hz"},
         "channel_calibration fixed references do not match the current schema.",
     )
     calibration_fp = _mapping_float(fixed, "fp_hz", "channel_calibration.fixed_references")
     calibration_linewidth = _mapping_float(
         fixed,
-        "filter_loaded_linewidth_hz",
+        "filter_off_reference_linewidth_hz",
         "channel_calibration.fixed_references",
     )
     _require(
@@ -921,13 +1142,11 @@ def _validated_channel_calibration(
         "channel_calibration fp_hz must match the pair fit fp_hz.",
     )
     _require(
-        calibration_linewidth == filter_loaded_linewidth_hz,
-        "channel_calibration filter loaded linewidth must match the pair fit.",
+        calibration_linewidth == filter_off_reference_linewidth_hz,
+        "channel_calibration filter off-reference linewidth must match the pair fit.",
     )
 
-    algorithm = _required_mapping(
-        calibration.get("algorithm"), "channel_calibration.algorithm"
-    )
+    algorithm = _required_mapping(calibration.get("algorithm"), "channel_calibration.algorithm")
     _require(
         set(algorithm) == {"linear_least_squares"},
         "channel_calibration algorithm does not match the current schema.",
@@ -1010,9 +1229,8 @@ def _validated_channel_calibration(
         "channel_calibration reference_contract_id must match the pair fit.",
     )
     _require(
-        provenance["filter_loaded_bare_reference_id"]
-        == current_filter_loaded_bare_reference_id,
-        "channel_calibration filter loaded-bare reference must match the pair fit.",
+        provenance["filter_off_reference_id"] == current_filter_off_reference_id,
+        "channel_calibration filter off-reference identity must match the pair fit.",
     )
     _require(
         provenance["port_plane"] == current_port_plane,
@@ -1174,7 +1392,7 @@ def _validated_channel_calibration(
         "background_windows_hz": [list(window) for window in background_windows],
         "fixed_references": {
             "fp_hz": calibration_fp,
-            "filter_loaded_linewidth_hz": calibration_linewidth,
+            "filter_off_reference_linewidth_hz": calibration_linewidth,
         },
         "algorithm": {
             "linear_least_squares": {
@@ -1205,6 +1423,549 @@ def _validated_channel_calibration(
         "validated channel_calibration snapshot does not preserve its hashed summary.",
     )
     return snapshot, residue
+
+
+def _system_a_observations(
+    values: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    _require(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes)),
+        "observations must be a sequence of mappings.",
+    )
+    required = {
+        "trace_id",
+        "lj_per_junction_h",
+        "lower_frequency_hz",
+        "upper_frequency_hz",
+        "lower_response_parameter",
+        "lower_extraction_method",
+        "lower_source_trace_id",
+        "upper_response_parameter",
+        "upper_extraction_method",
+        "upper_source_trace_id",
+        "candidate_id",
+        "reference_contract_id",
+        "topology_id",
+        "port_plane",
+    }
+    parsed: list[dict[str, object]] = []
+    seen_trace_ids: set[str] = set()
+    for index, raw in enumerate(values):
+        mapping = _required_mapping(raw, f"observations[{index}]")
+        _require(
+            set(mapping) == required,
+            f"observations[{index}] must contain exactly {sorted(required)}.",
+        )
+        trace_id = cast(str, mapping["trace_id"])
+        _require(
+            isinstance(trace_id, str) and bool(trace_id.strip()),
+            f"observations[{index}].trace_id must be a non-empty string.",
+        )
+        _require(trace_id not in seen_trace_ids, "observations trace_id values must be unique.")
+        seen_trace_ids.add(trace_id)
+        lower_frequency = _positive_finite(
+            _mapping_float(mapping, "lower_frequency_hz", f"observations[{index}]"),
+            f"observations[{index}].lower_frequency_hz",
+        )
+        upper_frequency = _positive_finite(
+            _mapping_float(mapping, "upper_frequency_hz", f"observations[{index}]"),
+            f"observations[{index}].upper_frequency_hz",
+        )
+        _require(
+            lower_frequency < upper_frequency,
+            f"observations[{index}] frequencies must be strictly lower/high ordered.",
+        )
+        identity = _validated_provenance(
+            {
+                name: mapping[name]
+                for name in (
+                    "trace_id",
+                    "candidate_id",
+                    "reference_contract_id",
+                    "topology_id",
+                    "port_plane",
+                )
+            },
+            frozenset(
+                {
+                    "trace_id",
+                    "candidate_id",
+                    "reference_contract_id",
+                    "topology_id",
+                    "port_plane",
+                }
+            ),
+            f"observations[{index}] identity",
+        )
+        branch_provenance: dict[str, dict[str, str]] = {}
+        for branch in ("lower", "upper"):
+            response_parameter = mapping[f"{branch}_response_parameter"]
+            extraction_method = mapping[f"{branch}_extraction_method"]
+            source_trace_id = mapping[f"{branch}_source_trace_id"]
+            _require(
+                isinstance(response_parameter, str)
+                and response_parameter.upper() in {"S", "Y", "Z"},
+                f"observations[{index}].{branch}_response_parameter must be S, Y, or Z.",
+            )
+            _require(
+                isinstance(extraction_method, str) and bool(extraction_method.strip()),
+                f"observations[{index}].{branch}_extraction_method must be a non-empty string.",
+            )
+            _require(
+                isinstance(source_trace_id, str) and bool(source_trace_id.strip()),
+                f"observations[{index}].{branch}_source_trace_id must be a non-empty string.",
+            )
+            branch_provenance[branch] = {
+                "response_parameter": cast(str, response_parameter).upper(),
+                "extraction_method": cast(str, extraction_method),
+                "source_trace_id": cast(str, source_trace_id),
+            }
+        parsed.append(
+            {
+                **identity,
+                "lj_per_junction_h": _positive_finite(
+                    _mapping_float(mapping, "lj_per_junction_h", f"observations[{index}]"),
+                    f"observations[{index}].lj_per_junction_h",
+                ),
+                "lower_frequency_hz": lower_frequency,
+                "upper_frequency_hz": upper_frequency,
+                "lower_branch": branch_provenance["lower"],
+                "upper_branch": branch_provenance["upper"],
+            }
+        )
+    _require(bool(parsed), "observations must not be empty.")
+    lj_values = np.asarray(
+        [float(cast(float, observation["lj_per_junction_h"])) for observation in parsed]
+    )
+    _require(
+        len(set(lj_values.tolist())) == len(lj_values),
+        "observations L_J values must be unique.",
+    )
+    lj_differences = np.diff(lj_values)
+    _require(
+        bool(np.all(lj_differences > 0.0) or np.all(lj_differences < 0.0)),
+        "observations L_J values must be strictly monotonic in supplied sweep order.",
+    )
+    return parsed
+
+
+def _validate_system_a_observation_identity(
+    observations: Sequence[Mapping[str, object]],
+    provenance: Mapping[str, object],
+) -> None:
+    for index, observation in enumerate(observations):
+        for name in ("candidate_id", "reference_contract_id", "topology_id", "port_plane"):
+            _require(
+                observation[name] == provenance[name],
+                f"observations[{index}].{name} must match provenance.{name}.",
+            )
+
+
+def _system_a_bounds(
+    values: Mapping[str, Sequence[float]],
+) -> dict[str, tuple[float, float]]:
+    mapping = _required_mapping(values, "physical_bounds")
+    _require(
+        set(mapping) == set(_SYSTEM_A_PARAMETER_NAMES),
+        f"physical_bounds must contain exactly {sorted(_SYSTEM_A_PARAMETER_NAMES)}.",
+    )
+    bounds = {
+        name: _window(cast(Sequence[float], mapping[name]), f"physical_bounds.{name}")
+        for name in _SYSTEM_A_PARAMETER_NAMES
+    }
+    _require(
+        bounds["c_q_eff_system_a_on_f"][0] > 0.0,
+        "physical_bounds.c_q_eff_system_a_on_f must be positive.",
+    )
+    _require(
+        bounds["f_r_lb_system_a_on_hz"][0] > 0.0,
+        "physical_bounds.f_r_lb_system_a_on_hz must be positive.",
+    )
+    _require(
+        bounds["g_system_a_on_hz"][0] >= 0.0,
+        "physical_bounds.g_system_a_on_hz must be nonnegative.",
+    )
+    return bounds
+
+
+def _system_a_seeds(
+    values: Sequence[Mapping[str, float]],
+    bounds: Mapping[str, tuple[float, float]],
+) -> list[dict[str, float]]:
+    _require(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes)),
+        "physical_seeds must be a sequence of mappings.",
+    )
+    converted: list[dict[str, float]] = []
+    for index, raw in enumerate(values):
+        mapping = _required_mapping(raw, f"physical_seeds[{index}]")
+        _require(
+            set(mapping) == set(_SYSTEM_A_PARAMETER_NAMES),
+            f"physical_seeds[{index}] must contain exactly {sorted(_SYSTEM_A_PARAMETER_NAMES)}.",
+        )
+        seed = {
+            name: _mapping_float(mapping, name, f"physical_seeds[{index}]")
+            for name in _SYSTEM_A_PARAMETER_NAMES
+        }
+        _require(
+            all(bounds[name][0] <= seed[name] <= bounds[name][1] for name in seed),
+            f"physical_seeds[{index}] must lie within physical_bounds.",
+        )
+        _require(
+            seed["g_system_a_on_hz"] >= 0.0,
+            f"physical_seeds[{index}].g_system_a_on_hz must be nonnegative.",
+        )
+        converted.append(seed)
+    _require(bool(converted), "physical_seeds must not be empty.")
+    _require(
+        len({tuple(seed[name] for name in _SYSTEM_A_PARAMETER_NAMES) for seed in converted})
+        == len(converted),
+        "physical_seeds must not contain duplicates.",
+    )
+    return converted
+
+
+def _system_a_numerical_tolerances(
+    values: Mapping[str, int | float],
+) -> dict[str, int | float]:
+    mapping = _required_mapping(values, "numerical_tolerances")
+    required = {
+        "frequency_residual_scale_hz",
+        "least_squares_max_nfev",
+        "least_squares_ftol",
+        "least_squares_xtol",
+        "least_squares_gtol",
+        "least_squares_diff_step",
+        "jacobian_rank_rtol",
+    }
+    _require(
+        set(mapping) == required,
+        f"numerical_tolerances must contain exactly {sorted(required)}.",
+    )
+    return {
+        "frequency_residual_scale_hz": _positive_finite(
+            _mapping_float(mapping, "frequency_residual_scale_hz", "numerical_tolerances"),
+            "numerical_tolerances.frequency_residual_scale_hz",
+        ),
+        "least_squares_max_nfev": _positive_integer(
+            _mapping_integer(mapping, "least_squares_max_nfev", "numerical_tolerances"),
+            "numerical_tolerances.least_squares_max_nfev",
+        ),
+        "least_squares_ftol": _positive_finite(
+            _mapping_float(mapping, "least_squares_ftol", "numerical_tolerances"),
+            "numerical_tolerances.least_squares_ftol",
+        ),
+        "least_squares_xtol": _positive_finite(
+            _mapping_float(mapping, "least_squares_xtol", "numerical_tolerances"),
+            "numerical_tolerances.least_squares_xtol",
+        ),
+        "least_squares_gtol": _positive_finite(
+            _mapping_float(mapping, "least_squares_gtol", "numerical_tolerances"),
+            "numerical_tolerances.least_squares_gtol",
+        ),
+        "least_squares_diff_step": _positive_finite(
+            _mapping_float(mapping, "least_squares_diff_step", "numerical_tolerances"),
+            "numerical_tolerances.least_squares_diff_step",
+        ),
+        "jacobian_rank_rtol": _positive_finite(
+            _mapping_float(mapping, "jacobian_rank_rtol", "numerical_tolerances"),
+            "numerical_tolerances.jacobian_rank_rtol",
+        ),
+    }
+
+
+def _system_a_gates(values: Mapping[str, int | float]) -> dict[str, int | float]:
+    mapping = _required_mapping(values, "gates")
+    integer_names = {
+        "min_trace_count",
+        "min_successful_seed_count",
+        "min_winning_seed_count",
+        "min_jacobian_rank",
+    }
+    float_names = {
+        "max_frequency_rmse_hz",
+        "max_frequency_error_hz",
+        "min_frequency_r2",
+        "min_normalized_bound_margin",
+        "min_successful_seed_fraction",
+        "near_optimal_cost_ratio",
+        "near_optimal_cost_absolute_tolerance",
+        "max_seed_spread_normalized",
+        "min_jacobian_singular_ratio",
+    }
+    required = integer_names | float_names
+    _require(set(mapping) == required, f"gates must contain exactly {sorted(required)}.")
+    converted: dict[str, int | float] = {
+        name: _positive_integer(_mapping_integer(mapping, name, "gates"), f"gates.{name}")
+        for name in integer_names
+    }
+    for name in float_names:
+        converted[name] = _mapping_float(mapping, name, "gates")
+    for name in (
+        "max_frequency_rmse_hz",
+        "max_frequency_error_hz",
+        "min_normalized_bound_margin",
+        "near_optimal_cost_absolute_tolerance",
+        "max_seed_spread_normalized",
+        "min_jacobian_singular_ratio",
+    ):
+        converted[name] = _nonnegative_finite(cast(float, converted[name]), f"gates.{name}")
+    converted["min_frequency_r2"] = _r2_gate(
+        cast(float, converted["min_frequency_r2"]), "gates.min_frequency_r2"
+    )
+    converted["min_successful_seed_fraction"] = _fraction(
+        cast(float, converted["min_successful_seed_fraction"]),
+        "gates.min_successful_seed_fraction",
+    )
+    converted["near_optimal_cost_ratio"] = _finite_at_least(
+        cast(float, converted["near_optimal_cost_ratio"]),
+        1.0,
+        "gates.near_optimal_cost_ratio",
+    )
+    _require(
+        cast(float, converted["min_normalized_bound_margin"]) < 0.5,
+        "gates.min_normalized_bound_margin must be less than 0.5.",
+    )
+    _require(
+        cast(float, converted["min_jacobian_singular_ratio"]) <= 1.0,
+        "gates.min_jacobian_singular_ratio must be at most 1.",
+    )
+    _require(
+        int(converted["min_jacobian_rank"]) == len(_SYSTEM_A_PARAMETER_NAMES),
+        "gates.min_jacobian_rank must equal the three-parameter System-A model rank.",
+    )
+    return converted
+
+
+def _run_system_a_seed_fits(
+    observations: Sequence[Mapping[str, object]],
+    lower: np.ndarray,
+    widths: np.ndarray,
+    seeds: Sequence[np.ndarray],
+    tolerances: Mapping[str, int | float],
+) -> tuple[list[dict[str, object]], list[tuple[OptimizeResult, dict[str, object]]]]:
+    evidence: list[dict[str, object]] = []
+    successful: list[tuple[OptimizeResult, dict[str, object]]] = []
+    for seed_index, seed in enumerate(seeds):
+        try:
+            result = least_squares(
+                lambda value: _system_a_residual(
+                    value,
+                    observations,
+                    lower,
+                    widths,
+                    float(tolerances["frequency_residual_scale_hz"]),
+                ),
+                seed,
+                bounds=(np.zeros_like(seed), np.ones_like(seed)),
+                x_scale=np.ones_like(seed),
+                method="trf",
+                loss="linear",
+                jac="2-point",
+                ftol=float(tolerances["least_squares_ftol"]),
+                xtol=float(tolerances["least_squares_xtol"]),
+                gtol=float(tolerances["least_squares_gtol"]),
+                diff_step=float(tolerances["least_squares_diff_step"]),
+                max_nfev=int(tolerances["least_squares_max_nfev"]),
+            )
+            terminal_finite = bool(
+                np.asarray(result.x).shape == seed.shape
+                and np.all(np.isfinite(result.x))
+                and np.isfinite(float(result.cost))
+                and np.all(np.isfinite(result.fun))
+                and np.all(np.isfinite(result.jac))
+            )
+            success = bool(result.success and result.status > 0 and terminal_finite)
+            record: dict[str, object] = {
+                "seed_index": seed_index,
+                "seed_normalized": _float_list(seed),
+                "terminal_normalized": (
+                    _float_list(np.asarray(result.x, dtype=float)) if terminal_finite else None
+                ),
+                "terminal_physical": (
+                    {
+                        name: float((lower + widths * np.asarray(result.x))[index])
+                        for index, name in enumerate(_SYSTEM_A_PARAMETER_NAMES)
+                    }
+                    if terminal_finite
+                    else None
+                ),
+                "cost": float(result.cost) if terminal_finite else None,
+                "optimizer_success": success,
+                "optimizer_status": int(result.status),
+                "optimizer_message": str(result.message),
+                "nfev": int(result.nfev),
+                "njev": int(result.njev) if result.njev is not None else None,
+                "optimality": (
+                    float(result.optimality) if np.isfinite(float(result.optimality)) else None
+                ),
+                "near_optimal": False,
+                "max_parameter_distance_from_best_normalized": None,
+            }
+            evidence.append(record)
+            if success:
+                successful.append((result, record))
+        except (FloatingPointError, np.linalg.LinAlgError, ValueError) as exc:
+            evidence.append(
+                {
+                    "seed_index": seed_index,
+                    "seed_normalized": _float_list(seed),
+                    "terminal_normalized": None,
+                    "terminal_physical": None,
+                    "cost": None,
+                    "optimizer_success": False,
+                    "optimizer_status": None,
+                    "optimizer_message": str(exc),
+                    "nfev": None,
+                    "njev": None,
+                    "optimality": None,
+                    "near_optimal": False,
+                    "max_parameter_distance_from_best_normalized": None,
+                }
+            )
+    return evidence, successful
+
+
+def _system_a_residual(
+    normalized_parameters: np.ndarray,
+    observations: Sequence[Mapping[str, object]],
+    lower: np.ndarray,
+    widths: np.ndarray,
+    residual_scale_hz: float,
+) -> np.ndarray:
+    parameters = lower + widths * np.asarray(normalized_parameters, dtype=float)
+    params = {
+        name: float(parameters[index]) for index, name in enumerate(_SYSTEM_A_PARAMETER_NAMES)
+    }
+    _, residual_hz = _system_a_predictions(observations, params)
+    scaled = residual_hz.reshape(-1) / residual_scale_hz
+    if not np.all(np.isfinite(scaled)):
+        raise FloatingPointError("System-A frequency residual is non-finite.")
+    return scaled
+
+
+def _system_a_predictions(
+    observations: Sequence[Mapping[str, object]],
+    params: Mapping[str, float],
+) -> tuple[list[dict[str, object]], np.ndarray]:
+    per_lj: list[dict[str, object]] = []
+    residuals: list[tuple[float, float]] = []
+    for observation in observations:
+        fq_hz = _system_a_fq_hz(
+            float(cast(float, observation["lj_per_junction_h"])),
+            float(params["c_q_eff_system_a_on_f"]),
+        )
+        fr_hz = float(params["f_r_lb_system_a_on_hz"])
+        g_hz = float(params["g_system_a_on_hz"])
+        midpoint = 0.5 * (fq_hz + fr_hz)
+        half_splitting = math.sqrt((0.5 * (fq_hz - fr_hz)) ** 2 + g_hz**2)
+        predicted_lower = midpoint - half_splitting
+        predicted_upper = midpoint + half_splitting
+        observed_lower = float(cast(float, observation["lower_frequency_hz"]))
+        observed_upper = float(cast(float, observation["upper_frequency_hz"]))
+        lower_residual = predicted_lower - observed_lower
+        upper_residual = predicted_upper - observed_upper
+        residuals.append((lower_residual, upper_residual))
+        per_lj.append(
+            {
+                "trace_id": observation["trace_id"],
+                "lj_per_junction_h": observation["lj_per_junction_h"],
+                "f_q_model_hz": fq_hz,
+                "observed_lower_frequency_hz": observed_lower,
+                "observed_upper_frequency_hz": observed_upper,
+                "predicted_lower_frequency_hz": predicted_lower,
+                "predicted_upper_frequency_hz": predicted_upper,
+                "lower_frequency_residual_hz": lower_residual,
+                "upper_frequency_residual_hz": upper_residual,
+                "lower_branch_provenance": observation["lower_branch"],
+                "upper_branch_provenance": observation["upper_branch"],
+            }
+        )
+    return per_lj, np.asarray(residuals, dtype=float)
+
+
+def _system_a_fq_hz(lj_per_junction_h: float, c_q_eff_f: float) -> float:
+    return 1.0 / (2.0 * math.pi * math.sqrt((lj_per_junction_h / 2.0) * c_q_eff_f))
+
+
+def _system_a_metrics(
+    observations: Sequence[Mapping[str, object]],
+    residual_hz: np.ndarray,
+) -> dict[str, float | int | None]:
+    observed = np.asarray(
+        [
+            [
+                float(cast(float, item["lower_frequency_hz"])),
+                float(cast(float, item["upper_frequency_hz"])),
+            ]
+            for item in observations
+        ],
+        dtype=float,
+    )
+    residual_flat = residual_hz.reshape(-1)
+    observed_flat = observed.reshape(-1)
+    sse = float(np.dot(residual_flat, residual_flat))
+    centered = observed_flat - float(np.mean(observed_flat))
+    centered_sse = float(np.dot(centered, centered))
+    return {
+        "frequency_rmse_hz": float(np.sqrt(np.mean(residual_flat**2))),
+        "max_abs_frequency_error_hz": float(np.max(np.abs(residual_flat))),
+        "frequency_r2": 1.0 - sse / centered_sse if centered_sse > 0.0 else None,
+        "trace_count": len(observations),
+        "frequency_observation_count": len(observed_flat),
+    }
+
+
+def _system_a_identifiability(
+    jacobian: np.ndarray,
+    relative_cutoff: float,
+) -> dict[str, object]:
+    singular_values = np.linalg.svd(jacobian, compute_uv=False)
+    _require(
+        bool(singular_values.size) and bool(np.all(np.isfinite(singular_values))),
+        "System-A Jacobian singular values must be finite and non-empty.",
+    )
+    threshold = relative_cutoff * float(singular_values[0])
+    rank = int(np.count_nonzero(singular_values > threshold))
+    ratio = float(singular_values[-1] / singular_values[0]) if singular_values[0] > 0.0 else 0.0
+    return {
+        "parameter_order": list(_SYSTEM_A_PARAMETER_NAMES),
+        "rank": rank,
+        "rank_threshold": threshold,
+        "svd_relative_cutoff": relative_cutoff,
+        "singular_values": _float_list(singular_values),
+        "singular_value_ratio": ratio,
+    }
+
+
+def _system_a_rejected(
+    base: Mapping[str, object],
+    codes: Sequence[str],
+    reasons: Sequence[str],
+    *,
+    seed_evidence: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    search = cast(Mapping[str, object], base["search"])
+    seed_count = len(cast(Sequence[object], search["physical_seeds"]))
+    successful_seed_count = sum(bool(item.get("optimizer_success")) for item in seed_evidence)
+    return {
+        **base,
+        "status": "rejected",
+        "failure_codes": list(codes),
+        "failure_reasons": list(reasons),
+        "params": None,
+        "per_lj": None,
+        "metrics": None,
+        "seed_evidence": list(seed_evidence),
+        "multi_start": {
+            "fit_executed": bool(seed_evidence),
+            "seed_count": seed_count,
+            "successful_seed_count": successful_seed_count,
+        },
+        "bound_margins": None,
+        "identifiability": None,
+        "optimizer": None,
+    }
 
 
 def _prepare_traces(
@@ -1279,13 +2040,13 @@ def _physical_s21(
     j_hz: float,
     fp_hz: float,
     fr_hz: float,
-    filter_loaded_linewidth_hz: float,
-    readout_loaded_linewidth_hz: float,
+    filter_off_reference_linewidth_hz: float,
+    readout_off_reference_linewidth_hz: float,
     channel_residue_hz: complex,
     phasor_sign: float,
 ) -> np.ndarray:
-    a_p = filter_loaded_linewidth_hz / 2.0 + 1j * phasor_sign * (frequency_hz - fp_hz)
-    a_r = readout_loaded_linewidth_hz / 2.0 + 1j * phasor_sign * (frequency_hz - fr_hz)
+    a_p = filter_off_reference_linewidth_hz / 2.0 + 1j * phasor_sign * (frequency_hz - fp_hz)
+    a_r = readout_off_reference_linewidth_hz / 2.0 + 1j * phasor_sign * (frequency_hz - fr_hz)
     denominator = a_p * a_r + j_hz**2
     return background + channel_residue_hz * a_r / denominator
 
@@ -1367,13 +2128,13 @@ def _quality_failure(
 def _poles(
     fp_hz: float,
     fr_hz: float,
-    filter_loaded_linewidth_hz: float,
-    readout_loaded_linewidth_hz: float,
+    filter_off_reference_linewidth_hz: float,
+    readout_off_reference_linewidth_hz: float,
     j_hz: float,
     phasor_sign: float,
 ) -> list[dict[str, float]]:
-    omega_p = complex(fp_hz, phasor_sign * filter_loaded_linewidth_hz / 2.0)
-    omega_r = complex(fr_hz, phasor_sign * readout_loaded_linewidth_hz / 2.0)
+    omega_p = complex(fp_hz, phasor_sign * filter_off_reference_linewidth_hz / 2.0)
+    omega_r = complex(fr_hz, phasor_sign * readout_off_reference_linewidth_hz / 2.0)
     split = np.sqrt(j_hz**2 + ((omega_p - omega_r) / 2.0) ** 2)
     poles = [(omega_p + omega_r) / 2.0 - split, (omega_p + omega_r) / 2.0 + split]
     return [
@@ -1533,8 +2294,8 @@ def _provenance(values: Mapping[str, object]) -> dict[str, str | bool | int | fl
             "reference_contract_id",
             "measured_trace_id",
             "empty_feedline_trace_id",
-            "filter_loaded_bare_reference_id",
-            "readout_loaded_bare_reference_id",
+            "filter_off_reference_id",
+            "common_readout_off_reference_id",
             "pair_assignment_id",
             "port_plane",
         }
@@ -1549,9 +2310,9 @@ def _calibration_provenance(
         {
             "calibration_id",
             "reference_contract_id",
-            "filter_only_trace_id",
+            "filter_off_reference_trace_id",
             "empty_feedline_trace_id",
-            "filter_loaded_bare_reference_id",
+            "filter_off_reference_id",
             "port_plane",
         }
     )
@@ -1612,9 +2373,7 @@ def _string_values(value: object, name: str) -> list[str]:
     return cast(list[str], converted)
 
 
-def _plain_scalar_mapping(
-    value: object, name: str
-) -> dict[str, str | bool | int | float]:
+def _plain_scalar_mapping(value: object, name: str) -> dict[str, str | bool | int | float]:
     mapping = _required_mapping(value, name)
     converted: dict[str, str | bool | int | float] = {}
     for key, item in mapping.items():

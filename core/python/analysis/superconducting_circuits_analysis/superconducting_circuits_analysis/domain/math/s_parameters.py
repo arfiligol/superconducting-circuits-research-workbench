@@ -16,6 +16,7 @@ and engineering explanations belong to the linked SCQ_Design knowledge base.
 This module does not implement passivity checking or enforcement.
 """
 
+import warnings
 from numbers import Real
 from typing import Any, cast
 
@@ -581,22 +582,30 @@ class MultiResonanceVectorFitter:
         n_resonators: int,
         bg_poles: int,
         *,
+        max_iterations: int,
         min_q: float,
         restrict_to_input_span: bool = True,
     ) -> dict:
-        """Fit the scalar trace and classify stable positive-frequency poles.
+        """Fit the scalar trace and classify stable positive-frequency candidates.
+
+        The returned ``resonances`` bucket is a candidate ledger, not a
+        physical-mode or promotion decision. It applies only the stable,
+        positive-frequency, input-span, and caller-owned Q classifications.
+        Convergence and each candidate's aligned residue contribution remain
+        evidence for the consuming workflow to gate explicitly.
 
         Arguments:
             n_resonators: Requested number of complex pole pairs.
             bg_poles: Requested number of real background poles.
+            max_iterations: Maximum pole-relocation iterations.
             min_q: Caller-owned threshold separating reported resonances from
                 the existing artifact bucket.
             restrict_to_input_span: Exclude poles outside the sampled span when
                 true.
 
         Returns:
-            Reported resonances, artifacts, reconstructed scalar S21, and its
-            explicit complex-S21 root-mean-square error.
+            The complete stored rational model, classified poles, reconstructed
+            scalar S21, complex residual, and fit diagnostics.
         """
         if isinstance(n_resonators, (bool, np.bool_)) or not isinstance(
             n_resonators, (int, np.integer)
@@ -610,6 +619,13 @@ class MultiResonanceVectorFitter:
             raise ValueError("n_resonators must be at least 1.")
         if bg_poles < 0:
             raise ValueError("bg_poles must be non-negative.")
+        if isinstance(max_iterations, (bool, np.bool_)) or not isinstance(
+            max_iterations, (int, np.integer)
+        ):
+            raise ValueError("max_iterations must be an integer.")
+        max_iterations = int(max_iterations)
+        if max_iterations < 1:
+            raise ValueError("max_iterations must be at least 1.")
         if isinstance(min_q, (bool, np.bool_)) or not isinstance(min_q, Real):
             raise ValueError("min_q must be a real number.")
         min_q_value = float(min_q)
@@ -629,11 +645,21 @@ class MultiResonanceVectorFitter:
             VectorFitting = skrf.VectorFitting
 
         self.vf_engine = VectorFitting(cast(Any, ntwk))
+        self.vf_engine.max_iterations = max_iterations
 
-        self.vf_engine.vector_fit(n_poles_real=bg_poles, n_poles_cmplx=n_resonators)
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter("always")
+            self.vf_engine.vector_fit(
+                n_poles_real=bg_poles,
+                n_poles_cmplx=n_resonators,
+                fit_constant=True,
+                fit_proportional=False,
+            )
 
         model_s21 = self.vf_engine.get_model_response(0, 0, self.f)
-        rms_error = float(np.sqrt(np.mean(np.abs(model_s21 - self.s21_complex) ** 2)))
+        residual_s21 = model_s21 - self.s21_complex
+        rms_error = float(np.sqrt(np.mean(np.abs(residual_s21) ** 2)))
+        max_abs_error = float(np.max(np.abs(residual_s21)))
 
         frequency_span_hz = (
             (float(np.min(self.f)), float(np.max(self.f))) if restrict_to_span else None
@@ -643,11 +669,38 @@ class MultiResonanceVectorFitter:
             frequency_span_hz=frequency_span_hz,
         )
 
+        if self.vf_engine.constant_coeff is None or self.vf_engine.proportional_coeff is None:
+            raise RuntimeError("Vector fitting did not return direct and proportional terms.")
+        constant_coeff = np.asarray(self.vf_engine.constant_coeff, dtype=complex)
+        proportional_coeff = np.asarray(self.vf_engine.proportional_coeff, dtype=complex)
+        if constant_coeff.shape != (1,) or proportional_coeff.shape != (1,):
+            raise RuntimeError("Scalar vector fitting returned non-scalar direct terms.")
+
+        delta_history = [float(value) for value in self.vf_engine.delta_max_history]
+        convergence_tolerance = float(self.vf_engine.max_tol)
+
         return {
             "resonances": extracted["resonances"],
             "artifacts": extracted["artifacts"],
+            "poles": extracted["poles"],
+            "constant_term": complex(constant_coeff[0]),
+            "proportional_term": complex(proportional_coeff[0]),
+            "stored_pole_count": len(extracted["poles"]),
+            "final_model_order": sum(
+                1 if item["pole_kind"] == "real" else 2 for item in extracted["poles"]
+            ),
             "model_s21": model_s21,
+            "residual_s21": residual_s21,
             "rms_error": rms_error,
+            "max_abs_error": max_abs_error,
+            "fit_diagnostics": {
+                "warnings": [str(item.message) for item in caught_warnings],
+                "max_iterations": max_iterations,
+                "iteration_count": len(delta_history),
+                "delta_max_history": delta_history,
+                "convergence_tolerance": convergence_tolerance,
+                "converged": bool(delta_history and delta_history[-1] < convergence_tolerance),
+            },
         }
 
     def _classify_poles(
@@ -655,7 +708,7 @@ class MultiResonanceVectorFitter:
         *,
         min_q: float,
         frequency_span_hz: tuple[float, float] | None = None,
-    ) -> dict[str, list[dict[str, float]]]:
+    ) -> dict[str, list[dict[str, Any]]]:
         """Classify fitted poles using the caller-owned Q threshold.
 
         Note: Qc and Qi are NOT extracted here because VF residues are unreliable
@@ -668,37 +721,58 @@ class MultiResonanceVectorFitter:
         if self.vf_engine is None:
             raise RuntimeError("Vector fitting has not been executed.")
         poles = np.asarray(self.vf_engine.poles if self.vf_engine.poles is not None else [])
+        residues = np.asarray(
+            self.vf_engine.residues if self.vf_engine.residues is not None else []
+        )
+        if residues.shape != (1, len(poles)):
+            raise RuntimeError("Scalar vector fitting returned unaligned poles and residues.")
 
-        for p in poles:
+        pole_records = []
+
+        for storage_index, (p, residue) in enumerate(zip(poles, residues[0], strict=True)):
             omega = np.imag(p)
             sigma = -np.real(p)  # skrf poles should be in Left-Half Plane (negative real part)
-
-            # Skip real poles (omega == 0) and conjugate halves (omega < 0)
-            if omega <= 0:
-                continue
-
-            # Filter unstable poles just in case
-            if sigma <= 0:
-                continue
-
-            fr = omega / (2 * np.pi)
-            Q_l = omega / (2 * sigma)
-            if frequency_span_hz is not None:
+            is_real = bool(omega == 0.0)
+            fr = None if is_real else float(omega / (2 * np.pi))
+            if not is_real and sigma == 0:
+                raise RuntimeError("Vector fitting returned a complex pole with zero damping.")
+            q_l = None if is_real else float(omega / (2 * sigma))
+            inside_span = None
+            if fr is not None and frequency_span_hz is not None:
                 fmin_hz, fmax_hz = frequency_span_hz
-                if fr < fmin_hz or fr > fmax_hz:
-                    continue
+                inside_span = bool(fmin_hz <= fr <= fmax_hz)
 
-            item = {
-                "fr": float(fr),
-                "Ql": float(Q_l),
-                "pole_real": float(np.real(p)),
-                "pole_imag": float(np.imag(p)),
+            exclusion_reason = None
+            if sigma <= 0:
+                exclusion_reason = "unstable_pole"
+            elif is_real:
+                exclusion_reason = "real_background_pole"
+            elif omega < 0:
+                exclusion_reason = "negative_frequency_storage_pole"
+            elif inside_span is False:
+                exclusion_reason = "outside_selected_frequency_span"
+            elif q_l is None or q_l <= min_q:
+                exclusion_reason = "quality_factor_not_above_min_q"
+
+            record = {
+                "storage_index": storage_index,
+                "pole": complex(p),
+                "residue": complex(residue),
+                "pole_kind": "real" if is_real else "complex_conjugate_pair",
+                "conjugate_term_inferred": not is_real,
+                "stable": bool(sigma > 0),
+                "fr": fr,
+                "Ql": q_l,
+                "inside_selected_frequency_span": inside_span,
+                "classification": "resonance" if exclusion_reason is None else "excluded",
+                "exclusion_reason": exclusion_reason,
             }
+            pole_records.append(record)
 
-            if Q_l > min_q:
-                resonances.append(item)
-            else:
-                artifacts.append(item)
+            if exclusion_reason is None:
+                resonances.append(record)
+            elif exclusion_reason == "quality_factor_not_above_min_q":
+                artifacts.append(record)
 
         resonances.sort(key=lambda x: x["fr"])
         artifacts.sort(key=lambda x: x["fr"])
@@ -706,4 +780,5 @@ class MultiResonanceVectorFitter:
         return {
             "resonances": resonances,
             "artifacts": artifacts,
+            "poles": pole_records,
         }

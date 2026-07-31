@@ -15,7 +15,6 @@
   - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - `SuperconductingCircuitsAnalysisBridge` tests are repo-local and require root `uv sync --all-packages`; the test bootstrap selects root `.venv` unless `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` overrides it.
 - **Frontend unit tests**: `npm run test --prefix app/frontend`
-- **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
 - For user-visible frontend changes, use Playwright-based smoke verification and screenshot or equivalent visual evidence when practical.
 - **Public site checks**:
   - `npm run check --prefix site`

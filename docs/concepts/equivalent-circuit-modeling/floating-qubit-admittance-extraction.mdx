@@ -12,8 +12,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Workbench-local PTC, coordinate-transform, and Kron workflow for a floating differential mode; unresolved semantics remain explicit.
-version: v0.6.0
-last_updated: 2026-07-10
+version: v0.8.0
+last_updated: 2026-07-16
 updated_by: codex
 title: Floating Qubit Admittance Extraction
 sidebar:
@@ -28,7 +28,9 @@ import { Aside } from '@astrojs/starlight/components';
 This page owns a Workbench workflow, not reusable network theory. The intended
 output is a differential-mode driving-point admittance $Y_{in,dm}(\omega)$
 whose coordinate normalization, compensated shunts, retained loads, and source
-artifact are all visible.
+artifact are all visible. Its tracked $\operatorname{Im}Y_{in,dm}=0$ root may
+represent a linearized qubit frequency only after the evidence gates below
+pass; it is never an anharmonic transition $f_{01}$.
 
 ## Canonical knowledge
 
@@ -37,6 +39,8 @@ artifact are all visible.
 - [Port-Termination Compensation](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/simulation/port-termination-compensation.qmd)
 - [Admittance Coordinate Transforms](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/network-modeling/admittance-coordinate-transforms.qmd)
 - [Schur Complement and Kron Reduction](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/numerical-methods/schur-complement-kron-reduction.qmd)
+- [Circuit Models to Bare Coordinates, Open EOM, and Normal Modes](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/quantum-circuits/physical-circuit-coordinates-node-flux-basis.qmd)
+- [D3 Full QRP Node Flux to Bare Coordinates](https://github.com/arfiligol/SCQ_Design/blob/main/docs/knowledge/worked-examples/d3-full-qrp-node-flux-to-bare-coordinates.qmd)
 
 ## Current executable route
 
@@ -59,6 +63,18 @@ That order matches the current API and keeps each declared probe shunt easy to
 identify. It is not a universal theorem that compensation must precede the
 coordinate transform: the operations are equivalent when the compensation
 matrix is transformed consistently with $Y$.
+
+This sequence constructs a retained differential **port-coordinate response**.
+It does not, by itself, construct the full-$\mathcal T_{\mathrm{QRP}}$ bare
+mode basis or prove that its retained coordinate is the canonical qubit bare
+coordinate. That second claim requires the full node-flux Lagrangian,
+charge-sector reductions, capacitance-weighted floating-pair transform,
+Legendre transform, and energy normalization documented by Root Knowledge.
+
+PTC may remove only shunts proven to exist in the compiled network and declared
+to be probe scaffolding for this observable. Feedline terminations and other
+physical environment loads remain in the network and are eliminated, when
+appropriate, through the declared zero-injection Kron boundary.
 
 ## Current local convention
 
@@ -103,14 +119,18 @@ Before this workflow can produce design authority, record:
 4. which environment loads remain in $Y$;
 5. retained and eliminated labels for the Kron boundary; and
 6. a raw-versus-processed comparison, singular diagnostics, the full condition
-   series, and a Human-approved threshold for the intended use.
+   series, and a Human-approved threshold for the intended use;
+7. every $\operatorname{Im}Y_{in,dm}=0$ candidate, the selected root and
+   continuation anchor, convention-aware slope, $\operatorname{Re}Y_{in,dm}$
+   at the root, and neighboring poles or singular samples.
 
 <Aside type="caution" title="Not yet a canonical floating-qubit result">
 
 The capacitance-derived automatic $\alpha,\beta$, HFSS reference-plane and
 loading comparison, and the mapping from $\operatorname{Re}Y_{in,dm}$ to a
 $T_1$ model do not yet have sufficient source or artifact evidence. Keep this
-page `draft`; do not promote its output into a reviewed physical parameter.
+page `draft`; the current notebook evidence does not yet complete the tracked
+root and Human-review gates required to promote a linearized frequency.
 
 </Aside>
 

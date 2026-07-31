@@ -5,7 +5,6 @@ using JSON3
 using JosephsonCircuits
 using LinearAlgebra
 using SHA
-using Statistics
 
 include("validation.jl")
 include("authoring/parameters.jl")

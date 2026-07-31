@@ -9,13 +9,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "echo 'No retained local E2E smoke is configured yet.'",
     "sync:types": "../../scripts/sync_api_types.sh"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",
-    "@codemirror/lang-python": "^6.2.1",
-    "@codemirror/lang-yaml": "^6.1.2",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.40.0",
     "@hookform/resolvers": "^5.2.2",
@@ -23,7 +20,6 @@
     "lucide-react": "^0.554.0",
     "next": "^16.1.6",
     "next-themes": "^0.4.6",
-    "plotly.js-dist-min": "^3.1.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hook-form": "^7.66.0",

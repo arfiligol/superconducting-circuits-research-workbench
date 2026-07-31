@@ -16,7 +16,7 @@ last_updated: 2026-06-12
 updated_by: codex
 ---
 
-import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
 # Testing
 
@@ -38,7 +38,7 @@ This page answers "What is the minimum to run", not the complete test design its
 | Backend | `uv run --package superconducting-circuits-backend pytest app/backend/tests -q` |
 | Python analysis | `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q` |
 | Julia Core / Visualizer / Runner / Analysis Bridge | `Pkg.test()` per Julia package |
-| Frontend | unit tests, E2E when necessary |
+| Frontend | unit tests; real browser smoke for user-visible workflows |
 | Desktop foundation | lint + build |
 | Docs | source check + build + built-route check |
 
@@ -77,29 +77,11 @@ Runner tests must cover JSON task contract parsing, manifest generation, local Z
 
 ## Frontend
 
-<Tabs>
-<TabItem label="Unit">
-
-
 ```bash
 npm run test --prefix app/frontend
 ```
 
-</TabItem>
-
-<TabItem label="E2E">
-
-
-```bash
-npm run test:e2e --prefix app/frontend
-```
-
-</TabItem>
-
-</Tabs>
-
-The foundation workflow currently only requires deterministic unit tests.
-Don't use placeholder E2E to pretend to cover the real workflow that hasn't been migrated yet.
+The repository retains deterministic frontend unit tests. User-visible workflow changes require a real Playwright browser smoke; there is no retained local E2E command.
 
 <Aside type="caution" title="Frontend review needs real browser evidence">
 
@@ -153,14 +135,14 @@ uv run python scripts/build/check_api_reference_links.py
 | --- | --- |
 | Key workflows must have at least one reproducible test path | Core delivery that relies solely on manual verification will not be accepted |
 | Backend service and Runner publication workflow give priority to writing deterministic tests | Ensure task lifecycle and TraceStore publication first |
-| The frontend component and interaction process are covered by unit / E2E respectively | Don't use a single test type to shoulder all the responsibilities |
+| Frontend components use unit tests; user-visible workflows use real Playwright smoke evidence | Don't claim browser coverage from unit tests alone |
 | Frontend merge review requires real UI evidence | User-visible delivery such as shell / layout / overlay / auth entry must be checked at least once with Playwright smoke + screenshot |
 | docs route verification must use canonical directory routes | Does not depend on the source `.md` path speculation build results |
 
 <Aside type="tip" title="Good default">
 
 If you are not sure which test to add in this round, first choose the deterministic test closest to the changed surface;
-Only add integration / E2E when the user-visible workflow actually spans multiple surfaces.
+Run a real browser smoke when the user-visible workflow spans multiple surfaces.
 
 </Aside>
 
@@ -183,7 +165,6 @@ Only add integration / E2E when the user-visible workflow actually spans multipl
   - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - `SuperconductingCircuitsAnalysisBridge` tests are repo-local and require root `uv sync --all-packages`; the test bootstrap selects root `.venv` unless `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` overrides it.
 - **Frontend unit tests**: `npm run test --prefix app/frontend`
-- **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
 - For user-visible frontend changes, use Playwright-based smoke verification and screenshot or equivalent visual evidence when practical.
 - **Public site checks**:
   - `npm run check --prefix site`

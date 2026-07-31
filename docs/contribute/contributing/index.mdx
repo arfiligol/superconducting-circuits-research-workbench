@@ -116,7 +116,8 @@ Formal static output will be generated at `site/dist/docs/` and passed route che
 To preview the same combined artifact as GitHub Pages, that is, `/`, `/docs/`, `/api/python/`, `/api/julia/` all in the same output:
 
 ```bash
-uv run docs-site serve --build
+./scripts/build/build_public_site.sh
+npm run preview --prefix site
 ```
 
 Starlight dev server supports Hot Reload, and the page will be automatically refreshed after saving the file.

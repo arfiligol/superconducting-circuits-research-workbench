@@ -915,7 +915,7 @@ class IntrinsicInterferometricPurcellFilter(elm.ElementCompound):
         visual_win0 = win0 + 2 * lead
         visual_win1 = visual_win0 + self.window_length + 2 * lead
         visual_length = visual_win1 + (length - win1) + 2 * lead
-        idc_stub_units = 0.5
+        idc_stub_units = 1.8
         idc_stub = u * idc_stub_units
         color = theme_color(self.theme)
         dot_radius = SCHEMATIC_DOT_RADIUS
@@ -1654,7 +1654,7 @@ class IntrinsicInterferometricPurcellFilterEquivalent(elm.ElementCompound):
         u = self.unit_length
         color = theme_color(self.theme)
         dot_radius = SCHEMATIC_DOT_RADIUS
-        idc_stub_units = 1.3
+        idc_stub_units = 1.8
         readout = (0.0, 0.0)
         filter_node = (
             self.resonator_separation + (u if self.c0r_label is not None else 0.0),
@@ -2082,29 +2082,28 @@ def _add_d3_feedline(component: Any, *, distributed: bool) -> None:
         )
         feedline = (feedline_left, feedline_right)
     else:
-        feedline_port_stub_units = 1.2
         feedline = add_at_public_terminal(
             component,
             PiSectionChain(
-                component_id=f"{component.component_id}_two_pi_feedline",
+                component_id=f"{component.component_id}_matched_port_regularizer",
                 n=2,
                 unit_length=u,
                 spacing_units=2.0,
                 height_units=1.0,
-                port_stub_units=feedline_port_stub_units,
+                port_stub_units=1.2,
                 reduce_capacitance=True,
                 theme=component.theme,
-                l_label_template=component.feedline_l_label_template,
-                c_half_label=component.feedline_c_half_label,
-                c_reduced_label=component.feedline_c_center_label,
+                l_label_template=component.feedline_regularizer_inductance_label,
+                c_half_label=component.feedline_regularizer_half_capacitance_label,
+                c_reduced_label=component.feedline_regularizer_center_capacitance_label,
                 left_port_label=None,
                 right_port_label=None,
                 show_terminals=False,
                 show_nodes=False,
                 show_labels=component.show_labels,
             ),
-            "tap_0",
-            (center_top[0] - 2.0 * u, feedline_y),
+            "tap_1",
+            (center_top[0], feedline_y),
         )
         center = public_terminal_point(feedline, "tap_1", transformed=True)
         left = public_terminal_point(feedline, "left", transformed=True)
@@ -2266,25 +2265,31 @@ def _add_d3_feedline(component: Any, *, distributed: bool) -> None:
 class D3IntrinsicPurcellEquivalentCircuitPlan(
     IntrinsicInterferometricPurcellFilterEquivalentWithQubit
 ):
-    """Top-level full-IDC equivalent plan with two-pi feedline and ports."""
+    """Top-level full-IDC equivalent plan with a two-pi matched port regularizer."""
 
     component_kind: ClassVar[str] = "D3IntrinsicPurcellEquivalentCircuitPlan"
 
     def __init__(
         self,
         *,
-        feedline_l_label_template: str = r"$L_{{\Delta f,{index}}}$",
-        feedline_c_half_label: str = r"$C_{\Delta f}/2$",
-        feedline_c_center_label: str = r"$C_{\Delta f}$",
+        feedline_regularizer_inductance_label: str = r"$L_{\mathrm{sep}}$",
+        feedline_regularizer_half_capacitance_label: str = r"$C_{\mathrm{sep}}/2$",
+        feedline_regularizer_center_capacitance_label: str = r"$C_{\mathrm{sep}}$",
         input_port_label: str = r"$P_1$",
         output_port_label: str = r"$P_2$",
         input_port_resistance_label: str = r"$R_{50}$",
         output_port_resistance_label: str = r"$R_{50}$",
         **kwargs: Any,
     ) -> None:
-        self.feedline_l_label_template = feedline_l_label_template
-        self.feedline_c_half_label = feedline_c_half_label
-        self.feedline_c_center_label = feedline_c_center_label
+        self.feedline_regularizer_inductance_label = feedline_regularizer_inductance_label.replace(
+            "{", "{{"
+        ).replace("}", "}}")
+        self.feedline_regularizer_half_capacitance_label = (
+            feedline_regularizer_half_capacitance_label
+        )
+        self.feedline_regularizer_center_capacitance_label = (
+            feedline_regularizer_center_capacitance_label
+        )
         self.input_port_label = input_port_label
         self.output_port_label = output_port_label
         self.input_port_resistance_label = input_port_resistance_label

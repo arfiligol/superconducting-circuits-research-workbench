@@ -2051,7 +2051,7 @@
             "target": "island_1"
         },
         {
-            "label": "$q_2$",
+            "label": "$q_0$",
             "id": "island_2",
             "hints": {
                 "placement_target": "qubit_q2_terminal",

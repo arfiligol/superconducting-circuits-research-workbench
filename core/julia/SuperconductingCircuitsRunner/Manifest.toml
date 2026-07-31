@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "5b962c3e3b99e218c883f16eb971f16b347e83c4"
+project_hash = "1b7528e0559d8161504d611b1bc93c2ab7ed5956"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "bbc22a9a08a0ef6460041086d8a7b27940ed4ffd"
@@ -1053,13 +1053,13 @@ uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.8.3+2"
 
 [[deps.SuperconductingCircuitsCore]]
-deps = ["DataFrames", "JSON3", "JosephsonCircuits", "SHA", "Statistics"]
+deps = ["DataFrames", "JSON3", "JosephsonCircuits", "LinearAlgebra", "SHA"]
 path = "../SuperconductingCircuitsCore"
 uuid = "b25d36e2-7598-4d7b-9e68-62f725d58ebd"
 version = "0.1.0"
 
 [[deps.SuperconductingCircuitsRunner]]
-deps = ["DataFrames", "Dates", "HTTP", "JSON3", "SHA", "StructTypes", "SuperconductingCircuitsCore", "UUIDs", "Zarr"]
+deps = ["Dates", "HTTP", "JSON3", "SHA", "SuperconductingCircuitsCore", "Zarr"]
 path = "."
 uuid = "4c7c5b9a-4e91-4bc5-a3fb-9573d29c3f0c"
 version = "0.1.0"

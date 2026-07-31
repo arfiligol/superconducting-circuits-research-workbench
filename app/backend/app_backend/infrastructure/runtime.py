@@ -379,22 +379,6 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
     )
 
 
-def get_simulation_execution_driver() -> None:
-    return None
-
-
-def get_post_processing_execution_driver() -> None:
-    return None
-
-
-def get_characterization_execution_driver() -> None:
-    return None
-
-
-def get_execution_recovery_service() -> None:
-    return None
-
-
 def get_task_service() -> TaskService:
     return _get_task_runtime_bundle().task_service
 

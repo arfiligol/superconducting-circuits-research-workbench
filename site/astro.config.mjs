@@ -33,9 +33,11 @@ export default defineConfig({
    },
    sidebar: [
     { label: "Docs Home", slug: "docs" },
+    { label: "Use In A Project", slug: "docs/project-context" },
     { label: "About", slug: "docs/about" },
     {
      label: "Start Here",
+     collapsed: true,
      items: [
       { label: "Overview", slug: "docs/start" },
       { label: "Installation", slug: "docs/start/installation" },
@@ -50,18 +52,22 @@ export default defineConfig({
       { label: "Overview", slug: "docs/workflows" },
       {
        label: "Reusable Circuit Authoring",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/workflows/reusable-circuit-authoring" } }],
       },
       {
        label: "FEM Result To Equivalent Circuit",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/workflows/fem-result-to-equivalent-circuit" } }],
       },
       {
        label: "Equivalent Circuit To Quantum Model",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/workflows/equivalent-circuit-to-quantum-model" } }],
       },
       {
        label: "Quantum Dynamics / Pulse Simulation",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/workflows/quantum-dynamics-pulse-simulation" } }],
       },
      ],
@@ -73,26 +79,32 @@ export default defineConfig({
       { label: "Overview", slug: "docs/concepts" },
       {
        label: "Physics Foundations",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/concepts/physics" } }],
       },
       {
        label: "Circuit Authoring Model",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/concepts/circuit-authoring-model" } }],
       },
       {
        label: "Equivalent Circuit Modeling",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/concepts/equivalent-circuit-modeling" } }],
       },
       {
        label: "GDSFactory-Compatible Artifacts",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/concepts/gdsfactory-compatible-artifacts" } }],
       },
       {
        label: "Quantum Modeling",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/concepts/quantum-modeling" } }],
       },
       {
        label: "Quantum Dynamics & Pulse Simulation",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/concepts/quantum-dynamics-pulse-simulation" } }],
       },
      ],
@@ -106,6 +118,7 @@ export default defineConfig({
       { label: "Authoring Map", slug: "docs/app/application-authoring" },
       {
        label: "Prototype To Product",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/app/prototype-to-product" } }],
       },
       {
@@ -115,10 +128,12 @@ export default defineConfig({
         { label: "Overview", slug: "docs/app/architecture" },
         {
          label: "Platform Architecture",
+         collapsed: true,
          items: [{ autogenerate: { directory: "docs/app/architecture/platform-architecture" } }],
         },
         {
          label: "Pipeline & Data Flow",
+         collapsed: true,
          items: [{ autogenerate: { directory: "docs/app/architecture/pipeline" } }],
         },
        ],
@@ -183,10 +198,12 @@ export default defineConfig({
       },
       {
        label: "Julia Visualizer",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/reference/julia-visualizer" } }],
       },
       {
        label: "Notebook Interface",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/reference/notebooks" } }],
       },
       {
@@ -204,10 +221,12 @@ export default defineConfig({
       { label: "Overview", slug: "docs/contribute" },
       {
        label: "Contributing",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/contribute/contributing" } }],
       },
       {
        label: "Agent Skills",
+       collapsed: true,
        items: [{ autogenerate: { directory: "docs/reference/agent-skills" } }],
       },
       {

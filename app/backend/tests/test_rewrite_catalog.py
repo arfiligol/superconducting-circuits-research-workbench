@@ -1,9 +1,7 @@
 from dataclasses import replace
-from typing import Any
 
 import pytest
 from app_backend.domain.datasets import (
-    CharacterizationAnalysisRegistryQuery,
     CharacterizationArtifactPayloadQuery,
     CharacterizationResultBrowseQuery,
     CharacterizationRunHistoryQuery,
@@ -15,16 +13,16 @@ from app_backend.domain.datasets import (
     TraceAxis,
     TraceBrowseQuery,
 )
-from app_backend.infrastructure.rewrite_app_state_repository import (
-    InMemoryRewriteAppStateRepository,
-)
-from app_backend.infrastructure.rewrite_catalog_repository import (
+from app_backend.infrastructure.app_state_repository import AppStateRepository
+from app_backend.infrastructure.catalog_seed_data import (
     COUPLER_DETUNING_DEMO_DEFINITION_ID,
     FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID,
     FLUXONIUM_READOUT_CHAIN_DEFINITION_ID,
-    InMemoryRewriteCatalogRepository,
 )
+from app_backend.infrastructure.durable_catalog_repository import DurableCatalogRepository
 from app_backend.infrastructure.runtime import (
+    get_app_state_repository,
+    get_catalog_repository,
     reset_runtime_state,
 )
 from app_backend.main import app
@@ -60,8 +58,8 @@ def reset_catalog_state() -> None:
 
 
 @pytest.fixture
-def app_state_repository() -> InMemoryRewriteAppStateRepository:
-    repository = InMemoryRewriteAppStateRepository()
+def app_state_repository() -> AppStateRepository:
+    repository = get_app_state_repository()
     repository.switch_runtime_mode(
         runtime_mode="online",
         server_target_origin="http://127.0.0.1:8000",
@@ -75,32 +73,14 @@ def app_state_repository() -> InMemoryRewriteAppStateRepository:
 
 
 @pytest.fixture
-def catalog_repository() -> InMemoryRewriteCatalogRepository:
-    return InMemoryRewriteCatalogRepository()
-
-
-def test_in_memory_result_trace_publication_requires_durable_storage(
-    catalog_repository: InMemoryRewriteCatalogRepository,
-) -> None:
-    unused: Any = object()
-
-    with pytest.raises(
-        ValueError,
-        match=r"^Result trace publication requires durable persisted storage\.$",
-    ):
-        catalog_repository.publish_result_trace(
-            task=unused,
-            basis_task=unused,
-            dataset=unused,
-            design=unused,
-            draft=unused,
-        )
+def catalog_repository() -> DurableCatalogRepository:
+    return get_catalog_repository()
 
 
 @pytest.fixture
 def dataset_service(
-    app_state_repository: InMemoryRewriteAppStateRepository,
-    catalog_repository: InMemoryRewriteCatalogRepository,
+    app_state_repository: AppStateRepository,
+    catalog_repository: DurableCatalogRepository,
 ) -> DatasetService:
     return DatasetService(
         catalog_service=DatasetCatalogService(
@@ -201,9 +181,14 @@ def test_dataset_service_lists_visible_catalog_rows_for_active_workspace(
 
 def test_dataset_service_rebinds_catalog_visibility_after_workspace_switch(
     dataset_service: DatasetService,
-    app_state_repository: InMemoryRewriteAppStateRepository,
+    app_state_repository: AppStateRepository,
 ) -> None:
-    app_state_repository.set_active_workspace_id("ws-modeling")
+    session_id = app_state_repository.get_session_state().session_id
+    assert session_id is not None
+    assert (
+        app_state_repository.set_authenticated_active_workspace_id(session_id, "ws-modeling")
+        is not None
+    )
 
     rows = dataset_service.list_dataset_catalog()
 
@@ -576,7 +561,7 @@ def _hfss_nd_ingestion_payload(
 
 
 def test_rewrite_ingestion_derives_nd_grid_structure_summary(
-    catalog_repository: InMemoryRewriteCatalogRepository,
+    catalog_repository: DurableCatalogRepository,
 ) -> None:
     result = catalog_repository.ingest_raw_data(
         "local-dataset-001",
@@ -1116,8 +1101,8 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
     )
 
     assert [metric.metric_id for metric in metrics] == [
-        "metric-fluxonium-lowest-observed-frequency-ghz",
-        "metric-fluxonium-residual-rms-max",
+        "metric-fluxonium-2025-031-residual-rms-max",
+        "metric-fluxonium-2025-031-lowest-observed-frequency-ghz",
     ]
     assert [design.design_id for design in designs] == ["design_flux_scan_a"]
     assert designs[0].compare_readiness == "ready"
@@ -1148,15 +1133,15 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
     assert phase_collection_key != collection_key
     assert trace_rows[0].allowed_actions.edit is False
     assert trace_rows[0].allowed_actions.delete is False
-    assert "source workflow" in trace_rows[0].mutation_policy_summary
+    assert "original workflow" in trace_rows[0].mutation_policy_summary
     filtered_rows = dataset_service.list_trace_metadata(
         "fluxonium-2025-031",
         "design_flux_scan_a",
         TraceBrowseQuery(axis_name="frequency", collection_key=collection_key),
     )
     assert [row.trace_id for row in filtered_rows] == [
-        "trace_flux_a_measurement",
         "trace_flux_a_layout",
+        "trace_flux_a_measurement",
     ]
 
     assert trace_detail.trace_id == "trace_flux_a_measurement"
@@ -1172,7 +1157,7 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
 
 
 def test_local_seed_single_trace_preview_uses_full_series_for_one_dimensional_preview(
-    catalog_repository: InMemoryRewriteCatalogRepository,
+    catalog_repository: DurableCatalogRepository,
 ) -> None:
     trace_detail = catalog_repository.get_trace_detail(
         "local-dataset-001",
@@ -1431,47 +1416,15 @@ def test_dataset_service_exposes_characterization_result_summary_and_detail_surf
     assert artifact_payload.payload["compare_groups"][0]["cells"][0] == [5.612, 5.587, None]
 
 
-def test_dataset_service_exposes_characterization_analysis_registry_and_run_history_surfaces(
+def test_dataset_service_exposes_characterization_run_history_surface(
     dataset_service: DatasetService,
 ) -> None:
-    registry_rows = dataset_service.list_characterization_analysis_registry(
-        "fluxonium-2025-031",
-        "design_flux_scan_a",
-        CharacterizationAnalysisRegistryQuery(
-            selected_trace_ids=(
-                "trace_flux_a_measurement",
-                "trace_flux_a_layout",
-            ),
-        ),
-    )
     run_rows = dataset_service.list_characterization_run_history(
         "fluxonium-2025-031",
         "design_flux_scan_a",
         CharacterizationRunHistoryQuery(
             analysis_id="admittance_extraction",
         ),
-    )
-
-    assert [row.analysis_id for row in registry_rows] == [
-        "admittance_extraction",
-        "sideband_comparison",
-        "junction_parameter_identification",
-    ]
-    assert registry_rows[0].availability_state == "unavailable"
-    assert registry_rows[0].required_config_fields == (
-        "fit_window",
-        "residual_tolerance",
-    )
-    assert registry_rows[0].trace_compatibility.selected_trace_count == 2
-    assert registry_rows[0].trace_compatibility.matched_trace_count == 0
-    assert registry_rows[0].trace_compatibility.summary == (
-        "Selected trace compatibility could not be re-evaluated because this design "
-        "does not yet carry durable trace capability markings."
-    )
-    assert registry_rows[1].availability_state == "unavailable"
-    assert registry_rows[1].trace_compatibility.summary == (
-        "Selected trace compatibility could not be re-evaluated because this design "
-        "does not yet carry durable trace capability markings."
     )
 
     assert [row.run_id for row in run_rows] == ["run-flux-a-003"]

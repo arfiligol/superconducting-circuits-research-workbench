@@ -5,12 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 from types import SimpleNamespace
+from typing import cast
 
 import numpy as np
 import pytest
 import superconducting_circuits_analysis.application.analysis.fitting.d3_purcell as d3_purcell
 from superconducting_circuits_analysis.application.analysis.fitting.d3_purcell import (
     calibrate_d3_channel_residue_s21,
+    fit_d3_system_a_lj_sweep,
     fit_d3_through_line_s21,
 )
 
@@ -23,8 +25,8 @@ def _synthetic_traces(
     fr_hz: float = 5.98e9,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, object]]:
     frequency = np.linspace(1.0e9, 11.0e9, 10_001)
-    filter_loaded_linewidth_hz = 12.0e6
-    readout_loaded_linewidth_hz = 0.0
+    filter_off_reference_linewidth_hz = 12.0e6
+    readout_off_reference_linewidth_hz = 0.0
     j_hz = 25.0e6
     residue_hz = -4.5e6 + 2.0e6j
     phasor_sign = 1.0 if phasor_convention == "exp_plus_iomega_t" else -1.0
@@ -33,19 +35,13 @@ def _synthetic_traces(
     if deep_filter_zero:
         fp_x = (fp_hz - 6.0e9) / 10.0e9
         direct_path_at_fp = (0.96 + 0.08j) + (-0.06 + 0.04j) * fp_x
-        residue_hz = -direct_path_at_fp * filter_loaded_linewidth_hz / 2.0
-    bare_a_p = (
-        filter_loaded_linewidth_hz / 2.0 + 1j * phasor_sign * (frequency - fp_hz)
-    )
+        residue_hz = -direct_path_at_fp * filter_off_reference_linewidth_hz / 2.0
+    bare_a_p = filter_off_reference_linewidth_hz / 2.0 + 1j * phasor_sign * (frequency - fp_hz)
     filter_only = direct_path + residue_hz / bare_a_p
     if deep_filter_zero:
         filter_only[int(np.argmin(np.abs(frequency - fp_hz)))] = 1.0e-5 * np.exp(2.6j)
-    pair_a_p = (
-        filter_loaded_linewidth_hz / 2.0 + 1j * phasor_sign * (frequency - fp_hz)
-    )
-    pair_a_r = (
-        readout_loaded_linewidth_hz / 2.0 + 1j * phasor_sign * (frequency - fr_hz)
-    )
+    pair_a_p = filter_off_reference_linewidth_hz / 2.0 + 1j * phasor_sign * (frequency - fp_hz)
+    pair_a_r = readout_off_reference_linewidth_hz / 2.0 + 1j * phasor_sign * (frequency - fr_hz)
     pair = direct_path + residue_hz * pair_a_r / (pair_a_p * pair_a_r + j_hz**2)
     empty_feedline = (0.72 + 0.13j) * np.exp(
         -2j * np.pi * phasor_sign * (frequency - 6.0e9) * 2.3e-9
@@ -56,8 +52,8 @@ def _synthetic_traces(
         "background_windows_hz": [[1.0e9, 2.0e9], [10.0e9, 11.0e9]],
         "fp_hz": fp_hz,
         "fr_hz": fr_hz,
-        "filter_loaded_linewidth_hz": filter_loaded_linewidth_hz,
-        "readout_loaded_linewidth_hz": readout_loaded_linewidth_hz,
+        "filter_off_reference_linewidth_hz": filter_off_reference_linewidth_hz,
+        "readout_off_reference_linewidth_hz": readout_off_reference_linewidth_hz,
         "j_bounds_hz": [5.0e6, 60.0e6],
         "j_seeds_hz": [10.0e6, 20.0e6, 24.0e6, 25.0e6, 40.0e6],
         "linear_ls_rcond": 1.0e-12,
@@ -82,8 +78,8 @@ def _synthetic_traces(
             "reference_contract_id": "synthetic-reference-contract",
             "measured_trace_id": "synthetic-full-feedline",
             "empty_feedline_trace_id": "synthetic-empty-feedline",
-            "filter_loaded_bare_reference_id": "synthetic-loaded-bare-filter",
-            "readout_loaded_bare_reference_id": "synthetic-loaded-bare-readout",
+            "filter_off_reference_id": "synthetic-filter-off-reference",
+            "common_readout_off_reference_id": "synthetic-readout-off-reference",
             "pair_assignment_id": "slot-6ghz",
             "port_plane": "synthetic-device-feedline-plane",
         },
@@ -113,7 +109,7 @@ def _calibrate(
         fit_window_hz=contract["fit_window_hz"],
         background_windows_hz=contract["background_windows_hz"],
         fp_hz=contract["fp_hz"],
-        filter_loaded_linewidth_hz=contract["filter_loaded_linewidth_hz"],
+        filter_off_reference_linewidth_hz=contract["filter_off_reference_linewidth_hz"],
         linear_ls_rcond=contract["linear_ls_rcond"],
         min_reference_magnitude=contract["min_reference_magnitude"],
         min_complex_r2=contract["min_complex_r2"],
@@ -123,9 +119,9 @@ def _calibrate(
         provenance={
             "calibration_id": "synthetic-channel-calibration",
             "reference_contract_id": "synthetic-reference-contract",
-            "filter_only_trace_id": "synthetic-filter-only",
+            "filter_off_reference_trace_id": "synthetic-filter-off-reference-trace",
             "empty_feedline_trace_id": "synthetic-empty-feedline",
-            "filter_loaded_bare_reference_id": "synthetic-loaded-bare-filter",
+            "filter_off_reference_id": "synthetic-filter-off-reference",
             "port_plane": "synthetic-device-feedline-plane",
         },
     )
@@ -163,6 +159,88 @@ def _canonical_calibration_hash(calibration: dict[str, object]) -> str:
         allow_nan=False,
     )
     return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
+def _synthetic_system_a_contract() -> tuple[list[dict[str, object]], dict[str, object]]:
+    truth = {
+        "c_q_eff_system_a_on_f": 85.0e-15,
+        "f_r_lb_system_a_on_hz": 6.00e9,
+        "g_system_a_on_hz": 90.0e6,
+    }
+    observations: list[dict[str, object]] = []
+    for index, lj_h in enumerate([14.0e-9, 17.0e-9, 20.0e-9, 23.0e-9, 26.0e-9, 29.0e-9]):
+        fq_hz = 1.0 / (2.0 * np.pi * np.sqrt((lj_h / 2.0) * truth["c_q_eff_system_a_on_f"]))
+        midpoint = 0.5 * (fq_hz + truth["f_r_lb_system_a_on_hz"])
+        half_splitting = np.sqrt(
+            (0.5 * (fq_hz - truth["f_r_lb_system_a_on_hz"])) ** 2 + truth["g_system_a_on_hz"] ** 2
+        )
+        observations.append(
+            {
+                "trace_id": f"system-a-response-{index}",
+                "lj_per_junction_h": lj_h,
+                "lower_frequency_hz": midpoint - half_splitting,
+                "upper_frequency_hz": midpoint + half_splitting,
+                "lower_response_parameter": "S",
+                "lower_extraction_method": "synthetic_complex_s21_pole_fit",
+                "lower_source_trace_id": f"system-a-s21-{index}",
+                "upper_response_parameter": "Y",
+                "upper_extraction_method": "synthetic_processed_ydiff_root",
+                "upper_source_trace_id": f"system-a-ydiff-{index}",
+                "candidate_id": "synthetic-candidate",
+                "reference_contract_id": "synthetic-reference-contract",
+                "topology_id": "q-r-feedline-system-a",
+                "port_plane": "synthetic-device-plane",
+            }
+        )
+    bounds = {
+        "c_q_eff_system_a_on_f": [70.0e-15, 100.0e-15],
+        "f_r_lb_system_a_on_hz": [5.80e9, 6.20e9],
+        "g_system_a_on_hz": [50.0e6, 140.0e6],
+    }
+    seeds: list[dict[str, float]] = []
+    for scale in (0.94, 0.97, 1.0, 1.03, 1.06):
+        seeds.append(
+            {
+                "c_q_eff_system_a_on_f": truth["c_q_eff_system_a_on_f"] * scale,
+                "f_r_lb_system_a_on_hz": truth["f_r_lb_system_a_on_hz"] + (scale - 1.0) * 100.0e6,
+                "g_system_a_on_hz": truth["g_system_a_on_hz"] * scale,
+            }
+        )
+    return observations, {
+        "physical_bounds": bounds,
+        "physical_seeds": seeds,
+        "numerical_tolerances": {
+            "frequency_residual_scale_hz": 1.0e6,
+            "least_squares_max_nfev": 1000,
+            "least_squares_ftol": 1.0e-12,
+            "least_squares_xtol": 1.0e-12,
+            "least_squares_gtol": 1.0e-12,
+            "least_squares_diff_step": 1.0e-6,
+            "jacobian_rank_rtol": 1.0e-10,
+        },
+        "gates": {
+            "min_trace_count": 5,
+            "max_frequency_rmse_hz": 1.0e3,
+            "max_frequency_error_hz": 2.0e3,
+            "min_frequency_r2": 0.999999,
+            "min_normalized_bound_margin": 0.02,
+            "min_successful_seed_count": 3,
+            "min_successful_seed_fraction": 0.6,
+            "near_optimal_cost_ratio": 1.1,
+            "near_optimal_cost_absolute_tolerance": 1.0e-8,
+            "min_winning_seed_count": 2,
+            "max_seed_spread_normalized": 1.0e-5,
+            "min_jacobian_rank": 3,
+            "min_jacobian_singular_ratio": 1.0e-8,
+        },
+        "provenance": {
+            "fit_id": "synthetic-system-a-fit",
+            "candidate_id": "synthetic-candidate",
+            "reference_contract_id": "synthetic-reference-contract",
+            "topology_id": "q-r-feedline-system-a",
+            "port_plane": "synthetic-device-plane",
+        },
+    }
 
 
 def _mock_seed_fits(
@@ -223,11 +301,35 @@ def test_calibration_and_pair_fit_recover_complex_residue_and_j(
     assert result["metrics"]["complex_r2"] > 0.99
     assert result["metrics"]["abs_r2"] > 0.99
     assert result["model_convention"]["simultaneous_j_residue_fit"] is False
-    assert result["model_convention"]["loaded_bare_diagonal_frequencies_fixed"] is True
+    assert result["model_convention"]["off_reference_diagonal_frequencies_fixed"] is True
     assert calibration["schema"] == "d3_channel_calibration"
+    assert calibration["fit_method"] == "d3_filter_off_reference_complex_channel_residue_linear_ls"
+    assert set(calibration["provenance"]) == {
+        "calibration_id",
+        "reference_contract_id",
+        "filter_off_reference_trace_id",
+        "empty_feedline_trace_id",
+        "filter_off_reference_id",
+        "port_plane",
+    }
     assert result["schema"] == "d3_through_line_j_fit"
     assert result["fit_method"] == "d3_through_line_complex_s21_fixed_calibrated_residue"
-    assert "loaded_linewidth_p_hz" in calibration["model_convention"]["denominator_term"]
+    assert set(result["provenance"]) == {
+        "reference_contract_id",
+        "measured_trace_id",
+        "empty_feedline_trace_id",
+        "filter_off_reference_id",
+        "common_readout_off_reference_id",
+        "pair_assignment_id",
+        "port_plane",
+    }
+    assert set(result["fixed_references"]) == {
+        "fp_hz",
+        "fr_hz",
+        "filter_off_reference_linewidth_hz",
+        "readout_off_reference_linewidth_hz",
+    }
+    assert "off_reference_linewidth_p_hz" in calibration["model_convention"]["denominator_term"]
     assert "loaded_linewidth_x_hz" in result["model_convention"]["denominator_term"]
     assert result["channel_calibration"]["calibration_id"] == calibration["calibration_id"]
     assert calibration["calibration_summary_sha256"] == _canonical_calibration_hash(calibration)
@@ -284,8 +386,8 @@ def test_calibration_and_pair_fit_replay_from_json_persisted_contract() -> None:
                 "contract": contract,
                 "traces": {
                     "frequency_hz": frequency.tolist(),
-                    "filter_only_s21_real": filter_only.real.tolist(),
-                    "filter_only_s21_imag": filter_only.imag.tolist(),
+                    "filter_off_reference_s21_real": filter_only.real.tolist(),
+                    "filter_off_reference_s21_imag": filter_only.imag.tolist(),
                     "pair_s21_real": pair.real.tolist(),
                     "pair_s21_imag": pair.imag.tolist(),
                     "empty_feedline_s21_real": empty_feedline.real.tolist(),
@@ -299,8 +401,8 @@ def test_calibration_and_pair_fit_replay_from_json_persisted_contract() -> None:
     replay_traces = persisted["traces"]
     replay_frequency = np.asarray(replay_traces["frequency_hz"], dtype=float)
     replay_filter = np.asarray(
-        replay_traces["filter_only_s21_real"], dtype=float
-    ) + 1j * np.asarray(replay_traces["filter_only_s21_imag"], dtype=float)
+        replay_traces["filter_off_reference_s21_real"], dtype=float
+    ) + 1j * np.asarray(replay_traces["filter_off_reference_s21_imag"], dtype=float)
     replay_pair = np.asarray(replay_traces["pair_s21_real"], dtype=float) + 1j * np.asarray(
         replay_traces["pair_s21_imag"], dtype=float
     )
@@ -357,9 +459,7 @@ def test_calibration_and_pair_fit_replay_from_json_persisted_contract() -> None:
         validated_calibration["calibration_summary_sha256"]
         == calibration["calibration_summary_sha256"]
     )
-    assert validated_calibration == {
-        key: calibration[key] for key in validated_calibration
-    }
+    assert validated_calibration == {key: calibration[key] for key in validated_calibration}
     assert replay_result["search"] == result["search"]
     assert persisted_calibration_result["search"] == result["search"]
     assert result["search"] == {
@@ -398,6 +498,105 @@ def test_pair_fit_rejects_seed_instability() -> None:
 
     assert result["status"] == "rejected"
     assert "ambiguous_near_optimal_basin" in result["failure_codes"]
+
+
+def test_system_a_response_frequency_sweep_recovers_shared_parameters() -> None:
+    observations, contract = _synthetic_system_a_contract()
+
+    result = fit_d3_system_a_lj_sweep(observations, **contract)
+
+    assert result["status"] == "success"
+    assert result["schema"] == "d3_system_a_frequency_lj_sweep_fit.v1"
+    assert result["model_convention"]["observation_authority"] == (
+        "per_branch_caller_supplied_S_Y_or_Z_response_extraction"
+    )
+    assert result["model_convention"]["closed_circuit_eigenmode_consumed"] is False
+    assert result["model_convention"]["one_point_shift_inversion_consumed"] is False
+    assert result["params"]["c_q_eff_system_a_on_f"] == pytest.approx(85.0e-15, rel=1.0e-8)
+    assert result["params"]["f_r_lb_system_a_on_hz"] == pytest.approx(6.00e9, rel=1.0e-8)
+    assert result["params"]["g_system_a_on_hz"] == pytest.approx(90.0e6, rel=1.0e-8)
+    assert result["params"]["g_system_a_on_hz"] >= 0.0
+    assert len(result["per_lj"]) == len(observations)
+    assert result["per_lj"][0]["lower_branch_provenance"]["response_parameter"] == "S"
+    assert result["per_lj"][0]["upper_branch_provenance"]["response_parameter"] == "Y"
+    assert result["trace_provenance"][0]["lower_branch"]["source_trace_id"] == ("system-a-s21-0")
+    assert result["trace_provenance"][0]["upper_branch"]["source_trace_id"] == ("system-a-ydiff-0")
+    assert result["metrics"]["max_abs_frequency_error_hz"] < 1.0
+    assert result["multi_start"]["successful_seed_count"] == 5
+    assert result["identifiability"]["rank"] == 3
+    assert result["identifiability"]["singular_value_ratio"] > 0.0
+    assert all(item["optimizer_success"] for item in result["seed_evidence"])
+    json.dumps(result, allow_nan=False)
+
+
+def test_system_a_malformed_response_frequency_order_raises() -> None:
+    observations, contract = _synthetic_system_a_contract()
+    observations[0]["lower_frequency_hz"] = observations[0]["upper_frequency_hz"]
+
+    with pytest.raises(ValueError, match="strictly lower/high ordered"):
+        fit_d3_system_a_lj_sweep(observations, **contract)
+
+
+def test_system_a_rejects_invalid_branch_provenance() -> None:
+    observations, contract = _synthetic_system_a_contract()
+    observations[0]["upper_response_parameter"] = "Q"
+
+    with pytest.raises(ValueError, match="upper_response_parameter must be S, Y, or Z"):
+        fit_d3_system_a_lj_sweep(observations, **contract)
+
+
+@pytest.mark.parametrize("mutation", ["duplicate", "nonmonotonic"])
+def test_system_a_requires_unique_monotonic_lj_sweep(mutation: str) -> None:
+    observations, contract = _synthetic_system_a_contract()
+    if mutation == "duplicate":
+        observations[2]["lj_per_junction_h"] = observations[1]["lj_per_junction_h"]
+        message = "must be unique"
+    else:
+        observations[2]["lj_per_junction_h"] = 15.0e-9
+        message = "must be strictly monotonic"
+
+    with pytest.raises(ValueError, match=message):
+        fit_d3_system_a_lj_sweep(observations, **contract)
+
+
+def test_system_a_rejects_quality_failure_with_fitted_evidence() -> None:
+    observations, contract = _synthetic_system_a_contract()
+    observations[2]["upper_frequency_hz"] = (
+        cast(float, observations[2]["upper_frequency_hz"]) + 5.0e6
+    )
+    gates = dict(cast(dict[str, int | float], contract["gates"]))
+    gates["max_frequency_rmse_hz"] = 1.0e4
+    gates["max_frequency_error_hz"] = 2.0e4
+    gates["min_frequency_r2"] = -1.0
+    contract["gates"] = gates
+
+    result = fit_d3_system_a_lj_sweep(observations, **contract)
+
+    assert result["status"] == "rejected"
+    assert "quality_failure" in result["failure_codes"]
+    assert result["params"] is not None
+    assert result["per_lj"] is not None
+    assert result["metrics"]["max_abs_frequency_error_hz"] > 2.0e4
+
+
+def test_system_a_rejects_unidentifiable_fit_and_negative_g_bounds() -> None:
+    observations, contract = _synthetic_system_a_contract()
+    gates = dict(cast(dict[str, int | float], contract["gates"]))
+    gates["min_jacobian_singular_ratio"] = 0.99
+    contract["gates"] = gates
+
+    rejected = fit_d3_system_a_lj_sweep(observations, **contract)
+
+    assert rejected["status"] == "rejected"
+    assert "identifiability_failure" in rejected["failure_codes"]
+    assert rejected["identifiability"]["rank"] == 3
+
+    malformed_observations, malformed_contract = _synthetic_system_a_contract()
+    bounds = dict(cast(dict[str, list[float]], malformed_contract["physical_bounds"]))
+    bounds["g_system_a_on_hz"] = [-1.0, 140.0e6]
+    malformed_contract["physical_bounds"] = bounds
+    with pytest.raises(ValueError, match="g_system_a_on_hz must be nonnegative"):
+        fit_d3_system_a_lj_sweep(malformed_observations, **malformed_contract)
 
 
 def test_pair_fit_accepts_far_high_cost_nonconvergence(
@@ -535,7 +734,7 @@ def test_calibration_excludes_deep_zero_from_phase_metric_only_when_explicit() -
 
 def test_calibration_returns_rank_rejection() -> None:
     frequency, filter_only, _, empty_feedline, contract = _synthetic_traces()
-    contract["filter_loaded_linewidth_hz"] = 1.0e30
+    contract["filter_off_reference_linewidth_hz"] = 1.0e30
 
     result = _calibrate(frequency, filter_only, empty_feedline, contract)
 
@@ -588,7 +787,7 @@ def test_pair_fit_fails_fast_on_tampered_successful_calibration(
     ("field", "expected_message"),
     [
         ("reference_contract_id", "reference_contract_id"),
-        ("filter_loaded_bare_reference_id", "filter loaded-bare reference"),
+        ("filter_off_reference_id", "filter off-reference identity"),
     ],
 )
 def test_pair_fit_fails_fast_on_cross_stage_reference_mismatch(

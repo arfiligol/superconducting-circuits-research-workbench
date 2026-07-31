@@ -70,6 +70,56 @@ function floating_common_pair_plan(; physical_on)
     return plan
 end
 
+function inductive_capacitive_pair_plan(; physical_on)
+    plan = CircuitPlan(
+        physical_on ? "inductive-capacitive-pair-on" : "inductive-capacitive-pair-off",
+    )
+    q = external_node("inductive_q")
+    r = external_node("inductive_r")
+    coupling_capacitance = 9.0e-15
+    shunt_capacitor!(
+        plan;
+        id="inductive_q_capacitance",
+        at=q,
+        capacitance=105.0e-15 + (physical_on ? 0.0 : coupling_capacitance),
+    )
+    shunt_capacitor!(
+        plan;
+        id="inductive_r_capacitance",
+        at=r,
+        capacitance=165.0e-15 + (physical_on ? 0.0 : coupling_capacitance),
+    )
+    physical_on && couple_capacitive!(
+        plan;
+        id="inductive_capacitive_coupling",
+        from=q,
+        to=r,
+        capacitance=coupling_capacitance,
+    )
+    q_inductor = series_inductor!(
+        plan;
+        id="inductive_q_inductance",
+        from=q,
+        to=ground(),
+        inductance=10.5e-9,
+    )
+    r_inductor = series_inductor!(
+        plan;
+        id="inductive_r_inductance",
+        from=r,
+        to=ground(),
+        inductance=4.8e-9,
+    )
+    physical_on && couple_inductive!(
+        plan;
+        id="inductive_mutual_coupling",
+        inductor_a=q_inductor,
+        inductor_b=r_inductor,
+        mutual_inductance=0.72e-9,
+    )
+    return plan
+end
+
 @testset "closed linear nodal extraction and modal projection" begin
     off = extract_linear_nodal_model(compile_to_josephson(closed_two_mode_plan(physical_on=false)))
     on = extract_linear_nodal_model(compile_to_josephson(closed_two_mode_plan(physical_on=true)))
@@ -167,6 +217,69 @@ end
     projection = project_selected_modes(off_modes, reduced.physical_on, [1, 2])
     closure = linear_projection_closure(projection, on_modes.frequencies_hz)
     @test closure.max_abs_bdg_residual_hz < 1.0e-3
+end
+
+@testset "shared-frame projection accepts capacitive and inductive coupling" begin
+    off = extract_linear_nodal_model(
+        compile_to_josephson(inductive_capacitive_pair_plan(physical_on=false)),
+    )
+    on = extract_linear_nodal_model(
+        compile_to_josephson(inductive_capacitive_pair_plan(physical_on=true)),
+    )
+    @test off.node_names == on.node_names
+    @test [off.capacitance[index, index] for index in axes(off.capacitance, 1)] ==
+        [on.capacitance[index, index] for index in axes(on.capacitance, 1)]
+    @test off.inverse_inductance != on.inverse_inductance
+
+    reduced = reduce_linear_model_pair(off, on)
+    @test reduced.coupling_off.retained_basis == reduced.physical_on.retained_basis
+    @test reduced.coupling_off.free_charge_basis == reduced.physical_on.free_charge_basis
+    @test reduced.coupling_off.inverse_inductance != reduced.physical_on.inverse_inductance
+
+    off_modes = solve_generalized_modes(reduced.coupling_off)
+    on_modes = solve_generalized_modes(reduced.physical_on)
+    projection = project_selected_modes(off_modes, reduced.physical_on, [1, 2])
+    closure = linear_projection_closure(projection, on_modes.frequencies_hz)
+    @test closure.max_abs_bdg_residual_hz < 1.0e-3
+    @test closure.max_abs_rwa_minus_bdg_hz > 0
+    @test closure.rwa_minus_bdg_hz ==
+        projection.projected_rwa_frequencies_hz .- projection.projected_bdg_frequencies_hz
+end
+
+@testset "shared-frame reduction rejects a changed stiffness nullspace" begin
+    capacitance = [1.0 0.0; 0.0 1.0]
+    off = LinearNodalModel(
+        ["a", "b"],
+        capacitance,
+        [1.0 0.0; 0.0 0.0],
+        "off-source",
+        "nodes",
+        "off-c",
+        "off-k",
+        nothing,
+    )
+    rotated_on = LinearNodalModel(
+        ["a", "b"],
+        capacitance,
+        [0.0 0.0; 0.0 1.0],
+        "on-source",
+        "nodes",
+        "on-c",
+        "on-k",
+        nothing,
+    )
+    missing_null_on = LinearNodalModel(
+        ["a", "b"],
+        capacitance,
+        [1.0 0.0; 0.0 1.0],
+        "missing-null-source",
+        "nodes",
+        "missing-null-c",
+        "missing-null-k",
+        nothing,
+    )
+    @test_throws FrameworkValidationError reduce_linear_model_pair(off, rotated_on)
+    @test_throws FrameworkValidationError reduce_linear_model_pair(off, missing_null_on)
 end
 
 @testset "closed linear extraction fails fast outside its conservative v1 scope" begin

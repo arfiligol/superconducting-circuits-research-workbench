@@ -1,8 +1,8 @@
 # This module owns the algorithm-only D3 tuning loop: explicit optimization
-# contracts, evaluator caching, cost accounting, and CMA-ES to Nelder-Mead
-# handoff. It does not own HB physics, D3 targets, geometry bounds, approval, or
-# artifact persistence; callers provide those decisions through a hash-bound
-# condition manifest and the evaluator.
+# contracts, evaluator caching, cost accounting, and bounded CMA-ES search.
+# It does not own HB physics, D3 targets, geometry bounds, approval, restart
+# orchestration, or artifact persistence; callers provide those decisions
+# through a hash-bound condition manifest and the evaluator.
 # Canonical D3 target:
 # https://github.com/arfiligol/SCQ_Design/blob/main/docs/design-targets/d3-intrinsic-interferometric-purcell-filter.qmd
 # Canonical optimization semantics:
@@ -11,7 +11,6 @@
 module D3CoupledOptimizer
 
 import CMAEvolutionStrategy
-import Optim
 import SHA
 
 export CMASettings,
@@ -22,7 +21,6 @@ export CMASettings,
     GateOutcome,
     MetricCost,
     MetricSpec,
-    NelderMeadSettings,
     OptimizationResult,
     PromotionSettings,
     RejectedEvaluation,
@@ -200,68 +198,6 @@ function CMASettings(; seed, sigma, popsize, maxiter, maxfevals, ftol, xtol)
 end
 
 """
-Explicit Optim.jl Nelder-Mead search settings supplied by the condition
-manifest. Promotion policy is intentionally owned by `PromotionSettings`.
-"""
-struct NelderMeadSettings
-    maxiter::Int
-    maxfevals::Int
-    ftol::Float64
-    xtol::Float64
-    rejection_carrier_cost::Float64
-    simplex_logit_offset::Float64
-    simplex_logit_multiplier::Float64
-
-    function NelderMeadSettings(
-        maxiter::Integer,
-        maxfevals::Integer,
-        ftol::Real,
-        xtol::Real,
-        rejection_carrier_cost::Real,
-        simplex_logit_offset::Real,
-        simplex_logit_multiplier::Real,
-    )
-        counts = Int(maxiter), Int(maxfevals)
-        counts[1] > 0 || error("Nelder-Mead maxiter must be positive.")
-        counts[2] > 0 || error("Nelder-Mead maxfevals must be positive.")
-        values = (
-            Float64(ftol),
-            Float64(xtol),
-            Float64(rejection_carrier_cost),
-            Float64(simplex_logit_offset),
-            Float64(simplex_logit_multiplier),
-        )
-        all(isfinite, values) || error("Nelder-Mead numeric settings must be finite.")
-        values[1] > 0 || error("Nelder-Mead ftol must be positive.")
-        values[2] > 0 || error("Nelder-Mead xtol must be positive.")
-        values[3] > 0 || error("Nelder-Mead rejection carrier cost must be positive.")
-        values[4] > 0 || error("Nelder-Mead simplex logit offset must be positive.")
-        values[5] >= 0 || error("Nelder-Mead simplex logit multiplier must be non-negative.")
-        return new(counts..., values...)
-    end
-end
-
-function NelderMeadSettings(;
-    maxiter,
-    maxfevals,
-    ftol,
-    xtol,
-    rejection_carrier_cost,
-    simplex_logit_offset,
-    simplex_logit_multiplier,
-)
-    return NelderMeadSettings(
-        maxiter,
-        maxfevals,
-        ftol,
-        xtol,
-        rejection_carrier_cost,
-        simplex_logit_offset,
-        simplex_logit_multiplier,
-    )
-end
-
-"""
     PromotionSettings(; max_cost, max_abs_normalized_residual)
 
 Define Human-owned promotion limits independently of the local search
@@ -362,15 +298,13 @@ struct CacheSummary
     miss_count::Int
 end
 
-"""Hash-bound CMA→Nelder-Mead result with independent search and gate states."""
+"""Hash-bound bounded-CMA-ES result with an independent promotion gate."""
 struct OptimizationResult
     condition_manifest_id::String
     condition_manifest_sha256::String
     condition_manifest_approval_status::String
     initial_seed_record_id::String
     cma::SearchStageOutcome
-    handoff::GateOutcome
-    nelder_mead::SearchStageOutcome
     promotion::GateOutcome
     history::Vector{EvaluationRecord}
     cache_summary::CacheSummary
@@ -485,40 +419,6 @@ function _from_unit_box(variables, values)
     ]
 end
 
-function _sigmoid(value)
-    isfinite(value) || error("Nelder-Mead produced a non-finite logit coordinate.")
-    if value >= 0
-        return 1.0 / (1.0 + exp(-value))
-    end
-    exponential = exp(value)
-    return exponential / (1.0 + exponential)
-end
-
-function _from_logits(variables, logits)
-    length(logits) == length(variables) || error("Logit candidate dimension mismatch.")
-    return _from_unit_box(variables, [_sigmoid(value) for value in logits])
-end
-
-function _normalized_simplex_width(simplex)
-    isempty(simplex) && error("Nelder-Mead simplex must not be empty.")
-    dimension = length(first(simplex))
-    all(point -> length(point) == dimension, simplex) || error("Inconsistent Nelder-Mead simplex dimensions.")
-    return maximum(
-        maximum(_sigmoid(point[index]) for point in simplex) -
-        minimum(_sigmoid(point[index]) for point in simplex)
-        for index in 1:dimension
-    )
-end
-
-function _nelder_mead_cost_spread_observation(state)
-    state.nm_x isa Real || error("Nelder-Mead callback returned a non-real cost-spread observation.")
-    observation = Float64(state.nm_x)
-    isfinite(observation) || error("Nelder-Mead cost spread must be finite.")
-    objective_values = Float64.(state.f_simplex)
-    all(isfinite, objective_values) || error("Nelder-Mead simplex objective values must be finite.")
-    return observation
-end
-
 function _condition(id, observed, comparator, threshold, unit)
     met = if isnothing(observed)
         nothing
@@ -565,25 +465,6 @@ function _stage_counts(records)
     return length(valid_candidate_ids), length(rejected_candidate_ids)
 end
 
-function _not_run_stage(settings::NelderMeadSettings, reason::AbstractString)
-    conditions = [
-        _condition("nelder_mead.ftol", nothing, "<=", settings.ftol, "cost"),
-        _condition("nelder_mead.xtol", nothing, "<=", settings.xtol, "normalized_fraction"),
-    ]
-    return SearchStageOutcome(
-        :not_run,
-        String(reason),
-        settings.maxiter,
-        settings.maxfevals,
-        0,
-        0,
-        nothing,
-        0,
-        0,
-        conditions,
-    )
-end
-
 function _gate(state, reason, record, conditions)
     state in (:met, :not_met, :not_evaluable) || error("Invalid gate state $(state).")
     unmet = [condition.condition_id for condition in conditions if condition.met !== true]
@@ -598,15 +479,15 @@ end
 
 function _promotion_conditions(
     record,
-    nelder_mead_state::Symbol,
+    cma_state::Symbol,
     metrics::AbstractVector{MetricSpec},
     promotion::PromotionSettings;
     stage_ran::Bool,
 )
-    convergence_observed = stage_ran ? (nelder_mead_state === :converged ? 1.0 : 0.0) : nothing
+    convergence_observed = stage_ran ? (cma_state === :converged ? 1.0 : 0.0) : nothing
     conditions = ConditionOutcome[
         _condition(
-            "promotion.nelder_mead_converged",
+            "promotion.cma_es_converged",
             convergence_observed,
             "==",
             1.0,
@@ -668,16 +549,16 @@ end
 
 """
     optimize_d3(evaluator, variables, metrics, initial_candidate, cma,
-                nelder_mead, promotion; condition_manifest_id,
+                promotion; condition_manifest_id,
                 condition_manifest_sha256,
                 condition_manifest_approval_status)
 
-Evaluate the exact seed once, run real bounded CMA-ES with an independent
-budget, and hand the best valid seed/CMA incumbent to real Nelder-Mead in
-smooth logit coordinates. Candidate rejection, search limits, nonconvergence,
-handoff failure, and promotion failure are returned as structured outcomes.
-Malformed contracts, evaluator bugs, nonfinite data, and optimizer-library
-failures remain execution errors. The function performs no artifact writes.
+Evaluate the exact seed once and run real bounded CMA-ES. Candidate rejection,
+search limits, nonconvergence, and promotion failure are returned as structured
+outcomes. Malformed contracts, evaluator bugs, nonfinite data, and
+optimizer-library failures remain execution errors. The function performs no
+artifact writes. Independent CMA-ES restarts are deliberately owned by the
+caller so their seeds and budgets remain explicit in the Run manifest.
 
 An `agent_proposed` or `sol_reviewed` manifest may drive an explicitly
 requested exploration, but its promotion outcome is always `:not_evaluable`
@@ -690,7 +571,6 @@ function optimize_d3(
     metrics::AbstractVector{MetricSpec},
     initial_candidate::NamedTuple,
     cma::CMASettings,
-    nelder_mead::NelderMeadSettings,
     promotion_settings::PromotionSettings;
     condition_manifest_id,
     condition_manifest_sha256,
@@ -704,9 +584,6 @@ function optimize_d3(
     _require_unique_names(variables, "variable")
     _require_unique_names(metrics, "metric")
     any(spec -> spec.weight > 0, metrics) || error("At least one metric must have positive weight.")
-    nelder_mead.maxfevals >= length(variables) + 1 || error(
-        "Nelder-Mead maxfevals must cover its initial simplex.",
-    )
 
     initial_values = _initial_values(variables, initial_candidate)
     initial_unit = _to_unit_box(variables, initial_values)
@@ -731,8 +608,11 @@ function optimize_d3(
         seed = cma.seed,
         maxiter = cma.maxiter,
         maxfevals = cma.maxfevals,
-        ftol = cma.ftol,
-        xtol = cma.xtol,
+        # Run the declared fixed budget. The package stops on its first scalar
+        # tolerance and its built-in xtol is sign-sensitive; D3 instead
+        # evaluates the declared joint absolute ftol/xtol contract below.
+        ftol = nothing,
+        xtol = nothing,
         parallel_evaluation = false,
         multi_threading = false,
         noise_handling = nothing,
@@ -745,10 +625,20 @@ function optimize_d3(
     cma_reason_symbol = cma_result.stop.reason
     cma_reason = String(cma_reason_symbol)
     cma_iterations = Int(cma_result.stop.it)
-    cma_franges = Float64.(cma_result.logger.frange)
-    recent_cma_franges = last(cma_franges, min(3, length(cma_franges)))
-    cma_ftol_observed = isempty(recent_cma_franges) || !all(isfinite, recent_cma_franges) ?
-        nothing : maximum(recent_cma_franges)
+    generation_count = length(cma_records) ÷ cma.popsize
+    recent_generation_ranges = Float64[]
+    for generation in max(1, generation_count - 2):generation_count
+        first_index = (generation - 1) * cma.popsize + 1
+        last_index = generation * cma.popsize
+        finite_costs = Float64[
+            record.cost for record in cma_records[first_index:last_index]
+            if !isnothing(record.cost) && isfinite(record.cost)
+        ]
+        length(finite_costs) >= 2 || continue
+        push!(recent_generation_ranges, maximum(finite_costs) - minimum(finite_costs))
+    end
+    cma_ftol_observed = isempty(recent_generation_ranges) ?
+        nothing : maximum(recent_generation_ranges)
     raw_cma_xtol = maximum(abs.(CMAEvolutionStrategy.sigma(cma_result.p) .* cma_result.p.cov.p))
     cma_xtol_observed = if isfinite(raw_cma_xtol)
         raw_cma_xtol
@@ -781,155 +671,10 @@ function optimize_d3(
         cma_conditions,
     )
 
-    handoff_incumbent = _best_valid_record(vcat(initial_seed_records, cma_records))
-    handoff_conditions = if isnothing(handoff_incumbent)
-        [
-            _condition("handoff.valid_incumbent", 0.0, "==", 1.0, "boolean"),
-            _condition("handoff.open_unit_box", nothing, ">", 0.0, "normalized_fraction"),
-        ]
-    else
-        unit = _to_unit_box(variables, Tuple(handoff_incumbent.candidate))
-        interior_margin = minimum(min(value, 1.0 - value) for value in unit)
-        [
-            _condition("handoff.valid_incumbent", 1.0, "==", 1.0, "boolean"),
-            _condition("handoff.open_unit_box", interior_margin, ">", 0.0, "normalized_fraction"),
-        ]
-    end
-    handoff = if isnothing(handoff_incumbent)
-        _gate(:not_evaluable, "Neither the initial seed nor CMA-ES produced a valid incumbent.", nothing, handoff_conditions)
-    elseif all(condition -> condition.met === true, handoff_conditions)
-        _gate(:met, "Best seed/CMA incumbent lies inside the open bounded domain.", handoff_incumbent, handoff_conditions)
-    else
-        _gate(:not_met, "Best seed/CMA incumbent does not meet every handoff condition.", handoff_incumbent, handoff_conditions)
-    end
-
-    if handoff.state !== :met
-        nm_outcome = _not_run_stage(nelder_mead, "Nelder-Mead was not run because the seed/CMA handoff gate was not met.")
-        promotion_conditions = _promotion_conditions(
-            nothing,
-            :not_run,
-            metrics,
-            promotion_settings;
-            stage_ran = false,
-        )
-        promotion_outcome = _gate(
-            :not_evaluable,
-            "Promotion is not evaluable because Nelder-Mead was not run.",
-            nothing,
-            promotion_conditions,
-        )
-        return OptimizationResult(
-            manifest_id,
-            manifest_hash,
-            approval_status,
-            initial_seed_record.record_id,
-            cma_outcome,
-            handoff,
-            nm_outcome,
-            promotion_outcome,
-            copy(context.history),
-            _cache_summary(context),
-        )
-    end
-
-    incumbent_unit = _to_unit_box(variables, Tuple(handoff_incumbent.candidate))
-    initial_logits = log.(incumbent_unit ./ (1.0 .- incumbent_unit))
-    nm_ftol_observed = Ref{Union{Nothing,Float64}}(nothing)
-    nm_xtol_observed = Ref{Union{Nothing,Float64}}(nothing)
-    joint_convergence = Ref(false)
-    callback = state -> begin
-        nm_ftol_observed[] = _nelder_mead_cost_spread_observation(state)
-        simplex_width = _normalized_simplex_width(state.simplex)
-        isfinite(simplex_width) || error("Nelder-Mead produced a non-finite normalized simplex width.")
-        nm_xtol_observed[] = simplex_width
-        joint_convergence[] =
-            !isnothing(nm_ftol_observed[]) &&
-            !isnothing(nm_xtol_observed[]) &&
-            nm_ftol_observed[] <= nelder_mead.ftol &&
-            nm_xtol_observed[] <= nelder_mead.xtol
-        return joint_convergence[]
-    end
-    nelder_mead_objective = logits -> begin
-        record_cost = _evaluate!(context, :nelder_mead, _from_logits(variables, logits))
-        record_cost == Inf && return nelder_mead.rejection_carrier_cost
-        record_cost < nelder_mead.rejection_carrier_cost || error(
-            "Valid Nelder-Mead cost $(record_cost) must remain below rejection carrier $(nelder_mead.rejection_carrier_cost).",
-        )
-        return record_cost
-    end
-    method = Optim.NelderMead(
-        parameters = Optim.AdaptiveParameters(α = 1.0, β = 1.0, γ = 0.75, δ = 1.0),
-        initial_simplex = Optim.AffineSimplexer(
-            a = nelder_mead.simplex_logit_offset,
-            b = nelder_mead.simplex_logit_multiplier,
-        ),
-    )
-    options = Optim.Options(
-        x_abstol = nelder_mead.xtol,
-        x_reltol = 0.0,
-        f_abstol = nelder_mead.ftol,
-        f_reltol = 0.0,
-        g_abstol = nelder_mead.ftol,
-        f_calls_limit = nelder_mead.maxfevals,
-        g_calls_limit = 0,
-        h_calls_limit = 0,
-        allow_f_increases = true,
-        successive_f_tol = 1,
-        iterations = nelder_mead.maxiter,
-        store_trace = false,
-        trace_simplex = false,
-        show_trace = false,
-        extended_trace = false,
-        show_warnings = false,
-        show_every = 1,
-        callback = callback,
-        time_limit = Inf,
-    )
-    nm_result = Optim.optimize(nelder_mead_objective, initial_logits, method, options)
-
-    nm_records = _stage_records(context, :nelder_mead)
-    nm_best = _best_valid_record(nm_records)
-    nm_valid_count, nm_rejected_count = _stage_counts(nm_records)
-    nm_iterations = Int(Optim.iterations(nm_result))
-    nm_evaluations = length(nm_records)
-    nm_conditions = [
-        _condition("nelder_mead.ftol", nm_ftol_observed[], "<=", nelder_mead.ftol, "cost"),
-        _condition("nelder_mead.xtol", nm_xtol_observed[], "<=", nelder_mead.xtol, "normalized_fraction"),
-    ]
-    nm_state = if isnothing(nm_best)
-        :no_valid_candidate
-    elseif Optim.converged(nm_result) && joint_convergence[]
-        :converged
-    else
-        :not_converged
-    end
-    nm_reason = if nm_state === :converged
-        "joint_ftol_xtol"
-    elseif Optim.iteration_limit_reached(nm_result)
-        "iteration_budget_exhausted"
-    elseif nm_evaluations >= nelder_mead.maxfevals
-        "evaluation_budget_exhausted"
-    elseif isnothing(nm_best)
-        "no_valid_candidate"
-    else
-        "optimizer_stopped_without_joint_convergence"
-    end
-    nm_outcome = SearchStageOutcome(
-        nm_state,
-        nm_reason,
-        nelder_mead.maxiter,
-        nelder_mead.maxfevals,
-        nm_iterations,
-        nm_evaluations,
-        isnothing(nm_best) ? nothing : nm_best.record_id,
-        nm_valid_count,
-        nm_rejected_count,
-        nm_conditions,
-    )
-
+    incumbent = _best_valid_record(vcat(initial_seed_records, cma_records))
     promotion_conditions = _promotion_conditions(
-        nm_best,
-        nm_state,
+        incumbent,
+        cma_state,
         metrics,
         promotion_settings;
         stage_ran = true,
@@ -938,15 +683,15 @@ function optimize_d3(
         _gate(
             :not_evaluable,
             "Manifest state $(approval_status) may produce exploration evidence but cannot evaluate promotion.",
-            nm_best,
+            incumbent,
             promotion_conditions,
         )
-    elseif isnothing(nm_best)
-        _gate(:not_evaluable, "Nelder-Mead produced no valid candidate.", nothing, promotion_conditions)
+    elseif isnothing(incumbent)
+        _gate(:not_evaluable, "CMA-ES produced no valid candidate.", nothing, promotion_conditions)
     elseif all(condition -> condition.met === true, promotion_conditions)
-        _gate(:met, "Human-approved promotion conditions are met.", nm_best, promotion_conditions)
+        _gate(:met, "Human-approved promotion conditions are met.", incumbent, promotion_conditions)
     else
-        _gate(:not_met, "Human-approved promotion conditions are not all met.", nm_best, promotion_conditions)
+        _gate(:not_met, "Human-approved promotion conditions are not all met.", incumbent, promotion_conditions)
     end
 
     return OptimizationResult(
@@ -955,8 +700,6 @@ function optimize_d3(
         approval_status,
         initial_seed_record.record_id,
         cma_outcome,
-        handoff,
-        nm_outcome,
         promotion_outcome,
         copy(context.history),
         _cache_summary(context),

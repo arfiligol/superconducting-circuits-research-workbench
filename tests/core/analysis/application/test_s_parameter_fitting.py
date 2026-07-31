@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
+from typing import Any
 
 import numpy as np
+import pytest
+from superconducting_circuits_analysis.application.analysis.fitting import (
+    s_parameters as s_parameter_fitting,
+)
 from superconducting_circuits_analysis.application.analysis.fitting.s_parameters import (
     fit_complex_s21_notch,
     fit_complex_s21_transmission,
@@ -365,6 +371,31 @@ def test_scalar_s21_vector_carrier_contains_exactly_the_input_response() -> None
     np.testing.assert_array_equal(carrier.s[:, 0, 0], s21)
 
 
+def test_multi_resonance_vector_fitter_applies_explicit_iteration_budget() -> None:
+    frequencies_hz = np.linspace(5.9e9, 6.1e9, 101)
+    s21 = transmission_s21(
+        frequencies_hz,
+        fr=6.0e9,
+        Ql=200.0,
+        a=0.8,
+        alpha=0.0,
+        tau=0.0,
+    )
+    fitter = MultiResonanceVectorFitter(frequencies_hz, s21)
+
+    result = fitter.fit(
+        n_resonators=1,
+        bg_poles=1,
+        max_iterations=7,
+        min_q=2.0,
+    )
+
+    assert fitter.vf_engine is not None
+    assert fitter.vf_engine.max_iterations == 7
+    assert result["fit_diagnostics"]["max_iterations"] == 7
+    assert result["fit_diagnostics"]["iteration_count"] <= 7
+
+
 def test_fit_complex_s21_vector_recovers_two_resonances() -> None:
     frequencies_hz = np.linspace(5.7e9, 6.5e9, 401)
     s21 = (
@@ -394,24 +425,38 @@ def test_fit_complex_s21_vector_recovers_two_resonances() -> None:
         s21.imag,
         n_resonators=2,
         bg_poles=2,
+        max_iterations=200,
         min_q=2.0,
+        fit_window_hz=(5.72e9, 6.48e9),
     )
 
     assert result["status"] == "success"
+    assert result["schema_version"] == "scalar-s21-vector-fit.v2"
     assert result["model"] == "scalar_s21_vector"
     assert result["fit_settings"] == {
         "n_resonators": 2,
         "bg_poles": 2,
+        "max_iterations": 200,
         "min_q": 2.0,
         "restrict_to_input_span": True,
+        "fit_constant": True,
+        "fit_proportional": False,
     }
-    assert len(result["model_trace"]["frequency_hz"]) == len(frequencies_hz)
+    assert len(result["model_trace"]["frequency_hz"]) == 381
+    assert result["fit_window_hz"] == [5.72e9, 6.48e9]
+    assert result["requested_fit_window_hz"] == [5.72e9, 6.48e9]
+    assert result["sampling"] == {
+        "sample_count": 381,
+        "minimum_frequency_step_hz": 2.0e6,
+        "maximum_frequency_step_hz": 2.0e6,
+    }
     assert [round(item["fr_hz"] / 1e9, 2) for item in result["resonances"]] == [6.05, 6.3]
     assert all(item["bandwidth_hz"] is not None for item in result["resonances"])
     model_s21 = np.asarray(result["model_trace"]["s21_real"]) + 1j * np.asarray(
         result["model_trace"]["s21_imag"]
     )
-    scalar_rmse = float(np.sqrt(np.mean(np.abs(model_s21 - s21) ** 2)))
+    selected_s21 = s21[10:-10]
+    scalar_rmse = float(np.sqrt(np.mean(np.abs(model_s21 - selected_s21) ** 2)))
     assert scalar_rmse > 0.0
     assert np.isclose(result["metrics"]["rms_error"], scalar_rmse, rtol=1.0e-13)
     assert not np.isclose(
@@ -419,7 +464,107 @@ def test_fit_complex_s21_vector_recovers_two_resonances() -> None:
         np.sqrt(2.0) * scalar_rmse,
         rtol=1.0e-6,
     )
-    json.dumps(result)
+    residual = np.asarray(result["complex_residual_trace"]["residual_real"]) + 1j * np.asarray(
+        result["complex_residual_trace"]["residual_imag"]
+    )
+    np.testing.assert_allclose(residual, model_s21 - selected_s21, rtol=0.0, atol=0.0)
+    assert result["metrics"]["max_abs_error"] == np.max(np.abs(residual))
+
+    rational_model = result["rational_model"]
+    poles = rational_model["poles"]
+    assert rational_model["response_domain"] == "scalar_s21"
+    assert rational_model["laplace_variable_convention"] == "s = j*2*pi*f"
+    assert rational_model["constant_term_units"] == "dimensionless"
+    assert rational_model["proportional_term_units"] == "seconds"
+    assert rational_model["proportional_term_status"] == "fixed_zero_not_fitted"
+    assert rational_model["stored_pole_count"] == len(poles)
+    assert rational_model["final_model_order"] == sum(
+        1 if item["pole_kind"] == "real" else 2 for item in poles
+    )
+    assert [item["storage_index"] for item in poles] == list(range(len(poles)))
+    assert all(item["classification"] in ("resonance", "excluded") for item in poles)
+    assert all(
+        (item["exclusion_reason"] is None) == (item["classification"] == "resonance")
+        for item in poles
+    )
+    assert any(item["exclusion_reason"] == "real_background_pole" for item in poles)
+
+    sampled_frequencies_hz = np.asarray(result["model_trace"]["frequency_hz"])
+    laplace_s = 2j * np.pi * sampled_frequencies_hz
+    constant = complex(**rational_model["constant_term"])
+    proportional = complex(**rational_model["proportional_term"])
+    reconstructed = constant + proportional * laplace_s
+    for item in poles:
+        pole = complex(
+            item["pole_real_rad_per_s"], item["pole_imag_rad_per_s"]
+        )
+        residue = complex(
+            item["residue_real_rad_per_s"], item["residue_imag_rad_per_s"]
+        )
+        reconstructed += residue / (laplace_s - pole)
+        if item["conjugate_term_inferred"]:
+            reconstructed += np.conjugate(residue) / (laplace_s - np.conjugate(pole))
+    np.testing.assert_allclose(reconstructed, model_s21, rtol=2.0e-14, atol=2.0e-14)
+    assert result["fit_diagnostics"]["iteration_count"] > 0
+    assert result["fit_diagnostics"]["max_iterations"] == 200
+    assert all("pole_real" not in item and "pole_imag" not in item for item in result["resonances"])
+    json.dumps(result, allow_nan=False)
+
+
+def test_vector_success_payload_fails_closed_for_corrupt_promotion_evidence() -> None:
+    frequencies_hz = np.linspace(5.9e9, 6.1e9, 201)
+    s21 = transmission_s21(
+        frequencies_hz,
+        fr=6.0e9,
+        Ql=200.0,
+        a=0.8,
+        alpha=0.0,
+        tau=0.0,
+    )
+    valid = fit_complex_s21_vector(
+        frequencies_hz,
+        s21.real,
+        s21.imag,
+        n_resonators=1,
+        bg_poles=1,
+        max_iterations=200,
+        min_q=2.0,
+    )
+    assert valid["status"] == "success"
+    poles = valid["rational_model"]["poles"]
+    real_index = next(index for index, pole in enumerate(poles) if pole["pole_kind"] == "real")
+    complex_index = next(
+        index for index, pole in enumerate(poles) if pole["pole_kind"] == "complex_conjugate_pair"
+    )
+
+    def assert_rejected(path: tuple[str | int, ...], value: object) -> None:
+        corrupted: Any = deepcopy(valid)
+        target: Any = corrupted
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+        with pytest.raises(ValueError):
+            s_parameter_fitting._validate_vector_success_payload(corrupted)
+
+    corruptions = (
+        (("schema_version",), "scalar-s21-vector-fit.v1"),
+        (("model",), "legacy_vector_fit"),
+        (("rational_model", "poles", 0, "pole_real_rad_per_s"), np.nan),
+        (("rational_model", "poles", 0, "residue_imag_rad_per_s"), np.inf),
+        (("rational_model", "constant_term", "real"), np.nan),
+        (("rational_model", "proportional_term", "imag"), np.inf),
+        (("model_trace", "s21_real", 0), np.nan),
+        (("complex_residual_trace", "residual_imag", 0), np.inf),
+        (("metrics", "rms_error"), np.nan),
+        (("sampling", "maximum_frequency_step_hz"), np.inf),
+        (("fit_diagnostics", "delta_max_history", 0), np.nan),
+        (("fit_diagnostics", "max_iterations"), 199),
+        (("rational_model", "poles", complex_index, "ql"), None),
+        (("rational_model", "poles", real_index, "exclusion_reason"), None),
+        (("rational_model", "poles", real_index, "fr_hz"), 1.0),
+    )
+    for path, value in corruptions:
+        assert_rejected(path, value)
 
 
 def test_fit_complex_s21_vector_rejects_implicit_coercions_and_nonfinite_min_q() -> None:
@@ -430,6 +575,9 @@ def test_fit_complex_s21_vector_rejects_implicit_coercions_and_nonfinite_min_q()
         {"n_resonators": True, "bg_poles": 2, "min_q": 2.0},
         {"n_resonators": 1, "bg_poles": 1.9, "min_q": 2.0},
         {"n_resonators": 1, "bg_poles": False, "min_q": 2.0},
+        {"n_resonators": 1, "bg_poles": 2, "max_iterations": 1.9, "min_q": 2.0},
+        {"n_resonators": 1, "bg_poles": 2, "max_iterations": True, "min_q": 2.0},
+        {"n_resonators": 1, "bg_poles": 2, "max_iterations": 0, "min_q": 2.0},
         {"n_resonators": 1, "bg_poles": 2, "min_q": np.inf},
         {"n_resonators": 1, "bg_poles": 2, "min_q": True},
         {
@@ -444,6 +592,18 @@ def test_fit_complex_s21_vector_rejects_implicit_coercions_and_nonfinite_min_q()
             "min_q": 2.0,
             "restrict_to_input_span": 0,
         },
+        {
+            "n_resonators": 1,
+            "bg_poles": 2,
+            "min_q": 2.0,
+            "fit_window_hz": [6.0e9, 5.0e9],
+        },
+        {
+            "n_resonators": 1,
+            "bg_poles": 2,
+            "min_q": 2.0,
+            "fit_window_hz": [5.7e9, 5.71e9],
+        },
     )
 
     for settings in invalid_settings:
@@ -451,6 +611,9 @@ def test_fit_complex_s21_vector_rejects_implicit_coercions_and_nonfinite_min_q()
             frequencies_hz,
             s21.real,
             s21.imag,
+            max_iterations=settings.pop("max_iterations", 200),
             **settings,
         )
         assert result["status"] == "failed"
+        assert result["schema_version"] == "scalar-s21-vector-fit.v2"
+        assert result["model"] == "scalar_s21_vector"

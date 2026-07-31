@@ -10,8 +10,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: Julia-native core, visualizer, runner, and analysis bridge package reference surface.
-version: v0.8.0
-last_updated: 2026-06-14
+version: v0.8.1
+last_updated: 2026-07-29
 updated_by: codex
 ---
 
@@ -23,7 +23,10 @@ This page documents the current boundaries of the Julia-native simulation / visu
 
 For the reusable Circuit Plan authoring architecture, use [Julia Core Authoring](../julia-core/index.mdx). For PlotlyJS figure contracts, use [Julia Visualizer](../julia-visualizer/index.mdx). This page records package placement and package-level ownership.
 
-For concrete component families, use project-space or lab-space component libraries built on the Julia Core authoring kernel.
+Concrete component families may use the bounded
+[Julia Core reusable catalog](../julia-core/component-libraries.md) or an
+external project/lab Component Library according to the component ownership
+contract.
 
 <Aside type="note" title="Current Julia Surface">
 

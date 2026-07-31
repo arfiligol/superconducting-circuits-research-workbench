@@ -9,7 +9,7 @@
   - `npm run check --prefix site`
   - `npm run build --prefix site`
   - `./scripts/build/build_public_site.sh`
-  - `uv run docs-site serve`
+  - `npm run preview --prefix site`
 - **Julia Core install**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'`
 - **Julia Visualizer install**: `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'`
 - **Julia Runner install**: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'`
@@ -50,4 +50,4 @@
   - `uv run python scripts/build/check_api_reference_links.py`
 - **Public artifact**:
   - `./scripts/build/build_public_site.sh` builds Astro at `/`, embeds Starlight docs at `/docs/`, and embeds generated API reference at `/api/python/` and `/api/julia/`.
-  - `uv run docs-site serve` serves the built `site/dist` artifact locally; add `--build` to rebuild before serving.
+  - `npm run preview --prefix site` serves the built `site/dist` artifact locally; run `./scripts/build/build_public_site.sh` first when the artifact needs rebuilding.

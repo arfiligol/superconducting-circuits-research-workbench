@@ -3,7 +3,7 @@ import json
 import struct
 from pathlib import Path
 
-from app_backend.infrastructure.rewrite_catalog_repository import (
+from app_backend.infrastructure.catalog_seed_data import (
     LOCAL_SPACE_RESONATOR_DEFINITION_ID,
 )
 from app_backend.main import app

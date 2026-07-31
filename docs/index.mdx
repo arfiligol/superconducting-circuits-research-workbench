@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: user
 scope: "Astro + Starlight reader/task-first technical documentation entry."
-version: v3.1.0
-last_updated: 2026-07-10
+version: v3.2.0
+last_updated: 2026-07-29
 updated_by: codex
 title: Technical documents
 description: Start from the task you want to complete, the concept you need to understand, or the contract you need to verify.
@@ -23,9 +23,16 @@ sidebar:
 
 import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
 
-This is the technical documentation entry for the Superconducting Circuits Research Workbench. First choose your current intention: start research from the notebook, complete the work, understand the model, check the contract, view the Product App, or maintain the project.
+This is the technical documentation entry for the Superconducting Circuits
+Research Workbench. Use it as a tool inside a host Project or Super Repo, then
+choose your current task.
 
 <CardGrid>
+ <LinkCard
+  title="Use Circuit Workbench In A Project"
+  href="./project-context/"
+description="Resolve a readable host Project first, or ask only for research semantics required by the task."
+ />
  <LinkCard
   title="Start Here"
   href="./start/"
@@ -39,7 +46,7 @@ description="Pluto research, Julia Core circuit authoring, simulation, analysis,
  <LinkCard
  title="Concepts"
   href="./concepts/"
-description="Workbench-specific mental models plus handoffs to the canonical SCQ_Design Knowledge Base."
+description="Workbench-specific mental models plus handoffs to the host Project's canonical Knowledge owners."
  />
  <LinkCard
   title="Product App"

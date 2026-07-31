@@ -5,8 +5,13 @@
             "label": "D3 linewidth L_A equivalent calibration",
             "role": "linewidth_loaded_bare_calibration",
             "parameters": {
+                "regularizer_characteristic_impedance_ohm": 50,
+                "regularizer_section_length_m": 2.3453294034007832e-6,
                 "diagonal_loading": "retained",
-                "feedline_model": "two_pi",
+                "regularizer_physical_role": "numerical_port_node_regularization_only",
+                "regularizer_series_inductance_h": 1.0e-12,
+                "feedline_model": "matched_port_regularizer_two_pi",
+                "regularizer_section_capacitance_f": 4.0e-16,
                 "external_coupling_state": "on",
                 "internal_coupling_state": "off_diagonal_suppressed"
             },
@@ -158,141 +163,180 @@
             "through": "linewidth_la_feedline_idc_c12"
         },
         {
-            "label": "d3_design_target_two_pi_feedline L1",
+            "label": "d3_design_target_port_regularizer_left L1",
             "role": "transmission_line_series_inductance",
             "parameters": {
                 "schematic_kind": "inductor",
-                "inductance": 2.021565e-10
+                "inductance": 1.0e-12
             },
-            "id": "d3_design_target_two_pi_feedline_l_1",
-            "to": "d3_design_target_two_pi_feedline_node_1",
+            "id": "d3_design_target_port_regularizer_left_l_1",
+            "to": "linewidth_la_feedline_attachment",
             "from": "d3_design_target_f1",
             "relation_type": "series",
             "through": "inductance"
         },
         {
-            "label": "d3_design_target_two_pi_feedline L2",
+            "label": "d3_design_target_port_regularizer_left C node 0",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 2.0e-16
+            },
+            "id": "d3_design_target_port_regularizer_left_c_node_0",
+            "to": "ground",
+            "from": "d3_design_target_f1",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_port_regularizer_left C node 1",
+            "role": "transmission_line_shunt_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 2.0e-16
+            },
+            "id": "d3_design_target_port_regularizer_left_c_node_1",
+            "to": "ground",
+            "from": "linewidth_la_feedline_attachment",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "d3_design_target_port_regularizer_left",
+            "role": "transmission_line_ladder",
+            "parameters": {
+                "g_per_m_s": 0,
+                "section_lengths_m": [
+                    2.3453294034007832e-6
+                ],
+                "section_rlgc_per_m": [
+                    {
+                        "g_per_m_s": 0,
+                        "c_per_m_f": 1.7055173547050172e-10,
+                        "r_per_m_ohm": 0,
+                        "l_per_m_h": 4.263793386762543e-7
+                    }
+                ],
+                "n_sections": 1,
+                "node_shunt_capacitance_f": [
+                    2.0e-16,
+                    2.0e-16
+                ],
+                "r_per_m_ohm": 0,
+                "l_per_m_h": 4.263793386762543e-7,
+                "c_per_m_f": 1.7055173547050172e-10,
+                "section_length_m": 2.3453294034007832e-6,
+                "head_termination": "external",
+                "tail_termination": "external",
+                "reference_section_length_m": 2.3453294034007832e-6,
+                "length_m": 2.3453294034007832e-6,
+                "node_shunt_conductance_s": [
+                    0,
+                    0
+                ],
+                "node_shunt_positions_m": [
+                    0,
+                    2.3453294034007832e-6
+                ],
+                "section_boundaries_m": [
+                    0,
+                    2.3453294034007832e-6
+                ],
+                "section_model": "pi"
+            },
+            "id": "d3_design_target_port_regularizer_left_ladder",
+            "to": "linewidth_la_feedline_attachment",
+            "from": "d3_design_target_f1",
+            "relation_type": "transmission_line_ladder",
+            "through": "d3_design_target_port_regularizer_left"
+        },
+        {
+            "label": "d3_design_target_port_regularizer_right L1",
             "role": "transmission_line_series_inductance",
             "parameters": {
                 "schematic_kind": "inductor",
-                "inductance": 2.021565e-10
+                "inductance": 1.0e-12
             },
-            "id": "d3_design_target_two_pi_feedline_l_2",
+            "id": "d3_design_target_port_regularizer_right_l_1",
             "to": "d3_design_target_f2",
-            "from": "d3_design_target_two_pi_feedline_node_1",
+            "from": "linewidth_la_feedline_attachment",
             "relation_type": "series",
             "through": "inductance"
         },
         {
-            "label": "d3_design_target_two_pi_feedline C node 0",
+            "label": "d3_design_target_port_regularizer_right C node 0",
             "role": "transmission_line_shunt_capacitance",
             "parameters": {
                 "schematic_kind": "capacitor",
-                "capacitance": 4.496500000000001e-14
+                "capacitance": 2.0e-16
             },
-            "id": "d3_design_target_two_pi_feedline_c_node_0",
+            "id": "d3_design_target_port_regularizer_right_c_node_0",
             "to": "ground",
-            "from": "d3_design_target_f1",
+            "from": "linewidth_la_feedline_attachment",
             "relation_type": "terminates",
             "through": "capacitance"
         },
         {
-            "label": "d3_design_target_two_pi_feedline C node 1",
+            "label": "d3_design_target_port_regularizer_right C node 1",
             "role": "transmission_line_shunt_capacitance",
             "parameters": {
                 "schematic_kind": "capacitor",
-                "capacitance": 8.993000000000001e-14
+                "capacitance": 2.0e-16
             },
-            "id": "d3_design_target_two_pi_feedline_c_node_1",
-            "to": "ground",
-            "from": "d3_design_target_two_pi_feedline_node_1",
-            "relation_type": "terminates",
-            "through": "capacitance"
-        },
-        {
-            "label": "d3_design_target_two_pi_feedline C node 2",
-            "role": "transmission_line_shunt_capacitance",
-            "parameters": {
-                "schematic_kind": "capacitor",
-                "capacitance": 4.496500000000001e-14
-            },
-            "id": "d3_design_target_two_pi_feedline_c_node_2",
+            "id": "d3_design_target_port_regularizer_right_c_node_1",
             "to": "ground",
             "from": "d3_design_target_f2",
             "relation_type": "terminates",
             "through": "capacitance"
         },
         {
-            "label": "d3_design_target_two_pi_feedline",
+            "label": "d3_design_target_port_regularizer_right",
             "role": "transmission_line_ladder",
             "parameters": {
                 "g_per_m_s": 0,
                 "section_lengths_m": [
-                    0.0005,
-                    0.0005
+                    2.3453294034007832e-6
                 ],
                 "section_rlgc_per_m": [
                     {
                         "g_per_m_s": 0,
-                        "c_per_m_f": 1.7986e-10,
+                        "c_per_m_f": 1.7055173547050172e-10,
                         "r_per_m_ohm": 0,
-                        "l_per_m_h": 4.04313e-7
-                    },
-                    {
-                        "g_per_m_s": 0,
-                        "c_per_m_f": 1.7986e-10,
-                        "r_per_m_ohm": 0,
-                        "l_per_m_h": 4.04313e-7
+                        "l_per_m_h": 4.263793386762543e-7
                     }
                 ],
-                "n_sections": 2,
+                "n_sections": 1,
                 "node_shunt_capacitance_f": [
-                    4.496500000000001e-14,
-                    8.993000000000001e-14,
-                    4.496500000000001e-14
+                    2.0e-16,
+                    2.0e-16
                 ],
                 "r_per_m_ohm": 0,
-                "l_per_m_h": 4.04313e-7,
-                "c_per_m_f": 1.7986e-10,
-                "section_length_m": 0.0005,
+                "l_per_m_h": 4.263793386762543e-7,
+                "c_per_m_f": 1.7055173547050172e-10,
+                "section_length_m": 2.3453294034007832e-6,
                 "head_termination": "external",
                 "tail_termination": "external",
-                "reference_section_length_m": 0.0005,
-                "length_m": 0.001,
+                "reference_section_length_m": 2.3453294034007832e-6,
+                "length_m": 2.3453294034007832e-6,
                 "node_shunt_conductance_s": [
-                    0,
                     0,
                     0
                 ],
                 "node_shunt_positions_m": [
                     0,
-                    0.0005,
-                    0.001
+                    2.3453294034007832e-6
                 ],
                 "section_boundaries_m": [
                     0,
-                    0.0005,
-                    0.001
+                    2.3453294034007832e-6
                 ],
                 "section_model": "pi"
             },
-            "id": "d3_design_target_two_pi_feedline_ladder",
+            "id": "d3_design_target_port_regularizer_right_ladder",
             "to": "d3_design_target_f2",
-            "from": "d3_design_target_f1",
-            "relation_type": "transmission_line_ladder",
-            "through": "d3_design_target_two_pi_feedline"
-        },
-        {
-            "label": "",
-            "role": "linewidth_la_idc_to_feedline_center",
-            "parameters": {
-                "schematic_kind": "node_connection"
-            },
-            "id": "connect_14",
-            "to": "d3_design_target_two_pi_feedline_node_1",
             "from": "linewidth_la_feedline_attachment",
-            "relation_type": "connect",
-            "through": null
+            "relation_type": "transmission_line_ladder",
+            "through": "d3_design_target_port_regularizer_right"
         }
     ],
     "ports": [
@@ -401,9 +445,14 @@
     "render_hints": {
         "schemdraw": {
             "parameters": {
+                "regularizer_characteristic_impedance_ohm": 50,
                 "component_id": "d3_linewidth_la_equivalent",
+                "regularizer_section_length_m": 2.3453294034007832e-6,
+                "regularizer_physical_role": "numerical_port_node_regularization_only",
                 "extraction_id": "linewidth_la",
-                "feedline_model": "two_pi",
+                "regularizer_series_inductance_h": 1.0e-12,
+                "feedline_model": "matched_port_regularizer_two_pi",
+                "regularizer_section_capacitance_f": 4.0e-16,
                 "external_coupling_state": "on",
                 "internal_coupling_state": "qrp_off"
             },
@@ -411,15 +460,15 @@
             "labels": {
                 "lp_label": "$L_p$",
                 "output_port_label": "$P_2$",
+                "feedline_regularizer_center_capacitance_label": "$C_{\\mathrm{sep}}$",
+                "feedline_regularizer_inductance_label": "$L_{\\mathrm{sep}}$",
                 "cn_diag_label": "$C_n^{\\mathrm{diag}}$",
                 "cpg_label": "$C_{pG}^{\\mathrm{IDC}}$",
+                "feedline_regularizer_half_capacitance_label": "$C_{\\mathrm{sep}}/2$",
                 "cpfc_label": "$C_{pf_c}^{\\mathrm{IDC}}$",
                 "input_port_label": "$P_1$",
                 "ln_diag_label": "$L_n^{\\mathrm{diag}}$",
                 "input_port_resistance_label": "$R_{50}$",
-                "feedline_c_center_label": "$C_{\\Delta f}$",
-                "feedline_l_label_template": "$L_{{\\Delta f,{index}}}$",
-                "feedline_c_half_label": "$C_{\\Delta f}/2$",
                 "output_port_resistance_label": "$R_{50}$",
                 "cp_label": "$C_p$",
                 "cfcg_label": "$C_{f_cG}^{\\mathrm{IDC}}$"

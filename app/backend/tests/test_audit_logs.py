@@ -1,10 +1,10 @@
 import pytest
 from app_backend.domain.audit import AuditRecord
 from app_backend.infrastructure.audit_store import create_audit_engine
-from app_backend.infrastructure.persistence.database import create_metadata_engine
-from app_backend.infrastructure.rewrite_catalog_repository import (
+from app_backend.infrastructure.catalog_seed_data import (
     LOCAL_SPACE_RESONATOR_DEFINITION_ID,
 )
+from app_backend.infrastructure.persistence.database import create_metadata_engine
 from app_backend.infrastructure.runtime import get_task_audit_repository, reset_runtime_state
 from app_backend.main import app
 from app_backend.settings import get_settings

@@ -59,8 +59,8 @@ def _load_catalog(path: Path) -> dict[str, Any]:
     if catalog["schema_version"] != CATALOG_SCHEMA:
         raise ValueError(f"Expected {CATALOG_SCHEMA}.")
     procedures = catalog["procedures"]
-    if not isinstance(procedures, list) or not procedures:
-        raise ValueError("D3 Procedure catalog must contain at least one Procedure.")
+    if not isinstance(procedures, list):
+        raise ValueError("D3 Procedure catalog procedures must be one list.")
     ids = [str(item["id"]) for item in procedures]
     if len(ids) != len(set(ids)):
         raise ValueError("D3 Procedure ids must be unique.")
@@ -129,7 +129,7 @@ def _validate_open_side_input(path: Path) -> None:
     if payload.get("schema_version") != "d3-readout-open-side-maxwell.v2":
         raise ValueError(
             "open_side_contract_required: canonical design requires "
-            "d3-readout-open-side-maxwell.v2; legacy v1 is historical replay only."
+            "d3-readout-open-side-maxwell.v2."
         )
     if (
         payload.get("readout_self_capacitance_ownership")

@@ -5,6 +5,19 @@ using SuperconductingCircuitsCore
 
 const D3_DEFAULT_FEEDLINE_L_PER_M_H = 404.313e-9
 const D3_DEFAULT_FEEDLINE_C_PER_M_F = 179.86e-12
+const D3_PORT_REGULARIZER_SERIES_INDUCTANCE_H = 1.0e-12
+const D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM = 50.0
+const D3_PORT_REGULARIZER_PHASE_VELOCITY_M_PER_S =
+    inv(sqrt(D3_DEFAULT_FEEDLINE_L_PER_M_H * D3_DEFAULT_FEEDLINE_C_PER_M_F))
+const D3_PORT_REGULARIZER_SECTION_CAPACITANCE_F =
+    D3_PORT_REGULARIZER_SERIES_INDUCTANCE_H /
+    D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM^2
+const D3_PORT_REGULARIZER_SECTION_LENGTH_M =
+    D3_PORT_REGULARIZER_SERIES_INDUCTANCE_H /
+    (
+        D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM /
+        D3_PORT_REGULARIZER_PHASE_VELOCITY_M_PER_S
+    )
 const D3_DEFAULT_MTL_L_MATRIX_PER_M_H = [
     410.86374 19.08527
     19.08527 410.85454
@@ -119,38 +132,57 @@ function _d3_schemdraw_schematic!(
     end
 end
 
-function _d3_two_pi_feedline!(
+function _d3_matched_port_regularizer!(
     plan::CircuitPlan;
-    length_m=1.0e-3,
-    l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
-    c_per_m_f=D3_DEFAULT_FEEDLINE_C_PER_M_F,
+    center=external_node("d3_design_target_fc"),
     port_resistance_ohm=50.0,
 )
+    resistance = Float64(port_resistance_ohm)
+    isfinite(resistance) &&
+        resistance == D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM ||
+        throw(ArgumentError(
+            "D3 matched port regularizer requires both external ports to equal " *
+            "$(D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM) ohm.",
+        ))
     input = external_node("d3_design_target_f1")
     output = external_node("d3_design_target_f2")
-    half_length = Float64(length_m) / 2
-    feedline = transmission_line!(
+    l_per_m_h =
+        D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM /
+        D3_PORT_REGULARIZER_PHASE_VELOCITY_M_PER_S
+    c_per_m_f = inv(
+        D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM *
+        D3_PORT_REGULARIZER_PHASE_VELOCITY_M_PER_S,
+    )
+    spec = _d3_line_spec(
+        length_m=D3_PORT_REGULARIZER_SECTION_LENGTH_M,
+        section_length_m=D3_PORT_REGULARIZER_SECTION_LENGTH_M,
+        l_per_m_h=l_per_m_h,
+        c_per_m_f=c_per_m_f,
+    )
+    left = transmission_line!(
         plan;
-        id=:d3_design_target_two_pi_feedline,
+        id=:d3_design_target_port_regularizer_left,
         head=input,
-        tail=output,
-        spec=_d3_line_spec(
-            length_m=length_m,
-            section_length_m=half_length,
-            l_per_m_h=l_per_m_h,
-            c_per_m_f=c_per_m_f,
-        ),
+        tail=center,
+        spec=spec,
         head_termination=:external,
         tail_termination=:external,
-        breakpoints_m=[half_length],
     )
-    center = node_at_distance(feedline, half_length)
+    right = transmission_line!(
+        plan;
+        id=:d3_design_target_port_regularizer_right,
+        head=center,
+        tail=output,
+        spec=spec,
+        head_termination=:external,
+        tail_termination=:external,
+    )
     external_port!(
         plan;
         id=:input_port,
         index=1,
         endpoint=input,
-        resistance=port_resistance_ohm,
+        resistance=resistance,
         role=:signal,
     )
     external_port!(
@@ -158,10 +190,22 @@ function _d3_two_pi_feedline!(
         id=:output_port,
         index=2,
         endpoint=output,
-        resistance=port_resistance_ohm,
+        resistance=resistance,
         role=:readout,
     )
-    return (; line=feedline, input=input, center=center, output=output)
+    return (;
+        left,
+        right,
+        input,
+        center,
+        output,
+        regularizer_series_inductance_h=D3_PORT_REGULARIZER_SERIES_INDUCTANCE_H,
+        regularizer_section_capacitance_f=D3_PORT_REGULARIZER_SECTION_CAPACITANCE_F,
+        regularizer_characteristic_impedance_ohm=
+            D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM,
+        regularizer_phase_velocity_m_per_s=D3_PORT_REGULARIZER_PHASE_VELOCITY_M_PER_S,
+        regularizer_section_length_m=D3_PORT_REGULARIZER_SECTION_LENGTH_M,
+    )
 end
 
 function _d3_distributed_feedline!(
@@ -280,7 +324,8 @@ function _d3_plan_schematic!(
         component_id=component.id,
         unit_length=1.5,
         labels=render_labels,
-        parameters=Dict(
+        parameters=merge(
+            Dict(
             :contains_feedline => true,
             :feedline_model => feedline_model,
             :feedline_coupling_kind => :interdigitated_three_branch,
@@ -288,6 +333,20 @@ function _d3_plan_schematic!(
             :optimizer_parameterization => :three_branch_idc_mapping_only,
             :qubit_inductive_branch_kind =>
                 engineering_graph(plan).components[Symbol(component.qubit.id)].parameters[:inductive_branch_kind],
+            ),
+            hasproperty(feedline, :regularizer_series_inductance_h) ? Dict(
+                :regularizer_series_inductance_h =>
+                    feedline.regularizer_series_inductance_h,
+                :regularizer_section_capacitance_f =>
+                    feedline.regularizer_section_capacitance_f,
+                :regularizer_characteristic_impedance_ohm =>
+                    feedline.regularizer_characteristic_impedance_ohm,
+                :regularizer_phase_velocity_m_per_s =>
+                    feedline.regularizer_phase_velocity_m_per_s,
+                :regularizer_section_length_m =>
+                    feedline.regularizer_section_length_m,
+                :regularizer_physical_role => :numerical_port_node_regularization_only,
+            ) : Dict{Symbol,Any}(),
         ),
         terminals=[
             (id=:input_port, endpoint=feedline.input, side=:left, kind=:port, label=raw"$P_1$"),
@@ -330,7 +389,7 @@ function _d3_plan_schematic!(
             (
                 id=:island_2,
                 target=component.qubit.island_2,
-                label=raw"$q_2$",
+                label=raw"$q_0$",
                 hints=Dict(
                     :placement => :marker,
                     :placement_target => :qubit_q2_terminal,
@@ -407,9 +466,6 @@ function build_d3_intrinsic_purcell_equivalent_circuit_plan(;
     cr1_f=4.2e-15,
     cr2_f=3.8e-15,
     l_j_per_junction_h=24.0e-9,
-    feedline_length_m=1.0e-3,
-    feedline_l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
-    feedline_c_per_m_f=D3_DEFAULT_FEEDLINE_C_PER_M_F,
     port_resistance_ohm=50.0,
 )
     plan = CircuitPlan(id)
@@ -447,18 +503,10 @@ function build_d3_intrinsic_purcell_equivalent_circuit_plan(;
         cr2_f=cr2_f,
         l_j_per_junction_h=l_j_per_junction_h,
     )
-    feedline = _d3_two_pi_feedline!(
+    feedline = _d3_matched_port_regularizer!(
         plan;
-        length_m=feedline_length_m,
-        l_per_m_h=feedline_l_per_m_h,
-        c_per_m_f=feedline_c_per_m_f,
+        center=component.filter.feedline_attachment,
         port_resistance_ohm=port_resistance_ohm,
-    )
-    connect!(
-        plan,
-        component.filter.feedline_attachment,
-        feedline.center;
-        role=:idc_to_feedline_center,
     )
     labels = Dict(
         :cr_label => _d3_engineering_relation_label(plan, component.filter.readout_resonator.capacitor.id),
@@ -477,9 +525,9 @@ function build_d3_intrinsic_purcell_equivalent_circuit_plan(;
         :cr2_label => _d3_engineering_relation_label(plan, component.qubit.cr2.id),
         :lj1_label => _d3_engineering_relation_label(plan, component.qubit.lj1.id),
         :lj2_label => _d3_engineering_relation_label(plan, component.qubit.lj2.id),
-        :feedline_l_label_template => raw"$L_{{\Delta f,{index}}}$",
-        :feedline_c_half_label => raw"$C_{\Delta f}/2$",
-        :feedline_c_center_label => raw"$C_{\Delta f}$",
+        :feedline_regularizer_inductance_label => raw"$L_{\mathrm{sep}}$",
+        :feedline_regularizer_half_capacitance_label => raw"$C_{\mathrm{sep}}/2$",
+        :feedline_regularizer_center_capacitance_label => raw"$C_{\mathrm{sep}}$",
     )
     isnothing(component.c0r) ||
         (labels[:c0r_label] = _d3_engineering_relation_label(plan, component.c0r.id))
@@ -497,7 +545,7 @@ function build_d3_intrinsic_purcell_equivalent_circuit_plan(;
         filter_node_id=:filter,
         filter_label_placement=:bus_middle,
         filter_label_target=:filter_signal,
-        feedline_model=:two_pi,
+        feedline_model=:matched_port_regularizer_two_pi,
     )
     return (; plan=plan, graph=engineering_graph(plan), component=component, feedline=feedline)
 end
@@ -684,8 +732,9 @@ Build linewidth extraction L_A for the Equivalent family.
 
 The readout coordinate and every r-p off-diagonal term are absent. The
 filter-side diagonal contributions of Cp/Lp and Cn/Ln remain as two grounded
-parallel LC components, while the full three-branch IDC, finite feedline, and
-both matched external ports remain connected.
+parallel LC components, while the full three-branch IDC, two fixed matched-TL
+port-node regularizer sections, and both matched external ports remain
+connected.
 """
 function build_d3_linewidth_la_equivalent_circuit_plan(;
     id="d3-linewidth-la-equivalent-circuit-plan",
@@ -696,9 +745,6 @@ function build_d3_linewidth_la_equivalent_circuit_plan(;
     filter_inductance_h=1.46e-9,
     bridge_capacitance_f=8.0e-15,
     bridge_inductance_h=35.0e-9,
-    feedline_length_m=1.0e-3,
-    feedline_l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
-    feedline_c_per_m_f=D3_DEFAULT_FEEDLINE_C_PER_M_F,
     port_resistance_ohm=50.0,
 )
     plan = CircuitPlan(id)
@@ -734,18 +780,10 @@ function build_d3_linewidth_la_equivalent_circuit_plan(;
         c2g_label=raw"$C_{f_cG}^{\mathrm{IDC}}$",
         c12_label=raw"$C_{pf_c}^{\mathrm{IDC}}$",
     )
-    feedline = _d3_two_pi_feedline!(
+    feedline = _d3_matched_port_regularizer!(
         plan;
-        length_m=feedline_length_m,
-        l_per_m_h=feedline_l_per_m_h,
-        c_per_m_f=feedline_c_per_m_f,
+        center=feedline_attachment,
         port_resistance_ohm=port_resistance_ohm,
-    )
-    connect!(
-        plan,
-        feedline_attachment,
-        feedline.center;
-        role=:linewidth_la_idc_to_feedline_center,
     )
     component_id = :d3_linewidth_la_equivalent
     record_engineering_component!(
@@ -758,7 +796,16 @@ function build_d3_linewidth_la_equivalent_circuit_plan(;
             :internal_coupling_state => :off_diagonal_suppressed,
             :diagonal_loading => :retained,
             :external_coupling_state => :on,
-            :feedline_model => :two_pi,
+            :feedline_model => :matched_port_regularizer_two_pi,
+            :regularizer_series_inductance_h =>
+                D3_PORT_REGULARIZER_SERIES_INDUCTANCE_H,
+            :regularizer_section_capacitance_f =>
+                D3_PORT_REGULARIZER_SECTION_CAPACITANCE_F,
+            :regularizer_characteristic_impedance_ohm =>
+                D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM,
+            :regularizer_section_length_m =>
+                D3_PORT_REGULARIZER_SECTION_LENGTH_M,
+            :regularizer_physical_role => :numerical_port_node_regularization_only,
         ),
         pins=[:filter, :feedline_attachment],
     )
@@ -773,9 +820,9 @@ function build_d3_linewidth_la_equivalent_circuit_plan(;
             :cpg_label => _d3_engineering_relation_label(plan, feedline_capacitor.c1g.id),
             :cfcg_label => _d3_engineering_relation_label(plan, feedline_capacitor.c2g.id),
             :cpfc_label => _d3_engineering_relation_label(plan, feedline_capacitor.c12.id),
-            :feedline_l_label_template => raw"$L_{{\Delta f,{index}}}$",
-            :feedline_c_half_label => raw"$C_{\Delta f}/2$",
-            :feedline_c_center_label => raw"$C_{\Delta f}$",
+            :feedline_regularizer_inductance_label => raw"$L_{\mathrm{sep}}$",
+            :feedline_regularizer_half_capacitance_label => raw"$C_{\mathrm{sep}}/2$",
+            :feedline_regularizer_center_capacitance_label => raw"$C_{\mathrm{sep}}$",
         ),
         _d3_auxiliary_port_labels(plan),
     )
@@ -790,7 +837,16 @@ function build_d3_linewidth_la_equivalent_circuit_plan(;
             :extraction_id => :linewidth_la,
             :internal_coupling_state => :qrp_off,
             :external_coupling_state => :on,
-            :feedline_model => :two_pi,
+            :feedline_model => :matched_port_regularizer_two_pi,
+            :regularizer_series_inductance_h =>
+                D3_PORT_REGULARIZER_SERIES_INDUCTANCE_H,
+            :regularizer_section_capacitance_f =>
+                D3_PORT_REGULARIZER_SECTION_CAPACITANCE_F,
+            :regularizer_characteristic_impedance_ohm =>
+                D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM,
+            :regularizer_section_length_m =>
+                D3_PORT_REGULARIZER_SECTION_LENGTH_M,
+            :regularizer_physical_role => :numerical_port_node_regularization_only,
         ),
         terminals=[
             (id=:input_port, endpoint=feedline.input, side=:left, kind=:port, label=raw"$P_1$"),

@@ -1,0 +1,57 @@
+{
+  "schema_version": "d3-fixed-q2d-rlgc-input.v1",
+  "artifact_id": "d3-continuous-upper-ground-w3-s3-d3-h8-q2d-rlgc",
+  "topology_id": "continuous_upper_ground",
+  "geometry_um": {
+    "trace_width": 3.0,
+    "trace_gap": 3.0,
+    "inter_trace_ground_width": 3.0,
+    "flip_chip_gap_height": 8.0,
+    "upper_ground_clearance_width": 0.0,
+    "metal_thickness": 0.2
+  },
+  "single_line": {
+    "l_per_m_h": 4.3575290933454624e-7,
+    "c_per_m_f": 1.491527564537374e-10,
+    "source_cache_key": "fb5c12f4f66334adca5fcf91bdf25e9e21838d3e315bf17536b17ba50ff468c1",
+    "source_case_id": "single__w3000_s3000_h8000__b580ad6272",
+    "cross_section_sha256": "2332d9b8a17d714c785e2b59e7c3fafd416e7d75174da6bb7893e2af2ea8fd0c",
+    "capacitance_matrix_sha256": "867d180e2c7252ca409c295bcb42dce741a29f9d26f32091198710a1e1515a75",
+    "inductance_matrix_sha256": "d642e66499e299a5f5485733b9a8a11f7b46a7db4f36e6491de9b42e2200460f"
+  },
+  "coupled_pair": {
+    "l_matrix_per_m_h": [
+      [
+        4.3671399663877326e-7,
+        1.6193473670985894e-8
+      ],
+      [
+        1.6193473670985894e-8,
+        4.367005829380964e-7
+      ]
+    ],
+    "c_matrix_per_m_f": [
+      [
+        1.488725856649626e-10,
+        -9.051719790144461e-12
+      ],
+      [
+        -9.051719790144461e-12,
+        1.4886285191111777e-10
+      ]
+    ],
+    "source_cache_key": "c1f89c1b71c8abfb23fa78c41c37da9f30966eb6cafd6c38d4fe6b09141e7d73",
+    "source_case_id": "pair__w3000_s3000_d3000_h8000__e1454b21be",
+    "cross_section_sha256": "b73387853f67e189662134acca77629105a17cdfc403a453c87167a4624447f3",
+    "capacitance_matrix_sha256": "2bed9622b9a971e1cf3b8372a5d977cc77c45bacf16435e271467cb64892bfce",
+    "inductance_matrix_sha256": "e7822c51a64278255170549b42d47b35edad66385bee8f50c9881a7d521502cb"
+  },
+  "solver": {
+    "aedt_version": "2024.2",
+    "pyaedt_version": "0.26.2",
+    "adaptive_frequency_hz": 6000000000.0,
+    "runtime_bundle_sha256": "41a60d5ea1af00c28cb0ab17cf78fba925329249a2586e72b4cc9e0f64774261"
+  },
+  "loss_model": "lossless_R_equals_G_equals_zero",
+  "coupling_orientation": "same_direction"
+}

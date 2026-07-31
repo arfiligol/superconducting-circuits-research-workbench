@@ -1,5 +1,5 @@
 import pytest
-from app_backend.infrastructure.rewrite_catalog_repository import (
+from app_backend.infrastructure.catalog_seed_data import (
     LOCAL_SPACE_RESONATOR_DEFINITION_ID,
 )
 from app_backend.infrastructure.runtime import reset_runtime_state
