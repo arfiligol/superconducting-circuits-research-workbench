@@ -33,10 +33,6 @@ const D3_RESPONSE_EQUIVALENT_VARIABLE_ORDER = (
     :u_IDC,
 )
 
-const D3_SELECTED_Q2D_ARTIFACT_ID =
-    "d3-continuous-upper-ground-w3-s3-d3-h8-q2d-rlgc"
-const D3_SELECTED_Q2D_ARTIFACT_SHA256 =
-    "6c22cd3c2721214ac0d1afaaaf8b40b396435bb413638da5ae889b6973166825"
 const D3_SELECTED_Q2D_TOPOLOGY = :continuous_upper_ground
 const D3_SELECTED_IDC_MAPPING_ID =
     "d3-same-die-filter-feedline-idc-q3d-tensor-fit-v1"
@@ -46,26 +42,6 @@ const D3_SELECTED_IDC_SOURCE_SHA256 =
     "6a54fec0669c01dacf433f3cc639192e5e5202ae232aa5b1e786ac7147b172e3"
 const D3_SELECTED_IDC_SEMANTIC_SHA256 =
     "dba6ffcfc442860151c4cad5b27bf6259a5ba1ca532637b2ce0c0c741d97d152"
-const D3_SELECTED_Q2D_GEOMETRY_UM = (
-    w=3.0,
-    s=3.0,
-    d=3.0,
-    h=8.0,
-    upper_ground_clearance=0.0,
-)
-const D3_SELECTED_SINGLE_LINE = (
-    l_per_m_h=4.3575290933454624e-7,
-    c_per_m_f=1.491527564537374e-10,
-)
-const D3_SELECTED_PAIR_L_PER_M_H = [
-    4.3671399663877326e-7 1.6193473670985894e-8
-    1.6193473670985894e-8 4.367005829380964e-7
-]
-const D3_SELECTED_PAIR_C_PER_M_F = [
-    1.488725856649626e-10 -9.051719790144461e-12
-    -9.051719790144461e-12 1.4886285191111777e-10
-]
-
 struct D3Stage2ResonatorMapping{L,S,C}
     fixed_line_input::L
     settings::S
@@ -167,7 +143,7 @@ function _d3_stage_require_physical_idc_mapping(idc_mapping::D3IDCMapping)
     )
     d3_idc_mapping_semantic_sha256(idc_mapping) ==
         D3_SELECTED_IDC_SEMANTIC_SHA256 || error(
-        "D3 physical IDC effective mapping contents do not match the selected v1 artifact.",
+        "D3 physical IDC mapping contents do not match the selected v1 artifact.",
     )
     return idc_mapping
 end
@@ -332,7 +308,7 @@ function _d3_stage2_validate_resonator_mapping(
         SuperconductingCircuitsCore.JSON3.write(expected),
     )))
     resonator_mapping.mapping_sha256 == expected_sha256 || error(
-        "D3 Stage-2 resonator mapping SHA-256 disagrees with its effective contract.",
+        "D3 Stage-2 resonator mapping SHA-256 disagrees with its declared contract.",
     )
     return resonator_mapping
 end
@@ -926,6 +902,7 @@ function d3_stage2_hb_trace(stage, frequency_hz; pump_frequency_hz)
         ]
         for index in eachindex(frequencies)
     ]
+    model_identity = d3_exact_n_compiled_model(stage.built).provenance
     return (
         frequency_hz=frequencies,
         scattering=scattering,
@@ -935,6 +912,7 @@ function d3_stage2_hb_trace(stage, frequency_hz; pump_frequency_hz)
         pump_state=:off,
         pump_frequency_hz=pump,
         source_current_a=0.0,
+        model_identity=model_identity,
         compiled=compiled,
     )
 end
@@ -1005,11 +983,9 @@ function _d3_selected_q2d_line_input(fixed)
     artifact_id = strip(String(fixed.q2d_artifact_id))
     artifact_sha256 = lowercase(strip(String(fixed.q2d_artifact_sha256)))
     topology_id = Symbol(fixed.q2d_topology_id)
-    artifact_id == D3_SELECTED_Q2D_ARTIFACT_ID || error(
-        "D3 fixed line input does not use the selected continuous-ground Q2D artifact.",
-    )
-    artifact_sha256 == D3_SELECTED_Q2D_ARTIFACT_SHA256 || error(
-        "D3 fixed line input wrapper SHA-256 does not match the selected Q2D artifact.",
+    isempty(artifact_id) && error("D3 fixed line input Q2D artifact id must not be empty.")
+    occursin(r"^[0-9a-f]{64}$", artifact_sha256) || error(
+        "D3 fixed line input Q2D artifact SHA-256 must be lowercase hexadecimal.",
     )
     topology_id == D3_SELECTED_Q2D_TOPOLOGY || error(
         "D3 fixed line input must use continuous upper ground.",
@@ -1018,58 +994,28 @@ function _d3_selected_q2d_line_input(fixed)
     geometry = fixed.q2d_geometry_um
     _d3_stage_require_exact_fields(
         geometry,
-        propertynames(D3_SELECTED_Q2D_GEOMETRY_UM),
+        (:w, :s, :d, :h, :upper_ground_clearance, :metal_thickness),
         "D3 Q2D geometry",
     )
     all(
-        name -> Float64(getproperty(geometry, name)) ==
-            getproperty(D3_SELECTED_Q2D_GEOMETRY_UM, name),
-        propertynames(D3_SELECTED_Q2D_GEOMETRY_UM),
-    ) || error(
-        "D3 Q2D geometry must equal the selected w=s=d=3 um, h=8 um continuous-ground point.",
+        name -> begin
+            value = Float64(getproperty(geometry, name))
+            isfinite(value) && value > 0
+        end,
+        (:w, :s, :d, :h, :metal_thickness),
+    ) || error("D3 Q2D physical geometry values must be finite and positive.")
+    Float64(geometry.upper_ground_clearance) == 0.0 || error(
+        "D3 continuous-upper-ground input requires zero upper-ground clearance.",
     )
     lines.coupling_orientation == :same_direction || error(
         "D3 selected Q2D input requires same-direction MTL coupling.",
     )
-    for (actual, expected, label) in (
-        (
-            lines.readout_l_per_m_h,
-            D3_SELECTED_SINGLE_LINE.l_per_m_h,
-            "readout L'",
-        ),
-        (
-            lines.readout_c_per_m_f,
-            D3_SELECTED_SINGLE_LINE.c_per_m_f,
-            "readout C'",
-        ),
-        (
-            lines.filter_l_per_m_h,
-            D3_SELECTED_SINGLE_LINE.l_per_m_h,
-            "filter L'",
-        ),
-        (
-            lines.filter_c_per_m_f,
-            D3_SELECTED_SINGLE_LINE.c_per_m_f,
-            "filter C'",
-        ),
-    )
-        actual == expected || error(
-            "D3 selected Q2D $(label) does not match the accepted artifact.",
-        )
-    end
-    lines.l_matrix_per_m_h == D3_SELECTED_PAIR_L_PER_M_H || error(
-        "D3 selected Q2D MTL L' matrix does not match the accepted artifact.",
-    )
-    lines.c_matrix_per_m_f == D3_SELECTED_PAIR_C_PER_M_F || error(
-        "D3 selected Q2D MTL C' matrix does not match the accepted artifact.",
-    )
-
     identity = (
         contract_id="d3-selected-continuous-ground-fixed-line.v1",
         q2d_artifact_id=artifact_id,
         q2d_artifact_sha256=artifact_sha256,
         q2d_topology_id=String(topology_id),
-        q2d_geometry_um=D3_SELECTED_Q2D_GEOMETRY_UM,
+        q2d_geometry_um=geometry,
         section_length_m=lines.section_length_m,
         readout_l_per_m_h=lines.readout_l_per_m_h,
         readout_c_per_m_f=lines.readout_c_per_m_f,
@@ -1094,7 +1040,7 @@ function _d3_selected_q2d_line_input(fixed)
             q2d_artifact_id=artifact_id,
             q2d_artifact_sha256=artifact_sha256,
             q2d_topology_id=topology_id,
-            q2d_geometry_um=D3_SELECTED_Q2D_GEOMETRY_UM,
+            q2d_geometry_um=geometry,
             fixed_line_input_sha256=fixed_line_input_sha256,
             fixed_line_input_identity=identity,
         ),
@@ -1365,6 +1311,12 @@ function d3_stage2_candidate_metrics(
         cqed_handoff=cqed_handoff,
     )
     linewidth_lc = identity_continuation.linewidth_lc
+    quantity_views = d3_stage2_quantity_views(
+        model,
+        cqed_handoff,
+        matrix_metrics,
+        identity_continuation,
+    )
     metrics = merge(
         matrix_metrics,
         (
@@ -1398,13 +1350,14 @@ function d3_stage2_candidate_metrics(
         ),
     )
     return (
-        contract_id="d3-stage2-candidate-metrics.v3",
+        contract_id="d3-stage2-candidate-metrics.v4",
         stage_id=stage.stage_id,
         model_family=stage.model_family,
         stage=stage,
         model=model,
         cqed_handoff=cqed_handoff,
         matrix_metrics=matrix_metrics,
+        quantity_views=quantity_views,
         extractions=(
             effective_rp=effective_rp,
             notch=notch,
@@ -1484,13 +1437,14 @@ function d3_stage2_candidate_foundation(
         linewidth_frequency_band_hz,
     )
     return (
-        contract_id="d3-stage2-candidate-foundation.v4",
+        contract_id="d3-stage2-candidate-foundation.v5",
         stage_id=stage.stage_id,
         model_family=stage.model_family,
         stage=stage,
         model=model,
         cqed_handoff=cqed_handoff,
         matrix_metrics=evaluated.matrix_metrics,
+        quantity_views=evaluated.quantity_views,
         response_closure=response_closure,
         extractions=(
             effective_rp=evaluated.extractions.effective_rp,
@@ -1513,6 +1467,147 @@ function d3_stage2_candidate_foundation(candidate, fixed, idc_mapping; kwargs...
     error(
         "D3 Stage-2 foundation requires a provenance-bearing CPW/MTL resonator " *
         "mapping; legacy free-LC receipts are ineligible.",
+    )
+end
+
+"""Return the JSON-ready three-frequency-view payload for one foundation.
+
+The payload is derived from `foundation.quantity_views`; callers must not
+rebuild a second circuit from a summary. The Stage-2 objective receipt binds
+the revision-7 authority and model identity. `source_summary_sha256` binds the
+payload to the summary that selected this foundation as the winning candidate.
+"""
+function d3_stage2_quantity_review_payload(
+    foundation,
+    objective,
+    source_summary_sha256,
+)
+    hasproperty(foundation, :contract_id) &&
+        foundation.contract_id == "d3-stage2-candidate-foundation.v5" || error(
+        "D3 quantity review requires the current Stage-2 candidate foundation.",
+    )
+    summary_sha256 = lowercase(strip(String(source_summary_sha256)))
+    occursin(r"^[0-9a-f]{64}$", summary_sha256) || error(
+        "D3 quantity review source_summary_sha256 must be lowercase SHA-256.",
+    )
+    views = foundation.quantity_views
+    anchored = views.anchored_oscillator_representation
+    normal_spectrum = views.fully_hybridized_closed_normal_mode_spectrum
+    open_poles = views.matched_open_port_poles
+    source_identity = foundation.cqed_handoff.source_model_identity
+    hasproperty(objective, :contract_id) &&
+        objective.contract_id == "d3-stage2-stage3-full-qrp-objective.v2" || error(
+        "D3 quantity review requires the revision-7 Stage-2 objective receipt.",
+    )
+    hasproperty(objective, :stage_id) && objective.stage_id == :stage2_equivalent ||
+        error("D3 quantity review requires a Stage-2 objective receipt.")
+    hasproperty(objective, :model_identity) &&
+        objective.model_identity == source_identity || error(
+        "D3 quantity review foundation and objective model identities disagree.",
+    )
+    expected_authority = (
+        approval_status=:human_approved,
+        target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
+        target_revision=7,
+        target_contract_sha256=
+            "2ec4014c5bd3ba5824c15d71c3ad1e03b2a0d1f7444a35dcd31b0a4fe99b7bf9",
+        notch_authority=:rp_on,
+        effective_diagonal_frequency_extraction=
+            :q_feedline_downfolded_rp_complex_operator,
+        effective_exchange_extraction=
+            :q_feedline_downfolded_rp_complex_midpoint_residue,
+        linewidth_pole_scope=:qrp_three,
+        primary_linewidth_extraction=:L_C,
+    )
+    hasproperty(objective, :authority) && objective.authority == expected_authority ||
+        error(
+            "D3 quantity review objective authority does not equal the Human-approved revision-7 contract.",
+        )
+    complex_record(value) = Dict(
+        "real" => Float64(real(value)),
+        "imag" => Float64(imag(value)),
+    )
+    named_values(values) = Dict(
+        String(name) => Float64(value)
+        for (name, value) in pairs(values)
+    )
+    assigned_poles = hasproperty(open_poles, :qrp_identity_assigned) ? Dict(
+        String(name) => Dict(
+            "display_index" => Int(value.display_index),
+            "frequency_hz" => complex_record(value.frequency_hz),
+            "linewidth_hz" => Float64(value.linewidth_hz),
+        )
+        for (name, value) in pairs(open_poles.qrp_identity_assigned)
+    ) : Dict{String,Any}()
+    raw_coordinates = views.coordinate_foundation.raw_physical_node_flux
+    reduced_coordinates =
+        views.coordinate_foundation.reduced_anchored_flux_charge
+    return Dict(
+        "schema_version" => "d3-stage2-linear-quantity-review.v3",
+        "source_summary_sha256" => summary_sha256,
+        "objective_contract_id" => String(objective.contract_id),
+        "objective_authority" => Dict(
+            String(name) => value isa Symbol ? String(value) : value
+            for (name, value) in pairs(objective.authority)
+        ),
+        "coordinate_foundation" => Dict(
+            "raw_physical_node_flux" => Dict(
+                "basis" => String(raw_coordinates.basis),
+                "coordinate_order" => raw_coordinates.coordinate_order,
+            ),
+            "reduced_anchored_flux_charge" => Dict(
+                "basis" => String(reduced_coordinates.basis),
+                "coordinate_order" => string.(reduced_coordinates.coordinate_order),
+                "node_to_anchored_transform" =>
+                    reduced_coordinates.node_to_anchored_transform,
+                "common_charge_reduction" =>
+                    reduced_coordinates.common_charge_reduction,
+            ),
+        ),
+        "anchored_oscillator_representation" => Dict(
+            "coupling_state" => String(anchored.coupling_state),
+            "boundary" => String(anchored.boundary),
+            "coordinate_basis" => String(anchored.coordinate_basis),
+            "representation" => String(anchored.representation),
+            "coordinate_order" => string.(anchored.coordinate_order),
+            "coordinate_rotation" => String(anchored.coordinate_rotation),
+            "normalization" => String(anchored.normalization),
+            "impedance_ohm" => named_values(anchored.impedance_ohm),
+            "h_diagonal_frequency_hz" =>
+                named_values(anchored.h_diagonal_frequency_hz),
+            "h_number_conserving_coupling_hz" =>
+                named_values(anchored.h_number_conserving_coupling_hz),
+            "pairing_diagonal_hz" => named_values(anchored.pairing_diagonal_hz),
+            "pairing_coupling_hz" => named_values(anchored.pairing_coupling_hz),
+        ),
+        "fully_hybridized_closed_normal_mode_spectrum" => Dict(
+            "spectrum" => String(normal_spectrum.spectrum),
+            "coupling_state" => String(normal_spectrum.coupling_state),
+            "boundary" => String(normal_spectrum.boundary),
+            "construction" => String(normal_spectrum.construction),
+            "display_order" => String(normal_spectrum.display_order),
+            "identity_assignment" => String(normal_spectrum.identity_assignment),
+            "frequencies_hz" => Float64.(normal_spectrum.frequencies_hz),
+            "structural_free_mode_count" =>
+                normal_spectrum.structural_free_mode_count,
+        ),
+        "matched_open_port_poles" => Dict(
+            "response_class" => String(open_poles.response_class),
+            "coupling_state" => String(open_poles.coupling_state),
+            "external_port_state" => String(open_poles.external_port_state),
+            "basis_claim" => String(open_poles.basis_claim),
+            "display_order" => String(open_poles.display_order),
+            "identity_assignment" => String(open_poles.identity_assignment),
+            "frequencies_hz" => complex_record.(open_poles.frequencies_hz),
+            "linewidths_hz" => Float64.(open_poles.linewidths_hz),
+            "passivity_roundoff_tolerance_hz" =>
+                Float64(open_poles.passivity_roundoff_tolerance_hz),
+            "qrp_identity_assigned" => assigned_poles,
+        ),
+        "model_identity" => Dict(
+            String(name) => String(value)
+            for (name, value) in pairs(source_identity)
+        ),
     )
 end
 

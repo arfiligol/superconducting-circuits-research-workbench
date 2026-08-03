@@ -232,7 +232,27 @@ open(csv_path, "w") do io
                         cqed.anchored_bare_hamiltonian.number_conserving_matrix_rad_s,
                     ),
                 "pairing_matrix_rad_s" =>
-                    _matrix_rows(cqed.exact.pairing_matrix_rad_s),
+                    _matrix_rows(
+                        cqed.anchored_bare_hamiltonian.pairing_matrix_rad_s,
+                    ),
+                "anchored_oscillator_representation" => Dict(
+                    "coordinate_basis" => String(
+                        cqed.anchored_bare_hamiltonian.coordinate_basis,
+                    ),
+                    "representation" => String(
+                        cqed.anchored_bare_hamiltonian.representation,
+                    ),
+                    "coordinate_rotation" => String(
+                        cqed.anchored_bare_hamiltonian.coordinate_rotation,
+                    ),
+                    "normalization" => String(
+                        cqed.anchored_bare_hamiltonian.normalization,
+                    ),
+                    "impedance_ohm" =>
+                        collect(cqed.oscillator_normalization.impedance_ohm),
+                ),
+                "fully_hybridized_closed_normal_mode_frequencies_hz" =>
+                    collect(cqed.normal_modes.frequencies_hz),
                 "exact_doubled_matrix_rad_s" =>
                     _matrix_rows(cqed.exact.doubled_matrix_rad_s),
                 "port_selector" => _matrix_rows(model.selector),
@@ -265,14 +285,16 @@ open(csv_path, "w") do io
                     "operand_authority" =>
                         String(matrix_metrics.operand_authority),
                     "metrics" => Dict(
-                        "fr_circuit_h_rr_pre_downfold_report_only_hz" =>
-                            matrix_metrics.fr_circuit_h_rr_pre_downfold_report_only_hz,
-                        "fp_circuit_h_pp_pre_downfold_report_only_hz" =>
-                            matrix_metrics.fp_circuit_h_pp_pre_downfold_report_only_hz,
-                        "J_circuit_h_rp_pre_downfold_report_only_hz" =>
-                            matrix_metrics.J_circuit_h_rp_pre_downfold_report_only_hz,
-                        "fq_circuit_h_qq_pre_downfold_report_only_hz" =>
-                            matrix_metrics.fq_circuit_h_qq_pre_downfold_report_only_hz,
+                        "fq_anchored_bare_qrp_on_h_diagonal_hz" =>
+                            matrix_metrics.fq_anchored_bare_qrp_on_h_diagonal_hz,
+                        "fr_anchored_bare_qrp_on_h_diagonal_hz" =>
+                            matrix_metrics.fr_anchored_bare_qrp_on_h_diagonal_hz,
+                        "fp_anchored_bare_qrp_on_h_diagonal_hz" =>
+                            matrix_metrics.fp_anchored_bare_qrp_on_h_diagonal_hz,
+                        "J_rp_anchored_bare_qrp_on_h_number_conserving_hz" =>
+                            matrix_metrics.J_rp_anchored_bare_qrp_on_h_number_conserving_hz,
+                        "Delta_rp_anchored_bare_qrp_on_pairing_report_only_hz" =>
+                            matrix_metrics.Delta_rp_anchored_bare_qrp_on_pairing_report_only_hz,
                     ),
                 ),
                 "cqed_hashes" => Dict(

@@ -316,7 +316,10 @@ def _validate_table_block(
 
 def _build_figure(manifest: Mapping[str, Any]) -> tuple[go.Figure, int]:
     media, history, *tables = manifest["blocks"]
-    pixel_heights = [900, 470] + [105 + 42 * len(table["rows"]) for table in tables]
+    pixel_heights = [900, 470] + [
+        105 + (68 if len(table["columns"]) > 4 else 42) * len(table["rows"])
+        for table in tables
+    ]
     report_height = 190 + sum(pixel_heights) + 38 * (len(pixel_heights) - 1)
     figure = make_subplots(
         rows=6,

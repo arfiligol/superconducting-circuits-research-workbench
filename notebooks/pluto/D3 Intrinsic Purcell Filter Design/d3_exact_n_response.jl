@@ -399,6 +399,106 @@ function _d3_exact_n_neutral_qubit_reduction(
     )
 end
 
+"""Return coordinate-, representation-, and response-explicit linear quantities.
+
+The reduced anchored coordinates are the physical coordinates after the
+topology transform and neutral common-charge reduction.  Coordinate-wise
+impedance normalization changes their canonical representation but does not
+rotate them into another coordinate basis.  The closed normal-mode result is
+exported only as a frequency spectrum; no reusable eigenvector transformation
+or third Hamiltonian basis is claimed.  Matched-open poles belong to the port
+response and are sorted only for display.
+"""
+function d3_linear_quantity_views(
+    model;
+    cqed_handoff=d3_numerical_cqed_handoff(model),
+    matrix_metrics=d3_stage2_matrix_metrics(
+        model;
+        cqed_handoff=cqed_handoff,
+    ),
+    matched_open_response=nothing,
+)
+    _d3_exact_n_require_handoff_source(
+        model,
+        cqed_handoff,
+        "D3 linear basis quantity views",
+    )
+    anchored = matrix_metrics.anchored_oscillator_representation
+    anchored.coordinate_basis ==
+        :reduced_physically_anchored_flux_charge_coordinates || error(
+        "D3 matrix metrics do not declare the reduced anchored coordinate basis.",
+    )
+    anchored.representation == :anchored_bare_coordinate_oscillator || error(
+        "D3 matrix metrics do not declare the anchored oscillator representation.",
+    )
+    open_poles = isnothing(matched_open_response) ?
+        matched_open_poles(
+            model.capacitance,
+            model.inverse_inductance,
+            model.selector,
+            model.reference_impedance_ohm,
+    ) : matched_open_response
+    open_frequency_hz = ComplexF64.(open_poles.frequencies_hz)
+    isempty(open_frequency_hz) && error(
+        "D3 matched-open response returned no positive-frequency poles.",
+    )
+    display_order = sortperm(
+        eachindex(open_frequency_hz);
+        by=index -> (real(open_frequency_hz[index]), imag(open_frequency_hz[index])),
+    )
+    sorted_open_frequency_hz = open_frequency_hz[display_order]
+    sorted_open_linewidth_hz = Float64.(
+        max.(-2 .* imag.(sorted_open_frequency_hz), 0.0),
+    )
+    passivity_roundoff_tolerance_hz =
+        256.0 * (2 * length(model.coordinate_order)) * eps(Float64) *
+        max(maximum(abs, sorted_open_frequency_hz), floatmin(Float64))
+    return (
+        contract_id="d3-linear-explicit-quantity-views.v2",
+        coordinate_foundation=(
+            raw_physical_node_flux=(
+                basis=:raw_physical_node_flux_coordinates,
+                coordinate_order=hasproperty(model, :physical_node_order) ?
+                    copy(model.physical_node_order) : nothing,
+            ),
+            reduced_anchored_flux_charge=(
+                basis=:reduced_physically_anchored_flux_charge_coordinates,
+                coordinate_order=copy(model.coordinate_order),
+                node_to_anchored_transform=
+                    hasproperty(model, :node_to_local_transform) ?
+                    Matrix{Float64}(model.node_to_local_transform) : nothing,
+                common_charge_reduction=
+                    hasproperty(model, :common_charge_reduction) ?
+                    model.common_charge_reduction : nothing,
+            ),
+        ),
+        anchored_oscillator_representation=anchored,
+        fully_hybridized_closed_normal_mode_spectrum=(
+            spectrum=:fully_hybridized_closed_normal_modes,
+            coupling_state=:qrp_on,
+            boundary=:closed,
+            construction=:generalized_eigenproblem_K_u_equals_omega2_C_u,
+            identity_assignment=:none,
+            display_order=:ascending_frequency_only,
+            frequencies_hz=copy(cqed_handoff.normal_modes.frequencies_hz),
+            structural_free_mode_count=
+                cqed_handoff.normal_modes.structural_free_mode_count,
+        ),
+        matched_open_port_poles=(
+            response_class=:matched_open_port_response,
+            coupling_state=:qrp_on,
+            external_port_state=:matched_open,
+            basis_claim=:none,
+            identity_assignment=:none,
+            display_order=:ascending_real_frequency_only,
+            display_order_source_indices=display_order,
+            frequencies_hz=sorted_open_frequency_hz,
+            linewidths_hz=sorted_open_linewidth_hz,
+            passivity_roundoff_tolerance_hz=passivity_roundoff_tolerance_hz,
+        ),
+    )
+end
+
 """
     d3_exact_n_compiled_model(built)
 
@@ -591,9 +691,25 @@ end
 
 """Carry one compiled physical model through the numerical cQED derivation.
 
-The returned matrices preserve `model.coordinate_order`. The anchored bare
-Hamiltonian retains both its number-conserving `h` block and its pairing block;
-this handoff does not construct a response by dropping either sector.
+The input `C` and `K` act on the reduced physically anchored flux-charge
+coordinate order declared by `model.coordinate_order`.  Those coordinates are
+the result of the topology-declared node transform and neutral common-charge
+reduction; this function does not define another coordinate basis.  Instead it
+applies the coordinate-wise canonical
+normalization
+
+`Z_i = sqrt((C^-1)[i,i] / K[i,i])`
+
+and returns an *anchored bare-coordinate oscillator representation*.  Here
+`bare` means subsystem-anchored coordinate identity, not coupling-off or an
+isolated subsystem.  Its `h` and `Delta` blocks therefore share the same
+coordinate order, transformation, and normalization.  The Exact doubled
+matrix is a lossless rewriting of those two blocks, not a separate fit or a
+normal-mode model.
+
+Fully hybridized closed normal-mode frequencies are reported separately from
+the generalized eigenproblem `K*u = omega^2*C*u`.  They must not be confused
+with anchored diagonal entries or with matched-open poles.
 """
 function d3_numerical_cqed_handoff(model)
     capacitance = Matrix{Float64}(model.capacitance)
@@ -781,7 +897,7 @@ function d3_numerical_cqed_handoff(model)
     exact_doubled_residual_hz = exact_doubled_hz .- exact_flux_hz
     matrix_hash = _d3_exact_n_matrix_sha256
     return (
-        contract_id="d3-numerical-lagrangian-to-cqed-handoff.v2",
+        contract_id="d3-numerical-lagrangian-to-cqed-handoff.v3",
         source_model_identity=source_model_identity,
         coordinate_order=copy(model.coordinate_order),
         lagrangian=(
@@ -800,19 +916,43 @@ function d3_numerical_cqed_handoff(model)
             inverse_inductance_h_inv=stiffness,
         ),
         oscillator_normalization=(
+            coordinate_basis=
+                :reduced_physically_anchored_flux_charge_coordinates,
+            representation=:anchored_bare_coordinate_oscillator,
+            coordinate_order=copy(model.coordinate_order),
+            coordinate_rotation=:none,
+            normalization=
+                :Z_i_equals_sqrt_C_inverse_ii_over_K_ii,
             impedance_ohm=impedance_ohm,
             charge_block_rad_s=charge_block,
             flux_block_rad_s=flux_block,
         ),
         anchored_bare_hamiltonian=(
+            coordinate_basis=
+                :reduced_physically_anchored_flux_charge_coordinates,
+            representation=:anchored_bare_coordinate_oscillator,
+            coordinate_order=copy(model.coordinate_order),
+            coordinate_rotation=:none,
+            normalization=
+                :Z_i_equals_sqrt_C_inverse_ii_over_K_ii,
             number_conserving_matrix_rad_s=number_conserving,
+            pairing_matrix_rad_s=pairing,
         ),
         exact=(
-            pairing_matrix_rad_s=pairing,
+            representation=:exact_doubled_anchored_oscillator,
+            coordinate_basis=
+                :reduced_physically_anchored_flux_charge_coordinates,
             doubled_matrix_rad_s=doubled,
-            flux_frequencies_hz=exact_flux_hz,
             doubled_frequencies_hz=exact_doubled_hz,
             doubled_free_eigenvalues_hz=doubled_free_eigenvalues_hz,
+            structural_free_mode_count=structural_free_mode_count,
+        ),
+        normal_modes=(
+            spectrum=:fully_hybridized_closed_normal_modes,
+            construction=:generalized_eigenproblem_K_u_equals_omega2_C_u,
+            identity_assignment=:none,
+            display_order=:ascending_frequency_only,
+            frequencies_hz=exact_flux_hz,
             structural_free_mode_count=structural_free_mode_count,
         ),
         port_response=(
@@ -898,12 +1038,15 @@ function d3_numerical_cqed_handoff(model)
     )
 end
 
-"""Extract Stage-2 matrix diagnostics from the coupling-on number-conserving block.
+"""Extract Stage-2 anchored-bare oscillator quantities from `h` and `Delta`.
 
-The complete Equivalent CircuitPlan owns C, K, and the q/r/p coordinate
-couplings. The diagonal values are pre-downfold report-only diagnostics; the
-q+feedline-downfolded effective complex roots own the Stage-2 frequency
-residuals.
+The reported `h` and `Delta` entries use the physically anchored
+bare-coordinate oscillator basis and its declared diagonal-impedance
+normalization.  Because this normalization scales each reduced anchored
+coordinate independently and performs no rotation, `h_qq`, `h_rr`, and
+`h_pp` are the anchored-bare coordinate-oscillator frequencies.  `h_rp` is
+the number-conserving exchange coefficient in the same representation;
+`Delta_rp` is reported separately for the exact non-RWA model.
 """
 function d3_stage2_matrix_metrics(
     model;
@@ -924,6 +1067,7 @@ function d3_stage2_matrix_metrics(
     all(haskey(coordinate_index, coordinate) for coordinate in (:q, :r, :p)) ||
         error("D3 Stage-2 matrix extraction requires q, r, and p coordinates.")
     h = cqed_handoff.anchored_bare_hamiltonian.number_conserving_matrix_rad_s
+    pairing = cqed_handoff.anchored_bare_hamiltonian.pairing_matrix_rad_s
     q = coordinate_index[:q]
     r = coordinate_index[:r]
     p = coordinate_index[:p]
@@ -935,16 +1079,134 @@ function d3_stage2_matrix_metrics(
         capacitance_sha256=provenance.capacitance_sha256,
         inverse_inductance_sha256=provenance.inverse_inductance_sha256,
         selector_sha256=provenance.selector_sha256,
+        anchored_oscillator_representation=(
+            coupling_state=:qrp_on,
+            boundary=:closed_conservative_block,
+            coordinate_basis=
+                :reduced_physically_anchored_flux_charge_coordinates,
+            representation=:anchored_bare_coordinate_oscillator,
+            coordinate_order=copy(model.coordinate_order),
+            coordinate_rotation=:none,
+            normalization=
+                :Z_i_equals_sqrt_C_inverse_ii_over_K_ii,
+            impedance_ohm=(
+                q=cqed_handoff.oscillator_normalization.impedance_ohm[q],
+                r=cqed_handoff.oscillator_normalization.impedance_ohm[r],
+                p=cqed_handoff.oscillator_normalization.impedance_ohm[p],
+            ),
+            h_diagonal_frequency_hz=(
+                q=h[q, q] / (2π),
+                r=h[r, r] / (2π),
+                p=h[p, p] / (2π),
+            ),
+            h_number_conserving_coupling_hz=(
+                qr=h[q, r] / (2π),
+                qp=h[q, p] / (2π),
+                rp=h[r, p] / (2π),
+            ),
+            pairing_diagonal_hz=(
+                q=pairing[q, q] / (2π),
+                r=pairing[r, r] / (2π),
+                p=pairing[p, p] / (2π),
+            ),
+            pairing_coupling_hz=(
+                qr=pairing[q, r] / (2π),
+                qp=pairing[q, p] / (2π),
+                rp=pairing[r, p] / (2π),
+            ),
+        ),
+        fq_anchored_bare_qrp_on_h_diagonal_hz=h[q, q] / (2π),
+        fr_anchored_bare_qrp_on_h_diagonal_hz=h[r, r] / (2π),
+        fp_anchored_bare_qrp_on_h_diagonal_hz=h[p, p] / (2π),
+        J_rp_anchored_bare_qrp_on_h_number_conserving_hz=
+            abs(h[r, p]) / (2π),
+        Delta_rp_anchored_bare_qrp_on_pairing_report_only_hz=
+            pairing[r, p] / (2π),
+        fq_circuit_h_qq_pre_downfold_report_only_hz=h[q, q] / (2π),
         fr_circuit_h_rr_pre_downfold_report_only_hz=h[r, r] / (2π),
         fp_circuit_h_pp_pre_downfold_report_only_hz=h[p, p] / (2π),
         J_circuit_h_rp_pre_downfold_report_only_hz=abs(h[r, p]) / (2π),
-        fq_circuit_h_qq_pre_downfold_report_only_hz=h[q, q] / (2π),
-        operand_authority=:coupling_on_anchored_bare_number_conserving_block,
+        operand_authority=
+            :coupling_on_anchored_bare_coordinate_oscillator_representation,
         coordinate_order=copy(model.coordinate_order),
         number_conserving_sha256=
             cqed_handoff.hashes.number_conserving_sha256,
         pairing_sha256=cqed_handoff.hashes.pairing_sha256,
         exact_doubled_sha256=cqed_handoff.hashes.doubled_sha256,
+    )
+end
+
+"""
+    d3_stage2_quantity_views(
+        model,
+        cqed_handoff,
+        matrix_metrics,
+        identity_continuation,
+    )
+
+Return the explicitly separated D3 quantity views used by Human review:
+
+1. raw physical node fluxes and the reduced anchored flux-charge coordinates;
+2. the impedance-normalized oscillator representation of those same anchored
+   coordinates, including `Z`, `h`, and `Delta`;
+3. fully hybridized closed normal-mode frequencies;
+4. matched-open response poles.  The poles are not another Hamiltonian basis;
+   q/r/p labels come only from the stored-energy identity assignment.
+"""
+function d3_stage2_quantity_views(
+    model,
+    cqed_handoff,
+    matrix_metrics,
+    identity_continuation,
+)
+    _d3_exact_n_require_handoff_source(
+        model,
+        cqed_handoff,
+        "D3 Stage-2 basis quantity views",
+    )
+    linear_views = d3_linear_quantity_views(
+        model;
+        cqed_handoff=cqed_handoff,
+        matrix_metrics=matrix_metrics,
+        matched_open_response=identity_continuation.positive_poles,
+    )
+    assigned_indices = identity_continuation.assignment.pole_indices
+    assigned_poles = identity_continuation.positive_poles
+    assigned_record(index) = begin
+        display_index = findfirst(
+            ==(index),
+            linear_views.matched_open_port_poles.display_order_source_indices,
+        )
+        isnothing(display_index) && error(
+            "D3 matched-open identity assignment is absent from the reported pole order.",
+        )
+        (
+            display_index=display_index,
+            frequency_hz=assigned_poles.frequencies_hz[index],
+            linewidth_hz=assigned_poles.linewidths_hz[index],
+        )
+    end
+    identity_assigned = (
+        q=assigned_record(assigned_indices.q),
+        r=assigned_record(assigned_indices.r),
+        p=assigned_record(assigned_indices.p),
+    )
+
+    return (
+        contract_id="d3-stage2-explicit-quantity-views.v2",
+        coordinate_foundation=linear_views.coordinate_foundation,
+        anchored_oscillator_representation=
+            linear_views.anchored_oscillator_representation,
+        fully_hybridized_closed_normal_mode_spectrum=
+            linear_views.fully_hybridized_closed_normal_mode_spectrum,
+        matched_open_port_poles=merge(
+            linear_views.matched_open_port_poles,
+            (
+                identity_assignment=
+                    identity_continuation.provenance.identity_rule,
+                qrp_identity_assigned=identity_assigned,
+            ),
+        ),
     )
 end
 
@@ -1316,10 +1578,13 @@ end
         gate_policy,
     )
 
-Evaluate the exact coupling-on matched-open `R=(r,p)` dynamic operator after
-eliminating exactly `E=(q,f1,fc,f2)`. The two diagonal complex roots and the
-complex-midpoint residue-normalized exchange are one inseparable Stage-2
-authority. Raw number-conserving `h` entries are not used by this operator.
+Evaluate the exact coupling-on matched-open dynamic operator on the retained
+physically anchored `R=(r,p)` coordinates after Schur-downfolding exactly
+`E=(q,f1,fc,f2)`.  The two diagonal complex roots and the complex-midpoint
+residue-normalized exchange are one inseparable Stage-2 authority.  This is
+not a normal-mode basis and it is not the raw anchored `h` block: the basis is
+anchored `r/p`, while the named operation is exact frequency-dependent
+`q+feedline` downfolding.
 """
 function d3_q_feedline_downfolded_rp_metrics(
     model;

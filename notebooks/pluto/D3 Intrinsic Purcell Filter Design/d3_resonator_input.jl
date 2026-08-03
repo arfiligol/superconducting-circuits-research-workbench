@@ -1,5 +1,6 @@
-# D3 fixed CPW/MTL input. This loader binds the continuous-upper-ground
-# cross-section selected by the Human to its public Q2D matrices.
+# D3 fixed CPW/MTL input. This loader validates one caller-selected,
+# continuous-upper-ground Q2D artifact and binds its exact geometry and
+# matrices to the physical Stage-2/3 candidate.
 
 module D3ResonatorInput
 
@@ -15,6 +16,12 @@ export load_d3_continuous_ground_q2d_input
 function _d3_q2d_positive(value, label)
     number = Float64(value)
     isfinite(number) && number > 0 || error("$(label) must be finite and positive.")
+    return number
+end
+
+function _d3_q2d_nonnegative(value, label)
+    number = Float64(value)
+    isfinite(number) && number >= 0 || error("$(label) must be finite and nonnegative.")
     return number
 end
 
@@ -37,7 +44,7 @@ function _d3_q2d_matrix(raw, label)
     return matrix
 end
 
-"""Load the Human-selected continuous-ground 8-um Q2D RLGC artifact."""
+"""Load one provenance-bearing continuous-ground Q2D RLGC artifact."""
 function load_d3_continuous_ground_q2d_input(path; section_length_m)
     input_path = abspath(String(path))
     isfile(input_path) || error("D3 Q2D RLGC input does not exist: $(input_path)")
@@ -63,17 +70,39 @@ function load_d3_continuous_ground_q2d_input(path; section_length_m)
         error("D3 Q2D RLGC input must use same-direction coupling.")
 
     geometry = payload["geometry_um"]
-    expected_geometry = Dict(
-        "trace_width" => 3.0,
-        "trace_gap" => 3.0,
-        "inter_trace_ground_width" => 3.0,
-        "flip_chip_gap_height" => 8.0,
-        "upper_ground_clearance_width" => 0.0,
-        "metal_thickness" => 0.2,
+    geometry_names = Set([
+        "trace_width",
+        "trace_gap",
+        "inter_trace_ground_width",
+        "flip_chip_gap_height",
+        "upper_ground_clearance_width",
+        "metal_thickness",
+    ])
+    Set(keys(geometry)) == geometry_names ||
+        error("D3 Q2D geometry fields do not match the continuous-ground contract.")
+    geometry_values = (
+        w=_d3_q2d_positive(geometry["trace_width"], "D3 Q2D trace width"),
+        s=_d3_q2d_positive(geometry["trace_gap"], "D3 Q2D trace gap"),
+        d=_d3_q2d_positive(
+            geometry["inter_trace_ground_width"],
+            "D3 Q2D inter-trace ground width",
+        ),
+        h=_d3_q2d_positive(
+            geometry["flip_chip_gap_height"],
+            "D3 Q2D flip-chip gap height",
+        ),
+        upper_ground_clearance=_d3_q2d_nonnegative(
+            geometry["upper_ground_clearance_width"],
+            "D3 Q2D upper-ground clearance width",
+        ),
+        metal_thickness=_d3_q2d_positive(
+            geometry["metal_thickness"],
+            "D3 Q2D metal thickness",
+        ),
     )
-    Set(keys(geometry)) == Set(keys(expected_geometry)) &&
-        all(Float64(geometry[name]) == value for (name, value) in expected_geometry) ||
-        error("D3 Q2D geometry must be the selected w=s=d=3 um, h=8 um continuous-ground point.")
+    geometry_values.upper_ground_clearance == 0.0 || error(
+        "D3 continuous-upper-ground Q2D input requires zero upper-ground clearance.",
+    )
 
     single = payload["single_line"]
     pair = payload["coupled_pair"]
@@ -97,6 +126,13 @@ function load_d3_continuous_ground_q2d_input(path; section_length_m)
     section = _d3_q2d_positive(section_length_m, "D3 line section length")
     artifact_id = strip(String(payload["artifact_id"]))
     isempty(artifact_id) && error("D3 Q2D artifact id must not be empty.")
+    solver = payload["solver"]
+    Set(keys(solver)) == Set([
+        "aedt_version",
+        "pyaedt_version",
+        "adaptive_frequency_hz",
+        "runtime_bundle_sha256",
+    ]) || error("D3 Q2D solver fields do not match its v1 contract.")
     return (
         section_length_m=section,
         readout_l_per_m_h=_d3_q2d_positive(
@@ -121,12 +157,20 @@ function load_d3_continuous_ground_q2d_input(path; section_length_m)
         q2d_artifact_id=artifact_id,
         q2d_artifact_sha256=artifact_sha256,
         q2d_topology_id=:continuous_upper_ground,
-        q2d_geometry_um=(
-            w=3.0,
-            s=3.0,
-            d=3.0,
-            h=8.0,
-            upper_ground_clearance=0.0,
+        q2d_geometry_um=geometry_values,
+        q2d_single_case_id=strip(String(single["source_case_id"])),
+        q2d_pair_case_id=strip(String(pair["source_case_id"])),
+        q2d_solver=(
+            adaptive_frequency_hz=_d3_q2d_positive(
+                solver["adaptive_frequency_hz"],
+                "D3 Q2D adaptive frequency",
+            ),
+            aedt_version=strip(String(solver["aedt_version"])),
+            pyaedt_version=strip(String(solver["pyaedt_version"])),
+            runtime_bundle_sha256=_d3_q2d_hash(
+                solver["runtime_bundle_sha256"],
+                "D3 Q2D runtime bundle SHA-256",
+            ),
         ),
     )
 end

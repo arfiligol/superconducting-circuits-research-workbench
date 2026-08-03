@@ -1,0 +1,949 @@
+# Canonical D3 Stage-2 winner handoff and artifact publication.  This module
+# owns neither optimization nor circuit physics: it re-evaluates one optimizer
+# winner through caller-supplied canonical evaluators, verifies that every
+# result belongs to the same compiled model, and atomically publishes the
+# Human-review inputs from that single in-memory foundation.
+
+module D3Stage2Result
+
+using Printf
+using SHA
+using SuperconductingCircuitsCore
+
+using ..D3CoupledOptimizer: OptimizationResult, RejectedEvaluation, ValidEvaluation
+
+export Stage2RunSpec,
+    Stage2EvaluatedResult,
+    evaluate_stage2_winner,
+    write_stage2_result
+
+const JSON3 = SuperconductingCircuitsCore.JSON3
+const SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v1"
+const QUBIT_RECEIPT_SCHEMA = "d3-stage2-qubit-admittance-receipt.v1"
+const OBJECTIVE_CONTRACT = "d3-stage2-stage3-full-qrp-objective.v2"
+const FOUNDATION_CONTRACT = "d3-stage2-candidate-foundation.v5"
+const OBJECTIVE_AUTHORITY = (
+    approval_status=:human_approved,
+    target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
+    target_revision=7,
+    target_contract_sha256=
+        "2ec4014c5bd3ba5824c15d71c3ad1e03b2a0d1f7444a35dcd31b0a4fe99b7bf9",
+    notch_authority=:rp_on,
+    effective_diagonal_frequency_extraction=
+        :q_feedline_downfolded_rp_complex_operator,
+    effective_exchange_extraction=
+        :q_feedline_downfolded_rp_complex_midpoint_residue,
+    linewidth_pole_scope=:qrp_three,
+    primary_linewidth_extraction=:L_C,
+)
+const CANDIDATE_NAMES =
+    (:lr_open_m, :lr_short_m, :lc_m, :lp_open_m, :lp_short_m, :u_IDC)
+const FILES = (
+    "summary.json",
+    "history.json",
+    "s21.csv",
+    "linear-quantities.json",
+    "qubit-admittance.csv",
+    "qubit-admittance-receipt.json",
+)
+
+"""Inputs owned by one reproducible Stage-2 winner evaluation."""
+struct Stage2RunSpec
+    run_id::String
+    slot_hz::Float64
+    response_frequency_hz::Vector{Float64}
+    qubit_frequency_hz::Vector{Float64}
+    q2d_spec::Dict{String,Any}
+    bounds::Dict{String,Any}
+    optimizer_configuration::Dict{String,Any}
+
+    function Stage2RunSpec(
+        run_id::AbstractString,
+        slot_hz::Real,
+        response_frequency_hz,
+        qubit_frequency_hz,
+        q2d_spec,
+        bounds,
+        optimizer_configuration,
+    )
+        id = strip(String(run_id))
+        occursin(r"^[a-z0-9][a-z0-9._-]*$", id) || error(
+            "D3 Stage-2 run_id must be lowercase filesystem-safe text.",
+        )
+        slot = Float64(slot_hz)
+        isfinite(slot) && slot > 0 || error(
+            "D3 Stage-2 Slot must be finite and positive.",
+        )
+        response = _frequency_grid(response_frequency_hz, "response")
+        qubit = _frequency_grid(qubit_frequency_hz, "qubit-admittance")
+        q2d = _validated_q2d_spec(q2d_spec)
+        bound_values = _validated_bounds(bounds)
+        optimizer = _validated_optimizer_configuration(
+            optimizer_configuration,
+            bound_values,
+        )
+        return new(id, slot, response, qubit, q2d, bound_values, optimizer)
+    end
+end
+
+function Stage2RunSpec(;
+    run_id,
+    slot_hz,
+    response_frequency_hz,
+    qubit_frequency_hz,
+    q2d_spec,
+    bounds,
+    optimizer_configuration,
+)
+    return Stage2RunSpec(
+        run_id,
+        slot_hz,
+        response_frequency_hz,
+        qubit_frequency_hz,
+        q2d_spec,
+        bounds,
+        optimizer_configuration,
+    )
+end
+
+"""One optimizer winner re-evaluated through the canonical Stage-2 path."""
+struct Stage2EvaluatedResult{O,R,F,J,H,Q}
+    specification::Stage2RunSpec
+    optimization::O
+    winner_record::R
+    foundation::F
+    objective::J
+    hb_trace::H
+    qubit_admittance::Q
+end
+
+function _frequency_grid(values, label)
+    frequencies = Float64.(collect(values))
+    !isempty(frequencies) && all(isfinite, frequencies) &&
+        all(>(0), frequencies) && all(diff(frequencies) .> 0) || error(
+        "D3 Stage-2 $(label) frequencies must be finite, positive, and strictly increasing.",
+    )
+    return frequencies
+end
+
+function _string_key_dict(value, label)
+    value isa AbstractDict || error("$(label) must be a dictionary.")
+    isempty(value) && error("$(label) must not be empty.")
+    return Dict{String,Any}(String(key) => item for (key, item) in pairs(value))
+end
+
+function _require_dict_keys(value, required, label)
+    missing = setdiff(Set(String.(required)), Set(keys(value)))
+    isempty(missing) || error("$(label) is missing $(sort!(collect(missing))).")
+    return value
+end
+
+function _nonempty_text(value, label)
+    value isa AbstractString || error("$(label) must be text.")
+    text = strip(String(value))
+    isempty(text) && error("$(label) must not be empty.")
+    return text
+end
+
+function _positive_real(value, label)
+    value isa Real && !(value isa Bool) || error("$(label) must be numeric.")
+    number = Float64(value)
+    isfinite(number) && number > 0 || error("$(label) must be finite and positive.")
+    return number
+end
+
+function _finite_vector(value, length_expected, label)
+    value isa AbstractArray || value isa Tuple || error("$(label) must be an array.")
+    numbers = Float64.(collect(value))
+    length(numbers) == length_expected || error(
+        "$(label) must contain exactly $(length_expected) values.",
+    )
+    all(isfinite, numbers) || error("$(label) must contain only finite values.")
+    return numbers
+end
+
+function _validated_q2d_spec(value)
+    q2d = _string_key_dict(value, "D3 Stage-2 Q2D report specification")
+    _require_dict_keys(
+        q2d,
+        (
+            "artifact_id",
+            "artifact_sha256",
+            "single_case_id",
+            "pair_case_id",
+            "geometry_um",
+            "solver",
+            "single_l_per_m_h",
+            "single_c_per_m_f",
+            "l_matrix_per_m_h",
+            "c_matrix_per_m_f",
+            "coupling_orientation",
+        ),
+        "D3 Stage-2 Q2D report specification",
+    )
+    geometry = _string_key_dict(q2d["geometry_um"], "D3 Stage-2 Q2D geometry")
+    _require_dict_keys(
+        geometry,
+        ("w", "s", "d", "h", "metal_thickness"),
+        "D3 Stage-2 Q2D geometry",
+    )
+    solver = _string_key_dict(q2d["solver"], "D3 Stage-2 Q2D solver")
+    _require_dict_keys(
+        solver,
+        ("adaptive_frequency_hz", "aedt_version", "pyaedt_version"),
+        "D3 Stage-2 Q2D solver",
+    )
+    q2d["artifact_id"] = _nonempty_text(q2d["artifact_id"], "Q2D artifact_id")
+    q2d["artifact_sha256"] = _sha256_text(
+        q2d["artifact_sha256"],
+        "Q2D artifact_sha256",
+    )
+    q2d["single_case_id"] = _nonempty_text(q2d["single_case_id"], "Q2D single_case_id")
+    q2d["pair_case_id"] = _nonempty_text(q2d["pair_case_id"], "Q2D pair_case_id")
+    q2d["coupling_orientation"] = _nonempty_text(
+        q2d["coupling_orientation"],
+        "Q2D coupling_orientation",
+    )
+    q2d["geometry_um"] = Dict(
+        name => _positive_real(geometry[name], "Q2D geometry $(name)")
+        for name in ("w", "s", "d", "h", "metal_thickness")
+    )
+    q2d["solver"] = Dict(
+        "adaptive_frequency_hz" => _positive_real(
+            solver["adaptive_frequency_hz"],
+            "Q2D adaptive frequency",
+        ),
+        "aedt_version" => _nonempty_text(solver["aedt_version"], "Q2D AEDT version"),
+        "pyaedt_version" =>
+            _nonempty_text(solver["pyaedt_version"], "Q2D PyAEDT version"),
+    )
+    q2d["single_l_per_m_h"] =
+        _positive_real(q2d["single_l_per_m_h"], "Q2D single-line L per metre")
+    q2d["single_c_per_m_f"] =
+        _positive_real(q2d["single_c_per_m_f"], "Q2D single-line C per metre")
+    q2d["l_matrix_per_m_h"] =
+        _finite_vector(q2d["l_matrix_per_m_h"], 4, "Q2D L matrix")
+    q2d["c_matrix_per_m_f"] =
+        _finite_vector(q2d["c_matrix_per_m_f"], 4, "Q2D C matrix")
+    return q2d
+end
+
+function _validated_bounds(value)
+    bounds = _string_key_dict(value, "D3 Stage-2 optimizer bounds")
+    required = string.(CANDIDATE_NAMES)
+    _require_dict_keys(
+        bounds,
+        required,
+        "D3 Stage-2 optimizer bounds",
+    )
+    Set(keys(bounds)) == Set(required) || error(
+        "D3 Stage-2 optimizer bounds must contain exactly $(required).",
+    )
+    return Dict(name => begin
+        interval = _finite_vector(bounds[name], 2, "D3 optimizer bound $(name)")
+        0 <= interval[1] < interval[2] || error(
+            "D3 optimizer bound $(name) must have 0 <= lower < upper.",
+        )
+        interval
+    end for name in required)
+end
+
+function _validated_optimizer_configuration(value, bounds)
+    configuration = _string_key_dict(
+        value,
+        "D3 Stage-2 optimizer configuration",
+    )
+    required = (
+        "algorithm",
+        "initial_mean",
+        "seed",
+        "sigma",
+        "popsize",
+        "maxiter",
+        "maxfevals",
+        "ftol",
+        "xtol",
+    )
+    Set(keys(configuration)) == Set(required) || error(
+        "D3 Stage-2 optimizer configuration fields must be exactly $(collect(required)).",
+    )
+    configuration["algorithm"] == "bounded_cma_es_only" || error(
+        "D3 Stage-2 optimizer algorithm must be bounded_cma_es_only.",
+    )
+    initial = _string_key_dict(
+        configuration["initial_mean"],
+        "D3 Stage-2 CMA initial mean",
+    )
+    Set(keys(initial)) == Set(string.(CANDIDATE_NAMES)) || error(
+        "D3 Stage-2 CMA initial mean must contain exactly the physical candidate coordinates.",
+    )
+    normalized_initial = Dict{String,Any}()
+    for name in string.(CANDIDATE_NAMES)
+        number = _positive_real(initial[name], "D3 Stage-2 CMA initial mean $(name)")
+        lower, upper = bounds[name]
+        lower <= number <= upper || error(
+            "D3 Stage-2 CMA initial mean $(name) is outside its declared bounds.",
+        )
+        normalized_initial[name] = number
+    end
+    integer_value(name; minimum=0) = begin
+        raw = configuration[name]
+        raw isa Integer && !(raw isa Bool) || error(
+            "D3 Stage-2 CMA $(name) must be an integer.",
+        )
+        parsed = Int(raw)
+        parsed >= minimum || error(
+            "D3 Stage-2 CMA $(name) must be at least $(minimum).",
+        )
+        parsed
+    end
+    seed = integer_value("seed")
+    popsize = integer_value("popsize"; minimum=2)
+    maxiter = integer_value("maxiter"; minimum=1)
+    maxfevals = integer_value("maxfevals"; minimum=popsize)
+    return Dict(
+        "algorithm" => "bounded_cma_es_only",
+        "initial_mean" => normalized_initial,
+        "seed" => seed,
+        "sigma" => _positive_real(configuration["sigma"], "D3 Stage-2 CMA sigma"),
+        "popsize" => popsize,
+        "maxiter" => maxiter,
+        "maxfevals" => maxfevals,
+        "ftol" => _positive_real(configuration["ftol"], "D3 Stage-2 CMA ftol"),
+        "xtol" => _positive_real(configuration["xtol"], "D3 Stage-2 CMA xtol"),
+    )
+end
+
+function _sha256_text(value, label)
+    text = lowercase(strip(String(value)))
+    occursin(r"^[0-9a-f]{64}$", text) || error(
+        "$(label) must contain 64 lowercase hexadecimal characters.",
+    )
+    return text
+end
+
+_file_sha256(path) = bytes2hex(SHA.sha256(read(path)))
+
+function _model_identity(source, label)
+    names = (
+        :circuit_plan_sha256,
+        :capacitance_sha256,
+        :inverse_inductance_sha256,
+        :selector_sha256,
+    )
+    has_field(name) = hasproperty(source, name) ||
+        (source isa AbstractDict && (haskey(source, name) || haskey(source, String(name))))
+    get_field(name) = hasproperty(source, name) ? getproperty(source, name) :
+        haskey(source, name) ? source[name] : source[String(name)]
+    all(has_field, names) || error(
+        "$(label) must bind all four D3 model-identity hashes.",
+    )
+    return NamedTuple{names}(Tuple(
+        _sha256_text(get_field(name), "$(label).$(name)")
+        for name in names
+    ))
+end
+
+function _winner_record(optimization::OptimizationResult)
+    record_id = optimization.promotion.candidate_record_id
+    isnothing(record_id) && error(
+        "D3 Stage-2 optimization has no incumbent candidate to publish.",
+    )
+    matches = [record for record in optimization.history if record.record_id == record_id]
+    length(matches) == 1 || error(
+        "D3 Stage-2 promotion candidate must identify exactly one history record.",
+    )
+    record = only(matches)
+    record.evaluation isa ValidEvaluation || error(
+        "D3 Stage-2 winner must be a valid evaluator result.",
+    )
+    isnothing(record.cost) && error("D3 Stage-2 winner must retain its optimizer cost.")
+    return record
+end
+
+function _require_same_grid(actual, expected, label)
+    values = Float64.(collect(actual))
+    values == expected || error("$(label) frequency grid disagrees with the Run specification.")
+    return values
+end
+
+function _require_complex_trace(values, expected_length, label)
+    trace = ComplexF64.(collect(values))
+    length(trace) == expected_length || error("$(label) length disagrees with its frequency grid.")
+    all(isfinite, trace) || error("$(label) must contain only finite values.")
+    return trace
+end
+
+function _validate_foundation(foundation, candidate, specification)
+    hasproperty(foundation, :contract_id) &&
+        foundation.contract_id == FOUNDATION_CONTRACT || error(
+        "D3 Stage-2 result requires the current candidate foundation.",
+    )
+    hasproperty(foundation, :stage_id) && foundation.stage_id == :stage2_equivalent ||
+        error("D3 Stage-2 result received a non-Stage-2 foundation.")
+    hasproperty(foundation, :model_family) &&
+        foundation.model_family == :equivalent_exact_n || error(
+        "D3 Stage-2 result requires the Equivalent Exact-N model family.",
+    )
+    hasproperty(foundation, :objective_ready) && foundation.objective_ready === true ||
+        error("D3 Stage-2 foundation is not objective-ready.")
+    foundation.stage.candidate == candidate || error(
+        "Re-evaluated Stage-2 foundation does not retain the optimizer winner candidate.",
+    )
+    response_match = foundation.stage.response_match
+    String(response_match.q2d_artifact_id) ==
+        specification.q2d_spec["artifact_id"] || error(
+        "D3 Stage-2 Run Q2D artifact id disagrees with the response-match foundation.",
+    )
+    _sha256_text(
+        response_match.q2d_artifact_sha256,
+        "D3 response-match Q2D artifact SHA-256",
+    ) == specification.q2d_spec["artifact_sha256"] || error(
+        "D3 Stage-2 Run Q2D artifact SHA-256 disagrees with the response-match foundation.",
+    )
+    return _model_identity(
+        foundation.cqed_handoff.source_model_identity,
+        "D3 Stage-2 foundation model identity",
+    )
+end
+
+function _validate_objective(objective, model_identity, winner_cost)
+    hasproperty(objective, :contract_id) &&
+        objective.contract_id == OBJECTIVE_CONTRACT || error(
+        "D3 Stage-2 result requires the revision-7 objective receipt.",
+    )
+    hasproperty(objective, :stage_id) && objective.stage_id == :stage2_equivalent ||
+        error("D3 Stage-2 result received a non-Stage-2 objective.")
+    hasproperty(objective, :model_family) &&
+        objective.model_family == :equivalent_exact_n || error(
+        "D3 Stage-2 objective uses the wrong model family.",
+    )
+    _model_identity(objective.model_identity, "D3 Stage-2 objective model identity") ==
+        model_identity || error("D3 Stage-2 foundation and objective model identities disagree.")
+    hasproperty(objective, :authority) && objective.authority == OBJECTIVE_AUTHORITY ||
+        error(
+            "D3 Stage-2 objective authority does not equal the Human-approved revision-7 contract.",
+        )
+    cost = Float64(objective.cost)
+    isfinite(cost) && cost >= 0 || error("D3 Stage-2 objective cost must be finite and non-negative.")
+    isapprox(cost, Float64(winner_cost); rtol=1.0e-12, atol=1.0e-12) || error(
+        "Re-evaluated revision-7 objective cost disagrees with the optimizer winner cost.",
+    )
+    return cost
+end
+
+function _validate_optimization_provenance(optimization, specification)
+    configuration = specification.optimizer_configuration
+    optimization.cma.declared_iteration_budget == configuration["maxiter"] || error(
+        "D3 Stage-2 CMA maxiter disagrees with the Run specification.",
+    )
+    optimization.cma.declared_evaluation_budget == configuration["maxfevals"] || error(
+        "D3 Stage-2 CMA maxfevals disagrees with the Run specification.",
+    )
+    initial_records = [
+        record for record in optimization.history
+        if record.record_id == optimization.initial_seed_record_id
+    ]
+    length(initial_records) == 1 || error(
+        "D3 Stage-2 Run must retain exactly one declared initial-seed record.",
+    )
+    initial_candidate = only(initial_records).candidate
+    initial_mean = configuration["initial_mean"]
+    for name in CANDIDATE_NAMES
+        hasproperty(initial_candidate, name) || error(
+            "D3 Stage-2 initial-seed record is missing $(name).",
+        )
+        Float64(getproperty(initial_candidate, name)) == initial_mean[String(name)] ||
+            error("D3 Stage-2 initial-seed record disagrees with initial_mean.$(name).")
+    end
+    return nothing
+end
+
+function _validate_candidate_bounds(candidate, bounds, label)
+    for name in CANDIDATE_NAMES
+        hasproperty(candidate, name) || error("$(label) is missing $(name).")
+        value = Float64(getproperty(candidate, name))
+        lower, upper = bounds[String(name)]
+        lower <= value <= upper || error(
+            "$(label) $(name)=$(value) is outside its declared bounds.",
+        )
+    end
+    return nothing
+end
+
+function _validate_qubit_result(qubit, foundation, frequencies)
+    _require_same_grid(qubit.frequency_hz, frequencies, "D3 qubit admittance")
+    hasproperty(qubit, :contract_id) &&
+        qubit.contract_id == "d3-stage2-hb-qubit-differential-admittance.candidate-v1" ||
+        error("D3 Stage-2 result requires the HB/direct qubit-admittance receipt.")
+    provenance = qubit.direct.diagnostics.source_model_provenance
+    foundation_identity = _model_identity(
+        foundation.cqed_handoff.source_model_identity,
+        "D3 Stage-2 foundation model identity",
+    )
+    _model_identity(qubit.model_identity, "D3 qubit HB model identity") ==
+        foundation_identity || error(
+        "D3 qubit HB result and Stage-2 foundation model identities disagree.",
+    )
+    _model_identity(provenance, "D3 qubit direct model identity") == foundation_identity ||
+        error("D3 qubit admittance and Stage-2 foundation model identities disagree.")
+    count = length(frequencies)
+    for (name, values) in (
+        (:hb_differential_admittance_s, qubit.hb_differential_admittance_s),
+        (:direct_differential_admittance_s, qubit.direct.differential_admittance_s),
+    )
+        _require_complex_trace(values, count, "D3 qubit $(name)")
+    end
+    return nothing
+end
+
+"""
+    evaluate_stage2_winner(optimization, specification; ...)
+
+Select the optimizer's incumbent, evaluate one canonical physical foundation,
+and derive the objective, HB trace, and weighted-qubit admittance from that same
+foundation. Callbacks receive `(foundation, specification)` except the
+foundation callback, which receives `(candidate, specification)`.
+"""
+function evaluate_stage2_winner(
+    optimization::OptimizationResult,
+    specification::Stage2RunSpec;
+    foundation_evaluator,
+    objective_evaluator,
+    hb_evaluator,
+    qubit_evaluator,
+)
+    _validate_optimization_provenance(optimization, specification)
+    winner = _winner_record(optimization)
+    _validate_candidate_bounds(
+        winner.candidate,
+        specification.bounds,
+        "D3 Stage-2 optimizer winner",
+    )
+    foundation = foundation_evaluator(winner.candidate, specification)
+    model_identity = _validate_foundation(
+        foundation,
+        winner.candidate,
+        specification,
+    )
+    _require_same_grid(
+        foundation.response_closure.frequency_hz,
+        specification.response_frequency_hz,
+        "D3 Stage-2 Exact/direct closure",
+    )
+    objective = objective_evaluator(foundation, specification)
+    _validate_objective(objective, model_identity, winner.cost)
+
+    hb = hb_evaluator(foundation, specification)
+    _require_same_grid(hb.frequency_hz, specification.response_frequency_hz, "D3 Stage-2 HB")
+    _model_identity(hb.model_identity, "D3 Stage-2 HB model identity") ==
+        model_identity || error(
+        "D3 Stage-2 HB trace and canonical foundation model identities disagree.",
+    )
+    _require_complex_trace(
+        hb.s21,
+        length(specification.response_frequency_hz),
+        "D3 Stage-2 HB S21",
+    )
+    qubit = qubit_evaluator(foundation, specification)
+    _validate_qubit_result(qubit, foundation, specification.qubit_frequency_hz)
+    return Stage2EvaluatedResult(
+        specification,
+        optimization,
+        winner,
+        foundation,
+        objective,
+        hb,
+        qubit,
+    )
+end
+
+function _json_value(value, label="value")
+    if value === nothing || value isa Bool || value isa AbstractString
+        return value
+    elseif value isa Symbol
+        return String(value)
+    elseif value isa Real
+        number = Float64(value)
+        isfinite(number) || error("$(label) contains a non-finite number.")
+        return value isa Integer ? Int(value) : number
+    elseif value isa Complex
+        isfinite(value) || error("$(label) contains a non-finite complex number.")
+        return Dict("real" => Float64(real(value)), "imag" => Float64(imag(value)))
+    elseif value isa NamedTuple
+        return Dict(
+            String(name) => _json_value(item, "$(label).$(name)")
+            for (name, item) in pairs(value)
+        )
+    elseif value isa AbstractDict
+        return Dict(
+            String(key) => _json_value(item, "$(label).$(key)")
+            for (key, item) in pairs(value)
+        )
+    elseif value isa AbstractArray || value isa Tuple
+        return [_json_value(item, "$(label)[]") for item in value]
+    end
+    error("$(label) contains unsupported $(typeof(value)); refusing lossy serialization.")
+end
+
+function _history_record(record, evaluation_index)
+    record.evaluation isa Union{ValidEvaluation,RejectedEvaluation} || error(
+        "D3 optimization history contains an unsupported evaluation type.",
+    )
+    result = Dict(
+        "evaluation" => Int(evaluation_index),
+        "cost" => record.cost,
+        "candidate" => _json_value(record.candidate, "history candidate"),
+        "record_id" => record.record_id,
+        "candidate_id" => record.candidate_id,
+        "stage" => String(record.stage),
+        "cache_hit" => record.cache_hit,
+    )
+    if record.evaluation isa RejectedEvaluation
+        result["rejection"] = string(
+            record.evaluation.code,
+            ": ",
+            record.evaluation.reason,
+        )
+    end
+    return result
+end
+
+function _write_json(path, value)
+    open(path, "w") do io
+        JSON3.pretty(io, value)
+        println(io)
+    end
+    return path
+end
+
+function _write_s21(path, evaluated)
+    closure = evaluated.foundation.response_closure
+    frequencies = evaluated.specification.response_frequency_hz
+    direct = _require_complex_trace(closure.direct.s21, length(frequencies), "Direct S21")
+    exact = _require_complex_trace(
+        closure.analytical.exact.s21,
+        length(frequencies),
+        "Exact-12 S21",
+    )
+    hb = _require_complex_trace(evaluated.hb_trace.s21, length(frequencies), "HB S21")
+    open(path, "w") do io
+        println(
+            io,
+            "frequency_hz,direct_real,direct_imag,exact_real,exact_imag,hb_real,hb_imag",
+        )
+        for index in eachindex(frequencies)
+            @printf(
+                io,
+                "%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g\n",
+                frequencies[index],
+                real(direct[index]),
+                imag(direct[index]),
+                real(exact[index]),
+                imag(exact[index]),
+                real(hb[index]),
+                imag(hb[index]),
+            )
+        end
+    end
+    return path
+end
+
+function _write_qubit(path, evaluated)
+    result = evaluated.qubit_admittance
+    frequencies = evaluated.specification.qubit_frequency_hz
+    open(path, "w") do io
+        println(
+            io,
+            "frequency_hz,hb_y_eff_real_s,hb_y_eff_imag_s,direct_y_eff_real_s," *
+            "direct_y_eff_imag_s,hb_t1_s,direct_t1_s,c_q_eff_f,alpha,beta," *
+            "kron_condition_number,hb_direct_abs_y_residual_s",
+        )
+        for index in eachindex(frequencies)
+            @printf(
+                io,
+                "%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g\n",
+                frequencies[index],
+                real(result.hb_differential_admittance_s[index]),
+                imag(result.hb_differential_admittance_s[index]),
+                real(result.direct.differential_admittance_s[index]),
+                imag(result.direct.differential_admittance_s[index]),
+                result.hb_purcell_t1_s[index],
+                result.direct.purcell_t1_s[index],
+                result.effective_differential_capacitance_f,
+                result.alpha,
+                result.beta,
+                result.kron_condition_number[index],
+                result.hb_direct_abs_y_residual_s[index],
+            )
+        end
+    end
+    return path
+end
+
+function _validate_linear_quantity_payload(
+    payload,
+    source_summary_sha256,
+    model_identity,
+)
+    record = _string_key_dict(payload, "D3 linear-quantity payload")
+    required = (
+        "schema_version",
+        "source_summary_sha256",
+        "objective_contract_id",
+        "objective_authority",
+        "coordinate_foundation",
+        "anchored_oscillator_representation",
+        "fully_hybridized_closed_normal_mode_spectrum",
+        "matched_open_port_poles",
+        "model_identity",
+    )
+    _require_dict_keys(record, required, "D3 linear-quantity payload")
+    record["schema_version"] == "d3-stage2-linear-quantity-review.v3" || error(
+        "D3 linear-quantity payload uses the wrong schema.",
+    )
+    record["source_summary_sha256"] == source_summary_sha256 || error(
+        "D3 linear-quantity payload did not bind the canonical summary.",
+    )
+    record["objective_contract_id"] == OBJECTIVE_CONTRACT || error(
+        "D3 linear-quantity payload uses the wrong objective contract.",
+    )
+    authority = _string_key_dict(
+        record["objective_authority"],
+        "D3 linear-quantity objective authority",
+    )
+    authority == _json_value(OBJECTIVE_AUTHORITY, "revision-7 authority") || error(
+        "D3 linear-quantity payload does not carry the complete revision-7 authority.",
+    )
+    _model_identity(record["model_identity"], "D3 linear-quantity model identity") ==
+        model_identity || error(
+        "D3 linear-quantity payload and canonical foundation model identities disagree.",
+    )
+    anchored = _string_key_dict(
+        record["anchored_oscillator_representation"],
+        "D3 anchored oscillator payload",
+    )
+    anchored["coupling_state"] == "qrp_on" &&
+        anchored["boundary"] == "closed_conservative_block" &&
+        anchored["coordinate_basis"] ==
+        "reduced_physically_anchored_flux_charge_coordinates" &&
+        anchored["representation"] == "anchored_bare_coordinate_oscillator" &&
+        anchored["coordinate_rotation"] == "none" &&
+        anchored["normalization"] ==
+            "Z_i_equals_sqrt_C_inverse_ii_over_K_ii" || error(
+        "D3 anchored oscillator payload does not retain its accepted basis/normalization semantics.",
+    )
+    closed = _string_key_dict(
+        record["fully_hybridized_closed_normal_mode_spectrum"],
+        "D3 closed normal-mode payload",
+    )
+    closed["spectrum"] == "fully_hybridized_closed_normal_modes" &&
+        closed["coupling_state"] == "qrp_on" &&
+        closed["boundary"] == "closed" &&
+        closed["construction"] ==
+            "generalized_eigenproblem_K_u_equals_omega2_C_u" &&
+        closed["identity_assignment"] == "none" &&
+        closed["display_order"] == "ascending_frequency_only" || error(
+        "D3 closed normal-mode payload does not retain its spectrum semantics.",
+    )
+    matched_open = _string_key_dict(
+        record["matched_open_port_poles"],
+        "D3 matched-open pole payload",
+    )
+    matched_open["response_class"] == "matched_open_port_response" &&
+        matched_open["coupling_state"] == "qrp_on" &&
+        matched_open["external_port_state"] == "matched_open" &&
+        matched_open["basis_claim"] == "none" &&
+        matched_open["identity_assignment"] ==
+            "global_normalized_stored_energy_overlap" || error(
+        "D3 matched-open pole payload does not retain its response/identity semantics.",
+    )
+    return record
+end
+
+function _summary(evaluated, artifact_hashes)
+    optimization = evaluated.optimization
+    foundation = evaluated.foundation
+    stage = foundation.stage
+    objective = evaluated.objective
+    model_identity = _model_identity(
+        foundation.cqed_handoff.source_model_identity,
+        "D3 Stage-2 foundation model identity",
+    )
+    metrics = foundation.metrics
+    required_metrics = (
+        :fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz,
+        :fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz,
+        :J_rp_eff_q_feedline_downfolded_coherent_hz,
+        :notch_rp_on_hz,
+        :kappa_sum_qrp_on_ext_on_hz,
+        :eta_r_qrp_on,
+        :eta_p_qrp_on,
+        :effective_diagonal_frequency_extraction,
+        :effective_exchange_extraction,
+        :notch_authority,
+        :linewidth_pole_scope,
+        :primary_linewidth_extraction,
+    )
+    all(name -> hasproperty(metrics, name), required_metrics) || error(
+        "D3 Stage-2 foundation is missing one or more revision-7 summary metrics.",
+    )
+    history = optimization.history
+    valid_evaluations = count(record -> !isnothing(record.cost), history)
+    return Dict(
+        "schema_version" => SUMMARY_SCHEMA,
+        "run_id" => evaluated.specification.run_id,
+        "status" => "converging_candidate_complete",
+        "objective_contract_id" => String(objective.contract_id),
+        "objective_authority" =>
+            _json_value(objective.authority, "objective authority"),
+        "model_identity" => _json_value(model_identity, "model identity"),
+        "slot_hz" => evaluated.specification.slot_hz,
+        "q2d_spec" => _json_value(evaluated.specification.q2d_spec, "Q2D specification"),
+        "bounds" => _json_value(evaluated.specification.bounds, "optimizer bounds"),
+        "cma" => Dict(
+            "evaluations" => length(history),
+            "valid_evaluations" => valid_evaluations,
+            "rejected_evaluations" => length(history) - valid_evaluations,
+            "configuration" => _json_value(
+                evaluated.specification.optimizer_configuration,
+                "CMA configuration",
+            ),
+            "state" => String(optimization.cma.state),
+            "termination_reason" => optimization.cma.termination_reason,
+            "observed_iterations" => optimization.cma.observed_iterations,
+            "declared_iteration_budget" => optimization.cma.declared_iteration_budget,
+            "declared_evaluation_budget" => optimization.cma.declared_evaluation_budget,
+            "initial_seed_record_id" => optimization.initial_seed_record_id,
+        ),
+        "best_candidate" =>
+            _json_value(evaluated.winner_record.candidate, "winner candidate"),
+        "best_resolved_lc" => _json_value(
+            stage.resolved_equivalent_candidate,
+            "resolved Equivalent candidate",
+        ),
+        "best_metrics" => Dict(
+            String(name) => _json_value(getproperty(metrics, name), "Stage-2 metric $(name)")
+            for name in required_metrics
+        ),
+        "best_objective" => Dict(
+            "cost" => objective.cost,
+            "target_gates" =>
+                _json_value(objective.target_gates, "objective target gates"),
+            "target_gates_pass" => objective.target_gates_pass,
+            "normalized_residuals" =>
+                _json_value(objective.normalized_residuals, "objective residuals"),
+        ),
+        "condition_manifest" => Dict(
+            "id" => optimization.condition_manifest_id,
+            "sha256" => optimization.condition_manifest_sha256,
+            "approval_status" => optimization.condition_manifest_approval_status,
+        ),
+        "winner_selection" => Dict(
+            "record_id" => evaluated.winner_record.record_id,
+            "candidate_id" => evaluated.winner_record.candidate_id,
+            "state" => String(optimization.promotion.state),
+            "reason" => optimization.promotion.reason,
+        ),
+        "response_match" => Dict(
+            "mapping_id" => stage.response_match.mapping_id,
+            "mapping_sha256" => stage.response_match.mapping_sha256,
+            "match_contract_id" => stage.response_match.match_contract_id,
+            "q2d_artifact_id" => stage.response_match.q2d_artifact_id,
+            "q2d_artifact_sha256" => stage.response_match.q2d_artifact_sha256,
+            "fixed_line_input_sha256" => stage.response_match.fixed_line_input_sha256,
+            "topology_id" => stage.response_match.topology_id,
+        ),
+        "idc" => _json_value(stage.idc, "IDC result"),
+        "response_frequency_hz" => evaluated.specification.response_frequency_hz,
+        "qubit_frequency_hz" => evaluated.specification.qubit_frequency_hz,
+        "artifacts" => artifact_hashes,
+        "artifact_contract" => collect(FILES),
+    )
+end
+
+"""
+    write_stage2_result(evaluated, output_directory; linear_quantity_payload_builder)
+
+Write the six canonical Stage-2 artifacts into an unpublished sibling
+directory, cross-bind their hashes, and rename that directory into place only
+after every artifact is complete. `output_directory` must not already exist.
+"""
+function write_stage2_result(
+    evaluated::Stage2EvaluatedResult,
+    output_directory;
+    linear_quantity_payload_builder,
+)
+    destination = abspath(String(output_directory))
+    ispath(destination) && error("D3 Stage-2 output directory already exists: $(destination)")
+    parent = dirname(destination)
+    mkpath(parent)
+    temporary = mktempdir(parent; prefix=".$(basename(destination)).building-", cleanup=false)
+    try
+        history_path = joinpath(temporary, "history.json")
+        s21_path = joinpath(temporary, "s21.csv")
+        qubit_path = joinpath(temporary, "qubit-admittance.csv")
+        _write_json(history_path, [
+            _history_record(record, index)
+            for (index, record) in enumerate(evaluated.optimization.history)
+        ])
+        _write_s21(s21_path, evaluated)
+        _write_qubit(qubit_path, evaluated)
+
+        first_hashes = Dict(
+            "history.json" => _file_sha256(history_path),
+            "s21.csv" => _file_sha256(s21_path),
+            "qubit-admittance.csv" => _file_sha256(qubit_path),
+        )
+        summary_path = joinpath(temporary, "summary.json")
+        _write_json(summary_path, _summary(evaluated, first_hashes))
+        summary_sha256 = _file_sha256(summary_path)
+
+        linear_payload = _validate_linear_quantity_payload(
+            linear_quantity_payload_builder(
+                evaluated.foundation,
+                evaluated.objective,
+                summary_sha256,
+            ),
+            summary_sha256,
+            _model_identity(
+                evaluated.foundation.cqed_handoff.source_model_identity,
+                "D3 Stage-2 foundation model identity",
+            ),
+        )
+        linear_path = joinpath(temporary, "linear-quantities.json")
+        _write_json(linear_path, linear_payload)
+        model_identity = _model_identity(
+            evaluated.foundation.cqed_handoff.source_model_identity,
+            "D3 Stage-2 foundation model identity",
+        )
+        qubit_receipt = Dict(
+            "schema_version" => QUBIT_RECEIPT_SCHEMA,
+            "source_summary_sha256" => summary_sha256,
+            "qubit_admittance_csv_sha256" => first_hashes["qubit-admittance.csv"],
+            "objective_contract_id" => String(evaluated.objective.contract_id),
+            "objective_authority" => _json_value(
+                evaluated.objective.authority,
+                "qubit receipt objective authority",
+            ),
+            "model_identity" => _json_value(model_identity, "qubit receipt model identity"),
+        )
+        _write_json(
+            joinpath(temporary, "qubit-admittance-receipt.json"),
+            qubit_receipt,
+        )
+        sort(readdir(temporary)) == sort(collect(FILES)) || error(
+            "D3 Stage-2 transactional directory contains an unexpected artifact set.",
+        )
+        ispath(destination) && error(
+            "D3 Stage-2 output directory appeared during publication: $(destination)",
+        )
+        mv(temporary, destination)
+        return destination
+    catch
+        rm(temporary; recursive=true, force=true)
+        rethrow()
+    end
+end
+
+end
