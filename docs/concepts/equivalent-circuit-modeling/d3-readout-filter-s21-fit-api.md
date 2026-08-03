@@ -48,7 +48,7 @@ three-mode compatibility model.
 Every fit must retain the identity declared by the source candidate:
 
 - physical-node reduction and ordered finite-order basis;
-- Exact doubled and RWA representation conventions;
+- Exact doubled representation and anchored $\mathbf h,\boldsymbol\Delta$ conventions;
 - allowed matrix sparsity, symmetry, and passivity relations;
 - port count, port order, attachment coordinates, reference impedance, and
   reference planes;
@@ -76,17 +76,9 @@ scalar-formula fit is an independent recovery check against the solver trace.
 Stage 3 may use the same fitter as a response-effective bridge only after the
 Stage-2 blind-recovery check passes.
 
-## Removed reduced route
-
-The former reduced runtime fitted seven RWA coefficients with a filter-only
-port projection and profiled background terms. It did not evaluate the
-declared Exact finite-order scalar formula and is not part of this API. Its
-Python entry point, Julia bridge wrapper, schema, and diagnostic scripts have
-been removed rather than retained as a misleading fallback.
-
 ## Current execution status
 
 The exact scalar-formula inverse fitter is `CONVERGING` and has no public
 production entry point yet. Callers must fail closed until the D3 fixed/free
 matrix registry and self-energy parameterization are implemented and reviewed.
-The forward Exact-12/RWA-6 evaluator remains available independently.
+The forward Exact-12 evaluator remains available independently.

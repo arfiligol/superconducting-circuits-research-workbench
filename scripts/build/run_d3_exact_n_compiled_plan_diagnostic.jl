@@ -164,7 +164,6 @@ open(csv_path, "w") do io
         for (representation, values) in (
             (:direct_equivalent, closure.direct.s21),
             (:exact_doubled_12, closure.analytical.exact.s21),
-            (:rwa_6_report_only, closure.analytical.rwa.s21),
         )
             for (frequency, value, direct_value) in zip(
                 trace.frequency_hz,
@@ -229,7 +228,9 @@ open(csv_path, "w") do io
                 "inverse_inductance_matrix_h_inv" =>
                     _matrix_rows(model.inverse_inductance),
                 "number_conserving_matrix_rad_s" =>
-                    _matrix_rows(cqed.rwa.number_conserving_matrix_rad_s),
+                    _matrix_rows(
+                        cqed.anchored_bare_hamiltonian.number_conserving_matrix_rad_s,
+                    ),
                 "pairing_matrix_rad_s" =>
                     _matrix_rows(cqed.exact.pairing_matrix_rad_s),
                 "exact_doubled_matrix_rad_s" =>
@@ -248,46 +249,30 @@ open(csv_path, "w") do io
                     "exact_observation" => _complex_matrix_record(
                         cqed.port_response.exact.observation,
                     ),
-                    "rwa_open_generator_per_s" => _complex_matrix_record(
-                        cqed.port_response.rwa.open_generator_per_s,
-                    ),
-                    "rwa_drive_per_s" => _complex_matrix_record(
-                        cqed.port_response.rwa.drive_per_s,
-                    ),
-                    "rwa_observation" => _complex_matrix_record(
-                        cqed.port_response.rwa.observation,
-                    ),
                 ),
                 "analytical_closure" => Dict(
                     "exact_status" => String(closure.exact_closure_status),
-                    "rwa_status" => String(closure.rwa_closure_status),
                     "max_abs_exact_scattering" =>
                         closure.residuals.max_abs_exact_scattering,
                     "max_abs_exact_s21" =>
                         closure.residuals.max_abs_exact_s21,
-                    "max_abs_rwa_s21" =>
-                        closure.residuals.max_abs_rwa_s21,
                     "exact_max_unitarity_defect" =>
                         closure.analytical.passivity.exact_max_unitarity_defect,
-                    "rwa_max_unitarity_defect" =>
-                        closure.analytical.passivity.rwa_max_unitarity_defect,
-                    "rwa_spectrum_status" =>
-                        String(cqed.rwa.spectrum_comparison_status),
                     "structural_free_mode_count" =>
-                        cqed.rwa.structural_free_mode_count,
+                        cqed.exact.structural_free_mode_count,
                 ),
                 "matrix_metrics" => Dict(
                     "operand_authority" =>
                         String(matrix_metrics.operand_authority),
                     "metrics" => Dict(
-                        "fr_circuit_diag_report_only_hz" =>
-                            matrix_metrics.fr_circuit_diag_report_only_hz,
-                        "fp_circuit_diag_report_only_hz" =>
-                            matrix_metrics.fp_circuit_diag_report_only_hz,
-                        "J_qrp_on_hz" =>
-                            matrix_metrics.J_qrp_on_hz,
-                        "fq_qrp_on_report_only_hz" =>
-                            matrix_metrics.fq_qrp_on_report_only_hz,
+                        "fr_circuit_h_rr_pre_downfold_report_only_hz" =>
+                            matrix_metrics.fr_circuit_h_rr_pre_downfold_report_only_hz,
+                        "fp_circuit_h_pp_pre_downfold_report_only_hz" =>
+                            matrix_metrics.fp_circuit_h_pp_pre_downfold_report_only_hz,
+                        "J_circuit_h_rp_pre_downfold_report_only_hz" =>
+                            matrix_metrics.J_circuit_h_rp_pre_downfold_report_only_hz,
+                        "fq_circuit_h_qq_pre_downfold_report_only_hz" =>
+                            matrix_metrics.fq_circuit_h_qq_pre_downfold_report_only_hz,
                     ),
                 ),
                 "cqed_hashes" => Dict(
@@ -315,13 +300,13 @@ open(csv_path, "w") do io
 end
 
 summary = Dict(
-    "schema_version" => "d3-exact-n-compiled-plan-diagnostic.v2",
+    "schema_version" => "d3-exact-n-compiled-plan-diagnostic.v3",
     "diagnostic_id" => diagnostic_id,
     "status" => "diagnostic_not_promotable",
     "reason" =>
         "Exact-N implementation validation with legacy direct-retained-row-sum qubit projection and legacy LC seeds, before accepted IDC mapping and Stage-2 optimization",
     "model_authority" =>
-        "canonical Equivalent CircuitPlan -> compiled netlist -> Exact-7 -> neutral-qubit Exact-6 -> Exact-12/RWA-6 analytical port maps",
+        "canonical Equivalent CircuitPlan -> compiled netlist -> Exact-7 -> neutral-qubit Exact-6 -> Exact-12 analytical port maps",
     "idc_input" => Dict(
         "authority" => "explicit_topology_diagnostic_only",
         "C_pG_IDC_fF" => idc_fF.cpg,

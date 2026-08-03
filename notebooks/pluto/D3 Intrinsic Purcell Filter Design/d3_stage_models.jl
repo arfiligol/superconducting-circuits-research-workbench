@@ -1254,7 +1254,6 @@ function _d3_stage_response_closure(model, cqed_handoff, frequency_hz)
         residuals=(
             exact_scattering=exact_scattering_residual,
             exact_s21=analytical.exact.s21 - direct.s21,
-            rwa_s21=analytical.rwa.s21 - direct.s21,
             max_abs_exact_scattering=maximum(
                 maximum(abs, residual)
                 for residual in exact_scattering_residual
@@ -1263,13 +1262,8 @@ function _d3_stage_response_closure(model, cqed_handoff, frequency_hz)
                 abs,
                 analytical.exact.s21 - direct.s21,
             ),
-            max_abs_rwa_s21=maximum(
-                abs,
-                analytical.rwa.s21 - direct.s21,
-            ),
         ),
         exact_closure_status=:candidate_gate__tolerance_not_human_frozen,
-        rwa_closure_status=:report_only,
     )
 end
 
@@ -1437,7 +1431,7 @@ end
 
 Execute the complete Stage-2 path that is already physically defined:
 candidate construction, compiled seven-node model, neutral `7 -> 6`
-reduction, numerical cQED handoff, Exact-12/RWA-6/direct response closure,
+reduction, numerical cQED handoff, Exact-12/direct response closure,
 matrix-space operands, intrinsic-pair notch, linewidth L_A calibration, and
 exact-open q/r/p identity continuation from the coupling-on canonical
 bare-coordinate reference basis.
@@ -1490,7 +1484,7 @@ function d3_stage2_candidate_foundation(
         linewidth_frequency_band_hz,
     )
     return (
-        contract_id="d3-stage2-candidate-foundation.v3",
+        contract_id="d3-stage2-candidate-foundation.v4",
         stage_id=stage.stage_id,
         model_family=stage.model_family,
         stage=stage,
@@ -1526,7 +1520,7 @@ end
     d3_stage3_candidate_foundation(candidate, fixed, idc_mapping; ...)
 
 Execute the physically closed Stage-3 construction, compilation, direct
-distributed/lumped response, Exact/RWA analytical response closure,
+distributed/lumped response, Exact analytical response closure,
 intrinsic-pair notch, and the independent linewidth L_A calibration. The
 Full-QRP loaded-bare and pole-identity operators remain fail-closed.
 """

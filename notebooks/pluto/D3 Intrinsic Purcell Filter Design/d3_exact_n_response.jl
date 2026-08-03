@@ -591,8 +591,9 @@ end
 
 """Carry one compiled physical model through the numerical cQED derivation.
 
-The returned matrices preserve `model.coordinate_order`. `h` is the RWA
-number-conserving block; `pairing` is retained in the exact doubled model.
+The returned matrices preserve `model.coordinate_order`. The anchored bare
+Hamiltonian retains both its number-conserving `h` block and its pairing block;
+this handoff does not construct a response by dropping either sector.
 """
 function d3_numerical_cqed_handoff(model)
     capacitance = Matrix{Float64}(model.capacitance)
@@ -706,10 +707,6 @@ function d3_numerical_cqed_handoff(model)
     doubled_drive = flux_velocity_to_doubled * flux_velocity_drive
     doubled_observation =
         flux_velocity_observation * doubled_to_flux_velocity
-    rwa_generator = open_doubled_generator[1:dimension, 1:dimension]
-    rwa_drive = doubled_drive[1:dimension, :]
-    rwa_observation = doubled_observation[:, 1:dimension]
-
     reconstructed_inverse_capacitance =
         sqrt_impedance * (number_conserving - pairing) * sqrt_impedance
     reconstructed_stiffness =
@@ -781,20 +778,10 @@ function d3_numerical_cqed_handoff(model)
     doubled_free_eigenvalues_hz =
         ComplexF64.(doubled_values[doubled_free_indices] ./ (2π))
 
-    rwa_all_hz = sort(eigvals(Symmetric(number_conserving)) ./ (2π))
-    length(rwa_all_hz) == dimension || error(
-        "D3 RWA spectrum must retain one amplitude per physical coordinate.",
-    )
-    if structural_free_mode_count > 0 && minimum(rwa_all_hz) <= 0
-        error(
-            "D3 RWA number-conserving block must remain positive even when it lifts an exact structural free coordinate.",
-        )
-    end
-
     exact_doubled_residual_hz = exact_doubled_hz .- exact_flux_hz
     matrix_hash = _d3_exact_n_matrix_sha256
     return (
-        contract_id="d3-numerical-lagrangian-to-cqed-handoff.v1",
+        contract_id="d3-numerical-lagrangian-to-cqed-handoff.v2",
         source_model_identity=source_model_identity,
         coordinate_order=copy(model.coordinate_order),
         lagrangian=(
@@ -817,13 +804,8 @@ function d3_numerical_cqed_handoff(model)
             charge_block_rad_s=charge_block,
             flux_block_rad_s=flux_block,
         ),
-        rwa=(
+        anchored_bare_hamiltonian=(
             number_conserving_matrix_rad_s=number_conserving,
-            frequencies_hz=rwa_all_hz,
-            structural_free_mode_count=structural_free_mode_count,
-            spectrum_comparison_status=structural_free_mode_count == 0 ?
-                :same_dimension_report_only :
-                :not_pairwise_comparable__rwa_lifts_structural_free_mode,
         ),
         exact=(
             pairing_matrix_rad_s=pairing,
@@ -831,6 +813,7 @@ function d3_numerical_cqed_handoff(model)
             flux_frequencies_hz=exact_flux_hz,
             doubled_frequencies_hz=exact_doubled_hz,
             doubled_free_eigenvalues_hz=doubled_free_eigenvalues_hz,
+            structural_free_mode_count=structural_free_mode_count,
         ),
         port_response=(
             representation=:transformed_flux_velocity_state_space,
@@ -857,17 +840,6 @@ function d3_numerical_cqed_handoff(model)
                 drive_per_s=doubled_drive,
                 observation=doubled_observation,
             ),
-            rwa=(
-                state_order=Symbol.("a_" .* String.(model.coordinate_order)),
-                open_generator_per_s=rwa_generator,
-                drive_per_s=rwa_drive,
-                observation=rwa_observation,
-                approximation=(
-                    dropped_pairing_block=true,
-                    dropped_negative_frequency_state=true,
-                    direct_scattering_retained=true,
-                ),
-            ),
         ),
         closure=(
             inverse_capacitance_max_abs_residual=inverse_capacitance_residual,
@@ -878,9 +850,6 @@ function d3_numerical_cqed_handoff(model)
             max_abs_exact_doubled_residual_hz=
                 isempty(exact_doubled_residual_hz) ? 0.0 :
                 maximum(abs, exact_doubled_residual_hz),
-            rwa_spectrum_comparison_status=structural_free_mode_count == 0 ?
-                :report_only :
-                :blocked_by_structural_free_mode_lift,
         ),
         hashes=(
             capacitance_sha256=matrix_hash("cqed-capacitance-f", capacitance),
@@ -925,20 +894,6 @@ function d3_numerical_cqed_handoff(model)
                     "cqed-exact-port-observation",
                     doubled_observation,
                 ),
-            rwa_open_generator_sha256=
-                _d3_exact_n_complex_matrix_sha256(
-                    "cqed-rwa-open-generator-s^-1",
-                    rwa_generator,
-                ),
-            rwa_drive_sha256=_d3_exact_n_complex_matrix_sha256(
-                "cqed-rwa-port-drive",
-                rwa_drive,
-            ),
-            rwa_observation_sha256=
-                _d3_exact_n_complex_matrix_sha256(
-                    "cqed-rwa-port-observation",
-                    rwa_observation,
-                ),
         ),
     )
 end
@@ -968,7 +923,7 @@ function d3_stage2_matrix_metrics(
     )
     all(haskey(coordinate_index, coordinate) for coordinate in (:q, :r, :p)) ||
         error("D3 Stage-2 matrix extraction requires q, r, and p coordinates.")
-    h = cqed_handoff.rwa.number_conserving_matrix_rad_s
+    h = cqed_handoff.anchored_bare_hamiltonian.number_conserving_matrix_rad_s
     q = coordinate_index[:q]
     r = coordinate_index[:r]
     p = coordinate_index[:p]
@@ -984,7 +939,7 @@ function d3_stage2_matrix_metrics(
         fp_circuit_h_pp_pre_downfold_report_only_hz=h[p, p] / (2π),
         J_circuit_h_rp_pre_downfold_report_only_hz=abs(h[r, p]) / (2π),
         fq_circuit_h_qq_pre_downfold_report_only_hz=h[q, q] / (2π),
-        operand_authority=:coupling_on_number_conserving_matrix,
+        operand_authority=:coupling_on_anchored_bare_number_conserving_block,
         coordinate_order=copy(model.coordinate_order),
         number_conserving_sha256=
             cqed_handoff.hashes.number_conserving_sha256,
@@ -1690,12 +1645,10 @@ function _d3_state_space_port_trace(
     )
 end
 
-"""Evaluate the exact doubled and raw RWA-6 analytical port responses.
+"""Evaluate the Exact-12 analytical port response.
 
 The Exact-12 trace is a similarity-transformed first-order representation of
-the same physical open EOM. The RWA-6 trace drops the pairing and
-negative-frequency blocks after transforming the complete port boundary; it
-is approximation evidence, not a promotion authority.
+the same physical open EOM and retains the complete pairing sector.
 """
 function d3_cqed_port_trace(cqed_handoff, frequency_hz)
     frequencies = Float64.(collect(frequency_hz))
@@ -1715,32 +1668,17 @@ function d3_cqed_port_trace(cqed_handoff, frequency_hz)
         frequencies,
         "D3 Exact-12 port response",
     )
-    rwa = _d3_state_space_port_trace(
-        ports.rwa.open_generator_per_s,
-        ports.rwa.drive_per_s,
-        ports.rwa.observation,
-        ports.direct_scattering,
-        frequencies,
-        "D3 RWA-6 port response",
-    )
     port_count = size(ports.direct_scattering, 1)
     identity_ports = Matrix{ComplexF64}(I, port_count, port_count)
     exact_unitarity_defect = maximum(
         maximum(abs, response' * response - identity_ports)
         for response in exact.scattering
     )
-    rwa_unitarity_defect = maximum(
-        maximum(abs, response' * response - identity_ports)
-        for response in rwa.scattering
-    )
     return (
         frequency_hz=frequencies,
         exact=exact,
-        rwa=rwa,
         passivity=(
             exact_max_unitarity_defect=exact_unitarity_defect,
-            rwa_max_unitarity_defect=rwa_unitarity_defect,
-            rwa_status=:report_only__not_assumed_passive_markov,
         ),
         coordinate_order=copy(cqed_handoff.coordinate_order),
         reference_impedance_ohm=copy(ports.reference_impedance_ohm),
@@ -1748,7 +1686,7 @@ function d3_cqed_port_trace(cqed_handoff, frequency_hz)
     )
 end
 
-"""Compare independent Exact-12/RWA-6 state-space traces with direct C/K response."""
+"""Compare the independent Exact-12 state-space trace with direct C/K response."""
 function d3_exact_n_response_closure(
     model,
     frequency_hz;
@@ -1769,7 +1707,6 @@ function d3_exact_n_response_closure(
         for index in eachindex(direct.scattering)
     ]
     exact_s21_residual = analytical.exact.s21 - direct.s21
-    rwa_s21_residual = analytical.rwa.s21 - direct.s21
     return (
         frequency_hz=analytical.frequency_hz,
         direct=direct,
@@ -1777,16 +1714,13 @@ function d3_exact_n_response_closure(
         residuals=(
             exact_scattering=exact_scattering_residual,
             exact_s21=exact_s21_residual,
-            rwa_s21=rwa_s21_residual,
             max_abs_exact_scattering=maximum(
                 maximum(abs, residual)
                 for residual in exact_scattering_residual
             ),
             max_abs_exact_s21=maximum(abs, exact_s21_residual),
-            max_abs_rwa_s21=maximum(abs, rwa_s21_residual),
         ),
         exact_closure_status=:candidate_gate__tolerance_not_human_frozen,
-        rwa_closure_status=:report_only,
     )
 end
 
