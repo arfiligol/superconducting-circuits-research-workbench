@@ -55,7 +55,9 @@ end
 function load_d3_continuous_ground_q2d_input(path; section_length_m)
     input_path = abspath(String(path))
     isfile(input_path) || error("D3 Q2D RLGC input does not exist: $(input_path)")
-    payload = JSON3.read(read(input_path, String), Dict{String,Any})
+    artifact_bytes = read(input_path)
+    artifact_sha256 = bytes2hex(SHA.sha256(artifact_bytes))
+    payload = JSON3.read(String(artifact_bytes), Dict{String,Any})
     Set(keys(payload)) == Set([
         "schema_version",
         "artifact_id",
@@ -144,9 +146,6 @@ function load_d3_continuous_ground_q2d_input(path; section_length_m)
     end
     l_matrix = _d3_q2d_matrix(pair["l_matrix_per_m_h"], "D3 Q2D MTL L'")
     c_matrix = _d3_q2d_matrix(pair["c_matrix_per_m_f"], "D3 Q2D MTL C'")
-    artifact_sha256 = open(input_path, "r") do io
-        bytes2hex(SHA.sha256(io))
-    end
     section = _d3_q2d_positive(section_length_m, "D3 line section length")
     section <= D3_MAX_LINE_SECTION_LENGTH_M || error(
         "D3 physical CPW/MTL section length must not exceed 50 um.",
