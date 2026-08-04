@@ -154,6 +154,33 @@ def _sha256(value: Any, label: str) -> str:
     return value
 
 
+def _json_values_equal(left: Any, right: Any) -> bool:
+    if type(left) is bool or type(right) is bool:
+        return type(left) is bool and type(right) is bool and left is right
+    if type(left) in (int, float) or type(right) in (int, float):
+        return type(left) in (int, float) and type(right) in (int, float) and left == right
+    if isinstance(left, Mapping) or isinstance(right, Mapping):
+        if not isinstance(left, Mapping) or not isinstance(right, Mapping):
+            return False
+        if not all(type(key) is str for key in (*left.keys(), *right.keys())):
+            return False
+        if set(left) != set(right):
+            return False
+        return all(_json_values_equal(left[key], right[key]) for key in left)
+    if isinstance(left, list) or isinstance(right, list):
+        return (
+            isinstance(left, list)
+            and isinstance(right, list)
+            and len(left) == len(right)
+            and all(_json_values_equal(a, b) for a, b in zip(left, right, strict=True))
+        )
+    if type(left) is str or type(right) is str:
+        return type(left) is str and type(right) is str and left == right
+    if left is None or right is None:
+        return left is None and right is None
+    return False
+
+
 def _complex_value(value: Any, label: str) -> complex:
     record = _mapping(value, label)
     if set(record) != {"real", "imag"}:
@@ -520,7 +547,7 @@ def _fixed_line_q2d_snapshot(response_match: Mapping[str, Any]) -> dict[str, Any
         decoded_identity = json.loads(canonical)
     except json.JSONDecodeError as error:
         raise ValueError("fixed-line canonical identity is not valid JSON.") from error
-    if decoded_identity != identity:
+    if not _json_values_equal(decoded_identity, identity):
         raise ValueError("fixed-line canonical JSON disagrees elementwise with its identity.")
     computed_sha256 = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     if computed_sha256 != response_match["fixed_line_input_sha256"]:
@@ -656,7 +683,7 @@ def _validate_response_match_audit(
         if not isinstance(response_match[field], str) or not response_match[field].strip():
             raise ValueError(f"summary.response_match.{field} must be non-empty text.")
     expected_q2d_spec = _fixed_line_q2d_snapshot(response_match)
-    if dict(q2d_spec) != expected_q2d_spec:
+    if not _json_values_equal(q2d_spec, expected_q2d_spec):
         raise ValueError(
             "summary.q2d_spec disagrees elementwise with the artifact-derived fixed-line identity."
         )
