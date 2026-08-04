@@ -41,6 +41,13 @@ function _d3_line_spec(;
     )
 end
 
+function _d3_mtl_window_breakpoints(start_m, length_m, section_length_m)
+    count = ceil(Int, Float64(length_m) / Float64(section_length_m) - 1e-12)
+    count > 0 || throw(ArgumentError("D3 MTL window requires at least one section."))
+    dx = Float64(length_m) / count
+    return [Float64(start_m) + index * dx for index in 0:count]
+end
+
 function _d3_engineering_relation_label(plan::CircuitPlan, relation_id)
     selected_id = Symbol(relation_id)
     for relation in engineering_graph(plan).relations
@@ -562,6 +569,7 @@ function build_d3_intrinsic_purcell_hybridized_circuit_plan(;
     readout_length_m=6.0e-3,
     filter_length_m=6.0e-3,
     section_length_m=0.75e-3,
+    mtl_section_length_m=section_length_m,
     readout_l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
     readout_c_per_m_f=D3_DEFAULT_FEEDLINE_C_PER_M_F,
     filter_l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
@@ -592,7 +600,7 @@ function build_d3_intrinsic_purcell_hybridized_circuit_plan(;
         start1_m=window_start_readout_m,
         start2_m=window_start_filter_m,
         length_m=window_length_m,
-        section_length_m=section_length_m,
+        section_length_m=mtl_section_length_m,
         l_matrix_per_m_h=l_matrix_per_m_h,
         c_matrix_per_m_f=c_matrix_per_m_f,
     )
@@ -915,6 +923,7 @@ function build_d3_linewidth_la_hybridized_circuit_plan(;
     idc_mutual_capacitance_f,
     filter_length_m=6.0e-3,
     section_length_m=0.75e-3,
+    mtl_section_length_m=section_length_m,
     filter_l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
     filter_c_per_m_f=D3_DEFAULT_FEEDLINE_C_PER_M_F,
     window_start_filter_m=2.25e-3,
@@ -935,7 +944,7 @@ function build_d3_linewidth_la_hybridized_circuit_plan(;
         start1_m=window_start_filter_m,
         start2_m=window_start_filter_m,
         length_m=window_length_m,
-        section_length_m=section_length_m,
+        section_length_m=mtl_section_length_m,
         l_matrix_per_m_h=l_matrix_per_m_h,
         c_matrix_per_m_f=c_matrix_per_m_f,
     )
@@ -950,10 +959,11 @@ function build_d3_linewidth_la_hybridized_circuit_plan(;
             l_per_m_h=filter_l_per_m_h,
             c_per_m_f=filter_c_per_m_f,
         ),
-        breakpoints_m=[
+        breakpoints_m=_d3_mtl_window_breakpoints(
             window_start_filter_m,
-            window_start_filter_m + window_length_m,
-        ],
+            window_length_m,
+            mtl_section_length_m,
+        ),
         section_overrides=[coupled_line_section_override(mtl_model, 2)],
     )
     feedline_capacitor = add_interdigitated_capacitor!(
@@ -1198,6 +1208,7 @@ function build_d3_intrinsic_pair_notch_hybridized_circuit_plan(;
     readout_length_m=6.0e-3,
     filter_length_m=6.0e-3,
     section_length_m=0.75e-3,
+    mtl_section_length_m=section_length_m,
     readout_l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
     readout_c_per_m_f=D3_DEFAULT_FEEDLINE_C_PER_M_F,
     filter_l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
@@ -1219,7 +1230,7 @@ function build_d3_intrinsic_pair_notch_hybridized_circuit_plan(;
         start1_m=window_start_readout_m,
         start2_m=window_start_filter_m,
         length_m=window_length_m,
-        section_length_m=section_length_m,
+        section_length_m=mtl_section_length_m,
         l_matrix_per_m_h=l_matrix_per_m_h,
         c_matrix_per_m_f=c_matrix_per_m_f,
     )
@@ -1234,10 +1245,11 @@ function build_d3_intrinsic_pair_notch_hybridized_circuit_plan(;
             l_per_m_h=readout_l_per_m_h,
             c_per_m_f=readout_c_per_m_f,
         ),
-        breakpoints_m=[
+        breakpoints_m=_d3_mtl_window_breakpoints(
             window_start_readout_m,
-            window_start_readout_m + window_length_m,
-        ],
+            window_length_m,
+            mtl_section_length_m,
+        ),
         section_overrides=[coupled_line_section_override(mtl_model, 1)],
     )
     filter_resonator = add_quarter_wave_resonator!(
@@ -1251,10 +1263,11 @@ function build_d3_intrinsic_pair_notch_hybridized_circuit_plan(;
             l_per_m_h=filter_l_per_m_h,
             c_per_m_f=filter_c_per_m_f,
         ),
-        breakpoints_m=[
+        breakpoints_m=_d3_mtl_window_breakpoints(
             window_start_filter_m,
-            window_start_filter_m + window_length_m,
-        ],
+            window_length_m,
+            mtl_section_length_m,
+        ),
         section_overrides=[coupled_line_section_override(mtl_model, 2)],
     )
     window = couple_transmission_window!(

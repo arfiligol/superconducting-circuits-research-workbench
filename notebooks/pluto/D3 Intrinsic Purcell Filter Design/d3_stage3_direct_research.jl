@@ -323,7 +323,7 @@ function d3_stage3_direct_research_evaluation(
         stage.auxiliary.notch,
         notch_frequency_bracket_hz,
     )
-    notch_target_hz = 4.5e9
+    notch_target_hz = 5.0e9
     notch_delta_hz = notch.frequency_hz - notch_target_hz
 
     reference_poles, band = _d3_direct_in_band_poles(

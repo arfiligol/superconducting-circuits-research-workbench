@@ -27,7 +27,39 @@ SCHEMA_VERSION = "human-reviewable-simulation-report.v1"
 REGISTER_SCHEMA_VERSION = "human-reviewable-simulation-report-register.v1"
 REPORT_FILENAME = "report.png"
 REGISTER_FILENAME = "report_register.json"
-REPORT_WIDTH_PX = 1800
+REPORT_RENDER_CONFIG = {
+    "width_px": 1800,
+    "media_height_px": 1000,
+    "history_height_px": 470,
+    "font_family": "DejaVu Sans, Arial, sans-serif",
+    "base_font_size": 17,
+    "title_font_size": 30,
+    "section_font_size": 22,
+    "table_header_font_size": 19,
+    "table_cell_font_size": 17,
+    "table_header_height_px": 40,
+    "table_cell_height_px": 60,
+    "margin_px": {"l": 90, "r": 90, "t": 110, "b": 70},
+    "section_gap_px": 80,
+    "palette": {
+        "ink": "#182235",
+        "title": "#111827",
+        "muted": "#6b7280",
+        "background": "#ffffff",
+        "table_header": "#e7edf5",
+        "grid": "#d8dee8",
+        "authority": "#111827",
+        "analytic": "#2563eb",
+        "solver": "#d97706",
+        "diagnostic": "#7c3aed",
+        "response": "#b42318",
+        "lifetime": "#2563eb",
+        "pass": "#16835b",
+        "fail": "#b42318",
+        "unavailable": "#9a6700",
+    },
+}
+REPORT_WIDTH_PX = int(REPORT_RENDER_CONFIG["width_px"])
 _REPORT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _REQUIRED_BLOCK_SIGNATURE = (
@@ -36,6 +68,7 @@ _REQUIRED_BLOCK_SIGNATURE = (
     ("table", "metrics"),
     ("table", "parameters"),
     ("table", "fixed_specifications"),
+    ("table", "diagnostics"),
     ("table", "provenance"),
 )
 
@@ -135,16 +168,10 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
         expected_sha = _digest(source["sha256"], f"{path}.sha256")
         actual_sha = file_sha256(source_path)
         if actual_sha != expected_sha:
-            raise ValueError(
-                f"{path}.sha256 mismatch: expected {expected_sha}, got {actual_sha}."
-            )
-        source_visibility = _enum(
-            source["visibility"], {"private", "public"}, f"{path}.visibility"
-        )
+            raise ValueError(f"{path}.sha256 mismatch: expected {expected_sha}, got {actual_sha}.")
+        source_visibility = _enum(source["visibility"], {"private", "public"}, f"{path}.visibility")
         if visibility == "public" and source_visibility != "public":
-            raise ValueError(
-                f"Public report cannot cite non-public source {source_id!r}."
-            )
+            raise ValueError(f"Public report cannot cite non-public source {source_id!r}.")
         sources.append(
             {
                 "id": source_id,
@@ -160,7 +187,8 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     if len(raw_blocks) != len(_REQUIRED_BLOCK_SIGNATURE):
         raise ValueError(
             "manifest.blocks must contain exactly media, optimization_history, "
-            "metrics, parameters, fixed_specifications, and provenance in V1 order."
+            "metrics, parameters, fixed_specifications, diagnostics, and provenance "
+            "in V1 order."
         )
     blocks: list[dict[str, Any]] = []
     block_ids: set[str] = set()
@@ -316,13 +344,18 @@ def _validate_table_block(
 
 def _build_figure(manifest: Mapping[str, Any]) -> tuple[go.Figure, int]:
     media, history, *tables = manifest["blocks"]
-    pixel_heights = [900, 470] + [
-        105 + (68 if len(table["columns"]) > 4 else 42) * len(table["rows"])
-        for table in tables
-    ]
-    report_height = 190 + sum(pixel_heights) + 38 * (len(pixel_heights) - 1)
+    palette = REPORT_RENDER_CONFIG["palette"]
+    pixel_heights = [
+        int(REPORT_RENDER_CONFIG["media_height_px"]),
+        int(REPORT_RENDER_CONFIG["history_height_px"]),
+    ] + [105 + (110 if len(table["columns"]) > 4 else 78) * len(table["rows"]) for table in tables]
+    report_height = (
+        190
+        + sum(pixel_heights)
+        + int(REPORT_RENDER_CONFIG["section_gap_px"]) * (len(pixel_heights) - 1)
+    )
     figure = make_subplots(
-        rows=6,
+        rows=7,
         cols=1,
         specs=[
             [{"type": "xy"}],
@@ -331,9 +364,10 @@ def _build_figure(manifest: Mapping[str, Any]) -> tuple[go.Figure, int]:
             [{"type": "table"}],
             [{"type": "table"}],
             [{"type": "table"}],
+            [{"type": "table"}],
         ],
         row_heights=pixel_heights,
-        vertical_spacing=0.024,
+        vertical_spacing=float(REPORT_RENDER_CONFIG["section_gap_px"]) / report_height,
         subplot_titles=[block["title"] for block in manifest["blocks"]],
     )
 
@@ -359,7 +393,7 @@ def _build_figure(manifest: Mapping[str, Any]) -> tuple[go.Figure, int]:
             x=history["x_values"],
             y=history["y_values"],
             mode="lines",
-            line={"color": "#6f42c1", "width": 3},
+            line={"color": palette["diagnostic"], "width": 3},
             name=history["y_label"],
             showlegend=False,
             hovertemplate="%{x}<br>%{y:.6g}<extra></extra>",
@@ -372,7 +406,7 @@ def _build_figure(manifest: Mapping[str, Any]) -> tuple[go.Figure, int]:
             x=[history["x_values"][-1]],
             y=[history["y_values"][-1]],
             mode="markers",
-            marker={"color": "#6f42c1", "size": 11},
+            marker={"color": palette["diagnostic"], "size": 11},
             showlegend=False,
             hoverinfo="skip",
         ),
@@ -390,26 +424,29 @@ def _build_figure(manifest: Mapping[str, Any]) -> tuple[go.Figure, int]:
 
     for row_index, table in enumerate(tables, start=3):
         columns = list(zip(*table["rows"], strict=True))
-        font_colors = [
-            [_status_color(value) for value in column]
-            for column in columns
-        ]
+        font_colors = [[_status_color(value) for value in column] for column in columns]
         figure.add_trace(
             go.Table(
                 columnwidth=table["column_widths"],
                 header={
                     "values": [f"<b>{_escaped(value)}</b>" for value in table["columns"]],
                     "align": "left",
-                    "fill_color": "#e7edf5",
-                    "font": {"color": "#182235", "size": 19},
-                    "height": 40,
+                    "fill_color": palette["table_header"],
+                    "font": {
+                        "color": palette["ink"],
+                        "size": REPORT_RENDER_CONFIG["table_header_font_size"],
+                    },
+                    "height": REPORT_RENDER_CONFIG["table_header_height_px"],
                 },
                 cells={
                     "values": [[_escaped(value) for value in column] for column in columns],
                     "align": "left",
-                    "fill_color": "#ffffff",
-                    "font": {"color": font_colors, "size": 17},
-                    "height": 34,
+                    "fill_color": palette["background"],
+                    "font": {
+                        "color": font_colors,
+                        "size": REPORT_RENDER_CONFIG["table_cell_font_size"],
+                    },
+                    "height": REPORT_RENDER_CONFIG["table_cell_height_px"],
                 },
             ),
             row=row_index,
@@ -421,18 +458,28 @@ def _build_figure(manifest: Mapping[str, Any]) -> tuple[go.Figure, int]:
             "text": manifest["title"],
             "x": 0.5,
             "xanchor": "center",
-            "font": {"size": 30, "color": "#111827"},
+            "font": {
+                "size": REPORT_RENDER_CONFIG["title_font_size"],
+                "color": palette["title"],
+            },
         },
         width=REPORT_WIDTH_PX,
         height=report_height,
-        margin={"l": 90, "r": 90, "t": 110, "b": 70},
-        paper_bgcolor="white",
-        plot_bgcolor="white",
-        font={"family": "DejaVu Sans, Arial, sans-serif", "size": 17, "color": "#182235"},
+        margin=REPORT_RENDER_CONFIG["margin_px"],
+        paper_bgcolor=palette["background"],
+        plot_bgcolor=palette["background"],
+        font={
+            "family": REPORT_RENDER_CONFIG["font_family"],
+            "size": REPORT_RENDER_CONFIG["base_font_size"],
+            "color": palette["ink"],
+        },
         template="plotly_white",
     )
     for annotation in figure.layout.annotations:
-        annotation.font = {"size": 22, "color": "#182235"}
+        annotation.font = {
+            "size": REPORT_RENDER_CONFIG["section_font_size"],
+            "color": palette["ink"],
+        }
     return figure, report_height
 
 
@@ -517,7 +564,7 @@ def _display_cell(value: Any, path: str) -> str:
         if cell["status"] != "NOT_AVAILABLE":
             raise ValueError(f"{path}.status must be 'NOT_AVAILABLE'.")
         return f"NOT_AVAILABLE — {_text(cell['reason'], f'{path}.reason')}"
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value):
         raise ValueError(f"{path} must be finite text/number or NOT_AVAILABLE with a reason.")
     return str(value)
 
@@ -535,7 +582,7 @@ def _source_ids(value: Any, path: str, known: set[str]) -> list[str]:
 def _finite_numbers(value: Any, path: str) -> list[float]:
     numbers: list[float] = []
     for index, item in enumerate(_sequence(value, path)):
-        if isinstance(item, bool) or not isinstance(item, (int, float)):
+        if isinstance(item, bool) or not isinstance(item, int | float):
             raise ValueError(f"{path}[{index}] must be numeric.")
         number = float(item)
         if not math.isfinite(number):
@@ -559,7 +606,7 @@ def _mapping(value: Any, path: str) -> Mapping[str, Any]:
 
 
 def _sequence(value: Any, path: str) -> Sequence[Any]:
-    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+    if isinstance(value, str | bytes) or not isinstance(value, Sequence):
         raise ValueError(f"{path} must be an array.")
     return value
 
@@ -598,33 +645,36 @@ def _escaped(value: str) -> str:
 
 
 def _status_color(value: str) -> str:
+    palette = REPORT_RENDER_CONFIG["palette"]
     if value == "PASS":
-        return "#16835b"
+        return palette["pass"]
     if value == "FAIL":
-        return "#b42318"
+        return palette["fail"]
     if value.startswith("NOT_AVAILABLE"):
-        return "#9a6700"
-    return "#182235"
+        return palette["unavailable"]
+    return palette["ink"]
 
 
 def _assert_no_private_absolute_paths(value: Any, path: str = "register") -> None:
     if isinstance(value, Mapping):
         for key, child in value.items():
             _assert_no_private_absolute_paths(child, f"{path}.{key}")
-    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+    elif isinstance(value, Sequence) and not isinstance(value, str | bytes):
         for index, child in enumerate(value):
             _assert_no_private_absolute_paths(child, f"{path}[{index}]")
-    elif isinstance(value, str):
-        if "/home/" in value or "\\Users\\" in value or re.search(
-            r"(^|[\s(])/(?:tmp|var|root|etc)/", value
-        ):
-            raise ValueError(f"{path} contains a private absolute filesystem path.")
+    elif isinstance(value, str) and (
+        "/home/" in value
+        or "\\Users\\" in value
+        or re.search(r"(^|[\s(])/(?:tmp|var|root|etc)/", value)
+    ):
+        raise ValueError(f"{path} contains a private absolute filesystem path.")
 
 
 __all__ = [
     "REGISTER_FILENAME",
     "REGISTER_SCHEMA_VERSION",
     "REPORT_FILENAME",
+    "REPORT_RENDER_CONFIG",
     "SCHEMA_VERSION",
     "file_sha256",
     "render_simulation_report",

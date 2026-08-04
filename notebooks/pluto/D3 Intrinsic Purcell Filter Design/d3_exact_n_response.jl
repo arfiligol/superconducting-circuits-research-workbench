@@ -1851,9 +1851,11 @@ end
 
 Extract the readout and filter diagonal complex roots after eliminating the
 matched finite-feedline coordinates from the coupling-on source model. The
-real parts own the D3 loaded-bare frequency residuals; the imaginary parts own
-the corresponding loaded-bare external linewidth diagnostics. These are not
-Full-QRP hybridized poles.
+real and imaginary parts are legacy response-equivalent fitter diagnostics;
+they do not own the revision-9 Stage-2 objective. Stage 2 instead retains
+`(r,p)` together and Schur-eliminates exactly `(q,f1,fc,f2)` through
+`d3_q_feedline_downfolded_rp_metrics`. These roots are not Full-QRP
+hybridized poles.
 """
 function d3_feedline_downfolded_loaded_bare_roots(
     model,

@@ -131,7 +131,7 @@
             "role": "transmission_line_series_inductance",
             "parameters": {
                 "schematic_kind": "inductor",
-                "inductance": 3.08147805e-10
+                "inductance": 3.081478050000001e-10
             },
             "id": "intrinsic_filter_readout_resonator_l_4",
             "to": "intrinsic_filter_readout_resonator_node_4",
@@ -144,7 +144,7 @@
             "role": "transmission_line_series_inductance",
             "parameters": {
                 "schematic_kind": "inductor",
-                "inductance": 3.08147805e-10
+                "inductance": 3.0814780499999996e-10
             },
             "id": "intrinsic_filter_readout_resonator_l_5",
             "to": "intrinsic_filter_readout_resonator_node_5",
@@ -222,7 +222,7 @@
             "role": "transmission_line_shunt_capacitance",
             "parameters": {
                 "schematic_kind": "capacitor",
-                "capacitance": 1.2827297625e-13
+                "capacitance": 1.2827297625000003e-13
             },
             "id": "intrinsic_filter_readout_resonator_c_node_3",
             "to": "ground",
@@ -248,7 +248,7 @@
             "role": "transmission_line_shunt_capacitance",
             "parameters": {
                 "schematic_kind": "capacitor",
-                "capacitance": 1.2827297625000003e-13
+                "capacitance": 1.2827297624999998e-13
             },
             "id": "intrinsic_filter_readout_resonator_c_node_5",
             "to": "ground",
@@ -304,8 +304,8 @@
                     0.0007499999999999999,
                     0.0007499999999999999,
                     0.0007499999999999999,
-                    0.00075,
-                    0.00075,
+                    0.0007500000000000002,
+                    0.0007499999999999998,
                     0.0007500000000000001,
                     0.0007500000000000001,
                     0.0007500000000000001
@@ -365,9 +365,9 @@
                     0,
                     1.34895e-13,
                     1.34895e-13,
-                    1.2827297625e-13,
-                    1.216509525e-13,
                     1.2827297625000003e-13,
+                    1.216509525e-13,
+                    1.2827297624999998e-13,
                     1.3489500000000003e-13,
                     1.3489500000000003e-13,
                     6.744750000000001e-14
@@ -477,7 +477,7 @@
             "role": "transmission_line_series_inductance",
             "parameters": {
                 "schematic_kind": "inductor",
-                "inductance": 3.0814090500000003e-10
+                "inductance": 3.081409050000001e-10
             },
             "id": "intrinsic_filter_filter_resonator_l_4",
             "to": "intrinsic_filter_filter_resonator_node_4",
@@ -490,7 +490,7 @@
             "role": "transmission_line_series_inductance",
             "parameters": {
                 "schematic_kind": "inductor",
-                "inductance": 3.0814090500000003e-10
+                "inductance": 3.0814090499999993e-10
             },
             "id": "intrinsic_filter_filter_resonator_l_5",
             "to": "intrinsic_filter_filter_resonator_node_5",
@@ -650,8 +650,8 @@
                     0.0007499999999999999,
                     0.0007499999999999999,
                     0.0007499999999999999,
-                    0.00075,
-                    0.00075,
+                    0.0007500000000000002,
+                    0.0007499999999999998,
                     0.0007500000000000001,
                     0.0007500000000000001,
                     0.0007500000000000001
@@ -772,7 +772,7 @@
             "role": "coupled_window_mutual_capacitance",
             "parameters": {
                 "schematic_kind": "capacitive_coupling",
-                "capacitance": 3.0362925000000002e-15
+                "capacitance": 3.036292500000001e-15
             },
             "id": "intrinsic_filter_mtl_window_c12_1_start",
             "to": "intrinsic_filter_filter_resonator_node_3",
@@ -785,7 +785,7 @@
             "role": "coupled_window_mutual_capacitance",
             "parameters": {
                 "schematic_kind": "capacitive_coupling",
-                "capacitance": 3.0362925000000002e-15
+                "capacitance": 3.036292500000001e-15
             },
             "id": "intrinsic_filter_mtl_window_c12_1_stop",
             "to": "intrinsic_filter_filter_resonator_node_4",
@@ -799,8 +799,8 @@
             "parameters": {
                 "schematic_kind": "inductive_coupling",
                 "inductor_a": "intrinsic_filter_readout_resonator_l_4",
-                "mutual_inductance": 1.4313952500000002e-11,
-                "coupling_coefficient": 0.046452100350490404,
+                "mutual_inductance": 1.4313952500000005e-11,
+                "coupling_coefficient": 0.04645210035049041,
                 "inductor_b": "intrinsic_filter_filter_resonator_l_4"
             },
             "id": "intrinsic_filter_mtl_window_m12_1",
@@ -814,7 +814,7 @@
             "role": "coupled_window_mutual_capacitance",
             "parameters": {
                 "schematic_kind": "capacitive_coupling",
-                "capacitance": 3.0362925000000002e-15
+                "capacitance": 3.0362924999999994e-15
             },
             "id": "intrinsic_filter_mtl_window_c12_2_start",
             "to": "intrinsic_filter_filter_resonator_node_4",
@@ -827,7 +827,7 @@
             "role": "coupled_window_mutual_capacitance",
             "parameters": {
                 "schematic_kind": "capacitive_coupling",
-                "capacitance": 3.0362925000000002e-15
+                "capacitance": 3.0362924999999994e-15
             },
             "id": "intrinsic_filter_mtl_window_c12_2_stop",
             "to": "intrinsic_filter_filter_resonator_node_5",
@@ -841,7 +841,7 @@
             "parameters": {
                 "schematic_kind": "inductive_coupling",
                 "inductor_a": "intrinsic_filter_readout_resonator_l_5",
-                "mutual_inductance": 1.4313952500000002e-11,
+                "mutual_inductance": 1.4313952499999997e-11,
                 "coupling_coefficient": 0.046452100350490404,
                 "inductor_b": "intrinsic_filter_filter_resonator_l_5"
             },
@@ -857,8 +857,8 @@
             "parameters": {
                 "coupling_orientation": "same_direction",
                 "section_lengths_m": [
-                    0.00075,
-                    0.00075
+                    0.0007500000000000002,
+                    0.0007499999999999998
                 ],
                 "c12_per_m_f": 8.09678e-12,
                 "l_matrix_per_m_h": "[4.1086374000000003e-7 1.9085270000000002e-8; 1.9085270000000002e-8 4.1085454e-7]",
@@ -866,7 +866,7 @@
                 "capacitive_boundary_records": [
                     {
                         "boundary_side": "start",
-                        "capacitance": 3.0362925000000002e-15,
+                        "capacitance": 3.036292500000001e-15,
                         "section_pair": [
                             4,
                             4
@@ -876,7 +876,7 @@
                     },
                     {
                         "boundary_side": "stop",
-                        "capacitance": 3.0362925000000002e-15,
+                        "capacitance": 3.036292500000001e-15,
                         "section_pair": [
                             4,
                             4
@@ -886,7 +886,7 @@
                     },
                     {
                         "boundary_side": "start",
-                        "capacitance": 3.0362925000000002e-15,
+                        "capacitance": 3.0362924999999994e-15,
                         "section_pair": [
                             5,
                             5
@@ -896,7 +896,7 @@
                     },
                     {
                         "boundary_side": "stop",
-                        "capacitance": 3.0362925000000002e-15,
+                        "capacitance": 3.0362924999999994e-15,
                         "section_pair": [
                             5,
                             5

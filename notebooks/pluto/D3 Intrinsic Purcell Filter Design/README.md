@@ -15,8 +15,9 @@ The host Design Target owns the physics and optimization semantics:
 - `d3_resonator_input.jl` validates one caller-selected, provenance-bearing
   continuous-upper-ground public Q2D input. Both physical stages bind its
   exact wrapper SHA, geometry, matrices, coupling orientation, and numerical
-  section length into one shared fixed-line identity; the Run manifest owns
-  which validated cross-section is being explored.
+  section length into one shared fixed-line identity. D3 physical CPW/MTL
+  discretization is limited to 50 µm or finer; the Run manifest owns which
+  validated cross-section is being explored.
 - `d3_stage_models.jl` accepts exactly
   `(lr_open,lr_short,lc,lp_open,lp_short,u_IDC)` for both Stage 2 and Stage 3.
   Stage 2 response-matches the five lengths to read-only
@@ -29,8 +30,8 @@ The host Design Target owns the physics and optimization semantics:
   fluxes, reduced physically anchored coordinates, their impedance-normalized
   oscillator representation, the fully hybridized closed normal-mode spectrum,
   and matched-open response poles.
-- `d3_stage_objectives.jl` owns one revision-7 Stage-2 objective and one
-  independent revision-7 Stage-3 objective. Matrix-space and open-response
+- `d3_stage_objectives.jl` owns one revision-9 Stage-2 objective and one
+  independent revision-9 Stage-3 objective. Matrix-space and open-response
   operands are provenance groups inside each joint objective, not Cost A/B/C.
 - `d3_coupled_optimizer.jl` owns the reusable bounded CMA-ES-only numerical
   search. It does not own circuit parameters, topology, or multi-start
@@ -44,12 +45,15 @@ The host Design Target owns the physics and optimization semantics:
   physical foundation, and transactionally publishes the six canonical Run
   artifacts. The Run specification records Q2D artifact identity, physical
   bounds, exact CMA seed/sigma/population/budgets/tolerances, and initial mean;
-  publication cross-checks them against the winner and foundation. It owns
-  publication and identity checks, not optimization or circuit physics.
+  the summary also retains the evaluator-owned temporary CPW/MTL reference
+  topology, section discretization, root/slope settings and numerical evidence
+  used to resolve `(Cr,Lr,Cp,Lp,Cn,Ln)`. Publication cross-checks them against
+  the winner and foundation. It owns publication and identity checks, not
+  optimization or circuit physics.
 - `notebooks/python/d3_stage2_candidate_review_report.py` accepts only those
   six canonical artifacts and renders the private Human-review report. It
-  rejects legacy summaries and any replacement trace supplied outside the Run
-  folder.
+  rejects legacy summaries, incomplete Length-to-LC extraction evidence, and
+  any replacement trace supplied outside the Run folder.
 
 ## Coordinate-, representation-, and response-explicit quantity contract
 
@@ -62,6 +66,7 @@ representation, and response boundary:
 | Raw physical node fluxes | Circuit Plan and compiled seven-node matrices | Pre-transform circuit coordinates. |
 | Reduced physically anchored flux-charge coordinates | Topology-declared transform followed by neutral common-charge `7 -> 6` reduction | `(q,r,p,f1,fc,f2)` is the physical coordinate basis used by `C`, `K`, and the Hamiltonian. |
 | Anchored bare-coordinate oscillator representation | Apply `Z_i = sqrt((C^-1)_ii/K_ii)` independently to each reduced QRP-on coordinate, with no coordinate rotation; use the closed conservative block | The same anchored directions expressed through `(a_i,a_i^dagger)`. `h_ii/2pi` owns the anchored-bare frequencies; `h_rp/2pi` and `Delta` remain explicit report quantities. |
+| Matched-open q+feedline-downfolded anchored-coordinate dynamic-effective representation | Attach the matched ports to the exact second-order six-coordinate QRP-on operator, retain `(r,p)`, and Schur-eliminate `(q,f1,fc,f2)` without diagonalizing the retained pair | Owns the Stage-2 `r/p` diagonal roots and residue-normalized complex exchange. The qubit remains through its linearized self-energy; ports are boundary self-energies, not coordinates. |
 | Fully hybridized closed normal-mode spectrum | Solve `K u = omega^2 C u` for the complete QRP-on closed conservative model | Owns the closed normal-mode frequencies. The exported quantity view is a spectrum, not a reusable basis transformation. |
 | Matched-open port poles | Attach the declared external ports to the QRP-on model and solve the exact open generator | Owns response-pole frequencies and linewidths under `ext,on`. These poles are not another Hamiltonian basis. |
 
@@ -76,12 +81,25 @@ report provenance. `d3_stage2_quantity_review_payload` converts that winning
 foundation into the JSON-ready, summary-SHA-bound report artifact.
 
 The anchored-bare coefficients, closed spectrum, and matched-open poles are
-reported without redefining the accepted revision-7 Stage-2 objective. That
+reported without redefining the accepted revision-9 Stage-2 objective. That
 objective retains its explicitly qualified `q+feedline -> r/p` downfolded
-frequency and exchange operands. HB replay remains independent closure
-evidence. A future Finite-Order Port-Response scalar-formula parameter fitter
-must remain separate evidence with fixed basis, normalization, sparsity, and
-port conventions; no fitted trace is fabricated by the current report.
+frequency and exchange operands. Their common source is the exact second-order
+open dynamic stiffness, equivalently the complete doubled non-RWA
+`h` and `Delta` dynamics: no `h`-only approximation precedes the Schur reduction.
+The complex exchange is the effective off-diagonal at the two diagonal roots'
+midpoint divided by their derivative-residue normalization; its coherent real
+part enters the objective, while its magnitude and dissipative imaginary part
+remain report quantities. HB replay remains independent closure evidence. A
+future Finite-Order Port-Response scalar-formula parameter fitter must remain
+separate evidence with fixed basis, normalization, sparsity, and port
+conventions; no fitted trace is fabricated by the current report.
+
+This V1 is state-independent. The full model still retains `q`, and the
+Full-QRP linewidth sum still follows the assigned `q/r/p` poles, but the
+dynamic-effective `r/p` block eliminates the linearized qubit only after its
+self-energy is included. Qubit-state-conditioned susceptibility, dispersive
+shifts, and `S21` require a later contract that retains `q` until that
+state-dependent response is defined.
 
 The IDC has one supported representation:
 
@@ -130,16 +148,50 @@ qubit-admittance-receipt.json
 
 `linear-quantities.json` and the qubit receipt are SHA-bound to the same
 `summary.json`; all three carry the same four-part compiled-model identity and
-complete revision-7 objective authority. The summary also hashes the history,
-S21, and qubit-admittance files. The folder is renamed into place only after
-all six files are complete; the report rejects extra files or any hash,
-authority, Q2D identity, or model-identity mismatch. Report generation is then:
+complete revision-9 objective authority. The summary also hashes the history,
+S21, and qubit-admittance files, and records the complete evaluator-owned
+Length-to-LC response-match evidence rather than recomputing it in the report.
+The folder is renamed into place only after all six files are complete; the
+report rejects extra files or any hash, authority, Q2D identity, extraction
+evidence, or model-identity mismatch. Report generation is then:
 
 ```bash
 uv run python notebooks/python/d3_stage2_candidate_review_report.py \
   --run-directory <canonical-stage2-run> \
   --output-directory <private-report-output>
 ```
+
+## Human-review report representation
+
+One `report.png` is the complete Stage-2 candidate-review surface. Its fixed
+reading order is:
+
+1. Direct C/K, Exact-12, independent HB, and scalar VF-of-Direct `S21`, their
+   complex residuals, and the weighted-qubit `Re(Y)` / linearized Purcell `T1`;
+2. best objective cost versus valid candidate evaluation;
+3. all revision-9 objective operands as target, actual, scale, residual, gate,
+   and physical meaning, followed only by the Schur-extracted and scalar-VF
+   comparison values;
+4. fabrication lengths and IDC finger length, resolved Equivalent LC values,
+   effective qubit capacitance, and floating-qubit transform;
+5. Q2D setup, single-line CPW RLGC/propagation, MTL matrices/modal propagation,
+   and the complete Length-to-LC extraction audit;
+6. report-only anchored-bare, fully hybridized closed, and matched-open views;
+7. source identity, reduction boundaries, numerical closure, and optimizer
+   provenance.
+
+`notebooks/python/human_reviewable_simulation_report.py` owns the shared
+`REPORT_RENDER_CONFIG` for image width, typography, spacing, table sizing, and
+semantic curve colors. The D3 producer owns the plotted quantities, units,
+labels, and fixed section order. Missing evidence is rendered explicitly as
+`NOT_AVAILABLE`; the renderer never consults an unbound external file. In
+particular, the current canonical Q2D artifact does not yet carry the material
+stack or dielectric constants, so those fields cannot be promoted into the
+report until the Q2D artifact contract is extended.
+
+The converging V1 review artifact remains PNG. A later PDF export should render
+the same fixed sections as separate logical pages and merge those pages; it
+must not turn this vertically continuous report into one oversized PDF page.
 
 ## Validation
 

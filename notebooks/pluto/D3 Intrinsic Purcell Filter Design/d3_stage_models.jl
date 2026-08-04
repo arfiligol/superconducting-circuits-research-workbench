@@ -333,7 +333,7 @@ function _d3_stage2_resonator_response_model(lengths, lines; diagonal)
         start1_m=lengths.lr_short_m,
         start2_m=lengths.lp_short_m,
         length_m=lengths.lc_m,
-        section_length_m=lines.section_length_m,
+        section_length_m=lines.mtl_section_length_m,
         l_matrix_per_m_h=l_matrix,
         c_matrix_per_m_f=c_matrix,
     )
@@ -349,9 +349,10 @@ function _d3_stage2_resonator_response_model(lengths, lines; diagonal)
             l_per_m_h=lines.readout_l_per_m_h,
             c_per_m_f=lines.readout_c_per_m_f,
         ),
-        breakpoints_m=(
+        breakpoints_m=_d3_mtl_window_breakpoints(
             lengths.lr_short_m,
-            lengths.lr_short_m + lengths.lc_m,
+            lengths.lc_m,
+            lines.mtl_section_length_m,
         ),
         section_overrides=[coupled_line_section_override(mtl_model, 1)],
     )
@@ -367,9 +368,10 @@ function _d3_stage2_resonator_response_model(lengths, lines; diagonal)
             l_per_m_h=lines.filter_l_per_m_h,
             c_per_m_f=lines.filter_c_per_m_f,
         ),
-        breakpoints_m=(
+        breakpoints_m=_d3_mtl_window_breakpoints(
             lengths.lp_short_m,
-            lengths.lp_short_m + lengths.lc_m,
+            lengths.lc_m,
+            lines.mtl_section_length_m,
         ),
         section_overrides=[coupled_line_section_override(mtl_model, 2)],
     )
@@ -570,6 +572,17 @@ function _d3_stage2_evaluate_response_match(
         fixed_line_input_sha256=selected_lines.fixed_line_input_sha256,
         match_contract_id=mapping.contract.match_contract_id,
         match_evidence=(
+            reference_model=(
+                role=:physical_length_to_equivalent_lc_extraction_only,
+                final_stage2_hb_model=:resolved_lumped_equivalent_circuit,
+                topology=:two_grounded_head_open_tail_quarter_wave_resonators_with_mtl_window,
+                terminal_coordinates=(:readout_open_tail, :filter_open_tail),
+                diagonal_match_state=:mtl_mutual_terms_disabled_diagonal_loading_preserved,
+                bridge_match_state=:full_mtl_mutual_terms_preserved,
+                internal_coordinate_elimination=:frequency_dependent_dynamic_schur_complement,
+                section_length_m=lines.section_length_m,
+                mtl_section_length_m=lines.mtl_section_length_m,
+            ),
             readout=readout,
             filter=filter,
             bridge=bridge,
@@ -936,6 +949,9 @@ function _d3_stage3_fixed_line_keywords(fixed)
         :section_length_m,
         "D3 Stage-3 fixed input",
     )
+    mtl_section_length_m = hasproperty(fixed, :mtl_section_length_m) ?
+        _d3_stage_positive(fixed, :mtl_section_length_m, "D3 Stage-3 fixed input") :
+        section_length_m
     for name in (
         :readout_l_per_m_h,
         :readout_c_per_m_f,
@@ -959,6 +975,7 @@ function _d3_stage3_fixed_line_keywords(fixed)
         error("D3 Stage-3 coupling orientation is unsupported.")
     return (
         section_length_m=section_length_m,
+        mtl_section_length_m=mtl_section_length_m,
         readout_l_per_m_h=Float64(fixed.readout_l_per_m_h),
         readout_c_per_m_f=Float64(fixed.readout_c_per_m_f),
         filter_l_per_m_h=Float64(fixed.filter_l_per_m_h),
@@ -1017,6 +1034,7 @@ function _d3_selected_q2d_line_input(fixed)
         q2d_topology_id=String(topology_id),
         q2d_geometry_um=geometry,
         section_length_m=lines.section_length_m,
+        mtl_section_length_m=lines.mtl_section_length_m,
         readout_l_per_m_h=lines.readout_l_per_m_h,
         readout_c_per_m_f=lines.readout_c_per_m_f,
         filter_l_per_m_h=lines.filter_l_per_m_h,
@@ -1123,6 +1141,7 @@ function d3_stage3_hybridized_model(
             filter_length_m=
                 lengths.lp_short_m + lengths.lc_m + lengths.lp_open_m,
             section_length_m=lines.section_length_m,
+            mtl_section_length_m=lines.mtl_section_length_m,
             filter_l_per_m_h=lines.filter_l_per_m_h,
             filter_c_per_m_f=lines.filter_c_per_m_f,
             window_start_filter_m=lengths.lp_short_m,
@@ -1138,6 +1157,7 @@ function d3_stage3_hybridized_model(
             filter_length_m=
                 lengths.lp_short_m + lengths.lc_m + lengths.lp_open_m,
             section_length_m=lines.section_length_m,
+            mtl_section_length_m=lines.mtl_section_length_m,
             readout_l_per_m_h=lines.readout_l_per_m_h,
             readout_c_per_m_f=lines.readout_c_per_m_f,
             filter_l_per_m_h=lines.filter_l_per_m_h,
@@ -1255,7 +1275,7 @@ end
         candidate, fixed, resonator_mapping, idc_mapping; ...)
 
 Compile one complete Equivalent candidate and extract exactly the six raw
-revision-7 objective operands. Expensive response-closure and L_A calibration
+revision-9 objective operands. Expensive response-closure and L_A calibration
 diagnostics are intentionally outside this optimizer-facing adapter.
 """
 function d3_stage2_candidate_metrics(
@@ -1470,12 +1490,14 @@ function d3_stage2_candidate_foundation(candidate, fixed, idc_mapping; kwargs...
     )
 end
 
-"""Return the JSON-ready three-frequency-view payload for one foundation.
+"""Return the JSON-ready base multi-view payload for one foundation.
 
 The payload is derived from `foundation.quantity_views`; callers must not
 rebuild a second circuit from a summary. The Stage-2 objective receipt binds
-the revision-7 authority and model identity. `source_summary_sha256` binds the
+the revision-9 authority and model identity. `source_summary_sha256` binds the
 payload to the summary that selected this foundation as the winning candidate.
+The canonical Stage-2 publisher adds the matched-open Schur-downfolded `r/p`
+receipt and promotes this base payload to the current report schema.
 """
 function d3_stage2_quantity_review_payload(
     foundation,
@@ -1497,7 +1519,7 @@ function d3_stage2_quantity_review_payload(
     source_identity = foundation.cqed_handoff.source_model_identity
     hasproperty(objective, :contract_id) &&
         objective.contract_id == "d3-stage2-stage3-full-qrp-objective.v2" || error(
-        "D3 quantity review requires the revision-7 Stage-2 objective receipt.",
+        "D3 quantity review requires the revision-9 Stage-2 objective receipt.",
     )
     hasproperty(objective, :stage_id) && objective.stage_id == :stage2_equivalent ||
         error("D3 quantity review requires a Stage-2 objective receipt.")
@@ -1508,9 +1530,9 @@ function d3_stage2_quantity_review_payload(
     expected_authority = (
         approval_status=:human_approved,
         target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
-        target_revision=7,
+        target_revision=9,
         target_contract_sha256=
-            "2ec4014c5bd3ba5824c15d71c3ad1e03b2a0d1f7444a35dcd31b0a4fe99b7bf9",
+            "86eb2da65329df9059efeddccc9f479d1ef116e0eed4a0de0554cf8f02353b9d",
         notch_authority=:rp_on,
         effective_diagonal_frequency_extraction=
             :q_feedline_downfolded_rp_complex_operator,
@@ -1521,7 +1543,7 @@ function d3_stage2_quantity_review_payload(
     )
     hasproperty(objective, :authority) && objective.authority == expected_authority ||
         error(
-            "D3 quantity review objective authority does not equal the Human-approved revision-7 contract.",
+            "D3 quantity review objective authority does not equal the Human-approved revision-9 contract.",
         )
     complex_record(value) = Dict(
         "real" => Float64(real(value)),

@@ -18,16 +18,16 @@ export Stage2RunSpec,
     write_stage2_result
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
-const SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v1"
+const SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v2"
 const QUBIT_RECEIPT_SCHEMA = "d3-stage2-qubit-admittance-receipt.v1"
 const OBJECTIVE_CONTRACT = "d3-stage2-stage3-full-qrp-objective.v2"
 const FOUNDATION_CONTRACT = "d3-stage2-candidate-foundation.v5"
 const OBJECTIVE_AUTHORITY = (
     approval_status=:human_approved,
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
-    target_revision=7,
+    target_revision=9,
     target_contract_sha256=
-        "2ec4014c5bd3ba5824c15d71c3ad1e03b2a0d1f7444a35dcd31b0a4fe99b7bf9",
+        "86eb2da65329df9059efeddccc9f479d1ef116e0eed4a0de0554cf8f02353b9d",
     notch_authority=:rp_on,
     effective_diagonal_frequency_extraction=
         :q_feedline_downfolded_rp_complex_operator,
@@ -410,7 +410,7 @@ end
 function _validate_objective(objective, model_identity, winner_cost)
     hasproperty(objective, :contract_id) &&
         objective.contract_id == OBJECTIVE_CONTRACT || error(
-        "D3 Stage-2 result requires the revision-7 objective receipt.",
+        "D3 Stage-2 result requires the revision-9 objective receipt.",
     )
     hasproperty(objective, :stage_id) && objective.stage_id == :stage2_equivalent ||
         error("D3 Stage-2 result received a non-Stage-2 objective.")
@@ -422,12 +422,12 @@ function _validate_objective(objective, model_identity, winner_cost)
         model_identity || error("D3 Stage-2 foundation and objective model identities disagree.")
     hasproperty(objective, :authority) && objective.authority == OBJECTIVE_AUTHORITY ||
         error(
-            "D3 Stage-2 objective authority does not equal the Human-approved revision-7 contract.",
+            "D3 Stage-2 objective authority does not equal the Human-approved revision-9 contract.",
         )
     cost = Float64(objective.cost)
     isfinite(cost) && cost >= 0 || error("D3 Stage-2 objective cost must be finite and non-negative.")
     isapprox(cost, Float64(winner_cost); rtol=1.0e-12, atol=1.0e-12) || error(
-        "Re-evaluated revision-7 objective cost disagrees with the optimizer winner cost.",
+        "Re-evaluated revision-9 objective cost disagrees with the optimizer winner cost.",
     )
     return cost
 end
@@ -694,12 +694,15 @@ function _validate_linear_quantity_payload(
         "objective_authority",
         "coordinate_foundation",
         "anchored_oscillator_representation",
+        "matched_open_q_feedline_schur_downfolded_rp_effective_representation",
         "fully_hybridized_closed_normal_mode_spectrum",
         "matched_open_port_poles",
         "model_identity",
     )
-    _require_dict_keys(record, required, "D3 linear-quantity payload")
-    record["schema_version"] == "d3-stage2-linear-quantity-review.v3" || error(
+    Set(keys(record)) == Set(required) || error(
+        "D3 linear-quantity payload must contain exactly the V4 review projections.",
+    )
+    record["schema_version"] == "d3-stage2-linear-quantity-review.v4" || error(
         "D3 linear-quantity payload uses the wrong schema.",
     )
     record["source_summary_sha256"] == source_summary_sha256 || error(
@@ -712,8 +715,8 @@ function _validate_linear_quantity_payload(
         record["objective_authority"],
         "D3 linear-quantity objective authority",
     )
-    authority == _json_value(OBJECTIVE_AUTHORITY, "revision-7 authority") || error(
-        "D3 linear-quantity payload does not carry the complete revision-7 authority.",
+    authority == _json_value(OBJECTIVE_AUTHORITY, "revision-9 authority") || error(
+        "D3 linear-quantity payload does not carry the complete revision-9 authority.",
     )
     _model_identity(record["model_identity"], "D3 linear-quantity model identity") ==
         model_identity || error(
@@ -732,6 +735,81 @@ function _validate_linear_quantity_payload(
         anchored["normalization"] ==
             "Z_i_equals_sqrt_C_inverse_ii_over_K_ii" || error(
         "D3 anchored oscillator payload does not retain its accepted basis/normalization semantics.",
+    )
+    effective = _string_key_dict(
+        record["matched_open_q_feedline_schur_downfolded_rp_effective_representation"],
+        "D3 q+feedline-downfolded RP effective payload",
+    )
+    effective_fields = (
+        "contract_id",
+        "coupling_state",
+        "external_port_state",
+        "retained_coordinates",
+        "eliminated_coordinates",
+        "coordinate_basis",
+        "representation",
+        "diagonal_root_extraction",
+        "diagonal_roots",
+        "residue_normalized_exchange",
+        "determinant_closure",
+        "gate_policy",
+        "context_validation",
+        "operator_diagnostics",
+        "source_model_identity",
+        "provenance",
+    )
+    Set(keys(effective)) == Set(effective_fields) || error(
+        "D3 q+feedline-downfolded RP payload must contain exactly the V4 effective fields.",
+    )
+    effective["contract_id"] ==
+        "d3-q-feedline-downfolded-rp-effective-operator.v1" &&
+        effective["coupling_state"] == "qrp_on" &&
+        effective["external_port_state"] == "matched_open" &&
+        effective["retained_coordinates"] == ["r", "p"] &&
+        effective["eliminated_coordinates"] == ["q", "f1", "fc", "f2"] &&
+        effective["coordinate_basis"] ==
+            "physically_anchored_rp_coordinates_no_retained_pair_rotation" &&
+        effective["representation"] ==
+            "frequency_dependent_dynamic_effective_operator" &&
+        effective["diagonal_root_extraction"] ==
+            "principal_subsystem_matched_open_poles_in_declared_band" || error(
+        "D3 q+feedline-downfolded RP payload does not retain its effective-operator semantics.",
+    )
+    exchange = _string_key_dict(
+        effective["residue_normalized_exchange"],
+        "D3 q+feedline-downfolded RP exchange payload",
+    )
+    exchange["square_root_branch"] == "principal_complex_square_root" || error(
+        "D3 q+feedline-downfolded RP payload does not declare the extraction branch.",
+    )
+    operator_diagnostics = _string_key_dict(
+        effective["operator_diagnostics"],
+        "D3 q+feedline-downfolded RP operator diagnostics",
+    )
+    Set(keys(operator_diagnostics)) == Set(("readout", "midpoint", "filter")) || error(
+        "D3 q+feedline-downfolded RP operator diagnostics must contain exactly three samples.",
+    )
+    diagnostic_fields = Set((
+        "elimination_condition_number",
+        "relative_elimination_solve_residual",
+        "relative_derivative_solve_residual",
+        "effective_reciprocity_error",
+    ))
+    all(
+        sample -> Set(keys(_string_key_dict(
+            operator_diagnostics[sample],
+            "D3 q+feedline-downfolded RP $(sample) diagnostics",
+        ))) == diagnostic_fields,
+        ("readout", "midpoint", "filter"),
+    ) || error(
+        "D3 q+feedline-downfolded RP operator diagnostic fields are incomplete.",
+    )
+    effective_identity = _model_identity(
+        effective["source_model_identity"],
+        "D3 q+feedline-downfolded RP source model identity",
+    )
+    effective_identity == model_identity || error(
+        "D3 q+feedline-downfolded RP payload and canonical foundation identities disagree.",
     )
     closed = _string_key_dict(
         record["fully_hybridized_closed_normal_mode_spectrum"],
@@ -761,6 +839,105 @@ function _validate_linear_quantity_payload(
     return record
 end
 
+function _effective_rp_linear_review_payload(foundation)
+    hasproperty(foundation, :extractions) &&
+        hasproperty(foundation.extractions, :effective_rp) || error(
+        "D3 Stage-2 foundation is missing the q+feedline-downfolded RP extraction.",
+    )
+    effective = foundation.extractions.effective_rp
+    effective.contract_id ==
+        "d3-q-feedline-downfolded-rp-effective-operator.v1" || error(
+        "D3 Stage-2 foundation uses the wrong q+feedline-downfolded RP extraction.",
+    )
+    root_record(root) = Dict(
+        "coordinate" => String(root.coordinate),
+        "complex_frequency_hz" => _json_value(root.root_hz, "effective diagonal root"),
+        "frequency_hz" => root.frequency_hz,
+        "external_linewidth_hz" => root.external_linewidth_hz,
+        "frequency_band_hz" => root.frequency_band_hz,
+        "principal_subsystem_coordinates" => string.(root.principal_subsystem_coordinates),
+        "principal_subsystem_pole_index" => root.principal_subsystem_pole_index,
+        "relative_root_residual" => root.relative_root_residual,
+    )
+    return Dict(
+        "contract_id" => String(effective.contract_id),
+        "coupling_state" => String(effective.coupling_state),
+        "external_port_state" => String(effective.external_port_state),
+        "retained_coordinates" => string.(effective.retained_coordinates),
+        "eliminated_coordinates" => string.(effective.eliminated_coordinates),
+        "coordinate_basis" =>
+            "physically_anchored_rp_coordinates_no_retained_pair_rotation",
+        "representation" => "frequency_dependent_dynamic_effective_operator",
+        "diagonal_root_extraction" =>
+            "principal_subsystem_matched_open_poles_in_declared_band",
+        "diagonal_roots" => Dict(
+            "r" => root_record(effective.readout),
+            "p" => root_record(effective.filter),
+        ),
+        "residue_normalized_exchange" => Dict(
+            "midpoint_angular_frequency_rad_s" => _json_value(
+                effective.midpoint_angular_frequency_rad_s,
+                "effective RP midpoint",
+            ),
+            "residue_slopes" => _json_value(
+                effective.residue_slopes,
+                "effective RP residue slopes",
+            ),
+            "residue_normalization" => _json_value(
+                effective.residue_normalization,
+                "effective RP residue normalization",
+            ),
+            "square_root_branch" => String(effective.square_root_branch),
+            "coupling_samples_rad_s" => _json_value(
+                effective.coupling_samples_rad_s,
+                "effective RP coupling samples",
+            ),
+            "effective_exchange_rad_s" => _json_value(
+                effective.effective_exchange_rad_s,
+                "effective RP exchange",
+            ),
+            "coherent_exchange_hz" => effective.coherent_exchange_hz,
+            "total_exchange_hz" => effective.total_exchange_hz,
+            "dissipative_cross_coupling_hz" =>
+                effective.dissipative_cross_coupling_hz,
+            "maximum_pairwise_coupling_spread_rad_s" =>
+                effective.maximum_pairwise_coupling_spread_rad_s,
+            "relative_coupling_spread" => effective.relative_coupling_spread,
+        ),
+        "determinant_closure" => _json_value(
+            effective.determinant_closure,
+            "effective RP determinant closure",
+        ),
+        "gate_policy" => _json_value(
+            effective.gate_policy,
+            "effective RP gate policy",
+        ),
+        "context_validation" => _json_value(
+            effective.context_validation,
+            "effective RP context validation",
+        ),
+        "operator_diagnostics" => Dict(
+            String(name) => _json_value(
+                operator.diagnostics,
+                "effective RP $(name) operator diagnostics",
+            )
+            for (name, operator) in pairs((
+                readout=effective.operator_samples.readout,
+                midpoint=effective.operator_samples.midpoint,
+                filter=effective.operator_samples.filter,
+            ))
+        ),
+        "source_model_identity" => _json_value(
+            effective.source_model_identity,
+            "effective RP source model identity",
+        ),
+        "provenance" => _json_value(
+            effective.provenance,
+            "effective RP provenance",
+        ),
+    )
+end
+
 function _summary(evaluated, artifact_hashes)
     optimization = evaluated.optimization
     foundation = evaluated.foundation
@@ -786,7 +963,7 @@ function _summary(evaluated, artifact_hashes)
         :primary_linewidth_extraction,
     )
     all(name -> hasproperty(metrics, name), required_metrics) || error(
-        "D3 Stage-2 foundation is missing one or more revision-7 summary metrics.",
+        "D3 Stage-2 foundation is missing one or more revision-9 summary metrics.",
     )
     history = optimization.history
     valid_evaluations = count(record -> !isnothing(record.cost), history)
@@ -853,6 +1030,10 @@ function _summary(evaluated, artifact_hashes)
             "q2d_artifact_sha256" => stage.response_match.q2d_artifact_sha256,
             "fixed_line_input_sha256" => stage.response_match.fixed_line_input_sha256,
             "topology_id" => stage.response_match.topology_id,
+            "match_evidence" => _json_value(
+                stage.response_match.match_evidence,
+                "length-to-equivalent-LC response-match evidence",
+            ),
         ),
         "idc" => _json_value(stage.idc, "IDC result"),
         "response_frequency_hz" => evaluated.specification.response_frequency_hz,
@@ -899,12 +1080,27 @@ function write_stage2_result(
         _write_json(summary_path, _summary(evaluated, first_hashes))
         summary_sha256 = _file_sha256(summary_path)
 
-        linear_payload = _validate_linear_quantity_payload(
+        linear_payload_candidate = _string_key_dict(
             linear_quantity_payload_builder(
                 evaluated.foundation,
                 evaluated.objective,
                 summary_sha256,
             ),
+            "D3 linear-quantity payload builder result",
+        )
+        haskey(
+            linear_payload_candidate,
+            "matched_open_q_feedline_schur_downfolded_rp_effective_representation",
+        ) && error(
+            "D3 linear-quantity builder must not override the canonical effective extraction receipt.",
+        )
+        linear_payload_candidate["schema_version"] =
+            "d3-stage2-linear-quantity-review.v4"
+        linear_payload_candidate[
+            "matched_open_q_feedline_schur_downfolded_rp_effective_representation"
+        ] = _effective_rp_linear_review_payload(evaluated.foundation)
+        linear_payload = _validate_linear_quantity_payload(
+            linear_payload_candidate,
             summary_sha256,
             _model_identity(
                 evaluated.foundation.cqed_handoff.source_model_identity,

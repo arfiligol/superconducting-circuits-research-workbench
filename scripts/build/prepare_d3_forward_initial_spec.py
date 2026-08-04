@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write the source-first Spring2025 initializer consumed by D3 forward runs.
 
-This build helper serializes the existing pure-math initializer for the five
+This build helper serializes the existing pure-math initializer for the four
 Human-selected slots. It does not fit circuit parameters, consume Q2D output,
 or promote paper values to D3 design targets.
 """
@@ -23,8 +23,8 @@ from superconducting_circuits_analysis.domain.math.spring2025_initial_spec impor
 )
 
 SCHEMA_VERSION = "purcell.spring2025-initial-spec.v1"
-SLOT_FREQUENCIES_HZ = (5.52e9, 5.76e9, 6.00e9, 6.24e9, 6.48e9)
-NOTCH_TARGET_HZ = 4.5e9
+SLOT_FREQUENCIES_HZ = (5.9e9, 6.0e9, 6.1e9, 6.2e9)
+NOTCH_TARGET_HZ = 5.0e9
 READOUT_OFFSET_HZ = -1.0e6
 FILTER_OFFSET_HZ = 1.0e6
 COUPLED_LENGTH_M = 318.0e-6
@@ -56,7 +56,7 @@ def _interval_record(value: Any) -> dict[str, Any]:
 
 
 def build_initial_spec() -> dict[str, Any]:
-    """Return the strict finite five-slot initializer payload."""
+    """Return the strict finite four-slot initializer payload."""
 
     geometry = SPRING2025_REFERENCE_GEOMETRY
     velocity = geometry.phase_velocity.si_value
