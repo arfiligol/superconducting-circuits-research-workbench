@@ -180,7 +180,7 @@ def test_narrow_q_like_pole_closes_after_common_carrier_centering() -> None:
     assert np.min(result.linewidths_hz) < 0.5e6
 
 
-@pytest.mark.parametrize("slot_hz", [5.52e9, 5.76e9, 6.00e9, 6.24e9, 6.48e9])
+@pytest.mark.parametrize("slot_hz", [5.9e9, 6.0e9, 6.1e9, 6.2e9])
 def test_target_slot_direct_resolvent_uses_the_same_centered_frame(slot_hz: float) -> None:
     """Target substitution closes when a sample approaches its dark pole."""
 

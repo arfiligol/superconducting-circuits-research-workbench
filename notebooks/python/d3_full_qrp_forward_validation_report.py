@@ -30,7 +30,8 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.patches import Patch, Rectangle
 
-EXPECTED_SLOTS_HZ = (5.52e9, 5.76e9, 6.00e9, 6.24e9, 6.48e9)
+EXPECTED_SLOTS_HZ = (5.9e9, 6.0e9, 6.1e9, 6.2e9)
+EXPECTED_NOTCH_TARGET_HZ = 5.0e9
 PUBLIC_Q2D_ROUTE = "public_q2d_cpw_spec_simulation_only"
 REPORT_SCHEMA = "d3-full-qrp-forward-validation-evidence-register.v2"
 FIGURE_DATA_SCHEMA = "d3-full-qrp-vf-figure-data.v2"
@@ -135,7 +136,7 @@ class EvidenceInputPaths:
 
     Attributes:
         analysis_json: Complete path-backed exact-six/three-mode/VF analyzer output.
-        primary_run_json: Raw primary five-slot circuit-forward run.
+        primary_run_json: Raw primary four-slot circuit-forward run.
         spring_initializer_json: Paper-backed Spring initializer artifact.
         q2d_pair_json: Public coupled-pair Maxwell L/C artifact.
         q2d_single_json: Public single-reference Maxwell L/C artifact.
@@ -406,7 +407,7 @@ def _validate_analysis(analysis: dict[str, Any]) -> None:
         "target-substitution and circuit constant-kappa ideal-hanger comparison only",
         f"{path}.semantics.three_mode_role",
     )
-    slots = _five_slots(analysis.get("slots"), f"{path}.slots")
+    slots = _target_slots(analysis.get("slots"), f"{path}.slots")
     for index, slot in enumerate(slots):
         slot_path = f"{path}.slots[{index}]"
         _require_string(
@@ -522,7 +523,7 @@ def _validate_analysis(analysis: dict[str, Any]) -> None:
             raise ValueError(
                 f"analysis.figure_data.{figure_key} must equal analysis.tables.{table_key}."
             )
-    panels = _five_slots(figure_data.get("trace_panels"), "analysis.figure_data.trace_panels")
+    panels = _target_slots(figure_data.get("trace_panels"), "analysis.figure_data.trace_panels")
     for index, panel in enumerate(panels):
         panel_path = f"analysis.figure_data.trace_panels[{index}]"
         frequency = _frequency_grid(panel.get("frequency_hz"), f"{panel_path}.frequency_hz")
@@ -558,7 +559,7 @@ def _validate_analysis(analysis: dict[str, Any]) -> None:
             raise ValueError(f"{panel_path} frequency grid disagrees with exact-six authority.")
         if panel.get("exact_six_s21") != exact_six.get("calibrated_s21"):
             raise ValueError(f"{panel_path}.exact_six_s21 disagrees with exact-six authority.")
-    policies = _five_slots(
+    policies = _target_slots(
         figure_data.get("frequency_grid_policies"),
         "analysis.figure_data.frequency_grid_policies",
     )
@@ -606,7 +607,7 @@ def _validate_analysis(analysis: dict[str, Any]) -> None:
     ):
         raise ValueError("analysis.figure_data closed-pole rows disagree with whole policies.")
 
-    subset_evidence = _five_slots(
+    subset_evidence = _target_slots(
         figure_data.get("three_mode_shared_subset_evidence"),
         "analysis.figure_data.three_mode_shared_subset_evidence",
     )
@@ -665,7 +666,7 @@ def _validate_primary_run(primary: dict[str, Any]) -> dict[str, str]:
     )
     provenance = _mapping(primary.get("provenance"), f"{path}.provenance")
     _require_string(provenance.get("q2d_route"), PUBLIC_Q2D_ROUTE, f"{path}.provenance.q2d_route")
-    slots = _five_slots(primary.get("slots"), f"{path}.slots")
+    slots = _target_slots(primary.get("slots"), f"{path}.slots")
     identities: list[tuple[str, str, str]] = []
     for index, slot in enumerate(slots):
         slot_path = f"{path}.slots[{index}]"
@@ -712,7 +713,7 @@ def _validate_primary_run(primary: dict[str, Any]) -> dict[str, str]:
         )
         identities.append(identity)
     if any(identity != identities[0] for identity in identities[1:]):
-        raise ValueError("primary_run five slots do not share one public Q2D identity.")
+        raise ValueError("primary_run target slots do not share one public Q2D identity.")
     return dict(
         zip(
             ("case_id", "q2d_pair_artifact_sha256", "q2d_single_artifact_sha256"),
@@ -1087,7 +1088,7 @@ def _validate_initializer(initializer: dict[str, Any]) -> None:
         source.get("provenance"), f"{path}.source.provenance"
     ):
         raise ValueError("spring_initializer source must remain initializer-only evidence.")
-    slots = _five_slots(initializer.get("slots"), f"{path}.slots")
+    slots = _target_slots(initializer.get("slots"), f"{path}.slots")
     for index, slot in enumerate(slots):
         _require_string(slot.get("status"), "initializer_only", f"{path}.slots[{index}].status")
         targets = _mapping(
@@ -1099,6 +1100,11 @@ def _validate_initializer(initializer: dict[str, Any]) -> None:
             "intrinsic_notch_hz",
         ):
             _positive_real(targets.get(key), f"{path}.slots[{index}].{key}")
+        if targets.get("intrinsic_notch_hz") != EXPECTED_NOTCH_TARGET_HZ:
+            raise ValueError(
+                f"{path}.slots[{index}].intrinsic_notch_hz must equal "
+                f"{EXPECTED_NOTCH_TARGET_HZ} Hz."
+            )
 
 
 def _validate_q2d_artifact(artifact: dict[str, Any], *, role: str) -> list[dict[str, Any]]:
@@ -1466,9 +1472,9 @@ def _validate_cross_source_links(
     primary_provenance = _mapping(primary["provenance"], "primary_run.provenance")
     if source.get("source_artifact_id") != primary_provenance.get("source_artifact_id"):
         raise ValueError("Analyzer source_artifact_id does not match the primary run.")
-    analysis_slots = _five_slots(analysis["slots"], "analysis.slots")
-    primary_slots = _five_slots(primary["slots"], "primary_run.slots")
-    initializer_slots = _five_slots(initializer["slots"], "spring_initializer.slots")
+    analysis_slots = _target_slots(analysis["slots"], "analysis.slots")
+    primary_slots = _target_slots(primary["slots"], "primary_run.slots")
+    initializer_slots = _target_slots(initializer["slots"], "spring_initializer.slots")
     for index, (analyzed, raw, initialized) in enumerate(
         zip(analysis_slots, primary_slots, initializer_slots, strict=True)
     ):
@@ -2154,7 +2160,9 @@ def _render_vf_ambiguity_evidence(
     nonconverged_count = 0
     for order, rows in sorted(by_order.items()):
         if len(rows) != expected_slot_count:
-            raise ValueError(f"VF background order {order} does not cover all five slots exactly.")
+            raise ValueError(
+                f"VF background order {order} does not cover all target slots exactly."
+            )
         ordered = sorted(rows)
         x_values = [row[0] / 1.0e9 for row in ordered]
         axes[0].plot(
@@ -2420,10 +2428,10 @@ def _validate_three_mode_view(view: Mapping[str, Any], path: str) -> None:
         )
 
 
-def _five_slots(value: Any, path: str) -> list[dict[str, Any]]:
+def _target_slots(value: Any, path: str) -> list[dict[str, Any]]:
     rows = _sequence(value, path)
     if len(rows) != len(EXPECTED_SLOTS_HZ):
-        raise ValueError(f"{path} must contain exactly five slots.")
+        raise ValueError(f"{path} must contain exactly {len(EXPECTED_SLOTS_HZ)} slots.")
     result = [dict(_mapping(row, f"{path}[{index}]")) for index, row in enumerate(rows)]
     actual = tuple(
         _positive_real(row.get("slot_hz"), f"{path}[{index}].slot_hz")
@@ -2441,7 +2449,7 @@ def _require_all_slots_tagged(value: Any, path: str) -> None:
         for index, row in enumerate(rows)
     }
     if observed != set(EXPECTED_SLOTS_HZ):
-        raise ValueError(f"{path} must retain rows tagged for all five D3 slots.")
+        raise ValueError(f"{path} must retain rows tagged for all D3 target slots.")
 
 
 def _complex_trace(value: Any, expected_length: int, path: str) -> np.ndarray:

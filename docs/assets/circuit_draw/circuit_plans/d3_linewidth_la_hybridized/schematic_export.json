@@ -94,7 +94,7 @@
             "role": "transmission_line_series_inductance",
             "parameters": {
                 "schematic_kind": "inductor",
-                "inductance": 3.0814090500000003e-10
+                "inductance": 3.081409050000001e-10
             },
             "id": "linewidth_la_filter_resonator_l_4",
             "to": "linewidth_la_filter_resonator_node_4",
@@ -107,7 +107,7 @@
             "role": "transmission_line_series_inductance",
             "parameters": {
                 "schematic_kind": "inductor",
-                "inductance": 3.0814090500000003e-10
+                "inductance": 3.0814090499999993e-10
             },
             "id": "linewidth_la_filter_resonator_l_5",
             "to": "linewidth_la_filter_resonator_node_5",
@@ -267,8 +267,8 @@
                     0.0007499999999999999,
                     0.0007499999999999999,
                     0.0007499999999999999,
-                    0.00075,
-                    0.00075,
+                    0.0007500000000000002,
+                    0.0007499999999999998,
                     0.0007500000000000001,
                     0.0007500000000000001,
                     0.0007500000000000001

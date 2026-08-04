@@ -10,6 +10,7 @@ composer owns publication, layout, and the evidence register.
 from __future__ import annotations
 
 import argparse
+import cmath
 import csv
 import json
 import math
@@ -21,6 +22,7 @@ from typing import Any
 import numpy as np
 import plotly.graph_objects as go
 from human_reviewable_simulation_report import (
+    REPORT_RENDER_CONFIG,
     SCHEMA_VERSION,
     file_sha256,
     render_simulation_report,
@@ -30,24 +32,19 @@ from superconducting_circuits_analysis.application.analysis.fitting.s_parameters
     fit_complex_s21_vector,
 )
 
-_SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v1"
-_LINEAR_QUANTITIES_SCHEMA = "d3-stage2-linear-quantity-review.v3"
+_SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v2"
+_LINEAR_QUANTITIES_SCHEMA = "d3-stage2-linear-quantity-review.v4"
 _QUBIT_RECEIPT_SCHEMA = "d3-stage2-qubit-admittance-receipt.v1"
 _OBJECTIVE_CONTRACT_ID = "d3-stage2-stage3-full-qrp-objective.v2"
+_TARGET_SLOTS_HZ = (5.9e9, 6.0e9, 6.1e9, 6.2e9)
 _OBJECTIVE_AUTHORITY = {
     "approval_status": "human_approved",
     "target_id": "d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
-    "target_revision": 7,
-    "target_contract_sha256": (
-        "2ec4014c5bd3ba5824c15d71c3ad1e03b2a0d1f7444a35dcd31b0a4fe99b7bf9"
-    ),
+    "target_revision": 9,
+    "target_contract_sha256": ("86eb2da65329df9059efeddccc9f479d1ef116e0eed4a0de0554cf8f02353b9d"),
     "notch_authority": "rp_on",
-    "effective_diagonal_frequency_extraction": (
-        "q_feedline_downfolded_rp_complex_operator"
-    ),
-    "effective_exchange_extraction": (
-        "q_feedline_downfolded_rp_complex_midpoint_residue"
-    ),
+    "effective_diagonal_frequency_extraction": ("q_feedline_downfolded_rp_complex_operator"),
+    "effective_exchange_extraction": ("q_feedline_downfolded_rp_complex_midpoint_residue"),
     "linewidth_pole_scope": "qrp_three",
     "primary_linewidth_extraction": "L_C",
 }
@@ -109,7 +106,7 @@ def _mapping(value: Any, label: str) -> Mapping[str, Any]:
 
 
 def _finite(value: Any, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise ValueError(f"{label} must be numeric.")
     number = float(value)
     if not math.isfinite(number):
@@ -156,6 +153,511 @@ def _sha256(value: Any, label: str) -> str:
     return value
 
 
+def _complex_value(value: Any, label: str) -> complex:
+    record = _mapping(value, label)
+    if set(record) != {"real", "imag"}:
+        raise ValueError(f"{label} must contain exactly real and imag.")
+    return complex(
+        _finite(record["real"], f"{label}.real"),
+        _finite(record["imag"], f"{label}.imag"),
+    )
+
+
+def _close_complex(left: complex, right: complex, *, rel_tol: float = 1e-10) -> bool:
+    return math.isclose(left.real, right.real, rel_tol=rel_tol, abs_tol=1e-9) and math.isclose(
+        left.imag, right.imag, rel_tol=rel_tol, abs_tol=1e-9
+    )
+
+
+def _validate_effective_rp(value: Any, model_identity: Mapping[str, str]) -> dict[str, Any]:
+    effective = dict(_mapping(value, "q+feedline-downfolded RP effective representation"))
+    fields = {
+        "contract_id",
+        "coupling_state",
+        "external_port_state",
+        "retained_coordinates",
+        "eliminated_coordinates",
+        "coordinate_basis",
+        "representation",
+        "diagonal_root_extraction",
+        "diagonal_roots",
+        "residue_normalized_exchange",
+        "determinant_closure",
+        "gate_policy",
+        "context_validation",
+        "operator_diagnostics",
+        "source_model_identity",
+        "provenance",
+    }
+    if set(effective) != fields:
+        raise ValueError("q+feedline-downfolded RP effective fields are incomplete.")
+    expected = {
+        "contract_id": "d3-q-feedline-downfolded-rp-effective-operator.v1",
+        "coupling_state": "qrp_on",
+        "external_port_state": "matched_open",
+        "retained_coordinates": ["r", "p"],
+        "eliminated_coordinates": ["q", "f1", "fc", "f2"],
+        "coordinate_basis": "physically_anchored_rp_coordinates_no_retained_pair_rotation",
+        "representation": "frequency_dependent_dynamic_effective_operator",
+        "diagonal_root_extraction": ("principal_subsystem_matched_open_poles_in_declared_band"),
+    }
+    for name, expected_value in expected.items():
+        if effective[name] != expected_value:
+            raise ValueError(f"q+feedline-downfolded RP {name} is not the V1 authority.")
+    if _model_identity(effective["source_model_identity"], "effective source identity") != dict(
+        model_identity
+    ):
+        raise ValueError("q+feedline-downfolded RP source identity disagrees with the Run.")
+
+    roots = _mapping(effective["diagonal_roots"], "effective diagonal roots")
+    if set(roots) != {"r", "p"}:
+        raise ValueError("effective diagonal roots must contain exactly r and p.")
+    root_values: dict[str, complex] = {}
+    gate = _mapping(effective["gate_policy"], "effective gate policy")
+    gate_fields = {
+        "maximum_elimination_condition_number",
+        "maximum_relative_elimination_solve_residual",
+        "maximum_relative_reciprocity_error",
+        "maximum_relative_passivity_violation",
+        "maximum_relative_root_residual",
+        "maximum_root_growth_rate_hz",
+        "minimum_normalized_residue_slope",
+        "maximum_relative_coupling_spread",
+        "maximum_relative_determinant_closure_error",
+    }
+    if set(gate) != gate_fields:
+        raise ValueError("effective gate policy fields are incomplete.")
+    gates = {name: _finite(gate[name], f"effective gate policy {name}") for name in gate_fields}
+    if gates["maximum_elimination_condition_number"] < 1 or any(
+        gates[name] < 0
+        for name in gate_fields
+        if name not in {"maximum_elimination_condition_number", "minimum_normalized_residue_slope"}
+    ):
+        raise ValueError("effective gate policy contains an invalid bound.")
+    if gates["minimum_normalized_residue_slope"] <= 0:
+        raise ValueError("effective minimum normalized residue slope must be positive.")
+
+    operator_diagnostics = _mapping(
+        effective["operator_diagnostics"], "effective operator diagnostics"
+    )
+    if set(operator_diagnostics) != {"readout", "midpoint", "filter"}:
+        raise ValueError("effective operator diagnostics must contain exactly three samples.")
+    diagnostic_fields = {
+        "elimination_condition_number",
+        "relative_elimination_solve_residual",
+        "relative_derivative_solve_residual",
+        "effective_reciprocity_error",
+    }
+    for sample_name in ("readout", "midpoint", "filter"):
+        sample = _mapping(
+            operator_diagnostics[sample_name], f"effective {sample_name} operator diagnostics"
+        )
+        if set(sample) != diagnostic_fields:
+            raise ValueError(f"effective {sample_name} operator diagnostic fields are incomplete.")
+        diagnostics = {
+            name: _finite(sample[name], f"effective {sample_name} {name}")
+            for name in diagnostic_fields
+        }
+        if any(value < 0 for value in diagnostics.values()):
+            raise ValueError(f"effective {sample_name} operator diagnostics must be nonnegative.")
+        if (
+            diagnostics["elimination_condition_number"]
+            > gates["maximum_elimination_condition_number"]
+        ):
+            raise ValueError(f"effective {sample_name} elimination conditioning exceeds its gate.")
+        if (
+            max(
+                diagnostics["relative_elimination_solve_residual"],
+                diagnostics["relative_derivative_solve_residual"],
+            )
+            > gates["maximum_relative_elimination_solve_residual"]
+        ):
+            raise ValueError(f"effective {sample_name} solve residual exceeds its gate.")
+        if diagnostics["effective_reciprocity_error"] > gates["maximum_relative_reciprocity_error"]:
+            raise ValueError(f"effective {sample_name} reciprocity error exceeds its gate.")
+
+    for coordinate, subsystem in (
+        ("r", ["r", "q", "f1", "fc", "f2"]),
+        ("p", ["p", "q", "f1", "fc", "f2"]),
+    ):
+        root = _mapping(roots[coordinate], f"effective {coordinate} root")
+        root_fields = {
+            "coordinate",
+            "complex_frequency_hz",
+            "frequency_hz",
+            "external_linewidth_hz",
+            "frequency_band_hz",
+            "principal_subsystem_coordinates",
+            "principal_subsystem_pole_index",
+            "relative_root_residual",
+        }
+        if set(root) != root_fields or root["coordinate"] != coordinate:
+            raise ValueError(f"effective {coordinate} diagonal-root fields are incomplete.")
+        complex_frequency = _complex_value(
+            root["complex_frequency_hz"], f"effective {coordinate} complex root"
+        )
+        frequency_hz = _finite(root["frequency_hz"], f"effective {coordinate} frequency")
+        linewidth_hz = _finite(root["external_linewidth_hz"], f"effective {coordinate} linewidth")
+        if (
+            frequency_hz <= 0
+            or complex_frequency.real <= 0
+            or complex_frequency.imag > gates["maximum_root_growth_rate_hz"]
+        ):
+            raise ValueError(f"effective {coordinate} diagonal root is not passive/positive.")
+        if not math.isclose(frequency_hz, complex_frequency.real, rel_tol=1e-12, abs_tol=1e-6):
+            raise ValueError(f"effective {coordinate} reported frequency disagrees with its root.")
+        if not math.isclose(
+            linewidth_hz,
+            max(-2 * complex_frequency.imag, 0.0),
+            rel_tol=1e-10,
+            abs_tol=1e-6,
+        ):
+            raise ValueError(f"effective {coordinate} linewidth disagrees with -2 Im(root).")
+        band = root["frequency_band_hz"]
+        if (
+            not isinstance(band, list)
+            or len(band) != 2
+            or not 0
+            < _finite(band[0], f"effective {coordinate} band lower")
+            <= complex_frequency.real
+            <= _finite(band[1], f"effective {coordinate} band upper")
+        ):
+            raise ValueError(f"effective {coordinate} root is outside its declared band.")
+        if root["principal_subsystem_coordinates"] != subsystem:
+            raise ValueError(f"effective {coordinate} principal subsystem is incorrect.")
+        pole_index = root["principal_subsystem_pole_index"]
+        if isinstance(pole_index, bool) or not isinstance(pole_index, int) or pole_index < 1:
+            raise ValueError(f"effective {coordinate} pole index must be positive.")
+        root_residual = _finite(
+            root["relative_root_residual"], f"effective {coordinate} root residual"
+        )
+        if not 0 <= root_residual <= gates["maximum_relative_root_residual"]:
+            raise ValueError(f"effective {coordinate} root residual exceeds its gate.")
+        root_values[coordinate] = complex_frequency
+
+    exchange = _mapping(effective["residue_normalized_exchange"], "effective exchange")
+    exchange_fields = {
+        "midpoint_angular_frequency_rad_s",
+        "residue_slopes",
+        "residue_normalization",
+        "square_root_branch",
+        "coupling_samples_rad_s",
+        "effective_exchange_rad_s",
+        "coherent_exchange_hz",
+        "total_exchange_hz",
+        "dissipative_cross_coupling_hz",
+        "maximum_pairwise_coupling_spread_rad_s",
+        "relative_coupling_spread",
+    }
+    if set(exchange) != exchange_fields:
+        raise ValueError("effective residue-normalized exchange fields are incomplete.")
+    if exchange["square_root_branch"] != "principal_complex_square_root":
+        raise ValueError("effective residue normalization must declare its principal branch.")
+    midpoint = _complex_value(exchange["midpoint_angular_frequency_rad_s"], "effective midpoint")
+    expected_midpoint = math.pi * (root_values["r"] + root_values["p"])
+    if not _close_complex(midpoint, expected_midpoint):
+        raise ValueError("effective midpoint disagrees with the two complex diagonal roots.")
+    slopes = _mapping(exchange["residue_slopes"], "effective residue slopes")
+    if set(slopes) != {"readout_s", "filter_s", "readout_normalized", "filter_normalized"}:
+        raise ValueError("effective residue-slope fields are incomplete.")
+    readout_slope = _complex_value(slopes["readout_s"], "effective readout residue slope")
+    filter_slope = _complex_value(slopes["filter_s"], "effective filter residue slope")
+    for name in ("readout_normalized", "filter_normalized"):
+        normalized = _finite(slopes[name], f"effective {name}")
+        if normalized < gates["minimum_normalized_residue_slope"]:
+            raise ValueError(f"effective {name} is below its gate.")
+    normalization = _complex_value(exchange["residue_normalization"], "effective normalization")
+    if not _close_complex(normalization, cmath.sqrt(readout_slope * filter_slope)):
+        raise ValueError(
+            "effective residue normalization disagrees with the principal square root."
+        )
+    samples = _mapping(exchange["coupling_samples_rad_s"], "effective coupling samples")
+    if set(samples) != {"readout", "midpoint", "filter"}:
+        raise ValueError("effective coupling samples must contain readout, midpoint, and filter.")
+    coupling_samples = {
+        name: _complex_value(samples[name], f"effective {name} coupling sample") for name in samples
+    }
+    effective_exchange = _complex_value(exchange["effective_exchange_rad_s"], "effective exchange")
+    if not _close_complex(effective_exchange, coupling_samples["midpoint"]):
+        raise ValueError("effective exchange must equal the midpoint coupling sample.")
+    coherent_hz = _finite(exchange["coherent_exchange_hz"], "effective coherent exchange")
+    total_hz = _finite(exchange["total_exchange_hz"], "effective total exchange")
+    dissipative_hz = _finite(
+        exchange["dissipative_cross_coupling_hz"], "effective dissipative coupling"
+    )
+    if not (
+        math.isclose(coherent_hz, abs(effective_exchange.real) / (2 * math.pi), rel_tol=1e-12)
+        and math.isclose(total_hz, abs(effective_exchange) / (2 * math.pi), rel_tol=1e-12)
+        and math.isclose(
+            dissipative_hz, -2 * effective_exchange.imag / (2 * math.pi), rel_tol=1e-12
+        )
+    ):
+        raise ValueError("effective exchange projections disagree with the complex exchange.")
+    pairwise_spread = max(
+        abs(left - right)
+        for left in coupling_samples.values()
+        for right in coupling_samples.values()
+    )
+    reported_spread = _finite(
+        exchange["maximum_pairwise_coupling_spread_rad_s"], "effective coupling spread"
+    )
+    relative_spread = _finite(exchange["relative_coupling_spread"], "effective relative spread")
+    exchange_magnitude = abs(effective_exchange)
+    if exchange_magnitude <= 0:
+        raise ValueError(
+            "residue-normalized midpoint exchange magnitude must be positive "
+            "for relative spread audit."
+        )
+    if not (
+        math.isclose(reported_spread, pairwise_spread, rel_tol=1e-12, abs_tol=1e-6)
+        and math.isclose(relative_spread, pairwise_spread / exchange_magnitude, rel_tol=1e-12)
+        and relative_spread <= gates["maximum_relative_coupling_spread"]
+    ):
+        raise ValueError("effective coupling-spread diagnostics are inconsistent.")
+
+    closure = _mapping(effective["determinant_closure"], "effective determinant closure")
+    if set(closure) != {"schur_determinant", "effective_determinant", "relative_error"}:
+        raise ValueError("effective determinant-closure fields are incomplete.")
+    schur_determinant = _complex_value(closure["schur_determinant"], "Schur determinant")
+    effective_determinant = _complex_value(
+        closure["effective_determinant"], "effective determinant"
+    )
+    closure_error = _finite(closure["relative_error"], "determinant closure error")
+    expected_error = abs(schur_determinant - effective_determinant) / max(
+        abs(schur_determinant), abs(effective_determinant)
+    )
+    if not math.isclose(closure_error, expected_error, rel_tol=1e-10, abs_tol=1e-18) or (
+        closure_error > gates["maximum_relative_determinant_closure_error"]
+    ):
+        raise ValueError("effective determinant closure disagrees with its gate.")
+
+    context = _mapping(effective["context_validation"], "effective context validation")
+    context_fields = {
+        "capacitance_reciprocity_error",
+        "stiffness_reciprocity_error",
+        "conductance_reciprocity_error",
+        "stiffness_relative_passivity_violation",
+        "conductance_relative_passivity_violation",
+    }
+    if set(context) != context_fields:
+        raise ValueError("effective context-validation fields are incomplete.")
+    context_values = {name: _finite(context[name], f"effective context {name}") for name in context}
+    if (
+        any(value < 0 for value in context_values.values())
+        or max(
+            context_values["capacitance_reciprocity_error"],
+            context_values["stiffness_reciprocity_error"],
+            context_values["conductance_reciprocity_error"],
+        )
+        > gates["maximum_relative_reciprocity_error"]
+        or max(
+            context_values["stiffness_relative_passivity_violation"],
+            context_values["conductance_relative_passivity_violation"],
+        )
+        > gates["maximum_relative_passivity_violation"]
+    ):
+        raise ValueError("effective context diagnostics exceed their gates.")
+
+    provenance = _mapping(effective["provenance"], "effective provenance")
+    provenance_fields = {
+        "operator",
+        "dynamic_stiffness",
+        "retained_partition",
+        "eliminated_partition",
+        "frequency_rank_assignment",
+        "capacitance_sha256",
+        "inverse_inductance_sha256",
+        "conductance_sha256",
+    }
+    if set(provenance) != provenance_fields or provenance != {
+        **dict(provenance),
+        "operator": "exact_open_dynamic_stiffness_schur",
+        "dynamic_stiffness": "K-omega^2*C-i*omega*G",
+        "retained_partition": ["r", "p"],
+        "eliminated_partition": ["q", "f1", "fc", "f2"],
+        "frequency_rank_assignment": "forbidden",
+    }:
+        raise ValueError("effective provenance does not retain the V1 operator convention.")
+    for name in ("capacitance_sha256", "inverse_inductance_sha256", "conductance_sha256"):
+        _sha256(provenance[name], f"effective provenance {name}")
+    return effective
+
+
+def _validate_response_match_audit(response_match: Mapping[str, Any]) -> None:
+    expected_response_match_fields = {
+        "mapping_id",
+        "mapping_sha256",
+        "match_contract_id",
+        "q2d_artifact_id",
+        "q2d_artifact_sha256",
+        "fixed_line_input_sha256",
+        "topology_id",
+        "match_evidence",
+    }
+    if set(response_match) != expected_response_match_fields:
+        raise ValueError(
+            "summary.response_match must contain the complete Length-to-LC audit record."
+        )
+    for field in ("mapping_sha256", "q2d_artifact_sha256", "fixed_line_input_sha256"):
+        _sha256(response_match[field], f"summary.response_match.{field}")
+    for field in ("mapping_id", "match_contract_id", "q2d_artifact_id", "topology_id"):
+        if not isinstance(response_match[field], str) or not response_match[field].strip():
+            raise ValueError(f"summary.response_match.{field} must be non-empty text.")
+
+    evidence = _mapping(
+        response_match["match_evidence"],
+        "summary.response_match.match_evidence",
+    )
+    if set(evidence) != {"reference_model", "readout", "filter", "bridge", "settings"}:
+        raise ValueError("response-match evidence must contain the complete reference-model audit.")
+
+    reference = _mapping(evidence["reference_model"], "response-match reference model")
+    expected_reference = {
+        "role": "physical_length_to_equivalent_lc_extraction_only",
+        "final_stage2_hb_model": "resolved_lumped_equivalent_circuit",
+        "topology": "two_grounded_head_open_tail_quarter_wave_resonators_with_mtl_window",
+        "terminal_coordinates": ["readout_open_tail", "filter_open_tail"],
+        "diagonal_match_state": "mtl_mutual_terms_disabled_diagonal_loading_preserved",
+        "bridge_match_state": "full_mtl_mutual_terms_preserved",
+        "internal_coordinate_elimination": "frequency_dependent_dynamic_schur_complement",
+    }
+    if set(reference) != {
+        *expected_reference,
+        "section_length_m",
+        "mtl_section_length_m",
+    }:
+        raise ValueError("response-match reference-model fields are incomplete.")
+    for field, expected in expected_reference.items():
+        if reference[field] != expected:
+            raise ValueError(f"response-match reference_model.{field} is not the V1 authority.")
+    for name in ("section_length_m", "mtl_section_length_m"):
+        section_length = _finite(reference[name], f"response-match {name}")
+        if not 0 < section_length <= 50e-6:
+            raise ValueError(f"D3 response-match {name} must be positive and at most 50 um.")
+
+    parallel_fields = {
+        "capacitance_f",
+        "inductance_h",
+        "angular_frequency_rad_s",
+        "frequency_hz",
+        "root_admittance_s",
+        "admittance_derivative_s_per_rad_s",
+        "derivative_step_rad_s",
+    }
+    for subsystem in ("readout", "filter"):
+        record = _mapping(evidence[subsystem], f"response-match {subsystem}")
+        if set(record) != parallel_fields:
+            raise ValueError(f"response-match {subsystem} evidence is incomplete.")
+        for field in (
+            "capacitance_f",
+            "inductance_h",
+            "angular_frequency_rad_s",
+            "frequency_hz",
+            "derivative_step_rad_s",
+        ):
+            if _finite(record[field], f"response-match {subsystem}.{field}") <= 0:
+                raise ValueError(f"response-match {subsystem}.{field} must be positive.")
+        _complex_value(record["root_admittance_s"], f"response-match {subsystem} root Y")
+        _complex_value(
+            record["admittance_derivative_s_per_rad_s"],
+            f"response-match {subsystem} dY/domega",
+        )
+
+    bridge = _mapping(evidence["bridge"], "response-match bridge")
+    bridge_fields = {
+        "capacitance_f",
+        "inductance_h",
+        "angular_frequency_rad_s",
+        "frequency_hz",
+        "root_transfer_impedance_ohm",
+        "transfer_impedance_derivative_ohm_per_rad_s",
+        "readout_admittance_s",
+        "filter_admittance_s",
+        "capacitance_imaginary_residual_f",
+        "derivative_step_rad_s",
+    }
+    if set(bridge) != bridge_fields:
+        raise ValueError("response-match bridge evidence is incomplete.")
+    for field in (
+        "capacitance_f",
+        "inductance_h",
+        "angular_frequency_rad_s",
+        "frequency_hz",
+        "derivative_step_rad_s",
+    ):
+        if _finite(bridge[field], f"response-match bridge.{field}") <= 0:
+            raise ValueError(f"response-match bridge.{field} must be positive.")
+    _finite(
+        bridge["capacitance_imaginary_residual_f"],
+        "response-match bridge capacitance residual",
+    )
+    for field in (
+        "root_transfer_impedance_ohm",
+        "transfer_impedance_derivative_ohm_per_rad_s",
+        "readout_admittance_s",
+        "filter_admittance_s",
+    ):
+        _complex_value(bridge[field], f"response-match bridge.{field}")
+
+    settings = _mapping(evidence["settings"], "response-match settings")
+    expected_settings = {
+        "readout_root_bracket_hz",
+        "filter_root_bracket_hz",
+        "notch_root_bracket_hz",
+        "parallel_derivative_step_rad_s",
+        "bridge_derivative_step_rad_s",
+        "bisection_absolute_tolerance_rad_s",
+        "bisection_relative_tolerance",
+        "bisection_max_iterations",
+        "match_root_relative_tolerance",
+        "derivative_relative_tolerance",
+    }
+    if set(settings) != expected_settings:
+        raise ValueError("response-match settings are incomplete.")
+    for field in ("readout_root_bracket_hz", "filter_root_bracket_hz", "notch_root_bracket_hz"):
+        bracket = settings[field]
+        if not isinstance(bracket, list) or len(bracket) != 2:
+            raise ValueError(f"response-match {field} must be a two-value bracket.")
+        lower = _finite(bracket[0], f"response-match {field}[0]")
+        upper = _finite(bracket[1], f"response-match {field}[1]")
+        if not 0 < lower < upper:
+            raise ValueError(f"response-match {field} must be positive and increasing.")
+    for field in (
+        "parallel_derivative_step_rad_s",
+        "bridge_derivative_step_rad_s",
+        "bisection_absolute_tolerance_rad_s",
+        "bisection_relative_tolerance",
+        "match_root_relative_tolerance",
+        "derivative_relative_tolerance",
+    ):
+        if _finite(settings[field], f"response-match {field}") <= 0:
+            raise ValueError(f"response-match {field} must be positive.")
+    iterations = settings["bisection_max_iterations"]
+    if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 1:
+        raise ValueError("response-match bisection_max_iterations must be a positive integer.")
+    if (
+        not math.isclose(
+            float(evidence["readout"]["derivative_step_rad_s"]),
+            float(settings["parallel_derivative_step_rad_s"]),
+            rel_tol=0.0,
+            abs_tol=0.0,
+        )
+        or not math.isclose(
+            float(evidence["filter"]["derivative_step_rad_s"]),
+            float(settings["parallel_derivative_step_rad_s"]),
+            rel_tol=0.0,
+            abs_tol=0.0,
+        )
+        or not math.isclose(
+            float(bridge["derivative_step_rad_s"]),
+            float(settings["bridge_derivative_step_rad_s"]),
+            rel_tol=0.0,
+            abs_tol=0.0,
+        )
+    ):
+        raise ValueError("response-match evidence derivative steps disagree with settings.")
+
+
 def _load_summary(path: Path) -> dict[str, Any]:
     summary = dict(_mapping(_load_json(path, "summary"), "summary"))
     _require_keys(
@@ -191,10 +693,10 @@ def _load_summary(path: Path) -> dict[str, Any]:
         raise ValueError("summary uses the wrong Stage-2 objective contract.")
     authority = _mapping(summary["objective_authority"], "summary.objective_authority")
     if dict(authority) != _OBJECTIVE_AUTHORITY:
-        raise ValueError("summary.objective_authority does not equal revision-7 authority.")
+        raise ValueError("summary.objective_authority does not equal revision-9 authority.")
     _model_identity(summary["model_identity"], "summary.model_identity")
-    if _finite(summary["slot_hz"], "summary.slot_hz") <= 0:
-        raise ValueError("summary.slot_hz must be positive.")
+    if _finite(summary["slot_hz"], "summary.slot_hz") not in _TARGET_SLOTS_HZ:
+        raise ValueError(f"summary.slot_hz must be one of {_TARGET_SLOTS_HZ} Hz.")
     if summary["artifact_contract"] != list(_RUN_FILES):
         raise ValueError("summary artifact contract must name the exact six canonical files.")
     artifacts = _mapping(summary["artifacts"], "summary.artifacts")
@@ -207,11 +709,7 @@ def _load_summary(path: Path) -> dict[str, Any]:
     _require_keys(q2d_spec, ("artifact_id", "artifact_sha256"), "summary.q2d_spec")
     _sha256(q2d_spec["artifact_sha256"], "summary.q2d_spec.artifact_sha256")
     response_match = _mapping(summary["response_match"], "summary.response_match")
-    _require_keys(
-        response_match,
-        ("q2d_artifact_id", "q2d_artifact_sha256"),
-        "summary.response_match",
-    )
+    _validate_response_match_audit(response_match)
     if response_match["q2d_artifact_id"] != q2d_spec["artifact_id"]:
         raise ValueError("summary Q2D artifact id disagrees with response-match provenance.")
     if response_match["q2d_artifact_sha256"] != q2d_spec["artifact_sha256"]:
@@ -255,11 +753,11 @@ def _load_summary(path: Path) -> dict[str, Any]:
     for key in ("sigma", "ftol", "xtol"):
         if _finite(configuration[key], f"summary.cma.configuration.{key}") <= 0:
             raise ValueError(f"summary.cma.configuration.{key} must be positive.")
-    initial_mean = _mapping(
-        configuration["initial_mean"], "summary.cma.configuration.initial_mean"
-    )
+    initial_mean = _mapping(configuration["initial_mean"], "summary.cma.configuration.initial_mean")
     if set(initial_mean) != set(_CANDIDATE_KEYS):
-        raise ValueError("summary CMA initial mean must contain the physical candidate coordinates.")
+        raise ValueError(
+            "summary CMA initial mean must contain the physical candidate coordinates."
+        )
     bounds = _mapping(summary["bounds"], "summary.bounds")
     if set(bounds) != set(_CANDIDATE_KEYS):
         raise ValueError("summary bounds must contain the physical candidate coordinates.")
@@ -283,6 +781,46 @@ def _load_summary(path: Path) -> dict[str, Any]:
         value = _finite(candidate[key], f"summary.best_candidate.{key}")
         if value <= 0 or not normalized_bounds[key][0] <= value <= normalized_bounds[key][1]:
             raise ValueError(f"summary.best_candidate.{key} must be positive and within bounds.")
+
+    resolved = _mapping(summary["best_resolved_lc"], "summary.best_resolved_lc")
+    expected_resolved_fields = {"Cr_f", "Lr_h", "Cp_f", "Lp_h", "Cn_f", "Ln_h", "u_IDC"}
+    if set(resolved) != expected_resolved_fields:
+        raise ValueError(
+            "summary.best_resolved_lc must contain the six matched LC values and u_IDC."
+        )
+    evidence = _mapping(response_match["match_evidence"], "response-match evidence")
+    evidence_fields = {
+        "Cr_f": ("readout", "capacitance_f"),
+        "Lr_h": ("readout", "inductance_h"),
+        "Cp_f": ("filter", "capacitance_f"),
+        "Lp_h": ("filter", "inductance_h"),
+        "Cn_f": ("bridge", "capacitance_f"),
+        "Ln_h": ("bridge", "inductance_h"),
+    }
+    for resolved_field, (group, evidence_field) in evidence_fields.items():
+        resolved_value = _finite(
+            resolved[resolved_field], f"summary.best_resolved_lc.{resolved_field}"
+        )
+        evidence_value = _finite(
+            _mapping(evidence[group], f"response-match {group}")[evidence_field],
+            f"response-match {group}.{evidence_field}",
+        )
+        if resolved_value <= 0 or not math.isclose(
+            resolved_value,
+            evidence_value,
+            rel_tol=1e-14,
+            abs_tol=0.0,
+        ):
+            raise ValueError(
+                f"summary.best_resolved_lc.{resolved_field} disagrees with response-match evidence."
+            )
+    if not math.isclose(
+        _finite(resolved["u_IDC"], "summary.best_resolved_lc.u_IDC"),
+        _finite(candidate["u_IDC"], "summary.best_candidate.u_IDC"),
+        rel_tol=0.0,
+        abs_tol=0.0,
+    ):
+        raise ValueError("summary resolved u_IDC disagrees with the physical candidate.")
 
     metrics = _mapping(summary["best_metrics"], "summary.best_metrics")
     _require_keys(
@@ -332,7 +870,8 @@ def _load_summary(path: Path) -> dict[str, Any]:
         raise ValueError("summary linewidth participations must sum to one.")
 
     objective = _mapping(summary["best_objective"], "summary.best_objective")
-    _require_keys(objective, ("cost", "target_gates", "target_gates_pass"), "best_objective")
+    if set(objective) != {"cost", "target_gates", "target_gates_pass", "normalized_residuals"}:
+        raise ValueError("summary.best_objective fields do not match the revision-9 receipt.")
     reported_cost = _finite(objective["cost"], "summary.best_objective.cost")
     if reported_cost < 0:
         raise ValueError("summary.best_objective.cost must be non-negative.")
@@ -341,33 +880,42 @@ def _load_summary(path: Path) -> dict[str, Any]:
     slot_hz = float(summary["slot_hz"])
     eta_r = float(metrics["eta_r_qrp_on"])
     eta_p = float(metrics["eta_p_qrp_on"])
-    residuals = (
-        (float(metrics["fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz"]) - slot_hz)
-        / 0.5e6,
-        (float(metrics["fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz"]) - slot_hz)
-        / 0.5e6,
-        (float(metrics["notch_rp_on_hz"]) - 4.5e9) / 10e6,
-        (float(metrics["J_rp_eff_q_feedline_downfolded_coherent_hz"]) - 5e6) / 2e6,
-        (float(metrics["kappa_sum_qrp_on_ext_on_hz"]) - 20e6) / 1e6,
-        (min(eta_r, eta_p) - 0.5) / 0.2,
+    residuals = {
+        "r_r": (float(metrics["fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz"]) - slot_hz) / 0.5e6,
+        "r_p": (float(metrics["fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz"]) - slot_hz) / 0.5e6,
+        "r_J": (float(metrics["J_rp_eff_q_feedline_downfolded_coherent_hz"]) - 5e6) / 2e6,
+        "r_n": (float(metrics["notch_rp_on_hz"]) - 5.0e9) / 10e6,
+        "r_kappa": (float(metrics["kappa_sum_qrp_on_ext_on_hz"]) - 20e6) / 1e6,
+        "r_eta": (min(eta_r, eta_p) - 0.5) / 0.2,
+    }
+    reported_residuals = _mapping(
+        objective["normalized_residuals"], "summary.best_objective.normalized_residuals"
     )
-    computed_cost = sum(value * value for value in residuals)
+    if set(reported_residuals) != set(residuals) or any(
+        not math.isclose(
+            _finite(reported_residuals[name], f"objective residual {name}"),
+            expected,
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        )
+        for name, expected in residuals.items()
+    ):
+        raise ValueError("summary objective residuals disagree with revision-9 operands.")
+    computed_cost = sum(value * value for value in residuals.values())
     if not math.isclose(reported_cost, computed_cost, rel_tol=1e-12, abs_tol=1e-9):
-        raise ValueError("summary.best_objective.cost disagrees with revision-7 residuals.")
+        raise ValueError("summary.best_objective.cost disagrees with revision-9 residuals.")
     gates = _mapping(objective["target_gates"], "summary.best_objective.target_gates")
     expected_gates = {
         "readout_effective_diagonal_within_tolerance": (
-            abs(float(metrics["fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz"]) - slot_hz)
-            <= 0.5e6
+            abs(float(metrics["fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz"]) - slot_hz) <= 0.5e6
         ),
         "filter_effective_diagonal_within_tolerance": (
-            abs(float(metrics["fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz"]) - slot_hz)
-            <= 0.5e6
+            abs(float(metrics["fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz"]) - slot_hz) <= 0.5e6
         ),
         "linewidth_participation": 0.3 <= eta_r <= 0.7 and 0.3 <= eta_p <= 0.7,
     }
     if dict(gates) != expected_gates:
-        raise ValueError("summary.best_objective.target_gates disagree with revision-7 gates.")
+        raise ValueError("summary.best_objective.target_gates disagree with revision-9 gates.")
     if objective["target_gates_pass"] != all(expected_gates.values()):
         raise ValueError("summary.best_objective.target_gates_pass is inconsistent.")
     return summary
@@ -375,21 +923,20 @@ def _load_summary(path: Path) -> dict[str, Any]:
 
 def _load_linear_quantities(path: Path) -> dict[str, Any]:
     quantities = dict(_mapping(_load_json(path, "linear quantities"), "linear quantities"))
-    _require_keys(
-        quantities,
-        (
-            "schema_version",
-            "source_summary_sha256",
-            "objective_contract_id",
-            "objective_authority",
-            "coordinate_foundation",
-            "anchored_oscillator_representation",
-            "fully_hybridized_closed_normal_mode_spectrum",
-            "matched_open_port_poles",
-            "model_identity",
-        ),
-        "linear quantities",
-    )
+    expected_fields = {
+        "schema_version",
+        "source_summary_sha256",
+        "objective_contract_id",
+        "objective_authority",
+        "coordinate_foundation",
+        "anchored_oscillator_representation",
+        "matched_open_q_feedline_schur_downfolded_rp_effective_representation",
+        "fully_hybridized_closed_normal_mode_spectrum",
+        "matched_open_port_poles",
+        "model_identity",
+    }
+    if set(quantities) != expected_fields:
+        raise ValueError("linear quantities must contain exactly the V4 review projections.")
     if quantities["schema_version"] != _LINEAR_QUANTITIES_SCHEMA:
         raise ValueError(
             f"linear quantities schema must be {_LINEAR_QUANTITIES_SCHEMA!r}, "
@@ -402,12 +949,12 @@ def _load_linear_quantities(path: Path) -> dict[str, Any]:
         "linear objective authority",
     )
     if dict(authority) != _OBJECTIVE_AUTHORITY:
-        raise ValueError("linear quantities do not carry revision-7 objective authority.")
+        raise ValueError("linear quantities do not carry revision-9 objective authority.")
     _sha256(
         quantities["source_summary_sha256"],
         "linear quantities source_summary_sha256",
     )
-    _model_identity(quantities["model_identity"], "linear quantities model identity")
+    identity = _model_identity(quantities["model_identity"], "linear quantities model identity")
     anchored = _mapping(
         quantities["anchored_oscillator_representation"],
         "linear quantities anchored oscillator representation",
@@ -454,6 +1001,10 @@ def _load_linear_quantities(path: Path) -> dict[str, Any]:
         _require_keys(group, keys, f"anchored.{group_name}")
         for key in keys:
             _finite(group[key], f"anchored.{group_name}.{key}")
+    _validate_effective_rp(
+        quantities["matched_open_q_feedline_schur_downfolded_rp_effective_representation"],
+        identity,
+    )
     normal_modes = _mapping(
         quantities["fully_hybridized_closed_normal_mode_spectrum"],
         "linear quantities normal modes",
@@ -477,8 +1028,7 @@ def _load_linear_quantities(path: Path) -> dict[str, Any]:
     if normal_modes["coupling_state"] != "qrp_on" or normal_modes["boundary"] != "closed":
         raise ValueError("closed normal-mode spectrum must declare QRP-on closed boundary.")
     if (
-        normal_modes["construction"]
-        != "generalized_eigenproblem_K_u_equals_omega2_C_u"
+        normal_modes["construction"] != "generalized_eigenproblem_K_u_equals_omega2_C_u"
         or normal_modes["identity_assignment"] != "none"
         or normal_modes["display_order"] != "ascending_frequency_only"
     ):
@@ -521,7 +1071,8 @@ def _load_linear_quantities(path: Path) -> dict[str, Any]:
         raise ValueError("matched-open poles must not claim a Hamiltonian basis.")
     if open_poles["identity_assignment"] != "global_normalized_stored_energy_overlap":
         raise ValueError(
-            "Stage-2 matched-open poles must use global normalized stored-energy identity continuation."
+            "Stage-2 matched-open poles must use global normalized stored-energy "
+            "identity continuation."
         )
     frequencies = open_poles["frequencies_hz"]
     linewidths = open_poles["linewidths_hz"]
@@ -541,11 +1092,7 @@ def _load_linear_quantities(path: Path) -> dict[str, Any]:
         real_frequency = _finite(record["real"], f"matched_open frequency {index} real")
         imaginary_frequency = _finite(record["imag"], f"matched_open frequency {index} imag")
         linewidth_hz = _finite(linewidth, f"matched_open linewidth {index}")
-        if (
-            real_frequency <= 0
-            or imaginary_frequency > passivity_tolerance_hz
-            or linewidth_hz < 0
-        ):
+        if real_frequency <= 0 or imaginary_frequency > passivity_tolerance_hz or linewidth_hz < 0:
             raise ValueError("matched-open poles must be positive-frequency and passive.")
         if not math.isclose(
             linewidth_hz,
@@ -566,13 +1113,9 @@ def _load_linear_quantities(path: Path) -> dict[str, Any]:
         )
         display_index = record["display_index"]
         if isinstance(display_index, bool) or not isinstance(display_index, int):
-            raise ValueError(
-                f"matched_open assigned {identity} display_index must be an integer."
-            )
+            raise ValueError(f"matched_open assigned {identity} display_index must be an integer.")
         if not 1 <= display_index <= len(frequencies):
-            raise ValueError(
-                f"matched_open assigned {identity} display_index is out of range."
-            )
+            raise ValueError(f"matched_open assigned {identity} display_index is out of range.")
         pole_index = display_index - 1
         frequency = _mapping(record["frequency_hz"], f"matched_open assigned {identity} frequency")
         _require_keys(frequency, ("real", "imag"), f"matched_open assigned {identity} frequency")
@@ -614,6 +1157,66 @@ def _load_linear_quantities(path: Path) -> dict[str, Any]:
     return quantities
 
 
+def _validate_summary_effective_consistency(
+    summary: Mapping[str, Any], linear_quantities: Mapping[str, Any]
+) -> None:
+    metrics = _mapping(summary["best_metrics"], "summary.best_metrics")
+    effective = _mapping(
+        linear_quantities["matched_open_q_feedline_schur_downfolded_rp_effective_representation"],
+        "effective representation",
+    )
+    roots = _mapping(effective["diagonal_roots"], "effective diagonal roots")
+    exchange = _mapping(effective["residue_normalized_exchange"], "effective exchange")
+    comparisons = {
+        "fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz": roots["r"]["frequency_hz"],
+        "fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz": roots["p"]["frequency_hz"],
+        "J_rp_eff_q_feedline_downfolded_coherent_hz": exchange["coherent_exchange_hz"],
+    }
+    for metric_name, receipt_value in comparisons.items():
+        if not math.isclose(
+            _finite(metrics[metric_name], f"summary metric {metric_name}"),
+            _finite(receipt_value, f"effective receipt {metric_name}"),
+            rel_tol=1e-12,
+            abs_tol=1e-6,
+        ):
+            raise ValueError(f"summary metric {metric_name} disagrees with the effective receipt.")
+
+    open_poles = _mapping(linear_quantities["matched_open_port_poles"], "matched-open port poles")
+    assigned = _mapping(open_poles["qrp_identity_assigned"], "matched-open q/r/p assignments")
+    assigned_linewidth_hz = {
+        identity: _finite(
+            _mapping(assigned[identity], f"matched-open assigned {identity}")["linewidth_hz"],
+            f"matched-open assigned {identity} linewidth",
+        )
+        for identity in ("q", "r", "p")
+    }
+    total_linewidth_hz = sum(assigned_linewidth_hz.values())
+    if not math.isclose(
+        _finite(
+            metrics["kappa_sum_qrp_on_ext_on_hz"],
+            "summary metric kappa_sum_qrp_on_ext_on_hz",
+        ),
+        total_linewidth_hz,
+        rel_tol=1e-12,
+        abs_tol=1e-6,
+    ):
+        raise ValueError("summary total q/r/p linewidth disagrees with the assigned open poles.")
+    resonator_linewidth_hz = assigned_linewidth_hz["r"] + assigned_linewidth_hz["p"]
+    if resonator_linewidth_hz <= 0:
+        raise ValueError("assigned matched-open r+p linewidth must be positive.")
+    for identity in ("r", "p"):
+        expected_participation = assigned_linewidth_hz[identity] / resonator_linewidth_hz
+        if not math.isclose(
+            _finite(metrics[f"eta_{identity}_qrp_on"], f"summary eta_{identity}_qrp_on"),
+            expected_participation,
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        ):
+            raise ValueError(
+                f"summary eta_{identity}_qrp_on disagrees with assigned r/p linewidths."
+            )
+
+
 def _load_qubit_receipt(path: Path) -> dict[str, Any]:
     receipt = dict(_mapping(_load_json(path, "qubit receipt"), "qubit receipt"))
     fields = (
@@ -640,7 +1243,7 @@ def _load_qubit_receipt(path: Path) -> dict[str, Any]:
         raise ValueError("qubit receipt uses the wrong objective contract.")
     authority = _mapping(receipt["objective_authority"], "qubit receipt authority")
     if dict(authority) != _OBJECTIVE_AUTHORITY:
-        raise ValueError("qubit receipt does not carry revision-7 objective authority.")
+        raise ValueError("qubit receipt does not carry revision-9 objective authority.")
     _model_identity(receipt["model_identity"], "qubit receipt model identity")
     return receipt
 
@@ -750,12 +1353,12 @@ def _vector_fit_direct_s21(s21: Mapping[str, np.ndarray]) -> dict[str, Any]:
     if diagnostics.get("converged") is not True:
         raise ValueError("Direct-S21 Vector Fitting did not converge.")
     poles = [
-        pole
-        for pole in result["rational_model"]["poles"]
-        if pole["classification"] == "resonance"
+        pole for pole in result["rational_model"]["poles"] if pole["classification"] == "resonance"
     ]
     if len(poles) != 2:
-        raise ValueError(f"Direct-S21 Vector Fitting must resolve two visible poles; got {len(poles)}.")
+        raise ValueError(
+            f"Direct-S21 Vector Fitting must resolve two visible poles; got {len(poles)}."
+        )
     poles.sort(key=lambda pole: float(pole["fr_hz"]))
     model = result["model_trace"]
     model_frequency_hz = np.asarray(model["frequency_hz"], dtype=float)
@@ -858,6 +1461,8 @@ def _render_media(
     qubit: Mapping[str, np.ndarray],
     vector_fit: Mapping[str, Any],
 ) -> None:
+    palette = REPORT_RENDER_CONFIG["palette"]
+    slot_ghz = float(summary["slot_hz"]) / 1e9
     figure = make_subplots(
         rows=3,
         cols=1,
@@ -872,10 +1477,10 @@ def _render_media(
     )
     frequency_ghz = s21["frequency_hz"] / 1e9
     styles = {
-        "direct": ("Direct C/K", "#1f77b4", "solid"),
-        "exact": ("Exact-12", "#ff7f0e", "dash"),
-        "hb": ("HB solver", "#2a9d8f", "dot"),
-        "vector_fit": ("VF of Direct S21", "#7c3aed", "dashdot"),
+        "direct": ("Direct C/K", palette["authority"], "solid"),
+        "exact": ("Exact-12", palette["analytic"], "dash"),
+        "hb": ("HB solver", palette["solver"], "dot"),
+        "vector_fit": ("VF of Direct S21", palette["diagnostic"], "dashdot"),
     }
     for key, (label, color, dash) in styles.items():
         trace = vector_fit["model_s21"] if key == "vector_fit" else s21[key]
@@ -890,23 +1495,18 @@ def _render_media(
             row=1,
             col=1,
         )
-    slot_ghz = float(summary["slot_hz"]) / 1e9
     figure.add_vline(
         x=slot_ghz,
-        line={"color": "#6b7280", "dash": "dash", "width": 1.5},
+        line={"color": palette["muted"], "dash": "dash", "width": 1.5},
         row=1,
         col=1,
     )
     for key, label, color in (
-        ("exact", "|Exact-12 - Direct|", "#ff7f0e"),
-        ("hb", "|HB - Direct|", "#2a9d8f"),
-        ("vector_fit", "|VF - Direct|", "#7c3aed"),
+        ("exact", "|Exact-12 - Direct|", palette["analytic"]),
+        ("hb", "|HB - Direct|", palette["solver"]),
+        ("vector_fit", "|VF - Direct|", palette["diagnostic"]),
     ):
-        residual = (
-            vector_fit["residual_s21"]
-            if key == "vector_fit"
-            else s21[key] - s21["direct"]
-        )
+        residual = vector_fit["residual_s21"] if key == "vector_fit" else s21[key] - s21["direct"]
         figure.add_trace(
             go.Scatter(
                 x=frequency_ghz,
@@ -922,8 +1522,8 @@ def _render_media(
 
     qubit_frequency_ghz = qubit["frequency_hz"] / 1e9
     for prefix, label, color, dash in (
-        ("hb", "HB Re(YQ,eff)", "#d62728", "solid"),
-        ("direct", "Direct Re(YQ,eff)", "#d62728", "dash"),
+        ("hb", "HB Re(YQ,eff)", palette["response"], "solid"),
+        ("direct", "Direct Re(YQ,eff)", palette["response"], "dash"),
     ):
         real_y = qubit[f"{prefix}_y_eff_real_s"]
         figure.add_trace(
@@ -955,8 +1555,8 @@ def _render_media(
                 secondary_y=False,
             )
     for prefix, label, color, dash in (
-        ("hb", "HB linearized T1 estimate", "#1f77b4", "solid"),
-        ("direct", "Direct linearized T1 estimate", "#1f77b4", "dash"),
+        ("hb", "HB linearized T1 estimate", palette["lifetime"], "solid"),
+        ("direct", "Direct linearized T1 estimate", palette["lifetime"], "dash"),
     ):
         figure.add_trace(
             go.Scatter(
@@ -984,18 +1584,29 @@ def _render_media(
     )
     figure.update_xaxes(title_text="Frequency (GHz)", row=3, col=1)
     figure.update_layout(
-        width=1800,
-        height=1000,
+        width=REPORT_RENDER_CONFIG["width_px"],
+        height=REPORT_RENDER_CONFIG["media_height_px"],
         margin={"l": 100, "r": 110, "t": 65, "b": 70},
         template="plotly_white",
-        font={"family": "DejaVu Sans, Arial, sans-serif", "size": 16},
+        font={"family": REPORT_RENDER_CONFIG["font_family"], "size": 16},
         legend={"orientation": "h", "yanchor": "bottom", "y": 1.01, "x": 0.0},
     )
-    figure.write_image(path, format="png", width=1800, height=1000, scale=1)
+    figure.write_image(
+        path,
+        format="png",
+        width=REPORT_RENDER_CONFIG["width_px"],
+        height=REPORT_RENDER_CONFIG["media_height_px"],
+        scale=1,
+    )
 
 
 def _gate(value: bool) -> str:
     return "PASS" if value else "FAIL"
+
+
+def _format_complex(value: Any, label: str, unit: str) -> str:
+    number = _complex_value(value, label)
+    return f"({number.real:.9g}{number.imag:+.9g}j) {unit}"
 
 
 def _table(
@@ -1044,6 +1655,8 @@ def _q2d_values(summary: Mapping[str, Any]) -> dict[str, float]:
         "zm": math.sqrt(l_mutual / c_mutual),
         "ze": math.sqrt((l_diag + l_mutual) / (c_diag - c_mutual)),
         "zo": math.sqrt((l_diag - l_mutual) / (c_diag + c_mutual)),
+        "ve": 1 / math.sqrt((l_diag + l_mutual) * (c_diag - c_mutual)),
+        "vo": 1 / math.sqrt((l_diag - l_mutual) * (c_diag + c_mutual)),
     }
 
 
@@ -1076,9 +1689,7 @@ def _manifest(
         {
             "id": source_id,
             "path": str(path),
-            "locator": (
-                f"run-directory/{path.name}"
-            ),
+            "locator": (f"run-directory/{path.name}"),
             "sha256": file_sha256(path),
             "visibility": "private",
         }
@@ -1090,6 +1701,19 @@ def _manifest(
     gates = _mapping(objective["target_gates"], "summary.best_objective.target_gates")
     candidate = _mapping(summary["best_candidate"], "summary.best_candidate")
     resolved = _mapping(summary["best_resolved_lc"], "summary.best_resolved_lc")
+    response_match = _mapping(summary["response_match"], "summary.response_match")
+    match_evidence = _mapping(
+        response_match["match_evidence"],
+        "summary.response_match.match_evidence",
+    )
+    reference_model = _mapping(
+        match_evidence["reference_model"],
+        "response-match reference model",
+    )
+    readout_match = _mapping(match_evidence["readout"], "response-match readout")
+    filter_match = _mapping(match_evidence["filter"], "response-match filter")
+    bridge_match = _mapping(match_evidence["bridge"], "response-match bridge")
+    match_settings = _mapping(match_evidence["settings"], "response-match settings")
     q2d = _mapping(summary["q2d_spec"], "summary.q2d_spec")
     geometry = _mapping(q2d["geometry_um"], "summary.q2d_spec.geometry_um")
     solver = _mapping(q2d["solver"], "summary.q2d_spec.solver")
@@ -1104,65 +1728,86 @@ def _manifest(
     anchored_frequency = _mapping(
         anchored["h_diagonal_frequency_hz"], "anchored h diagonal frequency"
     )
-    anchored_coupling = _mapping(
-        anchored["h_number_conserving_coupling_hz"], "anchored h coupling"
-    )
+    anchored_coupling = _mapping(anchored["h_number_conserving_coupling_hz"], "anchored h coupling")
     anchored_pairing = _mapping(anchored["pairing_coupling_hz"], "anchored pairing")
-    metric_rows = [
+    effective = _mapping(
+        linear_quantities["matched_open_q_feedline_schur_downfolded_rp_effective_representation"],
+        "linear quantities effective RP representation",
+    )
+    effective_roots = _mapping(effective["diagonal_roots"], "effective RP diagonal roots")
+    effective_exchange = _mapping(effective["residue_normalized_exchange"], "effective RP exchange")
+    readout_effective_root = _complex_value(
+        effective_roots["r"]["complex_frequency_hz"], "effective readout root"
+    )
+    filter_effective_root = _complex_value(
+        effective_roots["p"]["complex_frequency_hz"], "effective filter root"
+    )
+    complex_exchange = _complex_value(
+        effective_exchange["effective_exchange_rad_s"], "effective RP exchange"
+    )
+    filter_effective_linewidth_hz = float(effective_roots["p"]["external_linewidth_hz"])
+    total_qrp_linewidth_hz = float(metrics["kappa_sum_qrp_on_ext_on_hz"])
+    headline = (
+        f"S21, closure, and weighted-qubit Purcell response — cost "
+        f"{float(objective['cost']):.6g}; gates "
+        f"{_gate(bool(objective['target_gates_pass']))}; "
+        f"fᵣ/fₚ {float(metrics['fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz']) / 1e9:.6f}/"
+        f"{float(metrics['fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz']) / 1e9:.6f} GHz; "
+        f"J {float(metrics['J_rp_eff_q_feedline_downfolded_coherent_hz']) / 1e6:.4f} MHz; "
+        f"κΣ {total_qrp_linewidth_hz / 1e6:.4f} MHz"
+    )
+    primary_extraction_rows = [
         (
-            "Stage-2 objective operator — QRP,on; ext,on",
+            "Schur-dressed anchored-coordinate dynamic-effective — QRP,on; matched-open",
             "q+feedline-downfolded r diagonal root",
             f"{float(metrics['fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz']) / 1e9:.9f} GHz",
-            "—",
-            f"{slot_hz / 1e9:.9f} GHz",
+            f"Im = {readout_effective_root.imag / 1e6:.9g} MHz",
+            f"target {slot_hz / 1e9:.9f} GHz; "
+            f"κext = {float(effective_roots['r']['external_linewidth_hz']) / 1e6:.9g} MHz",
             _gate(bool(gates["readout_effective_diagonal_within_tolerance"])),
         ),
         (
-            "Stage-2 objective operator — QRP,on; ext,on",
+            "Schur-dressed anchored-coordinate dynamic-effective — QRP,on; matched-open",
             "q+feedline-downfolded p diagonal root",
             f"{float(metrics['fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz']) / 1e9:.9f} GHz",
-            "—",
-            f"{slot_hz / 1e9:.9f} GHz",
+            f"Im = {filter_effective_root.imag / 1e6:.9g} MHz",
+            f"target {slot_hz / 1e9:.9f} GHz; "
+            f"κext = {float(effective_roots['p']['external_linewidth_hz']) / 1e6:.9g} MHz",
             _gate(bool(gates["filter_effective_diagonal_within_tolerance"])),
         ),
         (
-            "Stage-2 objective operator — QRP,on; ext,on",
-            "q+feedline-downfolded coherent |Jrp|",
+            "Schur-dressed anchored-coordinate dynamic-effective — QRP,on; matched-open",
+            "residue-normalized coherent |Re Jrp|",
             f"{float(metrics['J_rp_eff_q_feedline_downfolded_coherent_hz']) / 1e6:.6f} MHz",
-            "—",
-            "5.000000 MHz",
-            "—",
+            f"J/2π = ({complex_exchange.real / (2 * math.pi * 1e6):.9g}"
+            f"{complex_exchange.imag / (2 * math.pi * 1e6):+.9g}j) MHz",
+            f"target 5.000000 MHz; |J| = "
+            f"{float(effective_exchange['total_exchange_hz']) / 1e6:.9g} MHz",
+            f"κcross = {float(effective_exchange['dissipative_cross_coupling_hz']) / 1e6:.9g} MHz",
+        ),
+    ]
+    diagnostic_rows = [
+        (
+            "Report-only linewidth diagnostic — Schur-effective p root",
+            "κp,eff - 20 MHz",
+            f"{(filter_effective_linewidth_hz - 20e6) / 1e6:+.9g} MHz",
+            f"κp,eff = {filter_effective_linewidth_hz / 1e6:.9g} MHz",
+            "20.000000 MHz reference",
+            "report-only; not an objective operand",
         ),
         (
-            "Intrinsic RP,on response",
-            "Intrinsic notch",
-            f"{float(metrics['notch_rp_on_hz']) / 1e9:.9f} GHz",
-            "—",
-            "4.500000000 GHz",
-            "—",
-        ),
-        (
-            "Matched-open QRP,on; ext,on response",
-            "Total QRP linewidth",
-            f"{float(metrics['kappa_sum_qrp_on_ext_on_hz']) / 1e6:.6f} MHz",
-            "—",
-            "20.000000 MHz",
-            "—",
-        ),
-        (
-            "Matched-open QRP,on; ext,on response",
-            "r/p linewidth participation",
-            f"{100 * float(metrics['eta_r_qrp_on']):.4f}% / "
-            f"{100 * float(metrics['eta_p_qrp_on']):.4f}%",
-            "—",
-            "30-70% hard gate",
-            _gate(bool(gates["linewidth_participation"])),
+            "Report-only linewidth diagnostic — cross-projection comparison",
+            "κp,eff - κΣ,qrp",
+            f"{(filter_effective_linewidth_hz - total_qrp_linewidth_hz) / 1e6:+.9g} MHz",
+            f"κp,eff = {filter_effective_linewidth_hz / 1e6:.9g} MHz",
+            f"κΣ,qrp = {total_qrp_linewidth_hz / 1e6:.9g} MHz",
+            "report-only; effective diagonal root vs assigned q+r+p poles",
         ),
     ]
     impedance = _mapping(anchored["impedance_ohm"], "anchored impedance")
     pairing_diagonal = _mapping(anchored["pairing_diagonal_hz"], "anchored pairing diagonal")
     for coordinate in ("q", "r", "p"):
-        metric_rows.append(
+        diagnostic_rows.append(
             (
                 "Anchored-bare QRP,on — closed conservative block",
                 f"{coordinate}: h_{coordinate}{coordinate}/2π",
@@ -1173,7 +1818,7 @@ def _manifest(
             )
         )
     for pair in ("qr", "qp", "rp"):
-        metric_rows.append(
+        diagnostic_rows.append(
             (
                 "Anchored-bare QRP,on — closed conservative block",
                 f"{pair}: h_ij/2π",
@@ -1188,7 +1833,7 @@ def _manifest(
         "linear quantities normal modes",
     )
     for index, frequency in enumerate(normal_modes["frequencies_hz"], start=1):
-        metric_rows.append(
+        diagnostic_rows.append(
             (
                 "Fully hybridized QRP,on — closed spectrum",
                 f"normal mode {index}",
@@ -1214,7 +1859,7 @@ def _manifest(
         zip(open_poles["frequencies_hz"], open_poles["linewidths_hz"], strict=True),
         start=1,
     ):
-        metric_rows.append(
+        diagnostic_rows.append(
             (
                 "Matched-open QRP,on; ext,on response",
                 f"complex pole {index}",
@@ -1225,7 +1870,7 @@ def _manifest(
                     f"{identity_by_pole[index - 1]}-like by stored-energy continuation; "
                     "not a Hamiltonian basis"
                     if index - 1 in identity_by_pole
-                    else "unassigned response pole; not a Hamiltonian basis"
+                    else "feedline-like pole, unassigned to q/r/p; not a Hamiltonian basis"
                 ),
             )
         )
@@ -1239,6 +1884,7 @@ def _manifest(
         ),
         key=lambda item: item[0],
     )
+    vector_fit_rows = []
     for index, (pole, matched_open) in enumerate(
         zip(vector_fit["poles"], assigned_rp, strict=True),
         start=1,
@@ -1249,7 +1895,7 @@ def _manifest(
             float(pole["residue_real_rad_per_s"]),
             float(pole["residue_imag_rad_per_s"]),
         )
-        metric_rows.append(
+        vector_fit_rows.append(
             (
                 "Scalar VF of Direct S21 — matched-open response cross-check",
                 f"visible VF pole {index}",
@@ -1261,13 +1907,90 @@ def _manifest(
                 f"R_VF = ({residue.real:.6g}{residue.imag:+.6g}j) rad/s",
             )
         )
+    normalized_residuals = _mapping(
+        objective["normalized_residuals"], "summary.best_objective.normalized_residuals"
+    )
+    objective_rows = [
+        (
+            "Objective residual — revision 9",
+            "r_r: Schur-effective r diagonal root",
+            f"{float(metrics['fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz']) / 1e9:.9f} GHz",
+            f"target = {slot_hz / 1e9:.9f} GHz",
+            "scale = 0.500000 MHz",
+            f"normalized = {float(normalized_residuals['r_r']):+.9g}; "
+            f"{_gate(bool(gates['readout_effective_diagonal_within_tolerance']))}; "
+            "retained r coordinate after q+feedline loading",
+        ),
+        (
+            "Objective residual — revision 9",
+            "r_p: Schur-effective p diagonal root",
+            f"{float(metrics['fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz']) / 1e9:.9f} GHz",
+            f"target = {slot_hz / 1e9:.9f} GHz",
+            "scale = 0.500000 MHz",
+            f"normalized = {float(normalized_residuals['r_p']):+.9g}; "
+            f"{_gate(bool(gates['filter_effective_diagonal_within_tolerance']))}; "
+            "retained p coordinate after q+feedline loading",
+        ),
+        (
+            "Objective residual — revision 9",
+            "r_J: Schur-effective coherent |Re Jrp|",
+            f"{float(metrics['J_rp_eff_q_feedline_downfolded_coherent_hz']) / 1e6:.9f} MHz",
+            "target = 5.000000000 MHz",
+            "scale = 2.000000 MHz",
+            f"normalized = {float(normalized_residuals['r_J']):+.9g}; "
+            "coherent retained r-p exchange; dissipative cross-coupling is report-only",
+        ),
+        (
+            "Objective residual — revision 9",
+            "r_n: intrinsic RP,on notch",
+            f"{float(metrics['notch_rp_on_hz']) / 1e9:.9f} GHz",
+            "target = 5.000000000 GHz",
+            "scale = 10.000000 MHz",
+            f"normalized = {float(normalized_residuals['r_n']):+.9g}; "
+            "real-axis complex Z21 zero of the intrinsic RP,on circuit",
+        ),
+        (
+            "Objective residual — revision 9",
+            "r_kappa: matched-open q/r/p total linewidth",
+            f"{float(metrics['kappa_sum_qrp_on_ext_on_hz']) / 1e6:.9f} MHz",
+            "target = 20.000000000 MHz",
+            "scale = 1.000000 MHz",
+            f"normalized = {float(normalized_residuals['r_kappa']):+.9g}; "
+            "sum of assigned q/r/p matched-open pole linewidths",
+        ),
+        (
+            "Objective residual — revision 9",
+            "r_eta: min(r,p) linewidth participation",
+            f"{min(float(metrics['eta_r_qrp_on']), float(metrics['eta_p_qrp_on'])):.9f}",
+            "target = 0.500000000",
+            "scale = 0.200000",
+            f"normalized = {float(normalized_residuals['r_eta']):+.9g}; "
+            f"{_gate(bool(gates['linewidth_participation']))}; r/p linewidth sharing",
+        ),
+        (
+            "Physical scalar-formula fit-back — Design Target requirement",
+            "bounded recovery of cared reduced parameters",
+            "NOT_AVAILABLE — no fit-back artifact is present in this canonical Run",
+            "recover f_r, f_p, coherent J, and declared port-response parameters",
+            "fixed basis, sparsity, ports, bounds, and response window",
+            "implementation gap; the scalar VF rows below are a parallel pole cross-check, "
+            "not a substitute",
+        ),
+    ]
+    metric_rows = objective_rows + primary_extraction_rows + vector_fit_rows
     parameter_rows = [
-        ("Readout open-side length", f"{float(candidate['lr_open_m']) * 1e6:.6f} µm"),
-        ("Readout short-side length", f"{float(candidate['lr_short_m']) * 1e6:.6f} µm"),
-        ("MTL coupling length", f"{float(candidate['lc_m']) * 1e6:.6f} µm"),
-        ("Filter open-side length", f"{float(candidate['lp_open_m']) * 1e6:.6f} µm"),
-        ("Filter short-side length", f"{float(candidate['lp_short_m']) * 1e6:.6f} µm"),
-        ("IDC finger length", f"{float(candidate['u_IDC']):.6f} µm"),
+        ("Fabrication — readout open-side length", f"{float(candidate['lr_open_m']) * 1e6:.6f} µm"),
+        (
+            "Fabrication — readout short-side length",
+            f"{float(candidate['lr_short_m']) * 1e6:.6f} µm",
+        ),
+        ("Fabrication — MTL coupling length", f"{float(candidate['lc_m']) * 1e6:.6f} µm"),
+        ("Fabrication — filter open-side length", f"{float(candidate['lp_open_m']) * 1e6:.6f} µm"),
+        (
+            "Fabrication — filter short-side length",
+            f"{float(candidate['lp_short_m']) * 1e6:.6f} µm",
+        ),
+        ("Fabrication — IDC finger length", f"{float(candidate['u_IDC']):.6f} µm"),
     ]
     for key, unit, scale in (
         ("Cr_f", "fF", 1e15),
@@ -1278,20 +2001,48 @@ def _manifest(
         ("Ln_h", "nH", 1e9),
     ):
         parameter_rows.append(
-            (f"Resolved {key}", f"{_finite(resolved[key], key) * scale:.9g} {unit}")
+            (
+                f"Equivalent circuit — resolved {key}",
+                f"{_finite(resolved[key], key) * scale:.9g} {unit}",
+            )
         )
     parameter_rows.extend(
         (
-            ("Effective qubit capacitance Cq,eff", f"{qubit_meta['c_q_eff_f'] * 1e15:.9g} fF"),
-            ("Floating-qubit weight alpha", f"{qubit_meta['alpha']:.12g}"),
-            ("Floating-qubit weight beta", f"{qubit_meta['beta']:.12g}"),
+            (
+                "Qubit transform — effective capacitance Cq,eff",
+                f"{qubit_meta['c_q_eff_f'] * 1e15:.9g} fF",
+            ),
+            ("Qubit transform — floating weight alpha", f"{qubit_meta['alpha']:.12g}"),
+            ("Qubit transform — floating weight beta", f"{qubit_meta['beta']:.12g}"),
         )
     )
 
-    fixed_rows = (
-        ("Cross-section", "continuous upper ground; no opening"),
+    readout_root_y = _format_complex(readout_match["root_admittance_s"], "readout root Y", "S")
+    readout_dy = _format_complex(
+        readout_match["admittance_derivative_s_per_rad_s"],
+        "readout dY/domega",
+        "S/(rad/s)",
+    )
+    filter_root_y = _format_complex(filter_match["root_admittance_s"], "filter root Y", "S")
+    filter_dy = _format_complex(
+        filter_match["admittance_derivative_s_per_rad_s"],
+        "filter dY/domega",
+        "S/(rad/s)",
+    )
+    bridge_root_z21 = _format_complex(
+        bridge_match["root_transfer_impedance_ohm"], "bridge root Z21", "Ω"
+    )
+    bridge_dz21 = _format_complex(
+        bridge_match["transfer_impedance_derivative_ohm_per_rad_s"],
+        "bridge dZ21/domega",
+        "Ω/(rad/s)",
+    )
+    bisection_atol = float(match_settings["bisection_absolute_tolerance_rad_s"])
+    derivative_rtol = float(match_settings["derivative_relative_tolerance"])
+    fixed_rows = [
+        ("Q2D setup — cross-section", "continuous upper ground; no opening"),
         (
-            "Geometry",
+            "Q2D setup — geometry",
             "w = {w:g} µm, s = {s:g} µm, d = {d:g} µm, h = {h:g} µm, t = {t:g} µm".format(
                 w=float(geometry["w"]),
                 s=float(geometry["s"]),
@@ -1301,28 +2052,112 @@ def _manifest(
             ),
         ),
         (
-            "Single-line RLGC",
+            "Q2D setup — materials / dielectric",
+            "NOT_AVAILABLE — the canonical Stage-2 Q2D artifact does not yet publish "
+            "the material stack or dielectric constants",
+        ),
+        (
+            "Single-line CPW — RLGC",
             f"R' = G' = 0; L' = {float(q2d['single_l_per_m_h']) * 1e9:.6f} nH/m; "
             f"C' = {float(q2d['single_c_per_m_f']) * 1e12:.6f} pF/m",
         ),
         (
-            "Single-line propagation",
+            "Single-line CPW — propagation",
             f"Z0 = {q2d_readback['z0']:.6f} Ω; v = {q2d_readback['velocity']:.7g} m/s; "
             f"εeff = {q2d_readback['epsilon_eff']:.6f}",
         ),
-        ("MTL L' matrix", np.array2string(l_matrix, precision=6) + " nH/m"),
-        ("MTL C' matrix", np.array2string(c_matrix, precision=6) + " pF/m"),
+        ("MTL section — L' matrix", np.array2string(l_matrix, precision=6) + " nH/m"),
+        ("MTL section — C' matrix", np.array2string(c_matrix, precision=6) + " pF/m"),
         (
-            "MTL impedance",
+            "MTL section — impedance",
             f"Zc = {q2d_readback['zc']:.6f} Ω; Zm = {q2d_readback['zm']:.6f} Ω; "
             f"Ze/Zo = {q2d_readback['ze']:.6f}/{q2d_readback['zo']:.6f} Ω",
         ),
         (
-            "Q2D convention",
+            "MTL section — modal propagation",
+            f"ve/vo = {q2d_readback['ve']:.7g}/{q2d_readback['vo']:.7g} m/s",
+        ),
+        (
+            "Q2D setup — solver convention",
             f"{float(solver['adaptive_frequency_hz']) / 1e9:g} GHz adaptive; lossless; "
             f"{q2d['coupling_orientation'].replace('_', '-')} MTL coupling",
         ),
-    )
+        (
+            "Length→LC extraction — reference model",
+            "temporary extraction-only circuit: two grounded-head/open-tail quarter-wave "
+            "resonators joined by one MTL window; final Stage-2 HB uses only the resolved "
+            "lumped Equivalent Circuit",
+        ),
+        (
+            "Length→LC extraction — reference-model reduction",
+            "frequency-dependent dynamic Schur complement eliminates internal CPW/MTL nodes; "
+            "terminals = readout_open_tail, filter_open_tail",
+        ),
+        (
+            "Length→LC extraction — CPW/MTL discretization",
+            f"section_length_m = {float(reference_model['section_length_m']):.17g} m "
+            f"({float(reference_model['section_length_m']) * 1e6:.9g} µm); "
+            f"mtl_section_length_m = "
+            f"{float(reference_model['mtl_section_length_m']):.17g} m "
+            f"({float(reference_model['mtl_section_length_m']) * 1e6:.9g} µm)",
+        ),
+        (
+            "Length→LC extraction — readout/filter state",
+            "MTL mutual terms disabled while diagonal loading is preserved; roots and slopes "
+            "come from the two open-tail terminal admittances",
+        ),
+        (
+            "Length→LC extraction — readout terminal-Y match",
+            f"froot = {float(readout_match['frequency_hz']) / 1e9:.12g} GHz; "
+            f"Y(root) = {readout_root_y}; dY/dω = {readout_dy}; "
+            f"Cr = {float(readout_match['capacitance_f']) * 1e15:.12g} fF; "
+            f"Lr = {float(readout_match['inductance_h']) * 1e9:.12g} nH",
+        ),
+        (
+            "Length→LC extraction — filter terminal-Y match",
+            f"froot = {float(filter_match['frequency_hz']) / 1e9:.12g} GHz; "
+            f"Y(root) = {filter_root_y}; dY/dω = {filter_dy}; "
+            f"Cp = {float(filter_match['capacitance_f']) * 1e15:.12g} fF; "
+            f"Lp = {float(filter_match['inductance_h']) * 1e9:.12g} nH",
+        ),
+        (
+            "Length→LC extraction — bridge state",
+            "full MTL mutual terms preserved; the intrinsic bridge is matched at the physical "
+            "open-tail Z21 notch",
+        ),
+        (
+            "Length→LC extraction — bridge Z21 match",
+            f"fnotch = {float(bridge_match['frequency_hz']) / 1e9:.12g} GHz; "
+            f"Z21(root) = {bridge_root_z21}; dZ21/dω = {bridge_dz21}",
+        ),
+        (
+            "Length→LC extraction — bridge terminal evidence",
+            f"Yr = {_format_complex(bridge_match['readout_admittance_s'], 'bridge Yr', 'S')}; "
+            f"Yp = {_format_complex(bridge_match['filter_admittance_s'], 'bridge Yp', 'S')}; "
+            f"Im(Cn residual) = {float(bridge_match['capacitance_imaginary_residual_f']):.9g} F; "
+            f"Cn = {float(bridge_match['capacitance_f']) * 1e15:.12g} fF; "
+            f"Ln = {float(bridge_match['inductance_h']) * 1e9:.12g} nH",
+        ),
+        (
+            "Length→LC extraction — root brackets",
+            "readout = [{:.9g}, {:.9g}] GHz; filter = [{:.9g}, {:.9g}] GHz; "
+            "notch = [{:.9g}, {:.9g}] GHz".format(
+                *(float(value) / 1e9 for value in match_settings["readout_root_bracket_hz"]),
+                *(float(value) / 1e9 for value in match_settings["filter_root_bracket_hz"]),
+                *(float(value) / 1e9 for value in match_settings["notch_root_bracket_hz"]),
+            ),
+        ),
+        (
+            "Length→LC extraction — root/slope numerical settings",
+            f"Δωparallel = {float(match_settings['parallel_derivative_step_rad_s']):.9g} rad/s; "
+            f"Δωbridge = {float(match_settings['bridge_derivative_step_rad_s']):.9g} rad/s; "
+            f"bisection atol = {bisection_atol:.9g} rad/s; "
+            f"rtol = {float(match_settings['bisection_relative_tolerance']):.9g}; "
+            f"maxiter = {int(match_settings['bisection_max_iterations'])}; "
+            f"root residual rtol = {float(match_settings['match_root_relative_tolerance']):.9g}; "
+            f"derivative residual rtol = {derivative_rtol:.9g}",
+        ),
+    ]
     qubit_frequency = qubit["frequency_hz"]
     cma_configuration = _mapping(
         _mapping(summary["cma"], "summary.cma")["configuration"],
@@ -1333,8 +2168,36 @@ def _manifest(
         "summary.cma.configuration.initial_mean",
     )
     model_identity = _model_identity(summary["model_identity"], "summary.model_identity")
-    objective_authority = _mapping(
-        summary["objective_authority"], "summary.objective_authority"
+    objective_authority = _mapping(summary["objective_authority"], "summary.objective_authority")
+    effective_provenance = _mapping(effective["provenance"], "effective RP provenance")
+    effective_closure = _mapping(effective["determinant_closure"], "effective RP closure")
+    effective_slopes = _mapping(effective_exchange["residue_slopes"], "effective RP slopes")
+    effective_samples = _mapping(
+        effective_exchange["coupling_samples_rad_s"], "effective RP coupling samples"
+    )
+    effective_operator_diagnostics = [
+        _mapping(sample, f"effective {name} operator diagnostics")
+        for name, sample in _mapping(
+            effective["operator_diagnostics"], "effective RP operator diagnostics"
+        ).items()
+    ]
+    maximum_operator_condition = max(
+        float(sample["elimination_condition_number"]) for sample in effective_operator_diagnostics
+    )
+    maximum_operator_solve_residual = max(
+        max(
+            float(sample["relative_elimination_solve_residual"]),
+            float(sample["relative_derivative_solve_residual"]),
+        )
+        for sample in effective_operator_diagnostics
+    )
+    maximum_operator_reciprocity_error = max(
+        float(sample["effective_reciprocity_error"]) for sample in effective_operator_diagnostics
+    )
+    effective_normalization_text = _format_complex(
+        effective_exchange["residue_normalization"],
+        "effective normalization",
+        "native operator units",
     )
     provenance_rows = (
         ("Run status", str(summary["status"])),
@@ -1344,12 +2207,62 @@ def _manifest(
             f"revision {objective_authority['target_revision']}; "
             f"SHA {objective_authority['target_contract_sha256']}",
         ),
+        ("Effective-operator contract", str(effective["contract_id"])),
+        (
+            "Effective-operator definition",
+            f"{effective_provenance['dynamic_stiffness']}; exact Schur complement; "
+            f"retain {effective_provenance['retained_partition']}; eliminate "
+            f"{effective_provenance['eliminated_partition']}; matched ports enter G",
+        ),
+        (
+            "Effective diagonal-root extraction",
+            f"{effective['diagonal_root_extraction']}; r band = "
+            f"{effective_roots['r']['frequency_band_hz']}; p band = "
+            f"{effective_roots['p']['frequency_band_hz']}; frequency-rank assignment forbidden",
+        ),
+        (
+            "Residue normalization / branch",
+            f"sqrt(({_complex_value(effective_slopes['readout_s'], 'readout slope')})"
+            f"x({_complex_value(effective_slopes['filter_s'], 'filter slope')})); "
+            f"normalization = {effective_normalization_text}; "
+            f"branch = {effective_exchange['square_root_branch']}; pointwise branch only—"
+            "cross-candidate branch continuation is not claimed",
+        ),
+        (
+            "Complex coupling samples",
+            "readout/midpoint/filter = "
+            + " / ".join(
+                _format_complex(effective_samples[name], f"effective {name} J", "rad/s")
+                for name in ("readout", "midpoint", "filter")
+            ),
+        ),
+        (
+            "Effective coupling/closure diagnostics",
+            f"three-point relative spread = "
+            f"{float(effective_exchange['relative_coupling_spread']):.9g}; "
+            f"determinant relative closure = {float(effective_closure['relative_error']):.9g}",
+        ),
+        (
+            "Effective operator sample diagnostics",
+            f"max cond(D_EE) = {maximum_operator_condition:.9g}; "
+            f"max solve residual = {maximum_operator_solve_residual:.9g}; "
+            f"max reciprocity error = {maximum_operator_reciprocity_error:.9g} "
+            "across readout/midpoint/filter",
+        ),
+        ("Effective C SHA", str(effective_provenance["capacitance_sha256"])),
+        ("Effective K SHA", str(effective_provenance["inverse_inductance_sha256"])),
+        ("Effective matched-port G SHA", str(effective_provenance["conductance_sha256"])),
         ("CircuitPlan SHA", model_identity["circuit_plan_sha256"]),
         ("Capacitance SHA", model_identity["capacitance_sha256"]),
         ("Inverse-inductance SHA", model_identity["inverse_inductance_sha256"]),
         ("Port-selector SHA", model_identity["selector_sha256"]),
         ("Q2D artifact", str(q2d["artifact_id"])),
         ("Q2D artifact SHA", str(q2d["artifact_sha256"])),
+        ("Length→LC mapping", str(response_match["mapping_id"])),
+        ("Length→LC mapping SHA", str(response_match["mapping_sha256"])),
+        ("Length→LC match contract", str(response_match["match_contract_id"])),
+        ("Length→LC topology", str(response_match["topology_id"])),
+        ("Fixed Q2D line-input SHA", str(response_match["fixed_line_input_sha256"])),
         ("Q2D cases", f"{q2d['single_case_id']} / {q2d['pair_case_id']}"),
         ("Q2D solver", f"AEDT {solver['aedt_version']}; PyAEDT {solver['pyaedt_version']}"),
         (
@@ -1400,10 +2313,7 @@ def _manifest(
         ),
         (
             "CMA initial mean",
-            ", ".join(
-                f"{name}={float(cma_initial_mean[name]):.9g}"
-                for name in _CANDIDATE_KEYS
-            ),
+            ", ".join(f"{name}={float(cma_initial_mean[name]):.9g}" for name in _CANDIDATE_KEYS),
         ),
         (
             "Scalar VF convention",
@@ -1433,7 +2343,7 @@ def _manifest(
             {
                 "type": "media",
                 "id": "response-review",
-                "title": "S21 closure and weighted-qubit Purcell response",
+                "title": headline,
                 "path": str(media_path),
                 "sha256": file_sha256(media_path),
                 "source_ids": ["s21", "qubit", "qubit_receipt", "summary"],
@@ -1442,7 +2352,7 @@ def _manifest(
                 "type": "optimization_history",
                 "id": "objective-history",
                 "title": (
-                    "Objective records (initial seed + CMA-ES): "
+                    "Best objective cost by valid candidate evaluation (initial seed + CMA-ES): "
                     f"{summary['cma']['evaluations']} evaluations, "
                     f"{summary['cma']['valid_evaluations']} valid, "
                     f"{summary['cma']['rejected_evaluations']} rejected"
@@ -1457,14 +2367,14 @@ def _manifest(
             _table(
                 "metrics",
                 "metrics",
-                "Revision-7 operands, three system-frequency views, and scalar VF poles",
+                "Stage-2 targets, optimized results, Schur extraction, and Vector Fitting",
                 (
                     "Layer / authority",
                     "Quantity",
-                    "Frequency / value",
-                    "Im or pairing",
-                    "Target / linewidth",
-                    "Gate / meaning",
+                    "Actual",
+                    "Target / reference",
+                    "Scale / companion",
+                    "Gate / physical meaning",
                 ),
                 metric_rows,
                 (1.25, 1.25, 1.05, 1.05, 1.15, 1.65),
@@ -1473,7 +2383,7 @@ def _manifest(
             _table(
                 "parameters",
                 "parameters",
-                "Physical candidate, resolved equivalent values, and qubit transform",
+                "Fabrication candidate, resolved equivalent circuit, and qubit transform",
                 ("Parameter", "Value"),
                 parameter_rows,
                 (1.5, 2.5),
@@ -1482,11 +2392,27 @@ def _manifest(
             _table(
                 "fixed-specifications",
                 "fixed_specifications",
-                "Fixed CPW / MTL specification",
-                ("Fixed CPW / MTL Spec", "Value used by this Stage-2 run"),
+                "Q2D setup, single-line CPW, MTL section, and Length→LC extraction audit",
+                ("Fixed input / extraction evidence", "Value used by this Stage-2 run"),
                 fixed_rows,
                 (1.0, 3.2),
                 ("summary",),
+            ),
+            _table(
+                "diagnostics",
+                "diagnostics",
+                "Report-only anchored-bare, fully hybridized closed, and matched-open views",
+                (
+                    "Layer / authority",
+                    "Quantity",
+                    "Actual",
+                    "Reference / boundary",
+                    "Companion quantity",
+                    "Physical meaning",
+                ),
+                diagnostic_rows,
+                (1.25, 1.25, 1.05, 1.05, 1.15, 1.65),
+                ("summary", "linear_quantities"),
             ),
             _table(
                 "provenance",
@@ -1535,12 +2461,11 @@ def build_report(
         if summary_hashes[filename] != file_sha256(run_directory / filename):
             raise ValueError(f"{filename} does not match its summary SHA-256.")
     linear_quantities = _load_linear_quantities(linear_quantities_path)
+    _validate_summary_effective_consistency(summary, linear_quantities)
     qubit_receipt = _load_qubit_receipt(qubit_receipt_path)
     summary_sha256 = file_sha256(summary_path)
     if linear_quantities["source_summary_sha256"] != summary_sha256:
-        raise ValueError(
-            "linear quantities were not produced from this Stage-2 summary."
-        )
+        raise ValueError("linear quantities were not produced from this Stage-2 summary.")
     if qubit_receipt["source_summary_sha256"] != summary_sha256:
         raise ValueError("qubit admittance was not produced from this Stage-2 summary.")
     if qubit_receipt["qubit_admittance_csv_sha256"] != file_sha256(qubit_csv):

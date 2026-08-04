@@ -10,6 +10,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const D3_Q2D_RLGC_SCHEMA = "d3-fixed-q2d-rlgc-input.v1"
+const D3_MAX_LINE_SECTION_LENGTH_M = 50e-6
 
 export load_d3_continuous_ground_q2d_input
 
@@ -124,6 +125,9 @@ function load_d3_continuous_ground_q2d_input(path; section_length_m)
         bytes2hex(SHA.sha256(io))
     end
     section = _d3_q2d_positive(section_length_m, "D3 line section length")
+    section <= D3_MAX_LINE_SECTION_LENGTH_M || error(
+        "D3 physical CPW/MTL section length must not exceed 50 um.",
+    )
     artifact_id = strip(String(payload["artifact_id"]))
     isempty(artifact_id) && error("D3 Q2D artifact id must not be empty.")
     solver = payload["solver"]

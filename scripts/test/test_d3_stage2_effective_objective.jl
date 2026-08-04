@@ -26,7 +26,7 @@ function objective_metrics(; slot_hz=6.0e9)
             fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz=slot_hz,
             fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz=slot_hz,
             J_rp_eff_q_feedline_downfolded_coherent_hz=5.0e6,
-            notch_rp_on_hz=4.5e9,
+            notch_rp_on_hz=5.0e9,
             kappa_sum_qrp_on_ext_on_hz=20.0e6,
             eta_r_qrp_on=0.5,
             eta_p_qrp_on=0.5,
@@ -41,7 +41,7 @@ function objective_metrics(; slot_hz=6.0e9)
     )
 end
 
-@testset "D3 revision-7 effective objective" begin
+@testset "D3 revision-9 effective objective" begin
     slot_hz = 6.0e9
     metrics = objective_metrics(; slot_hz=slot_hz)
     objective = d3_stage2_objective(
@@ -50,9 +50,11 @@ end
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
         TEST_MODEL_IDENTITY,
     )
-    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_revision == 7
+    @test D3_TARGET_SLOT_FREQUENCIES_HZ == (5.9e9, 6.0e9, 6.1e9, 6.2e9)
+    @test D3_INTERFERENCE_NOTCH_TARGET_HZ == 5.0e9
+    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_revision == 9
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_contract_sha256 ==
-        "2ec4014c5bd3ba5824c15d71c3ad1e03b2a0d1f7444a35dcd31b0a4fe99b7bf9"
+        "86eb2da65329df9059efeddccc9f479d1ef116e0eed4a0de0554cf8f02353b9d"
     @test objective.cost == 0.0
     @test objective.target_gates_pass
     @test keys(objective.target_gates) == (
@@ -86,7 +88,7 @@ end
             fr_qrp_on_hz=slot_hz,
             fp_qrp_on_hz=slot_hz,
             J_qrp_on_hz=5.0e6,
-            notch_rp_on_hz=4.5e9,
+            notch_rp_on_hz=5.0e9,
             kappa_sum_qrp_on_ext_on_hz=20.0e6,
             eta_r_qrp_on=0.5,
             eta_p_qrp_on=0.5,
@@ -102,6 +104,12 @@ end
     @test_throws ErrorException d3_stage2_objective(
         legacy_metrics,
         slot_hz,
+        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+        TEST_MODEL_IDENTITY,
+    )
+    @test_throws ErrorException d3_stage2_objective(
+        metrics,
+        6.3e9,
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
         TEST_MODEL_IDENTITY,
     )

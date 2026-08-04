@@ -89,7 +89,7 @@ def test_q1_table_ai_lengths_regress_through_frequency_identities() -> None:
     )
 
 
-@pytest.mark.parametrize("slot_hz", [5.52e9, 5.76e9, 6.00e9, 6.24e9, 6.48e9])
+@pytest.mark.parametrize("slot_hz", [5.9e9, 6.0e9, 6.1e9, 6.2e9])
 def test_d3_frequency_seeds_are_positive_and_round_trip(slot_hz: float) -> None:
     """The declared source-first ``lc=318 um``, 50/50 split seeds stay physical."""
 
@@ -97,7 +97,7 @@ def test_d3_frequency_seeds_are_positive_and_round_trip(slot_hz: float) -> None:
     seed = solve_source_first_length_seed(
         fr_hz=slot_hz,
         fp_hz=slot_hz,
-        fn_hz=4.5e9,
+        fn_hz=5.0e9,
         coupled_length_m=318.0e-6,
         short_delay_split=0.5,
         single_line_velocity_m_per_s=velocity,
@@ -106,7 +106,7 @@ def test_d3_frequency_seeds_are_positive_and_round_trip(slot_hz: float) -> None:
     assert min(seed.lengths.all_m) > 0.0
     assert seed.round_trip_frequencies.fr_hz == pytest.approx(slot_hz)
     assert seed.round_trip_frequencies.fp_hz == pytest.approx(slot_hz)
-    assert seed.round_trip_frequencies.fn_hz == pytest.approx(4.5e9)
+    assert seed.round_trip_frequencies.fn_hz == pytest.approx(5.0e9)
     assert seed.provenance == INITIALIZER_ONLY_PROCESS_MISMATCH
 
 
