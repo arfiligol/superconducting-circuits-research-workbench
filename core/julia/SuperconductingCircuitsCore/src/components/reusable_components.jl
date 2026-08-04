@@ -683,8 +683,23 @@ function add_intrinsic_interferometric_purcell_filter!(
     readout_grounded_head = _component_node(component_id, "readout_grounded_head")
     filter_grounded_head = _component_node(component_id, "filter_grounded_head")
     filter_open_tail = _component_node(component_id, "filter_open_tail")
-    readout_breakpoints = [mtl_model.start1_m, mtl_model.start1_m + mtl_model.length_m]
-    filter_breakpoints = [mtl_model.start2_m, mtl_model.start2_m + mtl_model.length_m]
+    # The uncoupled CPW and coupled MTL window may intentionally use different
+    # spatial resolutions. Explicit MTL-grid breakpoints refine only the
+    # coupled span while the base RLGCSpec continues to own the single-trace
+    # resolution outside that span.
+    mtl_section_count = _derived_section_count(
+        mtl_model.length_m,
+        mtl_model.section_length_m,
+    )
+    mtl_dx = mtl_model.length_m / mtl_section_count
+    readout_breakpoints = [
+        mtl_model.start1_m + index * mtl_dx
+        for index in 0:mtl_section_count
+    ]
+    filter_breakpoints = [
+        mtl_model.start2_m + index * mtl_dx
+        for index in 0:mtl_section_count
+    ]
 
     readout_resonator = add_quarter_wave_resonator!(
         plan;

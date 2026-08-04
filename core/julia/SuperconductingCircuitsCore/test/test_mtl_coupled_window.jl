@@ -662,6 +662,37 @@ end
     @test all(relation -> relation.mutual_inductance ≈ 0.5e-7 * 0.75mm, window.inductive_couplings)
 end
 
+@testset "Intrinsic filter honors the MTL resolution inside its coupled span" begin
+    base_spec = RLGCSpec(
+        length_m=2.0mm,
+        section_length_m=1.0mm,
+        l_per_m_h=4.2e-7,
+        c_per_m_f=1.7e-10,
+    )
+    model = _test_mtl_model(
+        start1_m=0.5mm,
+        start2_m=0.5mm,
+        length_m=1.0mm,
+        section_length_m=0.25mm,
+    )
+    plan = CircuitPlan("intrinsic-filter-mtl-resolution")
+    filter = add_intrinsic_interferometric_purcell_filter!(
+        plan;
+        id="intrinsic_filter",
+        readout_attachment=external_node("readout_attachment"),
+        feedline_attachment=external_node("feedline_attachment"),
+        readout_spec=base_spec,
+        filter_spec=base_spec,
+        mtl_model=model,
+        c1g_f=35.0e-15,
+        c2g_f=34.5e-15,
+        c12_f=38.0e-15,
+    )
+
+    @test filter.readout_resonator.line.section_lengths_m[filter.window.section_range1] ≈ fill(0.25mm, 4)
+    @test filter.filter_resonator.line.section_lengths_m[filter.window.section_range2] ≈ fill(0.25mm, 4)
+end
+
 @testset "MTL coupled window preflights every paired section before mutation" begin
     line_spec = RLGCSpec(
         length_m=1.0mm,
