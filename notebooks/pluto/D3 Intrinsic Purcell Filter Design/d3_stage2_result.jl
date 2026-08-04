@@ -164,12 +164,28 @@ end
 
 function _finite_vector(value, length_expected, label)
     value isa AbstractArray || value isa Tuple || error("$(label) must be an array.")
-    numbers = Float64.(collect(value))
-    length(numbers) == length_expected || error(
+    raw = collect(value)
+    length(raw) == length_expected || error(
         "$(label) must contain exactly $(length_expected) values.",
     )
+    all(item -> item isa Real && !(item isa Bool), raw) || error(
+        "$(label) must contain only numeric values.",
+    )
+    numbers = Float64.(raw)
     all(isfinite, numbers) || error("$(label) must contain only finite values.")
     return numbers
+end
+
+function _json_generic_copy(value)
+    if value isa AbstractDict
+        return Dict{String,Any}(
+            String(key) => _json_generic_copy(item)
+            for (key, item) in pairs(value)
+        )
+    elseif value isa AbstractArray || value isa Tuple
+        return Any[_json_generic_copy(item) for item in value]
+    end
+    return value
 end
 
 function _validated_q2d_spec(value)
@@ -277,7 +293,7 @@ function _validated_q2d_spec(value)
             "D3 Stage-2 Q2D $(name) must not exceed 50 um.",
         )
     end
-    return q2d
+    return _json_generic_copy(q2d)
 end
 
 function _validated_bounds(value)
