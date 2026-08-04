@@ -14,14 +14,19 @@ const D3_MAX_LINE_SECTION_LENGTH_M = 50e-6
 
 export load_d3_continuous_ground_q2d_input
 
+function _d3_q2d_real(value, label)
+    value isa Real && !(value isa Bool) || error("$(label) must be numeric.")
+    return Float64(value)
+end
+
 function _d3_q2d_positive(value, label)
-    number = Float64(value)
+    number = _d3_q2d_real(value, label)
     isfinite(number) && number > 0 || error("$(label) must be finite and positive.")
     return number
 end
 
 function _d3_q2d_nonnegative(value, label)
-    number = Float64(value)
+    number = _d3_q2d_real(value, label)
     isfinite(number) && number >= 0 || error("$(label) must be finite and nonnegative.")
     return number
 end
@@ -43,7 +48,10 @@ function _d3_q2d_matrix(raw, label)
     rows = collect(raw)
     length(rows) == 2 && all(row -> length(row) == 2, rows) ||
         error("$(label) must be a 2x2 matrix.")
-    matrix = Float64[rows[row][column] for row in 1:2, column in 1:2]
+    matrix = Float64[
+        _d3_q2d_real(rows[row][column], "$(label)[$(row),$(column)]")
+        for row in 1:2, column in 1:2
+    ]
     all(isfinite, matrix) && isposdef(Symmetric(matrix)) ||
         error("$(label) must be finite, symmetric, and positive definite.")
     isapprox(matrix, transpose(matrix); rtol=1e-12, atol=0.0) ||
