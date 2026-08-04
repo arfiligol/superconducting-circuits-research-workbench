@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import cmath
 import csv
+import hashlib
 import json
 import math
 import tempfile
@@ -151,6 +152,33 @@ def _sha256(value: Any, label: str) -> str:
     ):
         raise ValueError(f"{label} must be lowercase SHA-256.")
     return value
+
+
+def _json_values_equal(left: Any, right: Any) -> bool:
+    if type(left) is bool or type(right) is bool:
+        return type(left) is bool and type(right) is bool and left is right
+    if type(left) in (int, float) or type(right) in (int, float):
+        return type(left) in (int, float) and type(right) in (int, float) and left == right
+    if isinstance(left, Mapping) or isinstance(right, Mapping):
+        if not isinstance(left, Mapping) or not isinstance(right, Mapping):
+            return False
+        if not all(type(key) is str for key in (*left.keys(), *right.keys())):
+            return False
+        if set(left) != set(right):
+            return False
+        return all(_json_values_equal(left[key], right[key]) for key in left)
+    if isinstance(left, list) or isinstance(right, list):
+        return (
+            isinstance(left, list)
+            and isinstance(right, list)
+            and len(left) == len(right)
+            and all(_json_values_equal(a, b) for a, b in zip(left, right, strict=True))
+        )
+    if type(left) is str or type(right) is str:
+        return type(left) is str and type(right) is str and left == right
+    if left is None or right is None:
+        return left is None and right is None
+    return False
 
 
 def _complex_value(value: Any, label: str) -> complex:
@@ -483,7 +511,156 @@ def _validate_effective_rp(value: Any, model_identity: Mapping[str, str]) -> dic
     return effective
 
 
-def _validate_response_match_audit(response_match: Mapping[str, Any]) -> None:
+def _fixed_line_q2d_snapshot(response_match: Mapping[str, Any]) -> dict[str, Any]:
+    identity = dict(
+        _mapping(
+            response_match["fixed_line_input_identity"],
+            "summary.response_match.fixed_line_input_identity",
+        )
+    )
+    identity_fields = {
+        "contract_id",
+        "q2d_artifact_id",
+        "q2d_artifact_sha256",
+        "q2d_topology_id",
+        "q2d_geometry_um",
+        "q2d_single_case_id",
+        "q2d_pair_case_id",
+        "q2d_solver",
+        "q2d_loss_model",
+        "section_length_m",
+        "mtl_section_length_m",
+        "readout_l_per_m_h",
+        "readout_c_per_m_f",
+        "filter_l_per_m_h",
+        "filter_c_per_m_f",
+        "l_matrix_per_m_h",
+        "c_matrix_per_m_f",
+        "coupling_orientation",
+    }
+    if set(identity) != identity_fields:
+        raise ValueError("fixed-line identity fields do not match the normalized contract.")
+    canonical = response_match["fixed_line_input_identity_canonical_json"]
+    if not isinstance(canonical, str) or not canonical:
+        raise ValueError("fixed-line canonical identity must be non-empty text.")
+    try:
+        decoded_identity = json.loads(canonical)
+    except json.JSONDecodeError as error:
+        raise ValueError("fixed-line canonical identity is not valid JSON.") from error
+    if not _json_values_equal(decoded_identity, identity):
+        raise ValueError("fixed-line canonical JSON disagrees elementwise with its identity.")
+    computed_sha256 = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    if computed_sha256 != response_match["fixed_line_input_sha256"]:
+        raise ValueError("fixed-line canonical JSON disagrees with its reported SHA-256.")
+    if identity["contract_id"] != "d3-selected-continuous-ground-fixed-line.v1":
+        raise ValueError("fixed-line identity uses the wrong contract.")
+
+    geometry = dict(_mapping(identity["q2d_geometry_um"], "fixed-line Q2D geometry"))
+    geometry_fields = {
+        "w",
+        "s",
+        "d",
+        "h",
+        "upper_ground_clearance",
+        "metal_thickness",
+    }
+    if set(geometry) != geometry_fields:
+        raise ValueError("fixed-line Q2D geometry fields are incomplete.")
+    normalized_geometry = {
+        name: _finite(geometry[name], f"fixed-line geometry {name}") for name in geometry_fields
+    }
+    if any(normalized_geometry[name] <= 0 for name in geometry_fields - {"upper_ground_clearance"}):
+        raise ValueError("fixed-line physical geometry values must be positive.")
+    if normalized_geometry["upper_ground_clearance"] != 0:
+        raise ValueError("continuous-upper-ground identity requires zero upper-ground clearance.")
+
+    solver = dict(_mapping(identity["q2d_solver"], "fixed-line Q2D solver"))
+    solver_fields = {
+        "adaptive_frequency_hz",
+        "aedt_version",
+        "pyaedt_version",
+        "runtime_bundle_sha256",
+    }
+    if set(solver) != solver_fields:
+        raise ValueError("fixed-line Q2D solver fields are incomplete.")
+    normalized_solver = {
+        "adaptive_frequency_hz": _finite(
+            solver["adaptive_frequency_hz"], "fixed-line adaptive frequency"
+        ),
+        "aedt_version": solver["aedt_version"],
+        "pyaedt_version": solver["pyaedt_version"],
+        "runtime_bundle_sha256": _sha256(
+            solver["runtime_bundle_sha256"], "fixed-line runtime bundle SHA-256"
+        ),
+    }
+    if normalized_solver["adaptive_frequency_hz"] <= 0:
+        raise ValueError("fixed-line adaptive frequency must be positive.")
+    for name in ("aedt_version", "pyaedt_version"):
+        if not isinstance(normalized_solver[name], str) or not normalized_solver[name].strip():
+            raise ValueError(f"fixed-line {name} must be non-empty text.")
+
+    def matrix_rows(value: Any, label: str) -> list[list[float]]:
+        if not isinstance(value, list) or len(value) != 2:
+            raise ValueError(f"{label} must contain exactly two ordered rows.")
+        rows: list[list[float]] = []
+        for row_index, raw_row in enumerate(value):
+            if not isinstance(raw_row, list) or len(raw_row) != 2:
+                raise ValueError(f"{label}[{row_index}] must contain exactly two values.")
+            rows.append(
+                [
+                    _finite(raw_value, f"{label}[{row_index}][{column_index}]")
+                    for column_index, raw_value in enumerate(raw_row)
+                ]
+            )
+        return rows
+
+    l_matrix = matrix_rows(identity["l_matrix_per_m_h"], "fixed-line L matrix")
+    c_matrix = matrix_rows(identity["c_matrix_per_m_f"], "fixed-line C matrix")
+    readout_l = _finite(identity["readout_l_per_m_h"], "fixed-line readout L")
+    readout_c = _finite(identity["readout_c_per_m_f"], "fixed-line readout C")
+    filter_l = _finite(identity["filter_l_per_m_h"], "fixed-line filter L")
+    filter_c = _finite(identity["filter_c_per_m_f"], "fixed-line filter C")
+    if min(readout_l, readout_c, filter_l, filter_c) <= 0:
+        raise ValueError("fixed-line single-line L/C values must be positive.")
+    if readout_l != filter_l or readout_c != filter_c:
+        raise ValueError("fixed-line identity must retain one artifact-owned single-line L/C pair.")
+    section_length_m = _finite(identity["section_length_m"], "fixed-line CPW grid")
+    mtl_section_length_m = _finite(identity["mtl_section_length_m"], "fixed-line MTL grid")
+    if not 0 < section_length_m <= 50e-6 or not 0 < mtl_section_length_m <= 50e-6:
+        raise ValueError("fixed-line CPW and MTL grids must each be positive and at most 50 um.")
+    for name in ("q2d_artifact_id", "q2d_single_case_id", "q2d_pair_case_id"):
+        if not isinstance(identity[name], str) or not identity[name].strip():
+            raise ValueError(f"fixed-line {name} must be non-empty text.")
+    _sha256(identity["q2d_artifact_sha256"], "fixed-line Q2D artifact SHA-256")
+    if identity["q2d_topology_id"] != "continuous_upper_ground":
+        raise ValueError("fixed-line Q2D topology must be continuous_upper_ground.")
+    if identity["q2d_loss_model"] != "lossless_R_equals_G_equals_zero":
+        raise ValueError("fixed-line Q2D loss model must be lossless.")
+    if identity["coupling_orientation"] != "same_direction":
+        raise ValueError("fixed-line Q2D coupling orientation must be same_direction.")
+
+    return {
+        "artifact_id": identity["q2d_artifact_id"],
+        "artifact_sha256": identity["q2d_artifact_sha256"],
+        "topology_id": identity["q2d_topology_id"],
+        "single_case_id": identity["q2d_single_case_id"],
+        "pair_case_id": identity["q2d_pair_case_id"],
+        "geometry_um": normalized_geometry,
+        "solver": normalized_solver,
+        "loss_model": identity["q2d_loss_model"],
+        "single_l_per_m_h": readout_l,
+        "single_c_per_m_f": readout_c,
+        "l_matrix_per_m_h": [value for row in l_matrix for value in row],
+        "c_matrix_per_m_f": [value for row in c_matrix for value in row],
+        "coupling_orientation": identity["coupling_orientation"],
+        "section_length_m": section_length_m,
+        "mtl_section_length_m": mtl_section_length_m,
+    }
+
+
+def _validate_response_match_audit(
+    response_match: Mapping[str, Any], q2d_spec: Mapping[str, Any]
+) -> None:
     expected_response_match_fields = {
         "mapping_id",
         "mapping_sha256",
@@ -491,6 +668,8 @@ def _validate_response_match_audit(response_match: Mapping[str, Any]) -> None:
         "q2d_artifact_id",
         "q2d_artifact_sha256",
         "fixed_line_input_sha256",
+        "fixed_line_input_identity",
+        "fixed_line_input_identity_canonical_json",
         "topology_id",
         "match_evidence",
     }
@@ -503,6 +682,17 @@ def _validate_response_match_audit(response_match: Mapping[str, Any]) -> None:
     for field in ("mapping_id", "match_contract_id", "q2d_artifact_id", "topology_id"):
         if not isinstance(response_match[field], str) or not response_match[field].strip():
             raise ValueError(f"summary.response_match.{field} must be non-empty text.")
+    expected_q2d_spec = _fixed_line_q2d_snapshot(response_match)
+    if not _json_values_equal(q2d_spec, expected_q2d_spec):
+        raise ValueError(
+            "summary.q2d_spec disagrees elementwise with the artifact-derived fixed-line identity."
+        )
+    if response_match["q2d_artifact_id"] != expected_q2d_spec["artifact_id"]:
+        raise ValueError("response-match artifact id disagrees with its fixed-line identity.")
+    if response_match["q2d_artifact_sha256"] != expected_q2d_spec["artifact_sha256"]:
+        raise ValueError("response-match artifact SHA disagrees with its fixed-line identity.")
+    if response_match["topology_id"] != expected_q2d_spec["topology_id"]:
+        raise ValueError("response-match topology disagrees with its fixed-line identity.")
 
     evidence = _mapping(
         response_match["match_evidence"],
@@ -534,6 +724,8 @@ def _validate_response_match_audit(response_match: Mapping[str, Any]) -> None:
         section_length = _finite(reference[name], f"response-match {name}")
         if not 0 < section_length <= 50e-6:
             raise ValueError(f"D3 response-match {name} must be positive and at most 50 um.")
+        if section_length != expected_q2d_spec[name]:
+            raise ValueError(f"response-match {name} disagrees with its fixed-line identity.")
 
     parallel_fields = {
         "capacitance_f",
@@ -706,14 +898,8 @@ def _load_summary(path: Path) -> dict[str, Any]:
         _sha256(artifacts[name], f"summary.artifacts.{name}")
 
     q2d_spec = _mapping(summary["q2d_spec"], "summary.q2d_spec")
-    _require_keys(q2d_spec, ("artifact_id", "artifact_sha256"), "summary.q2d_spec")
-    _sha256(q2d_spec["artifact_sha256"], "summary.q2d_spec.artifact_sha256")
     response_match = _mapping(summary["response_match"], "summary.response_match")
-    _validate_response_match_audit(response_match)
-    if response_match["q2d_artifact_id"] != q2d_spec["artifact_id"]:
-        raise ValueError("summary Q2D artifact id disagrees with response-match provenance.")
-    if response_match["q2d_artifact_sha256"] != q2d_spec["artifact_sha256"]:
-        raise ValueError("summary Q2D artifact SHA disagrees with response-match provenance.")
+    _validate_response_match_audit(response_match, q2d_spec)
 
     cma = _mapping(summary["cma"], "summary.cma")
     _require_keys(
@@ -1630,33 +1816,17 @@ def _table(
     }
 
 
-def _q2d_values(summary: Mapping[str, Any]) -> dict[str, float]:
+def _single_line_q2d_readback(summary: Mapping[str, Any]) -> dict[str, float]:
     q2d = _mapping(summary["q2d_spec"], "summary.q2d_spec")
     single_l = _finite(q2d["single_l_per_m_h"], "q2d single L")
     single_c = _finite(q2d["single_c_per_m_f"], "q2d single C")
-    l_matrix = [_finite(value, "q2d L matrix") for value in q2d["l_matrix_per_m_h"]]
-    c_matrix = [_finite(value, "q2d C matrix") for value in q2d["c_matrix_per_m_f"]]
-    if len(l_matrix) != 4 or len(c_matrix) != 4 or single_l <= 0 or single_c <= 0:
-        raise ValueError(
-            "summary Q2D L/C data must contain positive single values and 2x2 matrices."
-        )
-    l_diag = (l_matrix[0] + l_matrix[3]) / 2
-    l_mutual = (l_matrix[1] + l_matrix[2]) / 2
-    c_diag = (c_matrix[0] + c_matrix[3]) / 2
-    c_mutual = abs((c_matrix[1] + c_matrix[2]) / 2)
-    if min(l_diag - l_mutual, c_diag - c_mutual, l_mutual, c_mutual) <= 0:
-        raise ValueError("summary Q2D pair matrices are not valid for even/odd extraction.")
+    if single_l <= 0 or single_c <= 0:
+        raise ValueError("summary Q2D single-line L/C values must be positive.")
     velocity = 1 / math.sqrt(single_l * single_c)
     return {
         "z0": math.sqrt(single_l / single_c),
         "velocity": velocity,
         "epsilon_eff": (299_792_458.0 / velocity) ** 2,
-        "zc": math.sqrt(l_diag / c_diag),
-        "zm": math.sqrt(l_mutual / c_mutual),
-        "ze": math.sqrt((l_diag + l_mutual) / (c_diag - c_mutual)),
-        "zo": math.sqrt((l_diag - l_mutual) / (c_diag + c_mutual)),
-        "ve": 1 / math.sqrt((l_diag + l_mutual) * (c_diag - c_mutual)),
-        "vo": 1 / math.sqrt((l_diag - l_mutual) * (c_diag + c_mutual)),
     }
 
 
@@ -1717,7 +1887,7 @@ def _manifest(
     q2d = _mapping(summary["q2d_spec"], "summary.q2d_spec")
     geometry = _mapping(q2d["geometry_um"], "summary.q2d_spec.geometry_um")
     solver = _mapping(q2d["solver"], "summary.q2d_spec.solver")
-    q2d_readback = _q2d_values(summary)
+    q2d_readback = _single_line_q2d_readback(summary)
     l_matrix = np.asarray(q2d["l_matrix_per_m_h"], dtype=float).reshape(2, 2) * 1e9
     c_matrix = np.asarray(q2d["c_matrix_per_m_f"], dtype=float).reshape(2, 2) * 1e12
 
@@ -2068,15 +2238,6 @@ def _manifest(
         ),
         ("MTL section — L' matrix", np.array2string(l_matrix, precision=6) + " nH/m"),
         ("MTL section — C' matrix", np.array2string(c_matrix, precision=6) + " pF/m"),
-        (
-            "MTL section — impedance",
-            f"Zc = {q2d_readback['zc']:.6f} Ω; Zm = {q2d_readback['zm']:.6f} Ω; "
-            f"Ze/Zo = {q2d_readback['ze']:.6f}/{q2d_readback['zo']:.6f} Ω",
-        ),
-        (
-            "MTL section — modal propagation",
-            f"ve/vo = {q2d_readback['ve']:.7g}/{q2d_readback['vo']:.7g} m/s",
-        ),
         (
             "Q2D setup — solver convention",
             f"{float(solver['adaptive_frequency_hz']) / 1e9:g} GHz adaptive; lossless; "
