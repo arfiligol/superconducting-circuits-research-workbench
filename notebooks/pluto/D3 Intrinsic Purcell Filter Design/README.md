@@ -151,6 +151,9 @@ qubit-admittance-receipt.json
 complete revision-9 objective authority. The summary also hashes the history,
 S21, and qubit-admittance files, and records the complete evaluator-owned
 Length-to-LC response-match evidence rather than recomputing it in the report.
+Its Q2D report snapshot is derived from the persisted normalized fixed-line
+identity; publication and report loading both rehash that canonical identity
+and reject any elementwise snapshot mismatch.
 The folder is renamed into place only after all six files are complete; the
 report rejects extra files or any hash, authority, Q2D identity, extraction
 evidence, or model-identity mismatch. Report generation is then:
@@ -174,8 +177,8 @@ reading order is:
    comparison values;
 4. fabrication lengths and IDC finger length, resolved Equivalent LC values,
    effective qubit capacitance, and floating-qubit transform;
-5. Q2D setup, single-line CPW RLGC/propagation, MTL matrices/modal propagation,
-   and the complete Length-to-LC extraction audit;
+5. Q2D setup, single-line CPW RLGC/propagation, the raw ordered MTL L/C
+   matrices, and the complete Length-to-LC extraction audit;
 6. report-only anchored-bare, fully hybridized closed, and matched-open views;
 7. source identity, reduction boundaries, numerical closure, and optimizer
    provenance.

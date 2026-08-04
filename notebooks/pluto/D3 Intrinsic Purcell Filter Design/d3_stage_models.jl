@@ -34,6 +34,7 @@ const D3_RESPONSE_EQUIVALENT_VARIABLE_ORDER = (
 )
 
 const D3_SELECTED_Q2D_TOPOLOGY = :continuous_upper_ground
+const D3_MAX_PHYSICAL_LINE_SECTION_LENGTH_M = 50e-6
 const D3_SELECTED_IDC_MAPPING_ID =
     "d3-same-die-filter-feedline-idc-q3d-tensor-fit-v1"
 const D3_SELECTED_IDC_MAPPING_SHA256 =
@@ -202,6 +203,8 @@ function _d3_stage2_response_matched_resonators(
         :topology_id,
         :match_contract_id,
         :fixed_line_input_sha256,
+        :fixed_line_input_identity,
+        :fixed_line_input_identity_canonical_json,
         :match_evidence,
     )
     all(name -> hasproperty(raw, name), required) || error(
@@ -262,12 +265,24 @@ function _d3_stage2_response_matched_resonators(
             :fixed_line_input_sha256,
         )
     ))
+    canonical_identity = String(raw.fixed_line_input_identity_canonical_json)
+    canonical_identity == SuperconductingCircuitsCore.JSON3.write(
+        raw.fixed_line_input_identity,
+    ) || error(
+        "D3 Stage-2 fixed-line canonical JSON disagrees with its normalized identity.",
+    )
+    bytes2hex(SHA.sha256(codeunits(canonical_identity))) ==
+        hashes.fixed_line_input_sha256 || error(
+        "D3 Stage-2 fixed-line identity SHA-256 disagrees with its canonical JSON.",
+    )
     return merge(
         values,
         strings,
         hashes,
         (
             physical_lengths=lengths,
+            fixed_line_input_identity=raw.fixed_line_input_identity,
+            fixed_line_input_identity_canonical_json=canonical_identity,
             match_evidence=raw.match_evidence,
         ),
     )
@@ -570,6 +585,9 @@ function _d3_stage2_evaluate_response_match(
         q2d_artifact_sha256=selected_lines.q2d_artifact_sha256,
         topology_id=String(selected_lines.q2d_topology_id),
         fixed_line_input_sha256=selected_lines.fixed_line_input_sha256,
+        fixed_line_input_identity=selected_lines.fixed_line_input_identity,
+        fixed_line_input_identity_canonical_json=
+            selected_lines.fixed_line_input_identity_canonical_json,
         match_contract_id=mapping.contract.match_contract_id,
         match_evidence=(
             reference_model=(
@@ -993,6 +1011,10 @@ function _d3_selected_q2d_line_input(fixed)
         :q2d_artifact_sha256,
         :q2d_topology_id,
         :q2d_geometry_um,
+        :q2d_single_case_id,
+        :q2d_pair_case_id,
+        :q2d_solver,
+        :q2d_loss_model,
     )
     all(name -> hasproperty(fixed, name), required) || error(
         "D3 fixed line input must come from the selected provenance-bearing Q2D loader.",
@@ -1006,6 +1028,16 @@ function _d3_selected_q2d_line_input(fixed)
     )
     topology_id == D3_SELECTED_Q2D_TOPOLOGY || error(
         "D3 fixed line input must use continuous upper ground.",
+    )
+    lines.section_length_m <= D3_MAX_PHYSICAL_LINE_SECTION_LENGTH_M || error(
+        "D3 physical CPW section length must not exceed 50 um.",
+    )
+    lines.mtl_section_length_m <= D3_MAX_PHYSICAL_LINE_SECTION_LENGTH_M || error(
+        "D3 physical MTL section length must not exceed 50 um.",
+    )
+    lines.readout_l_per_m_h == lines.filter_l_per_m_h &&
+        lines.readout_c_per_m_f == lines.filter_c_per_m_f || error(
+        "D3 selected Q2D input must use its one artifact-owned single-line L/C pair.",
     )
 
     geometry = fixed.q2d_geometry_um
@@ -1024,6 +1056,41 @@ function _d3_selected_q2d_line_input(fixed)
     Float64(geometry.upper_ground_clearance) == 0.0 || error(
         "D3 continuous-upper-ground input requires zero upper-ground clearance.",
     )
+    normalized_geometry = (
+        w=Float64(geometry.w),
+        s=Float64(geometry.s),
+        d=Float64(geometry.d),
+        h=Float64(geometry.h),
+        upper_ground_clearance=Float64(geometry.upper_ground_clearance),
+        metal_thickness=Float64(geometry.metal_thickness),
+    )
+    single_case_id = strip(String(fixed.q2d_single_case_id))
+    pair_case_id = strip(String(fixed.q2d_pair_case_id))
+    isempty(single_case_id) && error("D3 Q2D single-line case id must not be empty.")
+    isempty(pair_case_id) && error("D3 Q2D coupled-pair case id must not be empty.")
+    solver = fixed.q2d_solver
+    _d3_stage_require_exact_fields(
+        solver,
+        (:adaptive_frequency_hz, :aedt_version, :pyaedt_version, :runtime_bundle_sha256),
+        "D3 Q2D solver",
+    )
+    adaptive_frequency_hz = _d3_stage_positive(
+        solver,
+        :adaptive_frequency_hz,
+        "D3 Q2D solver",
+    )
+    aedt_version = strip(String(solver.aedt_version))
+    pyaedt_version = strip(String(solver.pyaedt_version))
+    isempty(aedt_version) && error("D3 Q2D AEDT version must not be empty.")
+    isempty(pyaedt_version) && error("D3 Q2D PyAEDT version must not be empty.")
+    runtime_bundle_sha256 = lowercase(strip(String(solver.runtime_bundle_sha256)))
+    occursin(r"^[0-9a-f]{64}$", runtime_bundle_sha256) || error(
+        "D3 Q2D runtime bundle SHA-256 must be lowercase hexadecimal.",
+    )
+    loss_model = strip(String(fixed.q2d_loss_model))
+    loss_model == "lossless_R_equals_G_equals_zero" || error(
+        "D3 selected Q2D input must use its declared lossless model.",
+    )
     lines.coupling_orientation == :same_direction || error(
         "D3 selected Q2D input requires same-direction MTL coupling.",
     )
@@ -1032,7 +1099,16 @@ function _d3_selected_q2d_line_input(fixed)
         q2d_artifact_id=artifact_id,
         q2d_artifact_sha256=artifact_sha256,
         q2d_topology_id=String(topology_id),
-        q2d_geometry_um=geometry,
+        q2d_geometry_um=normalized_geometry,
+        q2d_single_case_id=single_case_id,
+        q2d_pair_case_id=pair_case_id,
+        q2d_solver=(
+            adaptive_frequency_hz=adaptive_frequency_hz,
+            aedt_version=aedt_version,
+            pyaedt_version=pyaedt_version,
+            runtime_bundle_sha256=runtime_bundle_sha256,
+        ),
+        q2d_loss_model=loss_model,
         section_length_m=lines.section_length_m,
         mtl_section_length_m=lines.mtl_section_length_m,
         readout_l_per_m_h=lines.readout_l_per_m_h,
@@ -1049,8 +1125,10 @@ function _d3_selected_q2d_line_input(fixed)
         ),
         coupling_orientation=String(lines.coupling_orientation),
     )
+    fixed_line_input_identity_canonical_json =
+        SuperconductingCircuitsCore.JSON3.write(identity)
     fixed_line_input_sha256 = bytes2hex(SHA.sha256(codeunits(
-        SuperconductingCircuitsCore.JSON3.write(identity),
+        fixed_line_input_identity_canonical_json,
     )))
     return merge(
         lines,
@@ -1058,9 +1136,15 @@ function _d3_selected_q2d_line_input(fixed)
             q2d_artifact_id=artifact_id,
             q2d_artifact_sha256=artifact_sha256,
             q2d_topology_id=topology_id,
-            q2d_geometry_um=geometry,
+            q2d_geometry_um=normalized_geometry,
+            q2d_single_case_id=single_case_id,
+            q2d_pair_case_id=pair_case_id,
+            q2d_solver=identity.q2d_solver,
+            q2d_loss_model=loss_model,
             fixed_line_input_sha256=fixed_line_input_sha256,
             fixed_line_input_identity=identity,
+            fixed_line_input_identity_canonical_json=
+                fixed_line_input_identity_canonical_json,
         ),
     )
 end

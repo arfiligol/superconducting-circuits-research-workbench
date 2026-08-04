@@ -22,6 +22,7 @@ const SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v2"
 const QUBIT_RECEIPT_SCHEMA = "d3-stage2-qubit-admittance-receipt.v1"
 const OBJECTIVE_CONTRACT = "d3-stage2-stage3-full-qrp-objective.v2"
 const FOUNDATION_CONTRACT = "d3-stage2-candidate-foundation.v5"
+const MAX_PHYSICAL_LINE_SECTION_LENGTH_M = 50e-6
 const OBJECTIVE_AUTHORITY = (
     approval_status=:human_approved,
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
@@ -152,6 +153,15 @@ function _positive_real(value, label)
     return number
 end
 
+function _nonnegative_real(value, label)
+    value isa Real && !(value isa Bool) || error("$(label) must be numeric.")
+    number = Float64(value)
+    isfinite(number) && number >= 0 || error(
+        "$(label) must be finite and nonnegative.",
+    )
+    return number
+end
+
 function _finite_vector(value, length_expected, label)
     value isa AbstractArray || value isa Tuple || error("$(label) must be an array.")
     numbers = Float64.(collect(value))
@@ -164,34 +174,47 @@ end
 
 function _validated_q2d_spec(value)
     q2d = _string_key_dict(value, "D3 Stage-2 Q2D report specification")
-    _require_dict_keys(
-        q2d,
-        (
-            "artifact_id",
-            "artifact_sha256",
-            "single_case_id",
-            "pair_case_id",
-            "geometry_um",
-            "solver",
-            "single_l_per_m_h",
-            "single_c_per_m_f",
-            "l_matrix_per_m_h",
-            "c_matrix_per_m_f",
-            "coupling_orientation",
-        ),
-        "D3 Stage-2 Q2D report specification",
+    required = (
+        "artifact_id",
+        "artifact_sha256",
+        "topology_id",
+        "single_case_id",
+        "pair_case_id",
+        "geometry_um",
+        "solver",
+        "loss_model",
+        "single_l_per_m_h",
+        "single_c_per_m_f",
+        "l_matrix_per_m_h",
+        "c_matrix_per_m_f",
+        "coupling_orientation",
+        "section_length_m",
+        "mtl_section_length_m",
+    )
+    Set(keys(q2d)) == Set(required) || error(
+        "D3 Stage-2 Q2D report specification fields must be exactly $(collect(required)).",
     )
     geometry = _string_key_dict(q2d["geometry_um"], "D3 Stage-2 Q2D geometry")
-    _require_dict_keys(
-        geometry,
-        ("w", "s", "d", "h", "metal_thickness"),
-        "D3 Stage-2 Q2D geometry",
+    geometry_fields = (
+        "w",
+        "s",
+        "d",
+        "h",
+        "upper_ground_clearance",
+        "metal_thickness",
+    )
+    Set(keys(geometry)) == Set(geometry_fields) || error(
+        "D3 Stage-2 Q2D geometry fields must be exactly $(collect(geometry_fields)).",
     )
     solver = _string_key_dict(q2d["solver"], "D3 Stage-2 Q2D solver")
-    _require_dict_keys(
-        solver,
-        ("adaptive_frequency_hz", "aedt_version", "pyaedt_version"),
-        "D3 Stage-2 Q2D solver",
+    solver_fields = (
+        "adaptive_frequency_hz",
+        "aedt_version",
+        "pyaedt_version",
+        "runtime_bundle_sha256",
+    )
+    Set(keys(solver)) == Set(solver_fields) || error(
+        "D3 Stage-2 Q2D solver fields must be exactly $(collect(solver_fields)).",
     )
     q2d["artifact_id"] = _nonempty_text(q2d["artifact_id"], "Q2D artifact_id")
     q2d["artifact_sha256"] = _sha256_text(
@@ -200,14 +223,33 @@ function _validated_q2d_spec(value)
     )
     q2d["single_case_id"] = _nonempty_text(q2d["single_case_id"], "Q2D single_case_id")
     q2d["pair_case_id"] = _nonempty_text(q2d["pair_case_id"], "Q2D pair_case_id")
+    q2d["topology_id"] = _nonempty_text(q2d["topology_id"], "Q2D topology_id")
+    q2d["topology_id"] == "continuous_upper_ground" || error(
+        "D3 Stage-2 Q2D topology must be continuous_upper_ground.",
+    )
+    q2d["loss_model"] = _nonempty_text(q2d["loss_model"], "Q2D loss_model")
+    q2d["loss_model"] == "lossless_R_equals_G_equals_zero" || error(
+        "D3 Stage-2 Q2D loss model must be lossless_R_equals_G_equals_zero.",
+    )
     q2d["coupling_orientation"] = _nonempty_text(
         q2d["coupling_orientation"],
         "Q2D coupling_orientation",
     )
-    q2d["geometry_um"] = Dict(
+    q2d["coupling_orientation"] == "same_direction" || error(
+        "D3 Stage-2 Q2D coupling orientation must be same_direction.",
+    )
+    normalized_geometry = Dict(
         name => _positive_real(geometry[name], "Q2D geometry $(name)")
         for name in ("w", "s", "d", "h", "metal_thickness")
     )
+    normalized_geometry["upper_ground_clearance"] = _nonnegative_real(
+        geometry["upper_ground_clearance"],
+        "Q2D geometry upper_ground_clearance",
+    )
+    normalized_geometry["upper_ground_clearance"] == 0.0 || error(
+        "D3 Stage-2 continuous-upper-ground Q2D input requires zero clearance.",
+    )
+    q2d["geometry_um"] = normalized_geometry
     q2d["solver"] = Dict(
         "adaptive_frequency_hz" => _positive_real(
             solver["adaptive_frequency_hz"],
@@ -216,6 +258,10 @@ function _validated_q2d_spec(value)
         "aedt_version" => _nonempty_text(solver["aedt_version"], "Q2D AEDT version"),
         "pyaedt_version" =>
             _nonempty_text(solver["pyaedt_version"], "Q2D PyAEDT version"),
+        "runtime_bundle_sha256" => _sha256_text(
+            solver["runtime_bundle_sha256"],
+            "Q2D runtime bundle SHA-256",
+        ),
     )
     q2d["single_l_per_m_h"] =
         _positive_real(q2d["single_l_per_m_h"], "Q2D single-line L per metre")
@@ -225,6 +271,12 @@ function _validated_q2d_spec(value)
         _finite_vector(q2d["l_matrix_per_m_h"], 4, "Q2D L matrix")
     q2d["c_matrix_per_m_f"] =
         _finite_vector(q2d["c_matrix_per_m_f"], 4, "Q2D C matrix")
+    for name in ("section_length_m", "mtl_section_length_m")
+        q2d[name] = _positive_real(q2d[name], "Q2D $(name)")
+        q2d[name] <= MAX_PHYSICAL_LINE_SECTION_LENGTH_M || error(
+            "D3 Stage-2 Q2D $(name) must not exceed 50 um.",
+        )
+    end
     return q2d
 end
 
@@ -374,6 +426,151 @@ function _require_complex_trace(values, expected_length, label)
     return trace
 end
 
+function _flatten_fixed_matrix(value, label)
+    rows = collect(value)
+    length(rows) == 2 && all(row -> length(row) == 2, rows) || error(
+        "$(label) must be an ordered 2x2 matrix.",
+    )
+    return Float64[
+        rows[1][1],
+        rows[1][2],
+        rows[2][1],
+        rows[2][2],
+    ]
+end
+
+function _q2d_snapshot_from_fixed_line_identity(value)
+    identity = _string_key_dict(
+        _json_value(value, "D3 fixed-line identity"),
+        "D3 fixed-line identity",
+    )
+    fields = (
+        "contract_id",
+        "q2d_artifact_id",
+        "q2d_artifact_sha256",
+        "q2d_topology_id",
+        "q2d_geometry_um",
+        "q2d_single_case_id",
+        "q2d_pair_case_id",
+        "q2d_solver",
+        "q2d_loss_model",
+        "section_length_m",
+        "mtl_section_length_m",
+        "readout_l_per_m_h",
+        "readout_c_per_m_f",
+        "filter_l_per_m_h",
+        "filter_c_per_m_f",
+        "l_matrix_per_m_h",
+        "c_matrix_per_m_f",
+        "coupling_orientation",
+    )
+    Set(keys(identity)) == Set(fields) || error(
+        "D3 fixed-line identity fields must be exactly $(collect(fields)).",
+    )
+    identity["contract_id"] == "d3-selected-continuous-ground-fixed-line.v1" ||
+        error("D3 fixed-line identity uses the wrong contract.")
+    readout_l = _positive_real(
+        identity["readout_l_per_m_h"],
+        "D3 fixed-line readout L per metre",
+    )
+    readout_c = _positive_real(
+        identity["readout_c_per_m_f"],
+        "D3 fixed-line readout C per metre",
+    )
+    readout_l == _positive_real(
+        identity["filter_l_per_m_h"],
+        "D3 fixed-line filter L per metre",
+    ) && readout_c == _positive_real(
+        identity["filter_c_per_m_f"],
+        "D3 fixed-line filter C per metre",
+    ) || error(
+        "D3 fixed-line identity must retain one artifact-owned single-line L/C pair.",
+    )
+    return _validated_q2d_spec(Dict(
+        "artifact_id" => identity["q2d_artifact_id"],
+        "artifact_sha256" => identity["q2d_artifact_sha256"],
+        "topology_id" => identity["q2d_topology_id"],
+        "single_case_id" => identity["q2d_single_case_id"],
+        "pair_case_id" => identity["q2d_pair_case_id"],
+        "geometry_um" => identity["q2d_geometry_um"],
+        "solver" => identity["q2d_solver"],
+        "loss_model" => identity["q2d_loss_model"],
+        "single_l_per_m_h" => readout_l,
+        "single_c_per_m_f" => readout_c,
+        "l_matrix_per_m_h" => _flatten_fixed_matrix(
+            identity["l_matrix_per_m_h"],
+            "D3 fixed-line L matrix",
+        ),
+        "c_matrix_per_m_f" => _flatten_fixed_matrix(
+            identity["c_matrix_per_m_f"],
+            "D3 fixed-line C matrix",
+        ),
+        "coupling_orientation" => identity["coupling_orientation"],
+        "section_length_m" => identity["section_length_m"],
+        "mtl_section_length_m" => identity["mtl_section_length_m"],
+    ))
+end
+
+function _foundation_q2d_snapshot(foundation)
+    response_match = foundation.stage.response_match
+    required = (
+        :q2d_artifact_id,
+        :q2d_artifact_sha256,
+        :topology_id,
+        :fixed_line_input_sha256,
+        :fixed_line_input_identity,
+        :fixed_line_input_identity_canonical_json,
+        :match_evidence,
+    )
+    all(name -> hasproperty(response_match, name), required) || error(
+        "D3 Stage-2 response match is missing fixed-line publication provenance.",
+    )
+    canonical = response_match.fixed_line_input_identity_canonical_json
+    canonical isa AbstractString && !isempty(canonical) || error(
+        "D3 Stage-2 fixed-line canonical identity must be non-empty text.",
+    )
+    canonical = String(canonical)
+    canonical == JSON3.write(response_match.fixed_line_input_identity) || error(
+        "D3 Stage-2 fixed-line canonical JSON disagrees with its normalized identity.",
+    )
+    identity_sha256 = bytes2hex(SHA.sha256(codeunits(canonical)))
+    identity_sha256 == _sha256_text(
+        response_match.fixed_line_input_sha256,
+        "D3 response-match fixed-line identity SHA-256",
+    ) || error(
+        "D3 Stage-2 fixed-line identity SHA-256 disagrees with its canonical JSON.",
+    )
+    snapshot = _q2d_snapshot_from_fixed_line_identity(
+        response_match.fixed_line_input_identity,
+    )
+    String(response_match.q2d_artifact_id) == snapshot["artifact_id"] || error(
+        "D3 response-match artifact id disagrees with its fixed-line identity.",
+    )
+    _sha256_text(
+        response_match.q2d_artifact_sha256,
+        "D3 response-match Q2D artifact SHA-256",
+    ) == snapshot["artifact_sha256"] || error(
+        "D3 response-match artifact SHA-256 disagrees with its fixed-line identity.",
+    )
+    String(response_match.topology_id) == snapshot["topology_id"] || error(
+        "D3 response-match topology disagrees with its fixed-line identity.",
+    )
+    reference = response_match.match_evidence.reference_model
+    Float64(reference.section_length_m) == snapshot["section_length_m"] &&
+        Float64(reference.mtl_section_length_m) == snapshot["mtl_section_length_m"] || error(
+        "D3 response-match reference grids disagree with its fixed-line identity.",
+    )
+    return snapshot
+end
+
+function _validate_q2d_publication_binding(foundation, specification)
+    snapshot = _foundation_q2d_snapshot(foundation)
+    snapshot == specification.q2d_spec || error(
+        "D3 Stage-2 caller Q2D snapshot disagrees with the artifact-derived fixed-line identity.",
+    )
+    return snapshot
+end
+
 function _validate_foundation(foundation, candidate, specification)
     hasproperty(foundation, :contract_id) &&
         foundation.contract_id == FOUNDATION_CONTRACT || error(
@@ -390,17 +587,7 @@ function _validate_foundation(foundation, candidate, specification)
     foundation.stage.candidate == candidate || error(
         "Re-evaluated Stage-2 foundation does not retain the optimizer winner candidate.",
     )
-    response_match = foundation.stage.response_match
-    String(response_match.q2d_artifact_id) ==
-        specification.q2d_spec["artifact_id"] || error(
-        "D3 Stage-2 Run Q2D artifact id disagrees with the response-match foundation.",
-    )
-    _sha256_text(
-        response_match.q2d_artifact_sha256,
-        "D3 response-match Q2D artifact SHA-256",
-    ) == specification.q2d_spec["artifact_sha256"] || error(
-        "D3 Stage-2 Run Q2D artifact SHA-256 disagrees with the response-match foundation.",
-    )
+    _validate_q2d_publication_binding(foundation, specification)
     return _model_identity(
         foundation.cqed_handoff.source_model_identity,
         "D3 Stage-2 foundation model identity",
@@ -947,6 +1134,10 @@ function _summary(evaluated, artifact_hashes)
         foundation.cqed_handoff.source_model_identity,
         "D3 Stage-2 foundation model identity",
     )
+    q2d_snapshot = _validate_q2d_publication_binding(
+        foundation,
+        evaluated.specification,
+    )
     metrics = foundation.metrics
     required_metrics = (
         :fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz,
@@ -976,7 +1167,7 @@ function _summary(evaluated, artifact_hashes)
             _json_value(objective.authority, "objective authority"),
         "model_identity" => _json_value(model_identity, "model identity"),
         "slot_hz" => evaluated.specification.slot_hz,
-        "q2d_spec" => _json_value(evaluated.specification.q2d_spec, "Q2D specification"),
+        "q2d_spec" => _json_value(q2d_snapshot, "artifact-derived Q2D specification"),
         "bounds" => _json_value(evaluated.specification.bounds, "optimizer bounds"),
         "cma" => Dict(
             "evaluations" => length(history),
@@ -1029,6 +1220,12 @@ function _summary(evaluated, artifact_hashes)
             "q2d_artifact_id" => stage.response_match.q2d_artifact_id,
             "q2d_artifact_sha256" => stage.response_match.q2d_artifact_sha256,
             "fixed_line_input_sha256" => stage.response_match.fixed_line_input_sha256,
+            "fixed_line_input_identity" => _json_value(
+                stage.response_match.fixed_line_input_identity,
+                "normalized fixed-line identity",
+            ),
+            "fixed_line_input_identity_canonical_json" =>
+                stage.response_match.fixed_line_input_identity_canonical_json,
             "topology_id" => stage.response_match.topology_id,
             "match_evidence" => _json_value(
                 stage.response_match.match_evidence,
@@ -1055,6 +1252,10 @@ function write_stage2_result(
     output_directory;
     linear_quantity_payload_builder,
 )
+    _validate_q2d_publication_binding(
+        evaluated.foundation,
+        evaluated.specification,
+    )
     destination = abspath(String(output_directory))
     ispath(destination) && error("D3 Stage-2 output directory already exists: $(destination)")
     parent = dirname(destination)

@@ -33,6 +33,12 @@ function _d3_q2d_hash(value, label)
     return hash
 end
 
+function _d3_q2d_text(value, label)
+    text = strip(String(value))
+    isempty(text) && error("$(label) must not be empty.")
+    return text
+end
+
 function _d3_q2d_matrix(raw, label)
     rows = collect(raw)
     length(rows) == 2 && all(row -> length(row) == 2, rows) ||
@@ -107,7 +113,25 @@ function load_d3_continuous_ground_q2d_input(path; section_length_m)
 
     single = payload["single_line"]
     pair = payload["coupled_pair"]
-    for record in (single, pair)
+    Set(keys(single)) == Set([
+        "l_per_m_h",
+        "c_per_m_f",
+        "source_cache_key",
+        "source_case_id",
+        "cross_section_sha256",
+        "capacitance_matrix_sha256",
+        "inductance_matrix_sha256",
+    ]) || error("D3 Q2D single-line fields do not match its v1 contract.")
+    Set(keys(pair)) == Set([
+        "l_matrix_per_m_h",
+        "c_matrix_per_m_f",
+        "source_cache_key",
+        "source_case_id",
+        "cross_section_sha256",
+        "capacitance_matrix_sha256",
+        "inductance_matrix_sha256",
+    ]) || error("D3 Q2D coupled-pair fields do not match its v1 contract.")
+    for (label, record) in (("single-line", single), ("coupled-pair", pair))
         for name in (
             "source_cache_key",
             "cross_section_sha256",
@@ -116,8 +140,7 @@ function load_d3_continuous_ground_q2d_input(path; section_length_m)
         )
             _d3_q2d_hash(record[name], "D3 Q2D $(name)")
         end
-        isempty(strip(String(record["source_case_id"]))) &&
-            error("D3 Q2D source case id must not be empty.")
+        _d3_q2d_text(record["source_case_id"], "D3 Q2D $(label) source case id")
     end
     l_matrix = _d3_q2d_matrix(pair["l_matrix_per_m_h"], "D3 Q2D MTL L'")
     c_matrix = _d3_q2d_matrix(pair["c_matrix_per_m_f"], "D3 Q2D MTL C'")
@@ -128,8 +151,7 @@ function load_d3_continuous_ground_q2d_input(path; section_length_m)
     section <= D3_MAX_LINE_SECTION_LENGTH_M || error(
         "D3 physical CPW/MTL section length must not exceed 50 um.",
     )
-    artifact_id = strip(String(payload["artifact_id"]))
-    isempty(artifact_id) && error("D3 Q2D artifact id must not be empty.")
+    artifact_id = _d3_q2d_text(payload["artifact_id"], "D3 Q2D artifact id")
     solver = payload["solver"]
     Set(keys(solver)) == Set([
         "aedt_version",
@@ -162,20 +184,33 @@ function load_d3_continuous_ground_q2d_input(path; section_length_m)
         q2d_artifact_sha256=artifact_sha256,
         q2d_topology_id=:continuous_upper_ground,
         q2d_geometry_um=geometry_values,
-        q2d_single_case_id=strip(String(single["source_case_id"])),
-        q2d_pair_case_id=strip(String(pair["source_case_id"])),
+        q2d_single_case_id=_d3_q2d_text(
+            single["source_case_id"],
+            "D3 Q2D single-line source case id",
+        ),
+        q2d_pair_case_id=_d3_q2d_text(
+            pair["source_case_id"],
+            "D3 Q2D coupled-pair source case id",
+        ),
         q2d_solver=(
             adaptive_frequency_hz=_d3_q2d_positive(
                 solver["adaptive_frequency_hz"],
                 "D3 Q2D adaptive frequency",
             ),
-            aedt_version=strip(String(solver["aedt_version"])),
-            pyaedt_version=strip(String(solver["pyaedt_version"])),
+            aedt_version=_d3_q2d_text(
+                solver["aedt_version"],
+                "D3 Q2D AEDT version",
+            ),
+            pyaedt_version=_d3_q2d_text(
+                solver["pyaedt_version"],
+                "D3 Q2D PyAEDT version",
+            ),
             runtime_bundle_sha256=_d3_q2d_hash(
                 solver["runtime_bundle_sha256"],
                 "D3 Q2D runtime bundle SHA-256",
             ),
         ),
+        q2d_loss_model=String(payload["loss_model"]),
     )
 end
 
