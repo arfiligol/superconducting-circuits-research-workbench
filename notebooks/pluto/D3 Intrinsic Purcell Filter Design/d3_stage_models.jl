@@ -333,7 +333,7 @@ function _d3_stage2_resonator_response_model(lengths, lines; diagonal)
         start1_m=lengths.lr_short_m,
         start2_m=lengths.lp_short_m,
         length_m=lengths.lc_m,
-        section_length_m=lines.section_length_m,
+        section_length_m=lines.mtl_section_length_m,
         l_matrix_per_m_h=l_matrix,
         c_matrix_per_m_f=c_matrix,
     )
@@ -349,9 +349,10 @@ function _d3_stage2_resonator_response_model(lengths, lines; diagonal)
             l_per_m_h=lines.readout_l_per_m_h,
             c_per_m_f=lines.readout_c_per_m_f,
         ),
-        breakpoints_m=(
+        breakpoints_m=_d3_mtl_window_breakpoints(
             lengths.lr_short_m,
-            lengths.lr_short_m + lengths.lc_m,
+            lengths.lc_m,
+            lines.mtl_section_length_m,
         ),
         section_overrides=[coupled_line_section_override(mtl_model, 1)],
     )
@@ -367,9 +368,10 @@ function _d3_stage2_resonator_response_model(lengths, lines; diagonal)
             l_per_m_h=lines.filter_l_per_m_h,
             c_per_m_f=lines.filter_c_per_m_f,
         ),
-        breakpoints_m=(
+        breakpoints_m=_d3_mtl_window_breakpoints(
             lengths.lp_short_m,
-            lengths.lp_short_m + lengths.lc_m,
+            lengths.lc_m,
+            lines.mtl_section_length_m,
         ),
         section_overrides=[coupled_line_section_override(mtl_model, 2)],
     )
