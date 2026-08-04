@@ -374,6 +374,35 @@ function _sha256_text(value, label)
     return text
 end
 
+_is_json_number(value) =
+    (value isa Integer && !(value isa Bool)) || value isa AbstractFloat
+
+function _json_values_equal(left, right)
+    if left isa Bool || right isa Bool
+        return left isa Bool && right isa Bool && left === right
+    elseif _is_json_number(left) || _is_json_number(right)
+        return _is_json_number(left) && _is_json_number(right) && left == right
+    elseif left isa AbstractDict || right isa AbstractDict
+        left isa AbstractDict && right isa AbstractDict || return false
+        all(key -> key isa AbstractString, keys(left)) &&
+            all(key -> key isa AbstractString, keys(right)) || return false
+        Set(keys(left)) == Set(keys(right)) || return false
+        return all(key -> _json_values_equal(left[key], right[key]), keys(left))
+    elseif left isa AbstractVector || right isa AbstractVector
+        left isa AbstractVector && right isa AbstractVector || return false
+        length(left) == length(right) || return false
+        return all(
+            _json_values_equal(left[index], right[index])
+            for index in eachindex(left, right)
+        )
+    elseif left isa AbstractString || right isa AbstractString
+        return left isa AbstractString && right isa AbstractString && left == right
+    elseif left === nothing || right === nothing
+        return left === nothing && right === nothing
+    end
+    return false
+end
+
 _file_sha256(path) = bytes2hex(SHA.sha256(read(path)))
 
 function _model_identity(source, label)
@@ -565,7 +594,7 @@ end
 
 function _validate_q2d_publication_binding(foundation, specification)
     snapshot = _foundation_q2d_snapshot(foundation)
-    snapshot == specification.q2d_spec || error(
+    _json_values_equal(snapshot, specification.q2d_spec) || error(
         "D3 Stage-2 caller Q2D snapshot disagrees with the artifact-derived fixed-line identity.",
     )
     return snapshot
