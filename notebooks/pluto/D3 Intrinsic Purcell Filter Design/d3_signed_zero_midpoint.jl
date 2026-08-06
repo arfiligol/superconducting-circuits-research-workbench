@@ -181,24 +181,28 @@ function d3_signed_zero_midpoint(
             return _d3_signed_zero_failure(base, "response_is_not_complex", checks)
         value = ComplexF64(raw)
         isfinite(real(value)) && isfinite(imag(value)) ||
-            return _d3_signed_zero_failure(base, "nonfinite_response_sample", checks)
+            return _d3_signed_zero_failure(
+                base,
+                "nonfinite_response_sample",
+                merge(checks, (finite_response_samples=false,)),
+            )
         push!(responses, value)
     end
     signed_values = imag.(responses)
     checks = merge(checks, (finite_response_samples=true,))
-    any(iszero, signed_values) && return _d3_signed_zero_failure(
-        base,
-        "exact_zero_on_declared_grid",
-        merge(checks, (exact_grid_zero_absent=false, unique_bracket=false));
-        bracket_count=0,
-    )
-    checks = merge(checks, (exact_grid_zero_absent=true,))
-
     bracket_indices = findall(
         index -> signbit(signed_values[index]) != signbit(signed_values[index + 1]),
         1:(length(frequencies) - 1),
     )
     bracket_count = length(bracket_indices)
+    any(iszero, signed_values) && return _d3_signed_zero_failure(
+        base,
+        "exact_zero_on_declared_grid",
+        merge(checks, (exact_grid_zero_absent=false, unique_bracket=false));
+        bracket_count,
+    )
+    checks = merge(checks, (exact_grid_zero_absent=true,))
+
     bracket_count == 1 || return _d3_signed_zero_failure(
         base,
         iszero(bracket_count) ? "no_sign_change_bracket" :
