@@ -41,8 +41,8 @@ function objective_metrics(; slot_hz=6.0e9)
     )
 end
 
-@testset "D3 revision-9 effective objective" begin
-    slot_hz = 6.0e9
+@testset "D3 revision-10 effective objective" begin
+    slot_hz = 5.6e9
     metrics = objective_metrics(; slot_hz=slot_hz)
     objective = d3_stage2_objective(
         metrics,
@@ -50,11 +50,11 @@ end
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
         TEST_MODEL_IDENTITY,
     )
-    @test D3_TARGET_SLOT_FREQUENCIES_HZ == (5.9e9, 6.0e9, 6.1e9, 6.2e9)
+    @test D3_TARGET_SLOT_FREQUENCIES_HZ == (5.6e9, 5.7e9, 5.8e9, 5.9e9, 6.0e9)
     @test D3_INTERFERENCE_NOTCH_TARGET_HZ == 5.0e9
-    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_revision == 9
+    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_revision == 10
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_contract_sha256 ==
-        "86eb2da65329df9059efeddccc9f479d1ef116e0eed4a0de0554cf8f02353b9d"
+        "2853586e4c82e9912d5ef9cf178a22d45c534d70b6352da06aee13c2777ef3a9"
     @test objective.cost == 0.0
     @test objective.target_gates_pass
     @test keys(objective.target_gates) == (
@@ -107,10 +107,12 @@ end
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
         TEST_MODEL_IDENTITY,
     )
-    @test_throws ErrorException d3_stage2_objective(
-        metrics,
-        6.3e9,
-        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-        TEST_MODEL_IDENTITY,
-    )
+    for stale_slot_hz in (6.1e9, 6.2e9)
+        @test_throws ErrorException d3_stage2_objective(
+            metrics,
+            stale_slot_hz,
+            D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+            TEST_MODEL_IDENTITY,
+        )
+    end
 end
