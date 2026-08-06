@@ -1340,7 +1340,7 @@ end
         candidate, fixed, resonator_mapping, idc_mapping; lc_qualification_receipt, ...)
 
 Compile one complete Equivalent candidate and extract exactly the six raw
-revision-9 objective operands. Expensive response-closure and L_A calibration
+revision-10 objective operands. Expensive response-closure and L_A calibration
 diagnostics are intentionally outside this optimizer-facing adapter.
 """
 function d3_stage2_candidate_metrics(
@@ -1563,7 +1563,7 @@ end
 
 The payload is derived from `foundation.quantity_views`; callers must not
 rebuild a second circuit from a summary. The Stage-2 objective receipt binds
-the revision-9 authority and model identity. `source_summary_sha256` binds the
+the revision-10 authority and model identity. `source_summary_sha256` binds the
 payload to the summary that selected this foundation as the winning candidate.
 The canonical Stage-2 publisher adds the matched-open Schur-downfolded `r/p`
 receipt and promotes this base payload to the current report schema.
@@ -1588,7 +1588,7 @@ function d3_stage2_quantity_review_payload(
     source_identity = foundation.cqed_handoff.source_model_identity
     hasproperty(objective, :contract_id) &&
         objective.contract_id == "d3-stage2-stage3-full-qrp-objective.v2" || error(
-        "D3 quantity review requires the revision-9 Stage-2 objective receipt.",
+        "D3 quantity review requires the revision-10 Stage-2 objective receipt.",
     )
     hasproperty(objective, :stage_id) && objective.stage_id == :stage2_equivalent ||
         error("D3 quantity review requires a Stage-2 objective receipt.")
@@ -1599,9 +1599,9 @@ function d3_stage2_quantity_review_payload(
     expected_authority = (
         approval_status=:human_approved,
         target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
-        target_revision=9,
+        target_revision=10,
         target_contract_sha256=
-            "86eb2da65329df9059efeddccc9f479d1ef116e0eed4a0de0554cf8f02353b9d",
+            "2853586e4c82e9912d5ef9cf178a22d45c534d70b6352da06aee13c2777ef3a9",
         notch_authority=:rp_on,
         effective_diagonal_frequency_extraction=
             :q_feedline_downfolded_rp_complex_operator,
@@ -1612,7 +1612,7 @@ function d3_stage2_quantity_review_payload(
     )
     hasproperty(objective, :authority) && objective.authority == expected_authority ||
         error(
-            "D3 quantity review objective authority does not equal the Human-approved revision-9 contract.",
+            "D3 quantity review objective authority does not equal the Human-approved revision-10 contract.",
         )
     complex_record(value) = Dict(
         "real" => Float64(real(value)),

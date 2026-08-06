@@ -46,9 +46,9 @@ const MAX_PHYSICAL_LINE_SECTION_LENGTH_M = 50e-6
 const OBJECTIVE_AUTHORITY = (
     approval_status=:human_approved,
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
-    target_revision=9,
+    target_revision=10,
     target_contract_sha256=
-        "86eb2da65329df9059efeddccc9f479d1ef116e0eed4a0de0554cf8f02353b9d",
+        "2853586e4c82e9912d5ef9cf178a22d45c534d70b6352da06aee13c2777ef3a9",
     notch_authority=:rp_on,
     effective_diagonal_frequency_extraction=
         :q_feedline_downfolded_rp_complex_operator,
@@ -877,7 +877,7 @@ end
 function _validate_objective(objective, model_identity, winner_cost)
     hasproperty(objective, :contract_id) &&
         objective.contract_id == OBJECTIVE_CONTRACT || error(
-        "D3 Stage-2 result requires the revision-9 objective receipt.",
+        "D3 Stage-2 result requires the revision-10 objective receipt.",
     )
     hasproperty(objective, :stage_id) && objective.stage_id == :stage2_equivalent ||
         error("D3 Stage-2 result received a non-Stage-2 objective.")
@@ -889,12 +889,12 @@ function _validate_objective(objective, model_identity, winner_cost)
         model_identity || error("D3 Stage-2 foundation and objective model identities disagree.")
     hasproperty(objective, :authority) && objective.authority == OBJECTIVE_AUTHORITY ||
         error(
-            "D3 Stage-2 objective authority does not equal the Human-approved revision-9 contract.",
+            "D3 Stage-2 objective authority does not equal the Human-approved revision-10 contract.",
         )
     cost = Float64(objective.cost)
     isfinite(cost) && cost >= 0 || error("D3 Stage-2 objective cost must be finite and non-negative.")
     isapprox(cost, Float64(winner_cost); rtol=1.0e-12, atol=1.0e-12) || error(
-        "Re-evaluated revision-9 objective cost disagrees with the optimizer winner cost.",
+        "Re-evaluated revision-10 objective cost disagrees with the optimizer winner cost.",
     )
     return cost
 end
@@ -1259,8 +1259,8 @@ function _validate_linear_quantity_payload(
         record["objective_authority"],
         "D3 linear-quantity objective authority",
     )
-    authority == _json_value(OBJECTIVE_AUTHORITY, "revision-9 authority") || error(
-        "D3 linear-quantity payload does not carry the complete revision-9 authority.",
+    authority == _json_value(OBJECTIVE_AUTHORITY, "revision-10 authority") || error(
+        "D3 linear-quantity payload does not carry the complete revision-10 authority.",
     )
     _model_identity(record["model_identity"], "D3 linear-quantity model identity") ==
         model_identity || error(
@@ -1514,7 +1514,7 @@ function _summary(evaluated, artifact_hashes)
         :primary_linewidth_extraction,
     )
     all(name -> hasproperty(metrics, name), required_metrics) || error(
-        "D3 Stage-2 foundation is missing one or more revision-9 summary metrics.",
+        "D3 Stage-2 foundation is missing one or more revision-10 summary metrics.",
     )
     history = optimization.history
     valid_evaluations = count(record -> !isnothing(record.cost), history)

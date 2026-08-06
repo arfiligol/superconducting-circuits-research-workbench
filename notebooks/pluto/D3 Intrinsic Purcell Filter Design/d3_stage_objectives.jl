@@ -5,15 +5,15 @@
 
 const D3_STAGE_OBJECTIVE_CONTRACT_ID =
     "d3-stage2-stage3-full-qrp-objective.v2"
-const D3_TARGET_SLOT_FREQUENCIES_HZ = (5.9e9, 6.0e9, 6.1e9, 6.2e9)
+const D3_TARGET_SLOT_FREQUENCIES_HZ = (5.6e9, 5.7e9, 5.8e9, 5.9e9, 6.0e9)
 const D3_INTERFERENCE_NOTCH_TARGET_HZ = 5.0e9
 
 const D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY = (
     approval_status=:human_approved,
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
-    target_revision=9,
+    target_revision=10,
     target_contract_sha256=
-        "86eb2da65329df9059efeddccc9f479d1ef116e0eed4a0de0554cf8f02353b9d",
+        "2853586e4c82e9912d5ef9cf178a22d45c534d70b6352da06aee13c2777ef3a9",
     notch_authority=:rp_on,
     effective_diagonal_frequency_extraction=
         :q_feedline_downfolded_rp_complex_operator,
@@ -34,7 +34,7 @@ end
 
 function _d3_objective_authority(authority)
     authority == D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY || error(
-        "D3 objective authority does not equal the Human-accepted revision-9 target contract.",
+        "D3 objective authority does not equal the Human-accepted revision-10 target contract.",
     )
     return D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY
 end
@@ -110,7 +110,7 @@ function _d3_validate_response_authority(metrics, authority, label)
         hasproperty(metrics, name) ||
             error("$(label) is missing $(name).")
         Symbol(getproperty(metrics, name)) == expected || error(
-            "$(label) $(name) disagrees with the revision-9 authority.",
+            "$(label) $(name) disagrees with the revision-10 authority.",
         )
     end
     return nothing
@@ -189,7 +189,7 @@ end
 """
     d3_stage2_objective(metrics, slot_hz, authority, expected_model_identity)
 
-Evaluate the single revision-9 Stage-2 Equivalent objective. Matrix-space and
+Evaluate the single revision-10 Stage-2 Equivalent objective. Matrix-space and
 open-response entries are provenance groups within one residual vector, not
 separate costs or optimizer stages.
 """
@@ -230,7 +230,7 @@ end
 """
     d3_stage3_objective(metrics, slot_hz, authority, expected_model_identity)
 
-Evaluate the independent revision-9 Stage-3 Hybridized objective. Every
+Evaluate the independent revision-10 Stage-3 Hybridized objective. Every
 operand must be recomputed from the same complete distributed/lumped candidate.
 """
 function d3_stage3_objective(metrics, slot_hz, authority, expected_model_identity)
