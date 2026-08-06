@@ -191,7 +191,11 @@ function d3_signed_zero_midpoint(
     signed_values = imag.(responses)
     checks = merge(checks, (finite_response_samples=true,))
     bracket_indices = findall(
-        index -> signbit(signed_values[index]) != signbit(signed_values[index + 1]),
+        index -> begin
+            lower = signed_values[index]
+            upper = signed_values[index + 1]
+            (lower < 0 && upper > 0) || (lower > 0 && upper < 0)
+        end,
         1:(length(frequencies) - 1),
     )
     bracket_count = length(bracket_indices)
