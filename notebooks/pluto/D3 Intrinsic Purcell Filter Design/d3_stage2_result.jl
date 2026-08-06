@@ -6,6 +6,8 @@
 
 isdefined(@__MODULE__, :D3LCQualificationReceipt) ||
     include(joinpath(@__DIR__, "d3_lc_qualification_receipt.jl"))
+isdefined(@__MODULE__, :D3FullQRPQualificationReceipt) ||
+    include(joinpath(@__DIR__, "d3_full_qrp_qualification_receipt.jl"))
 
 module D3Stage2Result
 
@@ -19,8 +21,13 @@ using ..D3LCQualificationReceipt: D3AuthorizedStage2LC,
     authorize_d3_stage2_lc_receipt,
     d3_lc_qualification_receipt_identity,
     revalidate_d3_stage2_lc_receipt,
-    validate_d3_lc_qualification_receipt_identity,
     validate_d3_stage2_lc_authorization_match
+using ..D3FullQRPQualificationReceipt: D3AuthorizedStage2FullQRP,
+    D3_FULL_QRP_QUALIFICATION_POLICY_SHA256,
+    authorize_d3_stage2_full_qrp_receipt,
+    d3_full_qrp_qualification_receipt_identity,
+    evaluate_d3_stage2_objective_with_evidence,
+    revalidate_d3_stage2_full_qrp_receipt
 
 include(joinpath(@__DIR__, "d3_resonator_input.jl"))
 using .D3ResonatorInput: validate_d3_rev10_q2d_identity
@@ -31,7 +38,7 @@ export Stage2RunSpec,
     write_stage2_result
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
-const SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v3"
+const SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v4"
 const QUBIT_RECEIPT_SCHEMA = "d3-stage2-qubit-admittance-receipt.v1"
 const OBJECTIVE_CONTRACT = "d3-stage2-stage3-full-qrp-objective.v2"
 const FOUNDATION_CONTRACT = "d3-stage2-candidate-foundation.v5"
@@ -68,7 +75,8 @@ struct Stage2RunSpec
     response_frequency_hz::Vector{Float64}
     qubit_frequency_hz::Vector{Float64}
     q2d_spec::Dict{String,Any}
-    lc_qualification_receipt_sha256::String
+    lc_qualification_policy_sha256::String
+    full_qrp_qualification_policy_sha256::String
     bounds::Dict{String,Any}
     optimizer_configuration::Dict{String,Any}
 
@@ -78,7 +86,8 @@ struct Stage2RunSpec
         response_frequency_hz,
         qubit_frequency_hz,
         q2d_spec,
-        lc_qualification_receipt_sha256,
+        lc_qualification_policy_sha256,
+        full_qrp_qualification_policy_sha256,
         bounds,
         optimizer_configuration,
     )
@@ -92,8 +101,19 @@ struct Stage2RunSpec
         )
         response = _frequency_grid(response_frequency_hz, "response")
         qubit = _frequency_grid(qubit_frequency_hz, "qubit-admittance")
-        lc_receipt_sha256 = validate_d3_lc_qualification_receipt_identity(
-            lc_qualification_receipt_sha256,
+        lc_policy_sha256 = _sha256_text(
+            lc_qualification_policy_sha256,
+            "D3 LC qualification policy SHA-256",
+        )
+        lc_policy_sha256 == D3_LC_QUALIFICATION_POLICY_SHA256 || error(
+            "D3 Stage-2 RunSpec uses a stale LC qualification producer policy.",
+        )
+        full_qrp_policy_sha256 = _sha256_text(
+            full_qrp_qualification_policy_sha256,
+            "D3 Full-QRP qualification policy SHA-256",
+        )
+        full_qrp_policy_sha256 == D3_FULL_QRP_QUALIFICATION_POLICY_SHA256 || error(
+            "D3 Stage-2 RunSpec uses a stale Full-QRP qualification policy.",
         )
         q2d = _validated_q2d_spec(q2d_spec)
         bound_values = _validated_bounds(bounds)
@@ -107,7 +127,8 @@ struct Stage2RunSpec
             response,
             qubit,
             q2d,
-            lc_receipt_sha256,
+            lc_policy_sha256,
+            full_qrp_policy_sha256,
             bound_values,
             optimizer,
         )
@@ -120,7 +141,8 @@ function Stage2RunSpec(;
     response_frequency_hz,
     qubit_frequency_hz,
     q2d_spec,
-    lc_qualification_receipt_sha256=nothing,
+    lc_qualification_policy_sha256,
+    full_qrp_qualification_policy_sha256,
     bounds,
     optimizer_configuration,
 )
@@ -130,18 +152,20 @@ function Stage2RunSpec(;
         response_frequency_hz,
         qubit_frequency_hz,
         q2d_spec,
-        lc_qualification_receipt_sha256,
+        lc_qualification_policy_sha256,
+        full_qrp_qualification_policy_sha256,
         bounds,
         optimizer_configuration,
     )
 end
 
 """One optimizer winner re-evaluated through the canonical Stage-2 path."""
-struct Stage2EvaluatedResult{O,R,L,F,J,H,Q}
+struct Stage2EvaluatedResult{O,R,L,U,F,J,H,Q}
     specification::Stage2RunSpec
     optimization::O
     winner_record::R
     lc_qualification::L
+    full_qrp_qualification::U
     foundation::F
     objective::J
     hb_trace::H
@@ -773,11 +797,34 @@ function _revalidate_lc_qualification(
     candidate,
     specification,
 )
+    specification.lc_qualification_policy_sha256 ==
+        D3_LC_QUALIFICATION_POLICY_SHA256 || error(
+        "D3 Stage-2 RunSpec LC qualification policy changed after construction.",
+    )
     return revalidate_d3_stage2_lc_receipt(
         qualification,
         candidate;
         q2d_artifact_sha256=specification.q2d_spec["artifact_sha256"],
-        expected_receipt_sha256=specification.lc_qualification_receipt_sha256,
+    )
+end
+
+function _revalidate_full_qrp_qualification(
+    qualification::D3AuthorizedStage2FullQRP,
+    foundation,
+    candidate,
+    lc_qualification,
+    specification,
+)
+    specification.full_qrp_qualification_policy_sha256 ==
+        D3_FULL_QRP_QUALIFICATION_POLICY_SHA256 || error(
+        "D3 Stage-2 RunSpec Full-QRP qualification policy changed after construction.",
+    )
+    return revalidate_d3_stage2_full_qrp_receipt(
+        qualification,
+        foundation,
+        candidate,
+        lc_qualification;
+        q2d_artifact_sha256=specification.q2d_spec["artifact_sha256"],
     )
 end
 
@@ -924,12 +971,15 @@ Select the optimizer's incumbent, evaluate one canonical physical foundation,
 and derive the objective, HB trace, and weighted-qubit admittance from that same
 foundation. Callbacks receive `(foundation, specification)` except the
 foundation callback, which receives
-`(candidate, specification, lc_qualification)`.
+`(candidate, specification, lc_qualification)`. The objective callback receives
+`(foundation, specification, full_qrp_qualification)` and is reached only after
+both exact candidate receipts have been revalidated.
 """
 function evaluate_stage2_winner(
     optimization::OptimizationResult,
     specification::Stage2RunSpec;
     lc_qualification_receipt=nothing,
+    full_qrp_qualification_receipt=nothing,
     foundation_evaluator,
     objective_evaluator,
     hb_evaluator,
@@ -946,7 +996,6 @@ function evaluate_stage2_winner(
         lc_qualification_receipt,
         winner.candidate;
         q2d_artifact_sha256=specification.q2d_spec["artifact_sha256"],
-        expected_receipt_sha256=specification.lc_qualification_receipt_sha256,
     )
     foundation = foundation_evaluator(
         winner.candidate,
@@ -964,7 +1013,26 @@ function evaluate_stage2_winner(
         specification.response_frequency_hz,
         "D3 Stage-2 Exact/direct closure",
     )
-    objective = objective_evaluator(foundation, specification)
+    full_qrp_qualification = authorize_d3_stage2_full_qrp_receipt(
+        full_qrp_qualification_receipt,
+        foundation,
+        winner.candidate,
+        lc_qualification;
+        q2d_artifact_sha256=specification.q2d_spec["artifact_sha256"],
+    )
+    objective = evaluate_d3_stage2_objective_with_evidence(
+        full_qrp_qualification,
+        foundation,
+        winner.candidate,
+        lc_qualification;
+        q2d_artifact_sha256=specification.q2d_spec["artifact_sha256"],
+        objective_evaluator=(current_foundation, current_qualification) ->
+            objective_evaluator(
+                current_foundation,
+                specification,
+                current_qualification,
+            ),
+    )
     _validate_objective(objective, model_identity, winner.cost)
 
     hb = hb_evaluator(foundation, specification)
@@ -985,6 +1053,7 @@ function evaluate_stage2_winner(
         optimization,
         winner,
         lc_qualification,
+        full_qrp_qualification,
         foundation,
         objective,
         hb,
@@ -1014,11 +1083,22 @@ function _revalidate_evaluated_result(evaluated::Stage2EvaluatedResult)
         specification,
         evaluated.lc_qualification,
     )
+    full_qrp_qualification = _revalidate_full_qrp_qualification(
+        evaluated.full_qrp_qualification,
+        evaluated.foundation,
+        winner.candidate,
+        evaluated.lc_qualification,
+        specification,
+    )
     _validate_objective(evaluated.objective, model_identity, winner.cost)
-    return _revalidate_lc_qualification(
+    lc_qualification = _revalidate_lc_qualification(
         evaluated.lc_qualification,
         winner.candidate,
         specification,
+    )
+    return (
+        lc_qualification=lc_qualification,
+        full_qrp_qualification=full_qrp_qualification,
     )
 end
 
@@ -1403,7 +1483,9 @@ function _effective_rp_linear_review_payload(foundation)
 end
 
 function _summary(evaluated, artifact_hashes)
-    lc_qualification = _revalidate_evaluated_result(evaluated)
+    qualifications = _revalidate_evaluated_result(evaluated)
+    lc_qualification = qualifications.lc_qualification
+    full_qrp_qualification = qualifications.full_qrp_qualification
     optimization = evaluated.optimization
     foundation = evaluated.foundation
     stage = foundation.stage
@@ -1451,6 +1533,12 @@ function _summary(evaluated, artifact_hashes)
             "LC qualification receipt identity",
         ),
         "lc_qualification_policy_sha256" => D3_LC_QUALIFICATION_POLICY_SHA256,
+        "full_qrp_qualification_receipt" => _json_value(
+            d3_full_qrp_qualification_receipt_identity(full_qrp_qualification),
+            "Full-QRP qualification receipt identity",
+        ),
+        "full_qrp_qualification_policy_sha256" =>
+            D3_FULL_QRP_QUALIFICATION_POLICY_SHA256,
         "bounds" => _json_value(evaluated.specification.bounds, "optimizer bounds"),
         "cma" => Dict(
             "evaluations" => length(history),
