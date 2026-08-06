@@ -20,9 +20,10 @@ The host Design Target owns the physics and optimization semantics:
   spatial-grid eligibility receipt.
 - `d3_stage_models.jl` accepts exactly
   `(lr_open,lr_short,lc,lp_open,lp_short,u_IDC)` for both Stage 2 and Stage 3.
-  Stage 2 response-matches the five lengths to read-only
-  `(Cr,Lr,Cp,Lp,Cn,Ln)` before building the finite Equivalent Circuit; Stage 3
-  retains the same coordinates in the distributed model.
+  Stage 2 requires one exact candidate-bound LC qualification receipt and
+  consumes its read-only `(Cr,Lr,Cp,Lp,Cn,Ln)` tuple before building the finite
+  Equivalent Circuit; Stage 3 retains the same coordinates in the distributed
+  model.
 - `d3_exact_n_response.jl` owns the CONVERGING Finite-Order Port-Response
   Model execution and linewidth/notch extraction operators. Stage 1 defines
   their physics and contracts; it does not own an independent numerical
@@ -45,14 +46,14 @@ The host Design Target owns the physics and optimization semantics:
   physical foundation, and transactionally publishes the six canonical Run
   artifacts. The Run specification records Q2D artifact identity, physical
   bounds, exact CMA seed/sigma/population/budgets/tolerances, and initial mean;
-  the summary also retains the evaluator-owned temporary CPW/MTL reference
-  topology, section discretization, root/slope settings and numerical evidence
-  used to resolve `(Cr,Lr,Cp,Lp,Cn,Ln)`. Publication cross-checks them against
-  the winner and foundation. It owns publication and identity checks, not
-  optimization or circuit physics.
+  the summary also retains the exact LC receipt and policy identities, winner
+  binding, source chain, frequency deltas, reference topology, and fixed-line
+  section identity used for `(Cr,Lr,Cp,Lp,Cn,Ln)`. Publication revalidates the
+  receipt against the winner and foundation. It owns publication and identity
+  checks, not optimization or circuit physics.
 - `notebooks/python/d3_stage2_candidate_review_report.py` accepts only those
   six canonical artifacts and renders the private Human-review report. It
-  rejects legacy summaries, incomplete Length-to-LC extraction evidence, and
+  rejects legacy summaries, incomplete LC qualification evidence, and
   any replacement trace supplied outside the Run folder.
 
 ## Coordinate-, representation-, and response-explicit quantity contract
@@ -123,12 +124,12 @@ its receipt builder were removed when this ownership error was corrected.
 
 `d3_procedure_catalog.v1.json` currently contains no executable optimizer
 Procedure. This is intentional. Stage 2 now has the physical candidate,
-response-match, objective, single-winner re-evaluation, and canonical artifact
-publication interfaces, but no cataloged caller yet owns the accepted length
-bounds, CMA-ES Run manifest, and evaluator callbacks end to end. The response
-map therefore emits no synthetic all-length `in_domain` gate. Stage 3 remains
-halted. The catalog stays fail-closed until a project-owned caller supplies
-those decisions and every required extraction receipt.
+receipt-qualified LC construction, objective, single-winner re-evaluation, and
+canonical artifact publication interfaces, but no cataloged caller yet owns an
+accepted per-candidate receipt producer or covering envelope, length bounds,
+CMA-ES Run manifest, and evaluator callbacks end to end. Numeric Rev10
+candidates therefore remain `NOT_EVALUABLE` before objective evaluation.
+Stage 3 remains halted.
 
 The removed interactive optimizer and its parameter/config files must not be
 restored. A future optimizer entry point must call `d3_stage_models.jl` and
@@ -149,13 +150,14 @@ qubit-admittance-receipt.json
 `linear-quantities.json` and the qubit receipt are SHA-bound to the same
 `summary.json`; all three carry the same four-part compiled-model identity and
 complete revision-9 objective authority. The summary also hashes the history,
-S21, and qubit-admittance files, and records the complete evaluator-owned
-Length-to-LC response-match evidence rather than recomputing it in the report.
+S21, and qubit-admittance files, and records the exact LC qualification
+receipt/policy identity and its candidate, source, Q2D, and frequency-delta
+bindings rather than recomputing LC in the report.
 Its Q2D report snapshot is derived from the persisted normalized fixed-line
 identity; publication and report loading both rehash that canonical identity
 and reject any elementwise snapshot mismatch.
 The folder is renamed into place only after all six files are complete; the
-report rejects extra files or any hash, authority, Q2D identity, extraction
+report rejects extra files or any hash, authority, Q2D identity, LC qualification
 evidence, or model-identity mismatch. Report generation is then:
 
 ```bash
@@ -178,7 +180,7 @@ reading order is:
 4. fabrication lengths and IDC finger length, resolved Equivalent LC values,
    effective qubit capacitance, and floating-qubit transform;
 5. Q2D setup, single-line CPW RLGC/propagation, the raw ordered MTL L/C
-   matrices, and the complete Length-to-LC extraction audit;
+   matrices, and the receipt-qualified Length-to-LC audit;
 6. report-only anchored-bare, fully hybridized closed, and matched-open views;
 7. source identity, reduction boundaries, numerical closure, and optimizer
    provenance.
