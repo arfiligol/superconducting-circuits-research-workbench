@@ -33,10 +33,12 @@ from superconducting_circuits_analysis.application.analysis.fitting.s_parameters
     fit_complex_s21_vector,
 )
 
-_SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v2"
+_SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v3"
 _LINEAR_QUANTITIES_SCHEMA = "d3-stage2-linear-quantity-review.v4"
 _QUBIT_RECEIPT_SCHEMA = "d3-stage2-qubit-admittance-receipt.v1"
 _OBJECTIVE_CONTRACT_ID = "d3-stage2-stage3-full-qrp-objective.v2"
+_LC_QUALIFICATION_SCHEMA = "d3-root-derivative-lc-readback.v1"
+_LC_QUALIFICATION_CONTRACT = "d3-rev10-frequency-priority-lc-receipt-enforcement.v1"
 _TARGET_SLOTS_HZ = (5.9e9, 6.0e9, 6.1e9, 6.2e9)
 _OBJECTIVE_AUTHORITY = {
     "approval_status": "human_approved",
@@ -718,8 +720,102 @@ def _fixed_line_q2d_snapshot(response_match: Mapping[str, Any]) -> dict[str, Any
     }
 
 
+def _validate_lc_qualification_binding(
+    receipt_value: Any,
+    policy_sha256: Any,
+    candidate: Mapping[str, Any],
+    q2d_spec: Mapping[str, Any],
+) -> dict[str, Any]:
+    receipt = dict(_mapping(receipt_value, "summary.lc_qualification_receipt"))
+    expected_fields = {
+        "schema_version",
+        "evidence_id",
+        "receipt_sha256",
+        "contract_id",
+        "policy_sha256",
+        "candidate_id",
+        "candidate",
+        "source",
+        "frequency_deltas",
+    }
+    if set(receipt) != expected_fields:
+        raise ValueError("summary LC qualification receipt fields are incomplete.")
+    if receipt["schema_version"] != _LC_QUALIFICATION_SCHEMA:
+        raise ValueError("summary LC qualification receipt uses the wrong schema.")
+    if receipt["contract_id"] != _LC_QUALIFICATION_CONTRACT:
+        raise ValueError("summary LC qualification receipt uses the wrong contract.")
+    for field in ("evidence_id", "candidate_id"):
+        if not isinstance(receipt[field], str) or not receipt[field].strip():
+            raise ValueError(f"summary LC qualification {field} must be non-empty text.")
+    receipt["receipt_sha256"] = _sha256(
+        receipt["receipt_sha256"], "summary LC qualification receipt SHA-256"
+    )
+    receipt["policy_sha256"] = _sha256(
+        receipt["policy_sha256"], "summary LC qualification policy SHA-256"
+    )
+    if (
+        _sha256(policy_sha256, "summary LC qualification policy SHA-256")
+        != receipt["policy_sha256"]
+    ):
+        raise ValueError("summary LC qualification policy SHA disagrees with its receipt.")
+
+    receipt_candidate = _mapping(receipt["candidate"], "summary LC qualification candidate")
+    if set(receipt_candidate) != {"id", "lengths", "u_IDC"}:
+        raise ValueError("summary LC qualification candidate fields are incomplete.")
+    if receipt_candidate["id"] != receipt["candidate_id"]:
+        raise ValueError("summary LC qualification candidate id is inconsistent.")
+    lengths = _mapping(receipt_candidate["lengths"], "summary LC qualification lengths")
+    length_keys = _CANDIDATE_KEYS[:-1]
+    if set(lengths) != set(length_keys):
+        raise ValueError("summary LC qualification length fields are incomplete.")
+    for key in length_keys:
+        if not math.isclose(
+            _finite(lengths[key], f"summary LC qualification {key}"),
+            _finite(candidate[key], f"summary.best_candidate.{key}"),
+            rel_tol=0.0,
+            abs_tol=0.0,
+        ):
+            raise ValueError(f"summary LC qualification {key} disagrees with the winner.")
+    if not math.isclose(
+        _finite(receipt_candidate["u_IDC"], "summary LC qualification u_IDC"),
+        _finite(candidate["u_IDC"], "summary.best_candidate.u_IDC"),
+        rel_tol=0.0,
+        abs_tol=0.0,
+    ):
+        raise ValueError("summary LC qualification u_IDC disagrees with the winner.")
+
+    source = _mapping(receipt["source"], "summary LC qualification source")
+    expected_source_fields = {
+        "runner_sha256",
+        "spatial_receipt_sha256",
+        "convergence_runner_sha256",
+        "extractor_sha256",
+        "q2d_artifact_sha256",
+    }
+    if set(source) != expected_source_fields:
+        raise ValueError("summary LC qualification source fields are incomplete.")
+    for field in expected_source_fields:
+        _sha256(source[field], f"summary LC qualification source {field}")
+    if source["q2d_artifact_sha256"] != q2d_spec["artifact_sha256"]:
+        raise ValueError("summary LC qualification Q2D artifact disagrees with q2d_spec.")
+
+    frequency_deltas = _mapping(
+        receipt["frequency_deltas"], "summary LC qualification frequency deltas"
+    )
+    frequency_limits = {"f_r": 1.0e-3, "f_p": 1.0e-3, "f_n": 1.0e-2}
+    if set(frequency_deltas) != set(frequency_limits):
+        raise ValueError("summary LC qualification frequency deltas are incomplete.")
+    for name, limit in frequency_limits.items():
+        delta = _finite(frequency_deltas[name], f"summary LC qualification {name} delta")
+        if not 0 <= delta <= limit:
+            raise ValueError(f"summary LC qualification {name} delta exceeds its gate.")
+    return receipt
+
+
 def _validate_response_match_audit(
-    response_match: Mapping[str, Any], q2d_spec: Mapping[str, Any]
+    response_match: Mapping[str, Any],
+    q2d_spec: Mapping[str, Any],
+    receipt: Mapping[str, Any],
 ) -> None:
     expected_response_match_fields = {
         "mapping_id",
@@ -735,7 +831,7 @@ def _validate_response_match_audit(
     }
     if set(response_match) != expected_response_match_fields:
         raise ValueError(
-            "summary.response_match must contain the complete Length-to-LC audit record."
+            "summary.response_match must contain the complete receipt-qualified LC record."
         )
     for field in ("mapping_sha256", "q2d_artifact_sha256", "fixed_line_input_sha256"):
         _sha256(response_match[field], f"summary.response_match.{field}")
@@ -753,17 +849,23 @@ def _validate_response_match_audit(
         raise ValueError("response-match artifact SHA disagrees with its fixed-line identity.")
     if response_match["topology_id"] != expected_q2d_spec["topology_id"]:
         raise ValueError("response-match topology disagrees with its fixed-line identity.")
+    if response_match["mapping_id"] != "d3-frequency-priority-lc-qualification-receipt":
+        raise ValueError("response-match mapping is not receipt-qualified.")
+    if response_match["mapping_sha256"] != receipt["receipt_sha256"]:
+        raise ValueError("response-match mapping SHA disagrees with the LC receipt.")
+    if response_match["match_contract_id"] != receipt["contract_id"]:
+        raise ValueError("response-match contract disagrees with the LC receipt.")
 
     evidence = _mapping(
         response_match["match_evidence"],
         "summary.response_match.match_evidence",
     )
-    if set(evidence) != {"reference_model", "readout", "filter", "bridge", "settings"}:
-        raise ValueError("response-match evidence must contain the complete reference-model audit.")
+    if set(evidence) != {"reference_model", "qualification_receipt"}:
+        raise ValueError("response-match evidence must contain the receipt-qualified audit.")
 
     reference = _mapping(evidence["reference_model"], "response-match reference model")
     expected_reference = {
-        "role": "physical_length_to_equivalent_lc_extraction_only",
+        "role": "receipt_qualified_physical_length_to_equivalent_lc",
         "final_stage2_hb_model": "resolved_lumped_equivalent_circuit",
         "topology": "two_grounded_head_open_tail_quarter_wave_resonators_with_mtl_window",
         "terminal_coordinates": ["readout_open_tail", "filter_open_tail"],
@@ -786,128 +888,23 @@ def _validate_response_match_audit(
             raise ValueError(f"D3 response-match {name} must be positive and at most 50 um.")
         if section_length != expected_q2d_spec[name]:
             raise ValueError(f"response-match {name} disagrees with its fixed-line identity.")
-
-    parallel_fields = {
-        "capacitance_f",
-        "inductance_h",
-        "angular_frequency_rad_s",
-        "frequency_hz",
-        "root_admittance_s",
-        "admittance_derivative_s_per_rad_s",
-        "derivative_step_rad_s",
-    }
-    for subsystem in ("readout", "filter"):
-        record = _mapping(evidence[subsystem], f"response-match {subsystem}")
-        if set(record) != parallel_fields:
-            raise ValueError(f"response-match {subsystem} evidence is incomplete.")
-        for field in (
-            "capacitance_f",
-            "inductance_h",
-            "angular_frequency_rad_s",
-            "frequency_hz",
-            "derivative_step_rad_s",
-        ):
-            if _finite(record[field], f"response-match {subsystem}.{field}") <= 0:
-                raise ValueError(f"response-match {subsystem}.{field} must be positive.")
-        _complex_value(record["root_admittance_s"], f"response-match {subsystem} root Y")
-        _complex_value(
-            record["admittance_derivative_s_per_rad_s"],
-            f"response-match {subsystem} dY/domega",
-        )
-
-    bridge = _mapping(evidence["bridge"], "response-match bridge")
-    bridge_fields = {
-        "capacitance_f",
-        "inductance_h",
-        "angular_frequency_rad_s",
-        "frequency_hz",
-        "root_transfer_impedance_ohm",
-        "transfer_impedance_derivative_ohm_per_rad_s",
-        "readout_admittance_s",
-        "filter_admittance_s",
-        "capacitance_imaginary_residual_f",
-        "derivative_step_rad_s",
-    }
-    if set(bridge) != bridge_fields:
-        raise ValueError("response-match bridge evidence is incomplete.")
-    for field in (
-        "capacitance_f",
-        "inductance_h",
-        "angular_frequency_rad_s",
-        "frequency_hz",
-        "derivative_step_rad_s",
-    ):
-        if _finite(bridge[field], f"response-match bridge.{field}") <= 0:
-            raise ValueError(f"response-match bridge.{field} must be positive.")
-    _finite(
-        bridge["capacitance_imaginary_residual_f"],
-        "response-match bridge capacitance residual",
+    qualification = _mapping(
+        evidence["qualification_receipt"], "response-match qualification receipt"
     )
-    for field in (
-        "root_transfer_impedance_ohm",
-        "transfer_impedance_derivative_ohm_per_rad_s",
-        "readout_admittance_s",
-        "filter_admittance_s",
-    ):
-        _complex_value(bridge[field], f"response-match bridge.{field}")
-
-    settings = _mapping(evidence["settings"], "response-match settings")
-    expected_settings = {
-        "readout_root_bracket_hz",
-        "filter_root_bracket_hz",
-        "notch_root_bracket_hz",
-        "parallel_derivative_step_rad_s",
-        "bridge_derivative_step_rad_s",
-        "bisection_absolute_tolerance_rad_s",
-        "bisection_relative_tolerance",
-        "bisection_max_iterations",
-        "match_root_relative_tolerance",
-        "derivative_relative_tolerance",
+    qualification_fields = {
+        "schema_version",
+        "evidence_id",
+        "receipt_sha256",
+        "policy_sha256",
+        "candidate_id",
+        "source",
+        "frequency_deltas",
     }
-    if set(settings) != expected_settings:
-        raise ValueError("response-match settings are incomplete.")
-    for field in ("readout_root_bracket_hz", "filter_root_bracket_hz", "notch_root_bracket_hz"):
-        bracket = settings[field]
-        if not isinstance(bracket, list) or len(bracket) != 2:
-            raise ValueError(f"response-match {field} must be a two-value bracket.")
-        lower = _finite(bracket[0], f"response-match {field}[0]")
-        upper = _finite(bracket[1], f"response-match {field}[1]")
-        if not 0 < lower < upper:
-            raise ValueError(f"response-match {field} must be positive and increasing.")
-    for field in (
-        "parallel_derivative_step_rad_s",
-        "bridge_derivative_step_rad_s",
-        "bisection_absolute_tolerance_rad_s",
-        "bisection_relative_tolerance",
-        "match_root_relative_tolerance",
-        "derivative_relative_tolerance",
-    ):
-        if _finite(settings[field], f"response-match {field}") <= 0:
-            raise ValueError(f"response-match {field} must be positive.")
-    iterations = settings["bisection_max_iterations"]
-    if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 1:
-        raise ValueError("response-match bisection_max_iterations must be a positive integer.")
-    if (
-        not math.isclose(
-            float(evidence["readout"]["derivative_step_rad_s"]),
-            float(settings["parallel_derivative_step_rad_s"]),
-            rel_tol=0.0,
-            abs_tol=0.0,
-        )
-        or not math.isclose(
-            float(evidence["filter"]["derivative_step_rad_s"]),
-            float(settings["parallel_derivative_step_rad_s"]),
-            rel_tol=0.0,
-            abs_tol=0.0,
-        )
-        or not math.isclose(
-            float(bridge["derivative_step_rad_s"]),
-            float(settings["bridge_derivative_step_rad_s"]),
-            rel_tol=0.0,
-            abs_tol=0.0,
-        )
-    ):
-        raise ValueError("response-match evidence derivative steps disagree with settings.")
+    if set(qualification) != qualification_fields:
+        raise ValueError("response-match qualification receipt fields are incomplete.")
+    expected_qualification = {field: receipt[field] for field in qualification_fields}
+    if not _json_values_equal(qualification, expected_qualification):
+        raise ValueError("response-match qualification receipt disagrees with summary authority.")
 
 
 def _load_summary(path: Path) -> dict[str, Any]:
@@ -922,6 +919,8 @@ def _load_summary(path: Path) -> dict[str, Any]:
             "model_identity",
             "slot_hz",
             "q2d_spec",
+            "lc_qualification_receipt",
+            "lc_qualification_policy_sha256",
             "bounds",
             "cma",
             "best_candidate",
@@ -959,7 +958,6 @@ def _load_summary(path: Path) -> dict[str, Any]:
 
     q2d_spec = _mapping(summary["q2d_spec"], "summary.q2d_spec")
     response_match = _mapping(summary["response_match"], "summary.response_match")
-    _validate_response_match_audit(response_match, q2d_spec)
 
     cma = _mapping(summary["cma"], "summary.cma")
     _require_keys(
@@ -1028,38 +1026,23 @@ def _load_summary(path: Path) -> dict[str, Any]:
         if value <= 0 or not normalized_bounds[key][0] <= value <= normalized_bounds[key][1]:
             raise ValueError(f"summary.best_candidate.{key} must be positive and within bounds.")
 
+    lc_qualification = _validate_lc_qualification_binding(
+        summary["lc_qualification_receipt"],
+        summary["lc_qualification_policy_sha256"],
+        candidate,
+        q2d_spec,
+    )
+    _validate_response_match_audit(response_match, q2d_spec, lc_qualification)
+
     resolved = _mapping(summary["best_resolved_lc"], "summary.best_resolved_lc")
     expected_resolved_fields = {"Cr_f", "Lr_h", "Cp_f", "Lp_h", "Cn_f", "Ln_h", "u_IDC"}
     if set(resolved) != expected_resolved_fields:
         raise ValueError(
-            "summary.best_resolved_lc must contain the six matched LC values and u_IDC."
+            "summary.best_resolved_lc must contain the six receipt-qualified LC values and u_IDC."
         )
-    evidence = _mapping(response_match["match_evidence"], "response-match evidence")
-    evidence_fields = {
-        "Cr_f": ("readout", "capacitance_f"),
-        "Lr_h": ("readout", "inductance_h"),
-        "Cp_f": ("filter", "capacitance_f"),
-        "Lp_h": ("filter", "inductance_h"),
-        "Cn_f": ("bridge", "capacitance_f"),
-        "Ln_h": ("bridge", "inductance_h"),
-    }
-    for resolved_field, (group, evidence_field) in evidence_fields.items():
-        resolved_value = _finite(
-            resolved[resolved_field], f"summary.best_resolved_lc.{resolved_field}"
-        )
-        evidence_value = _finite(
-            _mapping(evidence[group], f"response-match {group}")[evidence_field],
-            f"response-match {group}.{evidence_field}",
-        )
-        if resolved_value <= 0 or not math.isclose(
-            resolved_value,
-            evidence_value,
-            rel_tol=1e-14,
-            abs_tol=0.0,
-        ):
-            raise ValueError(
-                f"summary.best_resolved_lc.{resolved_field} disagrees with response-match evidence."
-            )
+    for resolved_field in ("Cr_f", "Lr_h", "Cp_f", "Lp_h", "Cn_f", "Ln_h"):
+        if _finite(resolved[resolved_field], f"summary.best_resolved_lc.{resolved_field}") <= 0:
+            raise ValueError(f"summary.best_resolved_lc.{resolved_field} must be positive.")
     if not math.isclose(
         _finite(resolved["u_IDC"], "summary.best_resolved_lc.u_IDC"),
         _finite(candidate["u_IDC"], "summary.best_candidate.u_IDC"),
@@ -1940,10 +1923,12 @@ def _manifest(
         match_evidence["reference_model"],
         "response-match reference model",
     )
-    readout_match = _mapping(match_evidence["readout"], "response-match readout")
-    filter_match = _mapping(match_evidence["filter"], "response-match filter")
-    bridge_match = _mapping(match_evidence["bridge"], "response-match bridge")
-    match_settings = _mapping(match_evidence["settings"], "response-match settings")
+    lc_qualification = _mapping(
+        summary["lc_qualification_receipt"], "summary LC qualification receipt"
+    )
+    lc_frequency_deltas = _mapping(
+        lc_qualification["frequency_deltas"], "summary LC qualification frequency deltas"
+    )
     q2d = _mapping(summary["q2d_spec"], "summary.q2d_spec")
     geometry = _mapping(q2d["geometry_um"], "summary.q2d_spec.geometry_um")
     solver = _mapping(q2d["solver"], "summary.q2d_spec.solver")
@@ -2247,28 +2232,6 @@ def _manifest(
         )
     )
 
-    readout_root_y = _format_complex(readout_match["root_admittance_s"], "readout root Y", "S")
-    readout_dy = _format_complex(
-        readout_match["admittance_derivative_s_per_rad_s"],
-        "readout dY/domega",
-        "S/(rad/s)",
-    )
-    filter_root_y = _format_complex(filter_match["root_admittance_s"], "filter root Y", "S")
-    filter_dy = _format_complex(
-        filter_match["admittance_derivative_s_per_rad_s"],
-        "filter dY/domega",
-        "S/(rad/s)",
-    )
-    bridge_root_z21 = _format_complex(
-        bridge_match["root_transfer_impedance_ohm"], "bridge root Z21", "Ω"
-    )
-    bridge_dz21 = _format_complex(
-        bridge_match["transfer_impedance_derivative_ohm_per_rad_s"],
-        "bridge dZ21/domega",
-        "Ω/(rad/s)",
-    )
-    bisection_atol = float(match_settings["bisection_absolute_tolerance_rad_s"])
-    derivative_rtol = float(match_settings["derivative_relative_tolerance"])
     fixed_rows = [
         ("Q2D setup — cross-section", "continuous upper ground; no opening"),
         (
@@ -2304,18 +2267,18 @@ def _manifest(
             f"{q2d['coupling_orientation'].replace('_', '-')} MTL coupling",
         ),
         (
-            "Length→LC extraction — reference model",
-            "temporary extraction-only circuit: two grounded-head/open-tail quarter-wave "
-            "resonators joined by one MTL window; final Stage-2 HB uses only the resolved "
-            "lumped Equivalent Circuit",
+            "Length→LC qualification — reference model",
+            "receipt-qualified physical model: two grounded-head/open-tail quarter-wave "
+            "resonators joined by one MTL window; Stage-2 consumes only the sealed "
+            "deterministic LC tuple",
         ),
         (
-            "Length→LC extraction — reference-model reduction",
+            "Length→LC qualification — reference-model reduction",
             "frequency-dependent dynamic Schur complement eliminates internal CPW/MTL nodes; "
             "terminals = readout_open_tail, filter_open_tail",
         ),
         (
-            "Length→LC extraction — CPW/MTL discretization",
+            "Length→LC qualification — CPW/MTL discretization",
             f"section_length_m = {float(reference_model['section_length_m']):.17g} m "
             f"({float(reference_model['section_length_m']) * 1e6:.9g} µm); "
             f"mtl_section_length_m = "
@@ -2323,60 +2286,37 @@ def _manifest(
             f"({float(reference_model['mtl_section_length_m']) * 1e6:.9g} µm)",
         ),
         (
-            "Length→LC extraction — readout/filter state",
-            "MTL mutual terms disabled while diagonal loading is preserved; roots and slopes "
-            "come from the two open-tail terminal admittances",
+            "Length→LC qualification — receipt",
+            f"schema = {lc_qualification['schema_version']}; "
+            f"evidence = {lc_qualification['evidence_id']}; "
+            f"receipt SHA = {lc_qualification['receipt_sha256']}",
         ),
         (
-            "Length→LC extraction — readout terminal-Y match",
-            f"froot = {float(readout_match['frequency_hz']) / 1e9:.12g} GHz; "
-            f"Y(root) = {readout_root_y}; dY/dω = {readout_dy}; "
-            f"Cr = {float(readout_match['capacitance_f']) * 1e15:.12g} fF; "
-            f"Lr = {float(readout_match['inductance_h']) * 1e9:.12g} nH",
+            "Length→LC qualification — policy",
+            f"contract = {lc_qualification['contract_id']}; "
+            f"policy SHA = {lc_qualification['policy_sha256']}",
         ),
         (
-            "Length→LC extraction — filter terminal-Y match",
-            f"froot = {float(filter_match['frequency_hz']) / 1e9:.12g} GHz; "
-            f"Y(root) = {filter_root_y}; dY/dω = {filter_dy}; "
-            f"Cp = {float(filter_match['capacitance_f']) * 1e15:.12g} fF; "
-            f"Lp = {float(filter_match['inductance_h']) * 1e9:.12g} nH",
+            "Length→LC qualification — candidate",
+            f"candidate id = {lc_qualification['candidate_id']}; "
+            f"u_IDC = "
+            f"{float(_mapping(lc_qualification['candidate'], 'LC candidate')['u_IDC']):.9g} µm",
         ),
         (
-            "Length→LC extraction — bridge state",
-            "full MTL mutual terms preserved; the intrinsic bridge is matched at the physical "
-            "open-tail Z21 notch",
+            "Length→LC qualification — frequency stability",
+            f"δfr = {float(lc_frequency_deltas['f_r']) * 100:.9g}%; "
+            f"δfp = {float(lc_frequency_deltas['f_p']) * 100:.9g}%; "
+            f"δfn = {float(lc_frequency_deltas['f_n']) * 100:.9g}%",
         ),
         (
-            "Length→LC extraction — bridge Z21 match",
-            f"fnotch = {float(bridge_match['frequency_hz']) / 1e9:.12g} GHz; "
-            f"Z21(root) = {bridge_root_z21}; dZ21/dω = {bridge_dz21}",
-        ),
-        (
-            "Length→LC extraction — bridge terminal evidence",
-            f"Yr = {_format_complex(bridge_match['readout_admittance_s'], 'bridge Yr', 'S')}; "
-            f"Yp = {_format_complex(bridge_match['filter_admittance_s'], 'bridge Yp', 'S')}; "
-            f"Im(Cn residual) = {float(bridge_match['capacitance_imaginary_residual_f']):.9g} F; "
-            f"Cn = {float(bridge_match['capacitance_f']) * 1e15:.12g} fF; "
-            f"Ln = {float(bridge_match['inductance_h']) * 1e9:.12g} nH",
-        ),
-        (
-            "Length→LC extraction — root brackets",
-            "readout = [{:.9g}, {:.9g}] GHz; filter = [{:.9g}, {:.9g}] GHz; "
-            "notch = [{:.9g}, {:.9g}] GHz".format(
-                *(float(value) / 1e9 for value in match_settings["readout_root_bracket_hz"]),
-                *(float(value) / 1e9 for value in match_settings["filter_root_bracket_hz"]),
-                *(float(value) / 1e9 for value in match_settings["notch_root_bracket_hz"]),
-            ),
-        ),
-        (
-            "Length→LC extraction — root/slope numerical settings",
-            f"Δωparallel = {float(match_settings['parallel_derivative_step_rad_s']):.9g} rad/s; "
-            f"Δωbridge = {float(match_settings['bridge_derivative_step_rad_s']):.9g} rad/s; "
-            f"bisection atol = {bisection_atol:.9g} rad/s; "
-            f"rtol = {float(match_settings['bisection_relative_tolerance']):.9g}; "
-            f"maxiter = {int(match_settings['bisection_max_iterations'])}; "
-            f"root residual rtol = {float(match_settings['match_root_relative_tolerance']):.9g}; "
-            f"derivative residual rtol = {derivative_rtol:.9g}",
+            "Length→LC qualification — resolved tuple",
+            "Cr/Lr/Cp/Lp/Cn/Ln = "
+            f"{float(resolved['Cr_f']) * 1e15:.9g} fF / "
+            f"{float(resolved['Lr_h']) * 1e9:.9g} nH / "
+            f"{float(resolved['Cp_f']) * 1e15:.9g} fF / "
+            f"{float(resolved['Lp_h']) * 1e9:.9g} nH / "
+            f"{float(resolved['Cn_f']) * 1e15:.9g} fF / "
+            f"{float(resolved['Ln_h']) * 1e6:.9g} µH",
         ),
     ]
     qubit_frequency = qubit["frequency_hz"]
@@ -2479,9 +2419,9 @@ def _manifest(
         ("Port-selector SHA", model_identity["selector_sha256"]),
         ("Q2D artifact", str(q2d["artifact_id"])),
         ("Q2D artifact SHA", str(q2d["artifact_sha256"])),
-        ("Length→LC mapping", str(response_match["mapping_id"])),
-        ("Length→LC mapping SHA", str(response_match["mapping_sha256"])),
-        ("Length→LC match contract", str(response_match["match_contract_id"])),
+        ("Length→LC receipt mapping", str(response_match["mapping_id"])),
+        ("Length→LC receipt SHA", str(response_match["mapping_sha256"])),
+        ("Length→LC qualification contract", str(response_match["match_contract_id"])),
         ("Length→LC topology", str(response_match["topology_id"])),
         ("Fixed Q2D line-input SHA", str(response_match["fixed_line_input_sha256"])),
         ("Q2D cases", f"{q2d['single_case_id']} / {q2d['pair_case_id']}"),
@@ -2613,8 +2553,8 @@ def _manifest(
             _table(
                 "fixed-specifications",
                 "fixed_specifications",
-                "Q2D setup, single-line CPW, MTL section, and Length→LC extraction audit",
-                ("Fixed input / extraction evidence", "Value used by this Stage-2 run"),
+                "Q2D setup, single-line CPW, MTL section, and receipt-qualified Length→LC audit",
+                ("Fixed input / qualification evidence", "Value used by this Stage-2 run"),
                 fixed_rows,
                 (1.0, 3.2),
                 ("summary",),
