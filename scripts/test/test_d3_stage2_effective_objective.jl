@@ -21,22 +21,22 @@ function objective_metrics(; slot_hz=6.0e9)
     return merge(
         TEST_MODEL_IDENTITY,
         (
-            stage_id=:stage2_equivalent,
-            model_family=:equivalent_exact_n,
-            fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz=slot_hz,
-            fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz=slot_hz,
-            J_rp_eff_q_feedline_downfolded_coherent_hz=5.0e6,
-            notch_rp_on_hz=5.0e9,
-            kappa_sum_qrp_on_ext_on_hz=20.0e6,
-            eta_r_qrp_on=0.5,
-            eta_p_qrp_on=0.5,
+            stage_id=:stage2_direct_hybridized,
+            model_family=:hybridized_distributed_lumped,
+            fr_eff_complete_complement_rp_hz=slot_hz,
+            fp_eff_complete_complement_rp_hz=slot_hz,
+            J_eff_complete_complement_rp_coherent_hz=5.0e6,
+            notch_distributed_rp_on_hz=5.0e9,
+            kappa_sum_unordered_rp_subspace_hz=20.0e6,
+            linewidth_fraction_min_unordered_rp_subspace=0.5,
+            linewidth_fraction_max_unordered_rp_subspace=0.5,
             effective_diagonal_frequency_extraction=
-                :q_feedline_downfolded_rp_complex_operator,
+                :complete_complement_rp_complex_operator,
             effective_exchange_extraction=
-                :q_feedline_downfolded_rp_complex_midpoint_residue,
-            notch_authority=:rp_on,
-            linewidth_pole_scope=:qrp_three,
-            primary_linewidth_extraction=:L_C,
+                :complete_complement_rp_complex_midpoint_residue,
+            notch_authority=:distributed_rp_on,
+            linewidth_pole_scope=:unordered_rp_two_pole_subspace,
+            primary_linewidth_extraction=:exact_open_unordered_rp_poles,
         ),
     )
 end
@@ -54,7 +54,7 @@ end
     @test D3_INTERFERENCE_NOTCH_TARGET_HZ == 5.0e9
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_revision == 10
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_contract_sha256 ==
-        "2853586e4c82e9912d5ef9cf178a22d45c534d70b6352da06aee13c2777ef3a9"
+        "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209"
     @test objective.cost == 0.0
     @test objective.target_gates_pass
     @test keys(objective.target_gates) == (
@@ -66,8 +66,8 @@ end
     detuned = merge(
         metrics,
         (
-            fr_eff_q_feedline_downfolded_qrp_on_ext_on_hz=slot_hz - 0.6e6,
-            fp_eff_q_feedline_downfolded_qrp_on_ext_on_hz=slot_hz + 0.6e6,
+            fr_eff_complete_complement_rp_hz=slot_hz - 0.6e6,
+            fp_eff_complete_complement_rp_hz=slot_hz + 0.6e6,
         ),
     )
     detuned_objective = d3_stage2_objective(
@@ -115,4 +115,10 @@ end
             TEST_MODEL_IDENTITY,
         )
     end
+    @test_throws ErrorException d3_stage3_objective(
+        metrics,
+        slot_hz,
+        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+        TEST_MODEL_IDENTITY,
+    )
 end

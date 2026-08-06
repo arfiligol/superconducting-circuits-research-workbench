@@ -48,6 +48,70 @@ function _d3_mtl_window_breakpoints(start_m, length_m, section_length_m)
     return [Float64(start_m) + index * dx for index in 0:count]
 end
 
+function _d3_exact_interval_breakpoints(start_m, length_m, count)
+    count isa Integer && count > 0 || throw(ArgumentError(
+        "D3 exact interval section count must be a positive integer.",
+    ))
+    start = Float64(start_m)
+    length = Float64(length_m)
+    isfinite(start) && start >= 0 && isfinite(length) && length > 0 ||
+        throw(ArgumentError("D3 exact interval geometry must be finite and positive."))
+    points = [start + length * index / count for index in 0:count]
+    points[1] = start
+    points[end] = start + length
+    return points
+end
+
+function _d3_derived_section_count(length_m, reference_section_length_m)
+    length = Float64(length_m)
+    reference = Float64(reference_section_length_m)
+    isfinite(length) && length > 0 && isfinite(reference) && reference > 0 ||
+        throw(ArgumentError("D3 line length and reference section length must be finite and positive."))
+    raw = length / reference
+    nearest = round(Int, raw)
+    return isapprox(raw, nearest; atol=1e-12, rtol=1e-9) ? nearest : ceil(Int, raw)
+end
+
+function _d3_refined_hybridized_line_breakpoints(
+    head_length_m,
+    window_length_m,
+    tail_length_m,
+    base_section_length_m,
+    base_mtl_section_length_m,
+    refinement_level,
+)
+    refinement_level isa Integer && refinement_level >= 0 || throw(ArgumentError(
+        "D3 direct-Hybridized refinement_level must be a nonnegative integer.",
+    ))
+    factor = 1 << refinement_level
+    head_count = _d3_derived_section_count(head_length_m, base_section_length_m) * factor
+    mtl_count = _d3_derived_section_count(window_length_m, base_mtl_section_length_m) * factor
+    tail_count = _d3_derived_section_count(tail_length_m, base_section_length_m) * factor
+    head = _d3_exact_interval_breakpoints(0.0, head_length_m, head_count)
+    window = _d3_exact_interval_breakpoints(head_length_m, window_length_m, mtl_count)
+    tail = _d3_exact_interval_breakpoints(
+        Float64(head_length_m) + Float64(window_length_m),
+        tail_length_m,
+        tail_count,
+    )
+    return (
+        boundaries_m=vcat(head[1:(end - 1)], window[1:(end - 1)], tail),
+        count=head_count + mtl_count + tail_count,
+        mtl_count=mtl_count,
+    )
+end
+
+function _d3_exact_breakpoint_reference(boundaries_m)
+    boundaries = Float64.(collect(boundaries_m))
+    length(boundaries) >= 2 || throw(ArgumentError(
+        "D3 exact boundary array must contain at least two values.",
+    ))
+    all(isfinite, boundaries) && all(diff(boundaries) .> 0) || throw(ArgumentError(
+        "D3 exact boundary array must be finite and strictly increasing.",
+    ))
+    return maximum(diff(boundaries)) * (1 + 8eps(Float64))
+end
+
 function _d3_engineering_relation_label(plan::CircuitPlan, relation_id)
     selected_id = Symbol(relation_id)
     for relation in engineering_graph(plan).relations
@@ -223,6 +287,8 @@ function _d3_distributed_feedline!(
     l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
     c_per_m_f=D3_DEFAULT_FEEDLINE_C_PER_M_F,
     port_resistance_ohm=50.0,
+    left_breakpoints_m=nothing,
+    right_breakpoints_m=nothing,
 )
     n_sections isa Integer ||
         throw(ArgumentError("D3 split distributed feedline n_sections must be an integer."))
@@ -236,6 +302,31 @@ function _d3_distributed_feedline!(
     right_center_terminal = external_node("d3_design_target_fc_right_terminal")
     half_length = Float64(length_m) / 2
     half_sections = n_sections ÷ 2
+    exact_breakpoints = !isnothing(left_breakpoints_m) ||
+        !isnothing(right_breakpoints_m)
+    exact_breakpoints &&
+        (isnothing(left_breakpoints_m) || isnothing(right_breakpoints_m)) &&
+        throw(ArgumentError(
+            "D3 split distributed feedline exact grid requires both left and right boundary arrays.",
+        ))
+    left_boundaries = exact_breakpoints ? Float64.(collect(left_breakpoints_m)) : nothing
+    right_boundaries = exact_breakpoints ? Float64.(collect(right_breakpoints_m)) : nothing
+    if exact_breakpoints
+        for (label, boundaries) in (
+            ("left", left_boundaries),
+            ("right", right_boundaries),
+        )
+            first(boundaries) == 0.0 &&
+                isapprox(last(boundaries), half_length; atol=1e-12, rtol=1e-9) ||
+                throw(ArgumentError(
+                    "D3 distributed feedline $(label) boundaries must span exactly one half of feedline_length_m.",
+                ))
+            length(boundaries) - 1 == half_sections || throw(ArgumentError(
+                "D3 distributed feedline $(label) boundary count disagrees with n_sections.",
+            ))
+            _d3_exact_breakpoint_reference(boundaries)
+        end
+    end
     left = transmission_line!(
         plan;
         id=:d3_design_target_distributed_feedline_left,
@@ -243,12 +334,15 @@ function _d3_distributed_feedline!(
         tail=left_center_terminal,
         spec=RLGCSpec(
             length_m=half_length,
-            n_sections=half_sections,
+            n_sections=exact_breakpoints ? nothing : half_sections,
+            section_length_m=exact_breakpoints ?
+                _d3_exact_breakpoint_reference(left_boundaries) : nothing,
             l_per_m_h=l_per_m_h,
             c_per_m_f=c_per_m_f,
         ),
         head_termination=:external,
         tail_termination=:external,
+        breakpoints_m=left_boundaries,
     )
     right = transmission_line!(
         plan;
@@ -257,12 +351,15 @@ function _d3_distributed_feedline!(
         tail=output,
         spec=RLGCSpec(
             length_m=half_length,
-            n_sections=half_sections,
+            n_sections=exact_breakpoints ? nothing : half_sections,
+            section_length_m=exact_breakpoints ?
+                _d3_exact_breakpoint_reference(right_boundaries) : nothing,
             l_per_m_h=l_per_m_h,
             c_per_m_f=c_per_m_f,
         ),
         head_termination=:external,
         tail_termination=:external,
+        breakpoints_m=right_boundaries,
     )
     connect!(
         plan,
@@ -592,7 +689,25 @@ function build_d3_intrinsic_purcell_hybridized_circuit_plan(;
     feedline_l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
     feedline_c_per_m_f=D3_DEFAULT_FEEDLINE_C_PER_M_F,
     port_resistance_ohm=50.0,
+    readout_breakpoints_m=nothing,
+    filter_breakpoints_m=nothing,
+    feedline_left_breakpoints_m=nothing,
+    feedline_right_breakpoints_m=nothing,
 )
+    exact_grid_values = (
+        readout_breakpoints_m,
+        filter_breakpoints_m,
+        feedline_left_breakpoints_m,
+        feedline_right_breakpoints_m,
+    )
+    any(value -> !isnothing(value), exact_grid_values) &&
+        !all(value -> !isnothing(value), exact_grid_values) &&
+        throw(ArgumentError(
+            "D3 direct-Hybridized exact grid requires all four boundary arrays.",
+        ))
+    exact_grid = all(value -> !isnothing(value), exact_grid_values)
+    readout_boundaries = exact_grid ? Float64.(collect(readout_breakpoints_m)) : nothing
+    filter_boundaries = exact_grid ? Float64.(collect(filter_breakpoints_m)) : nothing
     plan = CircuitPlan(id)
     readout_attachment = external_node("readout_attachment")
     feedline_attachment = external_node("feedline_attachment")
@@ -611,13 +726,17 @@ function build_d3_intrinsic_purcell_hybridized_circuit_plan(;
         feedline_attachment=feedline_attachment,
         readout_spec=_d3_line_spec(
             length_m=readout_length_m,
-            section_length_m=section_length_m,
+            section_length_m=exact_grid ?
+                _d3_exact_breakpoint_reference(readout_boundaries) :
+                section_length_m,
             l_per_m_h=readout_l_per_m_h,
             c_per_m_f=readout_c_per_m_f,
         ),
         filter_spec=_d3_line_spec(
             length_m=filter_length_m,
-            section_length_m=section_length_m,
+            section_length_m=exact_grid ?
+                _d3_exact_breakpoint_reference(filter_boundaries) :
+                section_length_m,
             l_per_m_h=filter_l_per_m_h,
             c_per_m_f=filter_c_per_m_f,
         ),
@@ -627,6 +746,8 @@ function build_d3_intrinsic_purcell_hybridized_circuit_plan(;
         c2g_f=idc_feedline_ground_capacitance_f,
         c12_f=idc_mutual_capacitance_f,
         c0r_f=c0r_f,
+        readout_breakpoints_m=readout_boundaries,
+        filter_breakpoints_m=filter_boundaries,
     )
     island_1 = external_node("island_1")
     island_2 = external_node("island_2")
@@ -652,6 +773,8 @@ function build_d3_intrinsic_purcell_hybridized_circuit_plan(;
         l_per_m_h=feedline_l_per_m_h,
         c_per_m_f=feedline_c_per_m_f,
         port_resistance_ohm=port_resistance_ohm,
+        left_breakpoints_m=feedline_left_breakpoints_m,
+        right_breakpoints_m=feedline_right_breakpoints_m,
     )
     labels = Dict(
         :readout_label => raw"$\lambda/4\ \mathrm{readout}$",
@@ -1220,7 +1343,18 @@ function build_d3_intrinsic_pair_notch_hybridized_circuit_plan(;
     c_matrix_per_m_f=D3_DEFAULT_MTL_C_MATRIX_PER_M_F,
     coupling_orientation=:same_direction,
     port_resistance_ohm=50.0,
+    readout_breakpoints_m=nothing,
+    filter_breakpoints_m=nothing,
 )
+    exact_grid_values = (readout_breakpoints_m, filter_breakpoints_m)
+    any(value -> !isnothing(value), exact_grid_values) &&
+        !all(value -> !isnothing(value), exact_grid_values) &&
+        throw(ArgumentError(
+            "D3 Hybridized notch exact grid requires both resonator boundary arrays.",
+        ))
+    exact_grid = all(value -> !isnothing(value), exact_grid_values)
+    readout_boundaries = exact_grid ? Float64.(collect(readout_breakpoints_m)) : nothing
+    filter_boundaries = exact_grid ? Float64.(collect(filter_breakpoints_m)) : nothing
     plan = CircuitPlan(id)
     readout_grounded_head = external_node("intrinsic_pair_readout_grounded_head")
     readout_open_tail = external_node("intrinsic_pair_readout_open_tail")
@@ -1241,15 +1375,18 @@ function build_d3_intrinsic_pair_notch_hybridized_circuit_plan(;
         open_tail=readout_open_tail,
         spec=_d3_line_spec(
             length_m=readout_length_m,
-            section_length_m=section_length_m,
+            section_length_m=exact_grid ?
+                _d3_exact_breakpoint_reference(readout_boundaries) :
+                section_length_m,
             l_per_m_h=readout_l_per_m_h,
             c_per_m_f=readout_c_per_m_f,
         ),
-        breakpoints_m=_d3_mtl_window_breakpoints(
-            window_start_readout_m,
-            window_length_m,
-            mtl_section_length_m,
-        ),
+        breakpoints_m=exact_grid ? readout_boundaries :
+            _d3_mtl_window_breakpoints(
+                window_start_readout_m,
+                window_length_m,
+                mtl_section_length_m,
+            ),
         section_overrides=[coupled_line_section_override(mtl_model, 1)],
     )
     filter_resonator = add_quarter_wave_resonator!(
@@ -1259,15 +1396,18 @@ function build_d3_intrinsic_pair_notch_hybridized_circuit_plan(;
         open_tail=filter_open_tail,
         spec=_d3_line_spec(
             length_m=filter_length_m,
-            section_length_m=section_length_m,
+            section_length_m=exact_grid ?
+                _d3_exact_breakpoint_reference(filter_boundaries) :
+                section_length_m,
             l_per_m_h=filter_l_per_m_h,
             c_per_m_f=filter_c_per_m_f,
         ),
-        breakpoints_m=_d3_mtl_window_breakpoints(
-            window_start_filter_m,
-            window_length_m,
-            mtl_section_length_m,
-        ),
+        breakpoints_m=exact_grid ? filter_boundaries :
+            _d3_mtl_window_breakpoints(
+                window_start_filter_m,
+                window_length_m,
+                mtl_section_length_m,
+            ),
         section_overrides=[coupled_line_section_override(mtl_model, 2)],
     )
     window = couple_transmission_window!(

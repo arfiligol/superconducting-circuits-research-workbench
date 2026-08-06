@@ -599,7 +599,7 @@ end
 Compile a canonical D3 Hybridized Circuit Plan, retain every CPW/MTL and
 feedline coordinate, and eliminate only the neutral floating-qubit common
 charge coordinate. This supplies the unreduced physical model required for
-Stage-3 response and pole evaluation.
+direct-Hybridized Stage-2 response and pole evaluation.
 """
 function d3_hybridized_compiled_model(built)
     hasproperty(built, :plan) && hasproperty(built, :component) &&
@@ -632,6 +632,28 @@ function d3_hybridized_compiled_model(built)
     boundary.port_nodes == [f1_node_name, f2_node_name] || error(
         "D3 Hybridized P1/P2 nodes must equal the compiled f1/f2 reference planes.",
     )
+    anchored_node_names = (
+        r=_d3_exact_n_node_name(
+            compiled,
+            built.component.filter.readout_attachment,
+            "readout anchor",
+        ),
+        p=_d3_exact_n_node_name(
+            compiled,
+            built.component.filter.filter_resonator.line.tail,
+            "filter anchor",
+        ),
+        f1=f1_node_name,
+        fc=_d3_exact_n_node_name(
+            compiled,
+            built.feedline.center,
+            "feedline center",
+        ),
+        f2=f2_node_name,
+    )
+    length(unique(values(anchored_node_names))) == length(anchored_node_names) || error(
+        "D3 Hybridized q/r/p/feedline anchors must resolve to distinct physical nodes.",
+    )
     retained_node_names = [
         node_name for node_name in nodal_model.node_names
         if node_name != ql_node_name && node_name != qr_node_name
@@ -644,9 +666,54 @@ function d3_hybridized_compiled_model(built)
         Symbol.(retained_node_names),
         boundary.port_nodes,
     )
+    first(reduced.coordinate_order) == :q || error(
+        "D3 Hybridized neutral-qubit reduction must retain q as its first coordinate.",
+    )
+    reduced_coordinate_index = Dict(
+        coordinate => index
+        for (index, coordinate) in enumerate(reduced.coordinate_order)
+    )
+    anchored_coordinate_indices = (
+        q=1,
+        r=get(
+            reduced_coordinate_index,
+            Symbol(anchored_node_names.r),
+            nothing,
+        ),
+        p=get(
+            reduced_coordinate_index,
+            Symbol(anchored_node_names.p),
+            nothing,
+        ),
+        f1=get(
+            reduced_coordinate_index,
+            Symbol(anchored_node_names.f1),
+            nothing,
+        ),
+        fc=get(
+            reduced_coordinate_index,
+            Symbol(anchored_node_names.fc),
+            nothing,
+        ),
+        f2=get(
+            reduced_coordinate_index,
+            Symbol(anchored_node_names.f2),
+            nothing,
+        ),
+    )
+    all(index -> index isa Int, values(anchored_coordinate_indices)) || error(
+        "D3 Hybridized anchors are absent from the reduced physical coordinate order.",
+    )
+    length(unique(values(anchored_coordinate_indices))) ==
+        length(anchored_coordinate_indices) || error(
+        "D3 Hybridized anchored coordinate indices must be distinct.",
+    )
     return merge(
         reduced,
         (
+            anchored_coordinate_order=(:q, :r, :p, :f1, :fc, :f2),
+            anchored_coordinate_indices=anchored_coordinate_indices,
+            anchored_node_names=anchored_node_names,
             reference_impedance_ohm=boundary.reference_impedance_ohm,
             port_ids=boundary.port_ids,
             port_nodes=boundary.port_nodes,
@@ -1060,21 +1127,22 @@ function d3_stage2_matrix_metrics(
     cqed_handoff.coordinate_order == model.coordinate_order || error(
         "D3 Stage-2 matrix-metrics cQED handoff coordinate order disagrees with its model.",
     )
-    coordinate_index = Dict(
-        coordinate => index
-        for (index, coordinate) in enumerate(model.coordinate_order)
+    hasproperty(model, :anchored_coordinate_indices) || error(
+        "D3 direct-Hybridized matrix extraction requires explicit q/r/p anchor indices.",
     )
-    all(haskey(coordinate_index, coordinate) for coordinate in (:q, :r, :p)) ||
-        error("D3 Stage-2 matrix extraction requires q, r, and p coordinates.")
+    anchors = model.anchored_coordinate_indices
+    all(name -> hasproperty(anchors, name), (:q, :r, :p)) || error(
+        "D3 direct-Hybridized matrix extraction requires q/r/p anchors.",
+    )
     h = cqed_handoff.anchored_bare_hamiltonian.number_conserving_matrix_rad_s
     pairing = cqed_handoff.anchored_bare_hamiltonian.pairing_matrix_rad_s
-    q = coordinate_index[:q]
-    r = coordinate_index[:r]
-    p = coordinate_index[:p]
+    q = Int(anchors.q)
+    r = Int(anchors.r)
+    p = Int(anchors.p)
     provenance = model.provenance
     return (
-        stage_id=:stage2_equivalent,
-        model_family=:equivalent_exact_n,
+        stage_id=:stage2_direct_hybridized,
+        model_family=:hybridized_distributed_lumped,
         circuit_plan_sha256=provenance.circuit_plan_sha256,
         capacitance_sha256=provenance.capacitance_sha256,
         inverse_inductance_sha256=provenance.inverse_inductance_sha256,
@@ -1085,7 +1153,8 @@ function d3_stage2_matrix_metrics(
             coordinate_basis=
                 :reduced_physically_anchored_flux_charge_coordinates,
             representation=:anchored_bare_coordinate_oscillator,
-            coordinate_order=copy(model.coordinate_order),
+                coordinate_order=copy(model.coordinate_order),
+                anchored_coordinate_indices=(q=q, r=r, p=p),
             coordinate_rotation=:none,
             normalization=
                 :Z_i_equals_sqrt_C_inverse_ii_over_K_ii,
@@ -1129,6 +1198,7 @@ function d3_stage2_matrix_metrics(
         operand_authority=
             :coupling_on_anchored_bare_coordinate_oscillator_representation,
         coordinate_order=copy(model.coordinate_order),
+        anchored_coordinate_indices=(q=q, r=r, p=p),
         number_conserving_sha256=
             cqed_handoff.hashes.number_conserving_sha256,
         pairing_sha256=cqed_handoff.hashes.pairing_sha256,
@@ -1141,7 +1211,7 @@ end
         model,
         cqed_handoff,
         matrix_metrics,
-        identity_continuation,
+        unordered_rp_assignment,
     )
 
 Return the explicitly separated D3 quantity views used by Human review:
@@ -1151,13 +1221,14 @@ Return the explicitly separated D3 quantity views used by Human review:
    coordinates, including `Z`, `h`, and `Delta`;
 3. fully hybridized closed normal-mode frequencies;
 4. matched-open response poles.  The poles are not another Hamiltonian basis;
-   q/r/p labels come only from the stored-energy identity assignment.
+   only q is individually identified, while the two resonator poles remain an
+   unordered RP-subspace set.
 """
 function d3_stage2_quantity_views(
     model,
     cqed_handoff,
     matrix_metrics,
-    identity_continuation,
+    unordered_rp_assignment,
 )
     _d3_exact_n_require_handoff_source(
         model,
@@ -1168,10 +1239,10 @@ function d3_stage2_quantity_views(
         model;
         cqed_handoff=cqed_handoff,
         matrix_metrics=matrix_metrics,
-        matched_open_response=identity_continuation.positive_poles,
+        matched_open_response=unordered_rp_assignment.positive_poles,
     )
-    assigned_indices = identity_continuation.assignment.pole_indices
-    assigned_poles = identity_continuation.positive_poles
+    assigned_indices = unordered_rp_assignment.assignment
+    assigned_poles = unordered_rp_assignment.positive_poles
     assigned_record(index) = begin
         display_index = findfirst(
             ==(index),
@@ -1187,13 +1258,15 @@ function d3_stage2_quantity_views(
         )
     end
     identity_assigned = (
-        q=assigned_record(assigned_indices.q),
-        r=assigned_record(assigned_indices.r),
-        p=assigned_record(assigned_indices.p),
+        q_report_only=assigned_record(assigned_indices.q_pole_index),
+        unordered_rp_subspace=Tuple(
+            assigned_record(index)
+            for index in assigned_indices.unordered_rp_pole_indices
+        ),
     )
 
     return (
-        contract_id="d3-stage2-explicit-quantity-views.v2",
+        contract_id="d3-stage2-explicit-quantity-views.v3",
         coordinate_foundation=linear_views.coordinate_foundation,
         anchored_oscillator_representation=
             linear_views.anchored_oscillator_representation,
@@ -1203,14 +1276,14 @@ function d3_stage2_quantity_views(
             linear_views.matched_open_port_poles,
             (
                 identity_assignment=
-                    identity_continuation.provenance.identity_rule,
-                qrp_identity_assigned=identity_assigned,
+                    unordered_rp_assignment.provenance.identity_rule,
+                q_and_unordered_rp_subspace_assignment=identity_assigned,
             ),
         ),
     )
 end
 
-const D3_Q_FEEDLINE_DOWNFOLDED_RP_GATE_FIELDS = (
+const D3_COMPLETE_COMPLEMENT_RP_GATE_FIELDS = (
     :maximum_elimination_condition_number,
     :maximum_relative_elimination_solve_residual,
     :maximum_relative_reciprocity_error,
@@ -1222,27 +1295,27 @@ const D3_Q_FEEDLINE_DOWNFOLDED_RP_GATE_FIELDS = (
     :maximum_relative_determinant_closure_error,
 )
 
-function _d3_q_feedline_downfolded_rp_gate_policy(raw)
-    Tuple(propertynames(raw)) == D3_Q_FEEDLINE_DOWNFOLDED_RP_GATE_FIELDS ||
+function _d3_complete_complement_rp_gate_policy(raw)
+    Tuple(propertynames(raw)) == D3_COMPLETE_COMPLEMENT_RP_GATE_FIELDS ||
         error(
-            "D3 q+feedline-downfolded RP gate policy fields must be exactly $(collect(D3_Q_FEEDLINE_DOWNFOLDED_RP_GATE_FIELDS)).",
+            "D3 complete-complement RP gate policy fields must be exactly $(collect(D3_COMPLETE_COMPLEMENT_RP_GATE_FIELDS)).",
         )
-    values = Base.map(D3_Q_FEEDLINE_DOWNFOLDED_RP_GATE_FIELDS) do name
+    values = Base.map(D3_COMPLETE_COMPLEMENT_RP_GATE_FIELDS) do name
         value = getproperty(raw, name)
         value isa Real || error(
-            "D3 q+feedline-downfolded RP gate $(name) must be real.",
+            "D3 complete-complement RP gate $(name) must be real.",
         )
         parsed = Float64(value)
         isfinite(parsed) || error(
-            "D3 q+feedline-downfolded RP gate $(name) must be finite.",
+            "D3 complete-complement RP gate $(name) must be finite.",
         )
         parsed
     end
     policy = NamedTuple{
-        D3_Q_FEEDLINE_DOWNFOLDED_RP_GATE_FIELDS,
+        D3_COMPLETE_COMPLEMENT_RP_GATE_FIELDS,
     }(Tuple(values))
     policy.maximum_elimination_condition_number >= 1 || error(
-        "D3 q+feedline-downfolded RP maximum elimination condition number must be at least one.",
+        "D3 complete-complement RP maximum elimination condition number must be at least one.",
     )
     for name in (
         :maximum_relative_elimination_solve_residual,
@@ -1254,75 +1327,87 @@ function _d3_q_feedline_downfolded_rp_gate_policy(raw)
         :maximum_relative_determinant_closure_error,
     )
         getproperty(policy, name) >= 0 || error(
-            "D3 q+feedline-downfolded RP gate $(name) must be nonnegative.",
+            "D3 complete-complement RP gate $(name) must be nonnegative.",
         )
     end
     policy.minimum_normalized_residue_slope > 0 || error(
-        "D3 q+feedline-downfolded RP minimum normalized residue slope must be positive.",
+        "D3 complete-complement RP minimum normalized residue slope must be positive.",
     )
     return policy
 end
 
-function _d3_q_feedline_relative_error(numerator, denominator)
+function _d3_rp_relative_error(numerator, denominator)
     scale = max(Float64(denominator), floatmin(Float64))
     return Float64(numerator) / scale
 end
 
-function _d3_q_feedline_reciprocity_error(matrix)
-    return _d3_q_feedline_relative_error(
+function _d3_rp_reciprocity_error(matrix)
+    return _d3_rp_relative_error(
         opnorm(matrix - transpose(matrix), Inf),
         opnorm(matrix, Inf),
     )
 end
 
-function _d3_q_feedline_downfolded_rp_context(model, raw_gate_policy)
+function _d3_complete_complement_rp_context(model, raw_gate_policy)
     gate_policy =
-        _d3_q_feedline_downfolded_rp_gate_policy(raw_gate_policy)
+        _d3_complete_complement_rp_gate_policy(raw_gate_policy)
     coordinate_order = Symbol.(collect(model.coordinate_order))
-    coordinate_order == [:q, :r, :p, :f1, :fc, :f2] || error(
-        "D3 q+feedline-downfolded RP extraction requires coordinate order [q, r, p, f1, fc, f2].",
+    hasproperty(model, :anchored_coordinate_indices) || error(
+        "D3 complete-complement RP extraction requires explicit q/r/p/feedline anchor indices.",
+    )
+    anchors = model.anchored_coordinate_indices
+    anchor_names = (:q, :r, :p, :f1, :fc, :f2)
+    all(name -> hasproperty(anchors, name), anchor_names) || error(
+        "D3 complete-complement RP extraction requires q/r/p/f1/fc/f2 anchors.",
+    )
+    anchor_indices = Int[getproperty(anchors, name) for name in anchor_names]
+    dimension = length(coordinate_order)
+    all(index -> 1 <= index <= dimension, anchor_indices) &&
+        length(unique(anchor_indices)) == length(anchor_indices) || error(
+        "D3 complete-complement RP anchor indices are invalid or non-unique.",
     )
     capacitance = Matrix{Float64}(model.capacitance)
     stiffness = Matrix{Float64}(model.inverse_inductance)
-    size(capacitance) == (6, 6) && size(stiffness) == (6, 6) || error(
-        "D3 q+feedline-downfolded RP extraction requires 6x6 C and K matrices.",
+    size(capacitance) == (dimension, dimension) &&
+        size(stiffness) == (dimension, dimension) || error(
+        "D3 complete-complement RP C/K shapes disagree with the coordinate order.",
     )
     selector = Matrix{Float64}(model.selector)
-    size(selector) == (6, 2) || error(
-        "D3 q+feedline-downfolded RP extraction requires a 6x2 matched-port selector.",
+    size(selector) == (dimension, 2) || error(
+        "D3 complete-complement RP extraction requires an N x 2 matched-port selector.",
     )
     reference_impedance_ohm = Float64.(collect(model.reference_impedance_ohm))
     length(reference_impedance_ohm) == 2 &&
         all(value -> isfinite(value) && value > 0, reference_impedance_ohm) ||
         error(
-            "D3 q+feedline-downfolded RP extraction requires two finite positive reference impedances.",
+            "D3 complete-complement RP extraction requires two finite positive reference impedances.",
         )
     all(isfinite, capacitance) && all(isfinite, stiffness) &&
         all(isfinite, selector) || error(
-        "D3 q+feedline-downfolded RP matrices must contain only finite values.",
+        "D3 complete-complement RP matrices must contain only finite values.",
     )
     capacitance_reciprocity =
-        _d3_q_feedline_reciprocity_error(capacitance)
+        _d3_rp_reciprocity_error(capacitance)
     stiffness_reciprocity =
-        _d3_q_feedline_reciprocity_error(stiffness)
+        _d3_rp_reciprocity_error(stiffness)
     max(capacitance_reciprocity, stiffness_reciprocity) <=
         gate_policy.maximum_relative_reciprocity_error || error(
-        "D3 q+feedline-downfolded RP C/K reciprocity exceeds the caller-owned gate.",
+        "D3 complete-complement RP C/K reciprocity exceeds the caller-owned gate.",
     )
     capacitance = Matrix(Symmetric((capacitance + transpose(capacitance)) / 2))
     stiffness = Matrix(Symmetric((stiffness + transpose(stiffness)) / 2))
     isposdef(Symmetric(capacitance)) || error(
-        "D3 q+feedline-downfolded RP capacitance must be positive definite.",
+        "D3 complete-complement RP capacitance must be positive definite.",
     )
     conductance =
         selector *
         Diagonal(1 ./ reference_impedance_ohm) *
         transpose(selector)
     conductance_reciprocity =
-        _d3_q_feedline_reciprocity_error(conductance)
+        _d3_rp_reciprocity_error(conductance)
     conductance_reciprocity <=
         gate_policy.maximum_relative_reciprocity_error || error(
-        "D3 q+feedline-downfolded RP port conductance reciprocity exceeds the caller-owned gate.",
+        "D3 complete-complement RP port conductance reciprocity exceeds the caller-owned gate.",
     )
     stiffness_eigenvalues = eigvals(Symmetric(stiffness))
     conductance_eigenvalues = eigvals(Symmetric(conductance))
@@ -1336,18 +1421,12 @@ function _d3_q_feedline_downfolded_rp_context(model, raw_gate_policy)
         max(-minimum(conductance_eigenvalues), 0.0) / conductance_scale
     max(stiffness_violation, conductance_violation) <=
         gate_policy.maximum_relative_passivity_violation || error(
-        "D3 q+feedline-downfolded RP K/G passivity exceeds the caller-owned gate.",
+        "D3 complete-complement RP K/G passivity exceeds the caller-owned gate.",
     )
-    coordinate_index = Dict(
-        coordinate => index
-        for (index, coordinate) in enumerate(coordinate_order)
-    )
-    retained_indices = [coordinate_index[:r], coordinate_index[:p]]
+    retained_indices = [Int(anchors.r), Int(anchors.p)]
     eliminated_indices = [
-        coordinate_index[:q],
-        coordinate_index[:f1],
-        coordinate_index[:fc],
-        coordinate_index[:f2],
+        index for index in eachindex(coordinate_order)
+        if !(index in retained_indices)
     ]
     return (
         capacitance=capacitance,
@@ -1356,6 +1435,7 @@ function _d3_q_feedline_downfolded_rp_context(model, raw_gate_policy)
         selector=selector,
         reference_impedance_ohm=reference_impedance_ohm,
         coordinate_order=coordinate_order,
+        anchored_coordinate_indices=anchors,
         retained_indices=retained_indices,
         eliminated_indices=eliminated_indices,
         gate_policy=gate_policy,
@@ -1369,14 +1449,14 @@ function _d3_q_feedline_downfolded_rp_context(model, raw_gate_policy)
     )
 end
 
-function _d3_q_feedline_downfolded_rp_operator(context, angular_frequency_rad_s)
+function _d3_complete_complement_rp_operator(context, angular_frequency_rad_s)
     angular_frequency = ComplexF64(angular_frequency_rad_s)
     isfinite(real(angular_frequency)) && isfinite(imag(angular_frequency)) ||
         error(
-            "D3 q+feedline-downfolded RP angular frequency must be finite.",
+            "D3 complete-complement RP angular frequency must be finite.",
         )
     real(angular_frequency) > 0 || error(
-        "D3 q+feedline-downfolded RP angular frequency must have positive real part.",
+        "D3 complete-complement RP angular frequency must have positive real part.",
     )
     capacitance = context.capacitance
     stiffness = context.stiffness
@@ -1403,23 +1483,23 @@ function _d3_q_feedline_downfolded_rp_operator(context, angular_frequency_rad_s)
     isfinite(elimination_condition_number) &&
         elimination_condition_number <=
             context.gate_policy.maximum_elimination_condition_number || error(
-        "D3 q+feedline-downfolded RP eliminated block is singular or exceeds the caller-owned condition-number gate.",
+        "D3 complete-complement RP eliminated block is singular or exceeds the caller-owned condition-number gate.",
     )
     eliminated_response = try
         d_ee \ d_er
     catch exception
         error(
-            "D3 q+feedline-downfolded RP eliminated-block solve failed: $(sprint(showerror, exception))",
+            "D3 complete-complement RP eliminated-block solve failed: $(sprint(showerror, exception))",
         )
     end
     all(
         value -> isfinite(real(value)) && isfinite(imag(value)),
         eliminated_response,
     ) || error(
-        "D3 q+feedline-downfolded RP eliminated-block solve produced non-finite values.",
+        "D3 complete-complement RP eliminated-block solve produced non-finite values.",
     )
     solve_residual = d_ee * eliminated_response - d_er
-    relative_solve_residual = _d3_q_feedline_relative_error(
+    relative_solve_residual = _d3_rp_relative_error(
         opnorm(solve_residual, Inf),
         opnorm(d_ee, Inf) * opnorm(eliminated_response, Inf) +
         opnorm(d_er, Inf),
@@ -1427,7 +1507,7 @@ function _d3_q_feedline_downfolded_rp_operator(context, angular_frequency_rad_s)
     relative_solve_residual <=
         context.gate_policy.maximum_relative_elimination_solve_residual ||
         error(
-            "D3 q+feedline-downfolded RP eliminated-block solve residual exceeds the caller-owned gate.",
+            "D3 complete-complement RP eliminated-block solve residual exceeds the caller-owned gate.",
         )
     eliminated_response_derivative = try
         d_ee \ (
@@ -1436,19 +1516,19 @@ function _d3_q_feedline_downfolded_rp_operator(context, angular_frequency_rad_s)
         )
     catch exception
         error(
-            "D3 q+feedline-downfolded RP derivative solve failed: $(sprint(showerror, exception))",
+            "D3 complete-complement RP derivative solve failed: $(sprint(showerror, exception))",
         )
     end
     all(
         value -> isfinite(real(value)) && isfinite(imag(value)),
         eliminated_response_derivative,
     ) || error(
-        "D3 q+feedline-downfolded RP derivative solve produced non-finite values.",
+        "D3 complete-complement RP derivative solve produced non-finite values.",
     )
     derivative_solve_residual =
         d_ee * eliminated_response_derivative -
         (derivative_er - derivative_ee * eliminated_response)
-    relative_derivative_solve_residual = _d3_q_feedline_relative_error(
+    relative_derivative_solve_residual = _d3_rp_relative_error(
         opnorm(derivative_solve_residual, Inf),
         opnorm(d_ee, Inf) * opnorm(eliminated_response_derivative, Inf) +
         opnorm(derivative_er - derivative_ee * eliminated_response, Inf),
@@ -1456,7 +1536,7 @@ function _d3_q_feedline_downfolded_rp_operator(context, angular_frequency_rad_s)
     relative_derivative_solve_residual <=
         context.gate_policy.maximum_relative_elimination_solve_residual ||
         error(
-            "D3 q+feedline-downfolded RP derivative solve residual exceeds the caller-owned gate.",
+            "D3 complete-complement RP derivative solve residual exceeds the caller-owned gate.",
         )
 
     effective =
@@ -1466,10 +1546,10 @@ function _d3_q_feedline_downfolded_rp_operator(context, angular_frequency_rad_s)
         derivative_re * eliminated_response -
         d_re * eliminated_response_derivative
     reciprocity_error =
-        _d3_q_feedline_reciprocity_error(effective)
+        _d3_rp_reciprocity_error(effective)
     reciprocity_error <=
         context.gate_policy.maximum_relative_reciprocity_error || error(
-        "D3 q+feedline-downfolded RP effective-operator reciprocity exceeds the caller-owned gate.",
+        "D3 complete-complement RP effective-operator reciprocity exceeds the caller-owned gate.",
     )
     eliminated_term = d_re * eliminated_response
     diagonal_balance_scale = [
@@ -1501,14 +1581,14 @@ function _d3_q_feedline_downfolded_rp_operator(context, angular_frequency_rad_s)
     )
 end
 
-function _d3_q_feedline_downfolded_diagonal_root(
+function _d3_complete_complement_rp_diagonal_root(
     model,
     context,
     coordinate,
     raw_frequency_band_hz,
 )
     coordinate in (:r, :p) || error(
-        "D3 q+feedline-downfolded RP diagonal root supports only r or p.",
+        "D3 complete-complement RP diagonal root supports only r or p.",
     )
     band = _d3_loaded_bare_root_band(raw_frequency_band_hz)
     coordinate_index = Dict(
@@ -1532,16 +1612,16 @@ function _d3_q_feedline_downfolded_diagonal_root(
                context.gate_policy.maximum_root_growth_rate_hz
     ]
     length(candidates) == 1 || error(
-        "D3 q+feedline-downfolded $(coordinate) diagonal exposes $(length(candidates)) passive roots inside the caller-owned band; expected exactly one.",
+        "D3 complete-complement $(coordinate) diagonal exposes $(length(candidates)) passive roots inside the caller-owned band; expected exactly one.",
     )
     pole_index = only(candidates)
     root_hz = ComplexF64(poles.frequencies_hz[pole_index])
-    root_operator = _d3_q_feedline_downfolded_rp_operator(
+    root_operator = _d3_complete_complement_rp_operator(
         context,
         2π * root_hz,
     )
     retained_index = coordinate == :r ? 1 : 2
-    relative_root_residual = _d3_q_feedline_relative_error(
+    relative_root_residual = _d3_rp_relative_error(
         abs(
             root_operator.effective_dynamic_stiffness[
                 retained_index,
@@ -1552,7 +1632,7 @@ function _d3_q_feedline_downfolded_diagonal_root(
     )
     relative_root_residual <=
         context.gate_policy.maximum_relative_root_residual || error(
-        "D3 q+feedline-downfolded $(coordinate) diagonal root residual exceeds the caller-owned gate.",
+        "D3 complete-complement $(coordinate) diagonal root residual exceeds the caller-owned gate.",
     )
     return (
         coordinate=coordinate,
@@ -1571,7 +1651,7 @@ function _d3_q_feedline_downfolded_diagonal_root(
 end
 
 """
-    d3_q_feedline_downfolded_rp_metrics(
+    d3_complete_complement_rp_metrics(
         model;
         readout_root_band_hz,
         filter_root_band_hz,
@@ -1580,26 +1660,27 @@ end
 
 Evaluate the exact coupling-on matched-open dynamic operator on the retained
 physically anchored `R=(r,p)` coordinates after Schur-downfolding exactly
-`E=(q,f1,fc,f2)`.  The two diagonal complex roots and the complex-midpoint
+the complete Hybridized complement `E=all coordinates except R`. The two
+diagonal complex roots and the complex-midpoint
 residue-normalized exchange are one inseparable Stage-2 authority.  This is
 not a normal-mode basis and it is not the raw anchored `h` block: the basis is
 anchored `r/p`, while the named operation is exact frequency-dependent
-`q+feedline` downfolding.
+complete-complement downfolding.
 """
-function d3_q_feedline_downfolded_rp_metrics(
+function d3_complete_complement_rp_metrics(
     model;
     readout_root_band_hz,
     filter_root_band_hz,
     gate_policy,
 )
-    context = _d3_q_feedline_downfolded_rp_context(model, gate_policy)
-    readout = _d3_q_feedline_downfolded_diagonal_root(
+    context = _d3_complete_complement_rp_context(model, gate_policy)
+    readout = _d3_complete_complement_rp_diagonal_root(
         model,
         context,
         :r,
         readout_root_band_hz,
     )
-    filter = _d3_q_feedline_downfolded_diagonal_root(
+    filter = _d3_complete_complement_rp_diagonal_root(
         model,
         context,
         :p,
@@ -1607,32 +1688,32 @@ function d3_q_feedline_downfolded_rp_metrics(
     )
     readout_slope = -readout.operator.effective_dynamic_stiffness_derivative[1, 1]
     filter_slope = -filter.operator.effective_dynamic_stiffness_derivative[2, 2]
-    readout_normalized_slope = _d3_q_feedline_relative_error(
+    readout_normalized_slope = _d3_rp_relative_error(
         abs(readout_slope * readout.angular_root_rad_s),
         readout.operator.diagonal_balance_scale[1],
     )
-    filter_normalized_slope = _d3_q_feedline_relative_error(
+    filter_normalized_slope = _d3_rp_relative_error(
         abs(filter_slope * filter.angular_root_rad_s),
         filter.operator.diagonal_balance_scale[2],
     )
     min(readout_normalized_slope, filter_normalized_slope) >=
         context.gate_policy.minimum_normalized_residue_slope || error(
-        "D3 q+feedline-downfolded RP residue slope is below the caller-owned normalized gate.",
+        "D3 complete-complement RP residue slope is below the caller-owned normalized gate.",
     )
     normalization_product = readout_slope * filter_slope
     isfinite(real(normalization_product)) &&
         isfinite(imag(normalization_product)) &&
         !iszero(normalization_product) || error(
-        "D3 q+feedline-downfolded RP residue normalization is singular or non-finite.",
+        "D3 complete-complement RP residue normalization is singular or non-finite.",
     )
     normalization = sqrt(normalization_product)
     isfinite(real(normalization)) && isfinite(imag(normalization)) &&
         !iszero(normalization) || error(
-        "D3 q+feedline-downfolded RP principal square-root branch is undefined.",
+        "D3 complete-complement RP principal square-root branch is undefined.",
     )
     midpoint = (readout.angular_root_rad_s + filter.angular_root_rad_s) / 2
     midpoint_operator =
-        _d3_q_feedline_downfolded_rp_operator(context, midpoint)
+        _d3_complete_complement_rp_operator(context, midpoint)
     sample_frequencies = (
         readout=readout.angular_root_rad_s,
         midpoint=midpoint,
@@ -1655,45 +1736,48 @@ function d3_q_feedline_downfolded_rp_metrics(
         for left in eachindex(coupling_values)
         for right in eachindex(coupling_values)
     )
-    relative_coupling_spread = _d3_q_feedline_relative_error(
+    relative_coupling_spread = _d3_rp_relative_error(
         maximum_pairwise_spread_rad_s,
         abs(coupling_samples.midpoint),
     )
     relative_coupling_spread <=
         context.gate_policy.maximum_relative_coupling_spread || error(
-        "D3 q+feedline-downfolded RP three-point coupling spread exceeds the caller-owned gate.",
+        "D3 complete-complement RP three-point coupling spread exceeds the caller-owned gate.",
     )
 
     midpoint_dynamic = midpoint_operator.dynamic_stiffness
     midpoint_eliminated =
         midpoint_dynamic[context.eliminated_indices, context.eliminated_indices]
-    schur_determinant =
-        det(midpoint_dynamic) / det(midpoint_eliminated)
-    effective_determinant =
-        det(midpoint_operator.effective_dynamic_stiffness)
-    all(
-        value -> isfinite(real(value)) && isfinite(imag(value)),
-        (schur_determinant, effective_determinant),
-    ) || error(
-        "D3 q+feedline-downfolded RP determinant closure produced non-finite values.",
+    full_logabs, full_phase = logabsdet(midpoint_dynamic)
+    eliminated_logabs, eliminated_phase = logabsdet(midpoint_eliminated)
+    effective_logabs, effective_phase =
+        logabsdet(midpoint_operator.effective_dynamic_stiffness)
+    all(isfinite, (full_logabs, eliminated_logabs, effective_logabs)) &&
+        !iszero(full_phase) && !iszero(eliminated_phase) &&
+        !iszero(effective_phase) || error(
+        "D3 complete-complement RP determinant closure is singular or non-finite.",
     )
-    determinant_closure_error = _d3_q_feedline_relative_error(
-        abs(schur_determinant - effective_determinant),
-        max(abs(schur_determinant), abs(effective_determinant)),
-    )
+    schur_logabs = full_logabs - eliminated_logabs
+    schur_phase = full_phase / eliminated_phase
+    determinant_scale = max(schur_logabs, effective_logabs)
+    scaled_schur = schur_phase * exp(schur_logabs - determinant_scale)
+    scaled_effective =
+        effective_phase * exp(effective_logabs - determinant_scale)
+    determinant_closure_error = abs(scaled_schur - scaled_effective) /
+        max(abs(scaled_schur), abs(scaled_effective), floatmin(Float64))
     determinant_closure_error <=
         context.gate_policy.maximum_relative_determinant_closure_error ||
         error(
-            "D3 q+feedline-downfolded RP determinant closure exceeds the caller-owned gate.",
+            "D3 complete-complement RP determinant closure exceeds the caller-owned gate.",
         )
 
     effective_exchange = coupling_samples.midpoint
     return (
-        contract_id="d3-q-feedline-downfolded-rp-effective-operator.v1",
+        contract_id="d3-complete-complement-rp-effective-operator.v1",
         coupling_state=:qrp_on,
         external_port_state=:matched_open,
         retained_coordinates=[:r, :p],
-        eliminated_coordinates=[:q, :f1, :fc, :f2],
+        eliminated_coordinates=context.coordinate_order[context.eliminated_indices],
         readout=readout,
         filter=filter,
         midpoint_angular_frequency_rad_s=midpoint,
@@ -1715,8 +1799,10 @@ function d3_q_feedline_downfolded_rp_metrics(
             maximum_pairwise_spread_rad_s,
         relative_coupling_spread=relative_coupling_spread,
         determinant_closure=(
-            schur_determinant=schur_determinant,
-            effective_determinant=effective_determinant,
+            schur_logabs=schur_logabs,
+            schur_phase=schur_phase,
+            effective_logabs=effective_logabs,
+            effective_phase=effective_phase,
             relative_error=determinant_closure_error,
         ),
         operator_samples=(
@@ -1732,18 +1818,19 @@ function d3_q_feedline_downfolded_rp_metrics(
             operator=:exact_open_dynamic_stiffness_schur,
             dynamic_stiffness="K-omega^2*C-i*omega*G",
             retained_partition=[:r, :p],
-            eliminated_partition=[:q, :f1, :fc, :f2],
+            eliminated_partition=:complete_hybridized_complement,
+            eliminated_coordinate_indices=copy(context.eliminated_indices),
             frequency_rank_assignment=:forbidden,
             capacitance_sha256=_d3_exact_n_matrix_sha256(
-                "d3-q-feedline-rp-capacitance-f",
+                "d3-complete-complement-rp-capacitance-f",
                 context.capacitance,
             ),
             inverse_inductance_sha256=_d3_exact_n_matrix_sha256(
-                "d3-q-feedline-rp-inverse-inductance-h^-1",
+                "d3-complete-complement-rp-inverse-inductance-h^-1",
                 context.stiffness,
             ),
             conductance_sha256=_d3_exact_n_matrix_sha256(
-                "d3-q-feedline-rp-conductance-s",
+                "d3-complete-complement-rp-conductance-s",
                 context.conductance,
             ),
         ),
@@ -1854,7 +1941,7 @@ matched finite-feedline coordinates from the coupling-on source model. The
 real and imaginary parts are legacy response-equivalent fitter diagnostics;
 they do not own the revision-9 Stage-2 objective. Stage 2 instead retains
 `(r,p)` together and Schur-eliminates exactly `(q,f1,fc,f2)` through
-`d3_q_feedline_downfolded_rp_metrics`. These roots are not Full-QRP
+`d3_complete_complement_rp_metrics`. These roots are not Full-QRP
 hybridized poles.
 """
 function d3_feedline_downfolded_loaded_bare_roots(
@@ -2385,41 +2472,26 @@ function _d3_exact_n_reference_construction(value)
     return construction
 end
 
-"""
-    d3_exact_open_pole_identity_continuation(
-        model,
-        reference_states,
-        energy_metric;
-        minimum_overlap,
-        minimum_assignment_margin,
-        cqed_handoff,
-    )
+"""Select one q pole and one unordered two-pole RP subspace from the exact open generator.
 
-Assign unique q/r/p identities to the passive positive-frequency poles of the
-exact doubled open generator by a global normalized stored-energy-overlap
-assignment. `reference_states` must supply q/r/p vectors already embedded in
-the exact doubled `state_order`, their physical/mathematical construction,
-their source-model identity, and the target-model identity of that embedding.
-No frequency rank participates in the assignment.
-
-Reference construction and embedding are intentionally caller-owned. A Stage-2
-caller may, for example, supply coupling-on canonical bare-coordinate unit
-vectors; this evaluator neither constructs nor requires a coupling-off model.
-Both acceptance thresholds are required caller inputs, and the evaluator has
-no hidden overlap gate.
+The q reference is first projected onto the complete W-orthogonal complement
+of the anchored `R=span(r,p)` reference subspace. Candidate assignments are a
+distinct q pole plus an unordered pair of RP poles. No frequency rank or
+standalone r-like/p-like label participates in selection.
 """
-function d3_exact_open_pole_identity_continuation(
+function d3_exact_open_unordered_rp_subspace_assignment(
     model,
     reference_states,
     energy_metric;
-    minimum_overlap,
-    minimum_assignment_margin,
+    minimum_q_reference_overlap,
+    minimum_each_rp_subspace_overlap,
+    minimum_unordered_set_assignment_margin,
     cqed_handoff=d3_numerical_cqed_handoff(model),
 )
     _d3_exact_n_require_handoff_source(
         model,
         cqed_handoff,
-        "D3 exact-open pole-identity cQED handoff",
+        "D3 exact-open unordered-RP cQED handoff",
     )
     target_identity = _d3_exact_n_source_model_identity(model)
     exact = cqed_handoff.port_response.exact
@@ -2430,127 +2502,127 @@ function d3_exact_open_pole_identity_continuation(
         "D3 exact-open generator shape disagrees with its doubled state order.",
     )
 
-    required_reference_fields = (
+    reference_fields = (
         :vectors,
         :state_order,
         :construction,
         :source_model_identity,
         :embedded_target_model_identity,
     )
-    all(name -> hasproperty(reference_states, name), required_reference_fields) ||
-        error(
-            "D3 exact-open q/r/p references require vectors, state_order, construction, source_model_identity, and embedded_target_model_identity.",
-        )
+    all(name -> hasproperty(reference_states, name), reference_fields) || error(
+        "D3 exact-open unordered-RP references require vectors, state order, construction, source identity, and target identity.",
+    )
     collect(reference_states.state_order) == state_order || error(
-        "D3 exact-open q/r/p references use a different doubled state order.",
+        "D3 exact-open unordered-RP references use a different doubled state order.",
     )
     reference_source_identity = _d3_exact_n_validate_model_identity(
         reference_states.source_model_identity,
-        "D3 exact-open reference source identity",
+        "D3 exact-open unordered-RP reference source identity",
     )
     embedded_target_identity = _d3_exact_n_validate_model_identity(
         reference_states.embedded_target_model_identity,
-        "D3 exact-open reference embedding target identity",
+        "D3 exact-open unordered-RP reference target identity",
+    )
+    reference_source_identity == target_identity || error(
+        "D3 exact-open unordered-RP references belong to a different source model.",
     )
     embedded_target_identity == target_identity || error(
-        "D3 exact-open q/r/p references were embedded for a different target model.",
+        "D3 exact-open unordered-RP references were embedded for a different model.",
     )
     reference_construction =
         _d3_exact_n_reference_construction(reference_states.construction)
     identities = (:q, :r, :p)
-    all(name -> hasproperty(reference_states.vectors, name), identities) ||
-        error("D3 exact-open reference vectors must provide q, r, and p.")
+    all(name -> hasproperty(reference_states.vectors, name), identities) || error(
+        "D3 exact-open unordered-RP reference vectors must provide q, r, and p.",
+    )
 
-    required_metric_fields = (
+    metric_fields = (
         :matrix,
         :state_order,
         :construction,
         :source_model_identity,
         :matrix_sha256,
     )
-    all(name -> hasproperty(energy_metric, name), required_metric_fields) ||
-        error(
-            "D3 exact-open energy metric requires matrix, state_order, construction, source_model_identity, and matrix_sha256.",
-        )
+    all(name -> hasproperty(energy_metric, name), metric_fields) || error(
+        "D3 exact-open unordered-RP energy metric is incomplete.",
+    )
     collect(energy_metric.state_order) == state_order || error(
-        "D3 exact-open energy metric uses a different doubled state order.",
+        "D3 exact-open unordered-RP energy metric uses a different doubled state order.",
     )
     metric_source_identity = _d3_exact_n_validate_model_identity(
         energy_metric.source_model_identity,
-        "D3 exact-open energy-metric source identity",
+        "D3 exact-open unordered-RP energy-metric source identity",
     )
     metric_source_identity == target_identity || error(
-        "D3 exact-open energy metric was derived from a different target model.",
+        "D3 exact-open unordered-RP energy metric belongs to a different model.",
     )
-    metric_construction =
-        _d3_exact_n_reference_construction(energy_metric.construction)
     metric = Matrix{ComplexF64}(energy_metric.matrix)
     size(metric) == (state_count, state_count) || error(
-        "D3 exact-open energy metric has the wrong shape.",
+        "D3 exact-open unordered-RP energy metric has the wrong shape.",
     )
     metric_hash = _d3_exact_n_complex_matrix_sha256(
         "d3-exact-open-stored-energy-metric",
         metric,
     )
-    lowercase(strip(String(energy_metric.matrix_sha256))) == metric_hash ||
-        error("D3 exact-open energy-metric hash does not match its matrix.")
-    hermitian_scale = max(opnorm(metric, Inf), floatmin(Float64))
+    lowercase(strip(String(energy_metric.matrix_sha256))) == metric_hash || error(
+        "D3 exact-open unordered-RP energy-metric hash does not match its matrix.",
+    )
+    metric_scale = max(opnorm(metric, Inf), floatmin(Float64))
     maximum(abs, metric - metric') <=
-        4096 * state_count * eps(Float64) * hermitian_scale || error(
-        "D3 exact-open energy metric must be Hermitian.",
+        4096 * state_count * eps(Float64) * metric_scale || error(
+        "D3 exact-open unordered-RP energy metric must be Hermitian.",
     )
     metric = Matrix{ComplexF64}(Hermitian((metric + metric') / 2))
     metric_spectrum = eigvals(Hermitian(metric))
-    metric_scale = max(maximum(abs, metric_spectrum), floatmin(Float64))
+    metric_spectral_scale =
+        max(maximum(abs, metric_spectrum), floatmin(Float64))
     metric_tolerance =
-        4096 * state_count * eps(Float64) * metric_scale
+        4096 * state_count * eps(Float64) * metric_spectral_scale
     minimum(metric_spectrum) >= -metric_tolerance || error(
-        "D3 exact-open energy metric must be positive semidefinite.",
+        "D3 exact-open unordered-RP energy metric must be positive semidefinite.",
     )
 
-    overlap_gate = Float64(minimum_overlap)
-    margin_gate = Float64(minimum_assignment_margin)
-    isfinite(overlap_gate) && 0 < overlap_gate <= 1 || error(
-        "D3 exact-open minimum_overlap must be finite in (0, 1].",
+    q_gate = Float64(minimum_q_reference_overlap)
+    rp_gate = Float64(minimum_each_rp_subspace_overlap)
+    margin_gate = Float64(minimum_unordered_set_assignment_margin)
+    for (value, label) in (
+        (q_gate, "minimum_q_reference_overlap"),
+        (rp_gate, "minimum_each_rp_subspace_overlap"),
+        (margin_gate, "minimum_unordered_set_assignment_margin"),
     )
-    isfinite(margin_gate) && 0 < margin_gate <= 1 || error(
-        "D3 exact-open minimum_assignment_margin must be finite in (0, 1].",
-    )
+        isfinite(value) && 0 < value <= 1 || error(
+            "D3 exact-open $(label) must be finite in (0, 1].",
+        )
+    end
 
     raw_references = NamedTuple{identities}(Tuple(
         ComplexF64.(collect(getproperty(reference_states.vectors, identity)))
         for identity in identities
     ))
-    all(length(vector) == state_count for vector in values(raw_references)) ||
-        error("D3 exact-open reference-vector length disagrees with state order.")
+    all(length(vector) == state_count for vector in values(raw_references)) || error(
+        "D3 exact-open unordered-RP reference-vector length disagrees with state order.",
+    )
     all(
         value -> isfinite(real(value)) && isfinite(imag(value)),
         Iterators.flatten(values(raw_references)),
-    ) || error("D3 exact-open reference vectors contain non-finite values.")
-    reference_norms = NamedTuple{identities}(Tuple(
-        real(vector' * metric * vector)
-        for vector in values(raw_references)
-    ))
-    all(value -> isfinite(value) && value > metric_tolerance, values(reference_norms)) ||
-        error("D3 exact-open reference vector has non-positive stored energy.")
-    references = NamedTuple{identities}(Tuple(
-        vector / sqrt(norm_value)
-        for (vector, norm_value) in zip(
-            values(raw_references),
-            values(reference_norms),
-        )
-    ))
-    reference_matrix = hcat(values(references)...)
-    reference_gram = reference_matrix' * metric * reference_matrix
-    reference_gram_spectrum = eigvals(Hermitian(
-        (reference_gram + reference_gram') / 2,
-    ))
-    reference_scale =
-        max(maximum(abs, reference_gram_spectrum), floatmin(Float64))
-    minimum(reference_gram_spectrum) >
-        4096 * length(identities) * eps(Float64) * reference_scale || error(
-        "D3 exact-open q/r/p references are not energy-linearly independent.",
+    ) || error("D3 exact-open unordered-RP references contain non-finite values.")
+
+    r_matrix = hcat(raw_references.r, raw_references.p)
+    r_gram = Matrix{ComplexF64}(r_matrix' * metric * r_matrix)
+    r_gram = Matrix{ComplexF64}(Hermitian((r_gram + r_gram') / 2))
+    r_spectrum = eigvals(Hermitian(r_gram))
+    r_scale = max(maximum(abs, r_spectrum), floatmin(Float64))
+    minimum(r_spectrum) > 4096 * 2 * eps(Float64) * r_scale || error(
+        "D3 exact-open anchored r/p references do not span a positive two-dimensional energy subspace.",
     )
+    r_gram_inverse = inv(r_gram)
+    rp_project(vector) = r_matrix * (r_gram_inverse * (r_matrix' * metric * vector))
+    q_complement = raw_references.q - rp_project(raw_references.q)
+    q_complement_energy = real(q_complement' * metric * q_complement)
+    isfinite(q_complement_energy) && q_complement_energy > metric_tolerance || error(
+        "D3 exact-open q reference has no positive-energy complete complement to the RP subspace.",
+    )
+    normalized_q_complement = q_complement / sqrt(q_complement_energy)
 
     opened = eigen(generator)
     raw_frequency_hz = im .* opened.values ./ (2π)
@@ -2561,158 +2633,146 @@ function d3_exact_open_pole_identity_continuation(
     pole_scale_hz = max(maximum(abs, raw_frequency_hz), floatmin(Float64))
     decay_tolerance_hz =
         256 * length(raw_frequency_hz) * eps(Float64) * pole_scale_hz
-    positive_frequency_raw_indices = [
+    passive_indices = [
         index for index in eachindex(raw_frequency_hz)
         if real(raw_frequency_hz[index]) > 0 &&
            imag(raw_frequency_hz[index]) <= decay_tolerance_hz
     ]
-    positive_frequency_vectors =
-        Matrix{ComplexF64}(opened.vectors[:, positive_frequency_raw_indices])
-    positive_frequency_norms = Float64[
-        real(
-            positive_frequency_vectors[:, column]' *
-            metric *
-            positive_frequency_vectors[:, column],
-        )
-        for column in axes(positive_frequency_vectors, 2)
+    passive_vectors = Matrix{ComplexF64}(opened.vectors[:, passive_indices])
+    passive_energies = Float64[
+        real(passive_vectors[:, column]' * metric * passive_vectors[:, column])
+        for column in axes(passive_vectors, 2)
     ]
-    all(
-        value -> isfinite(value) && value >= -metric_tolerance,
-        positive_frequency_norms,
-    ) || error(
-        "D3 exact-open positive-frequency pole has negative stored energy.",
+    all(value -> isfinite(value) && value >= -metric_tolerance, passive_energies) || error(
+        "D3 exact-open passive pole has negative stored energy.",
     )
     oscillatory_columns = [
-        column for column in eachindex(positive_frequency_raw_indices)
-        if positive_frequency_norms[column] > metric_tolerance
+        column for column in eachindex(passive_indices)
+        if passive_energies[column] > metric_tolerance
     ]
-    positive_raw_indices =
-        positive_frequency_raw_indices[oscillatory_columns]
-    pole_vectors = positive_frequency_vectors[:, oscillatory_columns]
-    pole_norms = positive_frequency_norms[oscillatory_columns]
+    positive_raw_indices = passive_indices[oscillatory_columns]
+    pole_vectors = passive_vectors[:, oscillatory_columns]
+    pole_energies = passive_energies[oscillatory_columns]
     excluded_zero_energy_raw_indices = [
-        positive_frequency_raw_indices[column]
-        for column in eachindex(positive_frequency_raw_indices)
+        passive_indices[column]
+        for column in eachindex(passive_indices)
         if !(column in oscillatory_columns)
     ]
-    length(positive_raw_indices) >= length(identities) || error(
+    length(positive_raw_indices) >= 3 || error(
         "D3 exact-open generator exposes fewer than three passive positive-frequency positive-energy poles.",
     )
 
-    overlap_matrix = zeros(Float64, length(identities), length(positive_raw_indices))
-    for row in eachindex(identities), column in eachindex(positive_raw_indices)
-        overlap = abs2(
-            getproperty(references, identities[row])' *
-            metric *
-            pole_vectors[:, column],
-        ) / pole_norms[column]
-        isfinite(overlap) && overlap >= 0 || error(
-            "D3 exact-open normalized overlap is invalid.",
-        )
-        overlap <= 1 + 4096 * state_count * eps(Float64) || error(
-            "D3 exact-open normalized overlap exceeds its energy-metric bound.",
-        )
-        overlap_matrix[row, column] = min(overlap, 1.0)
+    q_overlaps = Float64[]
+    rp_overlaps = Float64[]
+    for column in eachindex(positive_raw_indices)
+        vector = pole_vectors[:, column]
+        energy = pole_energies[column]
+        q_overlap = abs2(normalized_q_complement' * metric * vector) / energy
+        projected = rp_project(vector)
+        rp_overlap = real(projected' * metric * projected) / energy
+        for (value, label) in ((q_overlap, "q"), (rp_overlap, "RP"))
+            isfinite(value) && value >= 0 || error(
+                "D3 exact-open normalized $(label) overlap is invalid.",
+            )
+            value <= 1 + 4096 * state_count * eps(Float64) || error(
+                "D3 exact-open normalized $(label) overlap exceeds its energy bound.",
+            )
+        end
+        push!(q_overlaps, min(q_overlap, 1.0))
+        push!(rp_overlaps, min(rp_overlap, 1.0))
     end
 
     assignments = NamedTuple[]
     pole_count = length(positive_raw_indices)
+    rp_rank = sort(
+        collect(1:pole_count);
+        by=index -> (rp_overlaps[index], -positive_raw_indices[index]),
+        rev=true,
+    )
     for q_index in 1:pole_count
-        for r_index in 1:pole_count
-            r_index == q_index && continue
-            for p_index in 1:pole_count
-                (p_index == q_index || p_index == r_index) && continue
-                indices = (q_index, r_index, p_index)
-                selected = (
-                    overlap_matrix[1, q_index],
-                    overlap_matrix[2, r_index],
-                    overlap_matrix[3, p_index],
-                )
-                push!(
-                    assignments,
-                    (
-                        indices=indices,
-                        selected=selected,
-                        mean_score=sum(selected) / length(identities),
-                    ),
-                )
+        eligible_rp = [index for index in rp_rank if index != q_index]
+        # For a fixed q pole the two largest RP-pair sums can only involve the
+        # three highest-ranked remaining RP overlaps. Keeping those candidates
+        # avoids cubic enumeration while preserving the exact best and runner-up
+        # assignment scores and deterministic raw-index tie breaking.
+        top_rp = eligible_rp[1:min(3, length(eligible_rp))]
+        for first_position in 1:(length(top_rp) - 1)
+            for second_position in (first_position + 1):length(top_rp)
+                first_rp = top_rp[first_position]
+                second_rp = top_rp[second_position]
+            selected = (
+                q=q_overlaps[q_index],
+                rp=(rp_overlaps[first_rp], rp_overlaps[second_rp]),
+            )
+            push!(assignments, (
+                q_index=q_index,
+                rp_indices=(first_rp, second_rp),
+                selected=selected,
+                mean_score=(selected.q + sum(selected.rp)) / 3,
+            ))
             end
         end
     end
-    sort!(
-        assignments;
-        by=assignment -> (
-            assignment.mean_score,
-            minimum(assignment.selected),
-        ),
-        rev=true,
-    )
     length(assignments) >= 2 || error(
-        "D3 exact-open identity assignment requires at least two global assignment candidates.",
+        "D3 exact-open unordered-RP assignment requires at least two distinct q+set candidates.",
     )
+    sort!(assignments; by=assignment -> (
+        assignment.mean_score,
+        min(assignment.selected.q, assignment.selected.rp...),
+        -positive_raw_indices[assignment.q_index],
+        -positive_raw_indices[assignment.rp_indices[1]],
+        -positive_raw_indices[assignment.rp_indices[2]],
+    ), rev=true)
     best = assignments[1]
     runner_up = assignments[2]
-    selected_overlaps =
-        NamedTuple{identities}(Tuple(best.selected))
-    minimum_selected_overlap = minimum(best.selected)
-    assignment_margin = best.mean_score - runner_up.mean_score
-    minimum_selected_overlap >= overlap_gate || error(
-        "D3 exact-open q/r/p identity overlap is below the caller-declared gate.",
+    best.selected.q >= q_gate || error(
+        "D3 exact-open q-complement overlap is below the caller-declared gate.",
     )
+    minimum(best.selected.rp) >= rp_gate || error(
+        "D3 exact-open RP-subspace overlap is below the caller-declared gate.",
+    )
+    assignment_margin = best.mean_score - runner_up.mean_score
     assignment_margin >= margin_gate || error(
-        "D3 exact-open q/r/p identity assignment is ambiguous under the caller-declared margin.",
+        "D3 exact-open unordered q+RP-set assignment is ambiguous under the caller-declared margin.",
     )
 
-    identity_assignment =
-        NamedTuple{identities}(Tuple(best.indices))
-    raw_state_assignment = NamedTuple{identities}(Tuple(
-        positive_raw_indices[index] for index in best.indices
-    ))
-    pole_frequencies_hz =
-        ComplexF64.(raw_frequency_hz[positive_raw_indices])
-    pole_linewidths_hz =
-        Float64.(max.(-2 .* imag.(pole_frequencies_hz), 0.0))
+    pole_frequencies_hz = ComplexF64.(raw_frequency_hz[positive_raw_indices])
+    pole_linewidths_hz = Float64.(max.(-2 .* imag.(pole_frequencies_hz), 0.0))
     poles = (
         frequencies_hz=pole_frequencies_hz,
         linewidths_hz=pole_linewidths_hz,
         raw_state_indices=positive_raw_indices,
-        raw_eigenvalues_per_s=
-            ComplexF64.(opened.values[positive_raw_indices]),
+        raw_eigenvalues_per_s=ComplexF64.(opened.values[positive_raw_indices]),
     )
-    linewidth_lc =
-        d3_linewidth_lc_from_identity_assignment(
-            poles,
-            identity_assignment,
-        )
-    reference_hashes = NamedTuple{identities}(Tuple(
-        _d3_exact_n_complex_matrix_sha256(
-            "d3-exact-open-reference-$(identity)",
-            reshape(getproperty(references, identity), :, 1),
-        )
-        for identity in identities
-    ))
+    linewidth = d3_unordered_rp_subspace_linewidth(
+        poles,
+        best.rp_indices,
+    )
     return (
-        contract_id="d3-exact-open-qrp-identity-continuation.v1",
-        identities=identities,
+        contract_id="d3-exact-open-q-and-unordered-rp-subspace.v1",
         state_order=state_order,
         positive_poles=poles,
-        excluded_zero_energy_raw_state_indices=
-            excluded_zero_energy_raw_indices,
-        overlap_matrix=overlap_matrix,
+        excluded_zero_energy_raw_state_indices=excluded_zero_energy_raw_indices,
+        overlaps=(q_complement=q_overlaps, rp_subspace=rp_overlaps),
         overlap_column_raw_state_indices=positive_raw_indices,
         assignment=(
-            pole_indices=identity_assignment,
-            raw_state_indices=raw_state_assignment,
-            selected_overlaps=selected_overlaps,
-            minimum_selected_overlap=minimum_selected_overlap,
+            q_pole_index=best.q_index,
+            unordered_rp_pole_indices=best.rp_indices,
+            q_raw_state_index=positive_raw_indices[best.q_index],
+            unordered_rp_raw_state_indices=Tuple(
+                positive_raw_indices[index] for index in best.rp_indices
+            ),
+            selected_q_overlap=best.selected.q,
+            selected_rp_subspace_overlaps=best.selected.rp,
             best_mean_score=best.mean_score,
             runner_up_mean_score=runner_up.mean_score,
             assignment_margin=assignment_margin,
-            minimum_overlap=overlap_gate,
-            minimum_assignment_margin=margin_gate,
+            minimum_q_reference_overlap=q_gate,
+            minimum_each_rp_subspace_overlap=rp_gate,
+            minimum_unordered_set_assignment_margin=margin_gate,
         ),
         energy_metric=(
-            construction=metric_construction,
+            construction=_d3_exact_n_reference_construction(energy_metric.construction),
             matrix_sha256=metric_hash,
             source_model_identity=metric_source_identity,
         ),
@@ -2720,13 +2780,14 @@ function d3_exact_open_pole_identity_continuation(
             construction=reference_construction,
             source_model_identity=reference_source_identity,
             embedded_target_model_identity=embedded_target_identity,
-            vector_sha256=reference_hashes,
-            energy_gram=reference_gram,
+            rp_energy_gram=r_gram,
+            q_complete_complement_energy=q_complement_energy,
         ),
-        linewidth_lc=linewidth_lc,
+        unordered_rp_linewidth=linewidth,
         provenance=(
             numerical_authority=:exact_doubled_open_generator,
-            identity_rule=:global_normalized_stored_energy_overlap,
+            identity_rule=:q_complete_complement_plus_unordered_rp_subspace,
+            unordered_pair_permutation=:equivalent,
             frequency_rank_assignment=:forbidden,
             source_model_identity=target_identity,
             exact_open_generator_sha256=
@@ -2735,484 +2796,39 @@ function d3_exact_open_pole_identity_continuation(
     )
 end
 
-function _d3_exact_n_metric_projector(
-    metric,
-    state_indices,
-    metric_tolerance,
-)
-    gram = Matrix{ComplexF64}(Hermitian(
-        (
-            metric[state_indices, state_indices] +
-            metric[state_indices, state_indices]'
-        ) / 2,
-    ))
-    decomposition = eigen(Hermitian(gram))
-    scale = max(maximum(abs, decomposition.values), floatmin(Float64))
-    tolerance = max(
-        Float64(metric_tolerance),
-        4096 * length(decomposition.values) * eps(Float64) * scale,
-    )
-    retained = findall(value -> value > tolerance, decomposition.values)
-    !isempty(retained) || error(
-        "D3 subsystem stored-energy subspace has no positive-energy direction.",
-    )
-    inverse_gram =
-        decomposition.vectors[:, retained] *
-        Diagonal(1 ./ decomposition.values[retained]) *
-        decomposition.vectors[:, retained]'
-    return (
-        state_indices=state_indices,
-        inverse_gram=inverse_gram,
-        rank=length(retained),
-        gram_sha256=_d3_exact_n_complex_matrix_sha256(
-            "d3-subsystem-energy-gram",
-            gram,
-        ),
-    )
-end
-
-function _d3_exact_n_apply_metric_projector(state, metric, projector)
-    coefficients =
-        projector.inverse_gram *
-        (metric * state)[projector.state_indices]
-    projected = zeros(ComplexF64, length(state))
-    projected[projector.state_indices] = coefficients
-    return projected
-end
-
-"""
-    d3_exact_open_subsystem_energy_participation_assignment(
-        model,
-        partition;
-        pole_frequency_band_hz,
-        minimum_participation,
-        minimum_assignment_margin,
-        cqed_handoff,
-    )
-
-Assign q/r/p identities directly from one coupling-on exact-open candidate.
-The caller supplies a disjoint, exhaustive physical-coordinate partition
-`(q, r, p, feedline)`. Exact-open eigenvectors are transformed back to
-`(Phi, Phidot)`, and each subsystem score is the normalized stored energy of
-the full-metric orthogonal projection onto that typed physical subspace.
-
-The q/r/p assignment maximizes the global mean participation subject to
-unique poles inside the required caller-owned frequency band. The band is a
-candidate-set boundary, not a frequency-rank rule. Frequency rank and
-coupling-off reference models are forbidden. The frequency band and both
-identity gates are required caller-owned inputs.
-"""
-function d3_exact_open_subsystem_energy_participation_assignment(
-    model,
-    partition;
-    pole_frequency_band_hz,
-    minimum_participation,
-    minimum_assignment_margin,
-    cqed_handoff=d3_numerical_cqed_handoff(model),
-)
-    _d3_exact_n_require_handoff_source(
-        model,
-        cqed_handoff,
-        "D3 exact-open subsystem-participation cQED handoff",
-    )
-    subsystems = (:q, :r, :p, :feedline)
-    Tuple(propertynames(partition)) == subsystems || error(
-        "D3 physical-coordinate partition fields must be exactly q, r, p, feedline.",
-    )
-    coordinate_order = copy(model.coordinate_order)
-    dimension = length(coordinate_order)
-    typed_indices = NamedTuple{subsystems}(Tuple(
-        begin
-            raw = collect(getproperty(partition, subsystem))
-            !isempty(raw) || error(
-                "D3 $(subsystem) physical-coordinate partition must not be empty.",
-            )
-            all(value -> value isa Integer, raw) || error(
-                "D3 $(subsystem) physical-coordinate indices must be integers.",
-            )
-            Int.(raw)
-        end
-        for subsystem in subsystems
-    ))
-    flattened = collect(Iterators.flatten(values(typed_indices)))
-    sort(flattened) == collect(1:dimension) &&
-        length(unique(flattened)) == dimension || error(
-        "D3 q/r/p/feedline physical-coordinate partition must be disjoint and exhaustive.",
-    )
-
-    participation_gate = Float64(minimum_participation)
-    margin_gate = Float64(minimum_assignment_margin)
-    frequency_band_hz = Float64.(collect(pole_frequency_band_hz))
-    length(frequency_band_hz) == 2 &&
-        all(isfinite, frequency_band_hz) &&
-        0 < frequency_band_hz[1] < frequency_band_hz[2] || error(
-        "D3 exact-open pole frequency band must contain two finite increasing positive values.",
-    )
-    isfinite(participation_gate) && 0 < participation_gate <= 1 || error(
-        "D3 exact-open minimum_participation must be finite in (0, 1].",
-    )
-    isfinite(margin_gate) && 0 < margin_gate <= 1 || error(
-        "D3 exact-open minimum_assignment_margin must be finite in (0, 1].",
-    )
-
-    capacitance = Matrix{Float64}(model.capacitance)
-    stiffness = Matrix{Float64}(model.inverse_inductance)
-    size(capacitance) == size(stiffness) == (dimension, dimension) || error(
-        "D3 exact-open subsystem participation requires dimensionally consistent C/K matrices.",
-    )
-    zero_block = zeros(Float64, dimension, dimension)
-    stored_energy_metric = [
-        stiffness zero_block
-        zero_block capacitance
-    ]
-    metric_spectrum = eigvals(Symmetric(stored_energy_metric))
-    metric_scale = max(maximum(abs, metric_spectrum), floatmin(Float64))
-    metric_tolerance =
-        4096 * length(metric_spectrum) * eps(Float64) * metric_scale
-    minimum(metric_spectrum) >= -metric_tolerance || error(
-        "D3 flux/velocity stored-energy metric must be positive semidefinite.",
-    )
-
-    exact = cqed_handoff.port_response.exact
-    generator = Matrix{ComplexF64}(exact.open_generator_per_s)
-    doubled_to_flux_velocity =
-        Matrix{ComplexF64}(exact.doubled_to_flux_velocity)
-    state_count = 2 * dimension
-    size(generator) == (state_count, state_count) &&
-        size(doubled_to_flux_velocity) == (state_count, state_count) || error(
-        "D3 exact-open generator or canonical transform has the wrong shape.",
-    )
-    opened = eigen(generator)
-    raw_frequency_hz = im .* opened.values ./ (2π)
-    all(
-        value -> isfinite(real(value)) && isfinite(imag(value)),
-        raw_frequency_hz,
-    ) || error("D3 exact-open generator produced non-finite poles.")
-    pole_scale_hz = max(maximum(abs, raw_frequency_hz), floatmin(Float64))
-    decay_tolerance_hz =
-        256 * length(raw_frequency_hz) * eps(Float64) * pole_scale_hz
-    passive_positive_raw_indices = [
-        index for index in eachindex(raw_frequency_hz)
-        if real(raw_frequency_hz[index]) > 0 &&
-           imag(raw_frequency_hz[index]) <= decay_tolerance_hz
-    ]
-    passive_positive_doubled_vectors =
-        Matrix{ComplexF64}(
-            opened.vectors[:, passive_positive_raw_indices],
-        )
-    passive_positive_flux_velocity_vectors =
-        doubled_to_flux_velocity * passive_positive_doubled_vectors
-    passive_positive_energy = Float64[
-        real(
-            passive_positive_flux_velocity_vectors[:, column]' *
-            stored_energy_metric *
-            passive_positive_flux_velocity_vectors[:, column],
-        )
-        for column in axes(passive_positive_flux_velocity_vectors, 2)
-    ]
-    all(
-        value -> isfinite(value) && value >= -metric_tolerance,
-        passive_positive_energy,
-    ) || error("D3 passive positive-frequency pole has negative stored energy.")
-    oscillatory_columns = findall(
-        value -> value > metric_tolerance,
-        passive_positive_energy,
-    )
-    positive_energy_raw_indices =
-        passive_positive_raw_indices[oscillatory_columns]
-    positive_energy_flux_velocity_vectors =
-        passive_positive_flux_velocity_vectors[:, oscillatory_columns]
-    positive_energy = passive_positive_energy[oscillatory_columns]
-    excluded_zero_energy_raw_indices = [
-        passive_positive_raw_indices[column]
-        for column in eachindex(passive_positive_raw_indices)
-        if !(column in oscillatory_columns)
-    ]
-    in_band_columns = [
-        column for column in eachindex(positive_energy_raw_indices)
-        if frequency_band_hz[1] <=
-           real(raw_frequency_hz[positive_energy_raw_indices[column]]) <=
-           frequency_band_hz[2]
-    ]
-    in_band_column_set = Set(in_band_columns)
-    out_of_band_columns = [
-        column for column in eachindex(positive_energy_raw_indices)
-        if !(column in in_band_column_set)
-    ]
-    positive_raw_indices =
-        positive_energy_raw_indices[in_band_columns]
-    pole_vectors_flux_velocity =
-        positive_energy_flux_velocity_vectors[:, in_band_columns]
-    pole_energy = positive_energy[in_band_columns]
-    excluded_out_of_band_positive_energy_raw_indices =
-        positive_energy_raw_indices[out_of_band_columns]
-    length(positive_raw_indices) >= 3 || error(
-        "D3 exact-open candidate exposes fewer than three passive positive-energy poles inside the caller-owned frequency band.",
-    )
-
-    flux_velocity_indices = NamedTuple{subsystems}(Tuple(
-        vcat(
-            getproperty(typed_indices, subsystem),
-            dimension .+ getproperty(typed_indices, subsystem),
-        )
-        for subsystem in subsystems
-    ))
-    participation = zeros(Float64, length(subsystems), length(positive_raw_indices))
-    projection_receipts = Dict{Symbol,Any}()
-    for (row, subsystem) in enumerate(subsystems)
-        indices = getproperty(flux_velocity_indices, subsystem)
-        projector = _d3_exact_n_metric_projector(
-            stored_energy_metric,
-            indices,
-            metric_tolerance,
-        )
-        projection_receipts[subsystem] = (
-            physical_coordinate_indices=
-                copy(getproperty(typed_indices, subsystem)),
-            physical_coordinate_names=
-                coordinate_order[getproperty(typed_indices, subsystem)],
-            flux_velocity_state_indices=indices,
-            positive_metric_rank=projector.rank,
-            subspace_gram_sha256=projector.gram_sha256,
-        )
-        for column in eachindex(positive_raw_indices)
-            projected = _d3_exact_n_apply_metric_projector(
-                pole_vectors_flux_velocity[:, column],
-                stored_energy_metric,
-                projector,
-            )
-            score = real(
-                projected' *
-                stored_energy_metric *
-                projected,
-            ) / pole_energy[column]
-            isfinite(score) && score >= 0 || error(
-                "D3 subsystem stored-energy participation is invalid.",
-            )
-            score <= 1 + 4096 * state_count * eps(Float64) || error(
-                "D3 subsystem stored-energy participation exceeds one.",
-            )
-            participation[row, column] = min(score, 1.0)
-        end
-    end
-
-    assignments = NamedTuple[]
-    pole_count = length(positive_raw_indices)
-    for q_index in 1:pole_count
-        for r_index in 1:pole_count
-            r_index == q_index && continue
-            for p_index in 1:pole_count
-                (p_index == q_index || p_index == r_index) && continue
-                indices = (q_index, r_index, p_index)
-                selected = (
-                    participation[1, q_index],
-                    participation[2, r_index],
-                    participation[3, p_index],
-                )
-                push!(
-                    assignments,
-                    (
-                        indices=indices,
-                        selected=selected,
-                        mean_score=sum(selected) / 3,
-                    ),
-                )
-            end
-        end
-    end
-    sort!(
-        assignments;
-        by=assignment -> (
-            assignment.mean_score,
-            minimum(assignment.selected),
-        ),
-        rev=true,
-    )
-    length(assignments) >= 2 || error(
-        "D3 subsystem pole assignment requires at least two global candidates.",
-    )
-    best = assignments[1]
-    runner_up = assignments[2]
-    selected_participation = (
-        q=best.selected[1],
-        r=best.selected[2],
-        p=best.selected[3],
-    )
-    minimum_selected_participation = minimum(best.selected)
-    assignment_margin = best.mean_score - runner_up.mean_score
-    minimum_selected_participation >= participation_gate || error(
-        "D3 q/r/p subsystem participation is below the caller-declared gate.",
-    )
-    assignment_margin >= margin_gate || error(
-        "D3 q/r/p subsystem assignment is ambiguous under the caller-declared margin.",
-    )
-
-    identity_assignment = (
-        q=best.indices[1],
-        r=best.indices[2],
-        p=best.indices[3],
-    )
-    raw_state_assignment = (
-        q=positive_raw_indices[best.indices[1]],
-        r=positive_raw_indices[best.indices[2]],
-        p=positive_raw_indices[best.indices[3]],
-    )
-    pole_frequencies_hz =
-        ComplexF64.(raw_frequency_hz[positive_raw_indices])
-    pole_linewidths_hz =
-        Float64.(max.(-2 .* imag.(pole_frequencies_hz), 0.0))
-    poles = (
-        frequencies_hz=pole_frequencies_hz,
-        linewidths_hz=pole_linewidths_hz,
-        raw_state_indices=positive_raw_indices,
-        raw_eigenvalues_per_s=
-            ComplexF64.(opened.values[positive_raw_indices]),
-    )
-    linewidth_lc = d3_linewidth_lc_from_identity_assignment(
-        poles,
-        identity_assignment,
-    )
-    membership = zeros(Float64, dimension, length(subsystems))
-    for (column, subsystem) in enumerate(subsystems)
-        membership[getproperty(typed_indices, subsystem), column] .= 1.0
-    end
-    hashes = (
-        source_model_identity=_d3_exact_n_source_model_identity(model),
-        exact_open_generator_sha256=
-            cqed_handoff.hashes.exact_open_generator_sha256,
-        stored_energy_metric_sha256=_d3_exact_n_matrix_sha256(
-            "d3-flux-velocity-stored-energy-metric",
-            stored_energy_metric,
-        ),
-        partition_membership_sha256=_d3_exact_n_matrix_sha256(
-            "d3-typed-subsystem-partition",
-            membership,
-        ),
-        subsystem_participation_sha256=_d3_exact_n_matrix_sha256(
-            "d3-subsystem-energy-participation",
-            participation,
-        ),
-        positive_pole_set_sha256=_d3_exact_n_matrix_sha256(
-            "d3-in-band-positive-pole-set",
-            hcat(
-                real.(pole_frequencies_hz),
-                imag.(pole_frequencies_hz),
-                pole_linewidths_hz,
-                Float64.(positive_raw_indices),
-            ),
-        ),
-        positive_pole_flux_velocity_vectors_sha256=
-            _d3_exact_n_complex_matrix_sha256(
-                "d3-positive-pole-flux-velocity-vectors",
-                pole_vectors_flux_velocity,
-            ),
-    )
-    receipt = (
-        contract_id="d3-exact-open-subsystem-energy-participation.v1",
-        coupling_state=:qrp_on,
-        source_model_identity=hashes.source_model_identity,
-        pole_frequency_band_hz=copy(frequency_band_hz),
-        pole_counts=(
-            passive_positive=length(passive_positive_raw_indices),
-            positive_energy=length(positive_energy_raw_indices),
-            in_band_positive_energy=length(positive_raw_indices),
-            excluded_out_of_band_positive_energy=
-                length(excluded_out_of_band_positive_energy_raw_indices),
-            excluded_zero_energy=length(excluded_zero_energy_raw_indices),
-        ),
-        in_band_positive_energy_raw_state_indices=
-            copy(positive_raw_indices),
-        excluded_out_of_band_positive_energy_raw_state_indices=
-            copy(excluded_out_of_band_positive_energy_raw_indices),
-        excluded_zero_energy_raw_state_indices=
-            copy(excluded_zero_energy_raw_indices),
-        assignment_raw_state_indices=raw_state_assignment,
-        minimum_participation=participation_gate,
-        minimum_assignment_margin=margin_gate,
-        hashes=hashes,
-    )
-    return (
-        contract_id="d3-exact-open-subsystem-energy-participation.v1",
-        coupling_state=:qrp_on,
-        pole_frequency_band_hz=frequency_band_hz,
-        coordinate_order=coordinate_order,
-        state_order=(
-            doubled=copy(exact.state_order.doubled),
-            flux_velocity=copy(exact.state_order.flux_velocity),
-        ),
-        partition=NamedTuple{subsystems}(Tuple(
-            projection_receipts[subsystem] for subsystem in subsystems
-        )),
-        positive_poles=poles,
-        excluded_zero_energy_raw_state_indices=
-            excluded_zero_energy_raw_indices,
-        subsystem_order=subsystems,
-        subsystem_participation=participation,
-        subsystem_participation_column_raw_state_indices=
-            positive_raw_indices,
-        per_pole_participation_sum=vec(sum(participation; dims=1)),
-        assignment=(
-            pole_indices=identity_assignment,
-            raw_state_indices=raw_state_assignment,
-            selected_participation=selected_participation,
-            minimum_selected_participation=
-                minimum_selected_participation,
-            best_mean_score=best.mean_score,
-            runner_up_mean_score=runner_up.mean_score,
-            assignment_margin=assignment_margin,
-            minimum_participation=participation_gate,
-            minimum_assignment_margin=margin_gate,
-        ),
-        linewidth_lc=linewidth_lc,
-        hashes=hashes,
-        receipt=receipt,
-        provenance=(
-            numerical_authority=:coupling_on_exact_doubled_open_generator,
-            identity_rule=:global_typed_subsystem_stored_energy_participation,
-            subsystem_projection=:full_metric_orthogonal_projection,
-            pole_candidate_scope=:caller_owned_frequency_band,
-            coupling_off_reference=:forbidden,
-            frequency_rank_assignment=:forbidden,
-        ),
-    )
-end
-
-"""
-Aggregate linewidth L_C after an external identity-continuation evaluator has
-assigned unique q/r/p pole indices. This function deliberately refuses
-frequency-rank ownership.
-"""
-function d3_linewidth_lc_from_identity_assignment(poles, identity_assignment)
-    required = (:q, :r, :p)
-    all(name -> hasproperty(identity_assignment, name), required) || error(
-        "D3 linewidth L_C identity assignment must provide q, r, and p pole indices.",
-    )
-    indices = Int[getproperty(identity_assignment, name) for name in required]
-    length(unique(indices)) == 3 || error(
-        "D3 linewidth L_C q/r/p pole indices must be unique.",
+"""Aggregate the two-pole linewidth of one unordered RP-subspace assignment."""
+function d3_unordered_rp_subspace_linewidth(poles, raw_pair_indices)
+    pair = Tuple(Int.(collect(raw_pair_indices)))
+    length(pair) == 2 && pair[1] != pair[2] || error(
+        "D3 unordered-RP linewidth requires two distinct pole indices.",
     )
     linewidths = Float64.(poles.linewidths_hz)
-    all(index -> 1 <= index <= length(linewidths), indices) || error(
-        "D3 linewidth L_C identity assignment contains an out-of-range pole index.",
+    all(value -> isfinite(value) && value >= 0, linewidths) || error(
+        "D3 unordered-RP linewidth input must contain finite nonnegative values.",
     )
-    selected = NamedTuple{required}(Tuple(linewidths[index] for index in indices))
-    resonator_sum = selected.r + selected.p
-    resonator_sum > 0 || error(
-        "D3 linewidth L_C requires a positive r+p linewidth sum.",
+    all(index -> 1 <= index <= length(linewidths), pair) || error(
+        "D3 unordered-RP linewidth contains an out-of-range pole index.",
     )
+    selected = Tuple(linewidths[index] for index in pair)
+    total = sum(selected)
+    total > 0 || error(
+        "D3 unordered-RP linewidth requires a positive two-pole sum.",
+    )
+    fractions = Tuple(value / total for value in selected)
     return (
-        quantity=:kappa_sum_qrp_on_ext_on,
-        linewidth_hz=sum(values(selected)),
-        per_identity_linewidth_hz=selected,
-        eta_r=selected.r / resonator_sum,
-        eta_p=selected.p / resonator_sum,
+        quantity=:kappa_sum_unordered_rp_subspace,
+        linewidth_sum_hz=total,
+        unordered_pair_linewidths_hz=selected,
+        linewidth_fraction_min=minimum(fractions),
+        linewidth_fraction_max=maximum(fractions),
+        unordered_pair_pole_indices=pair,
         excluded_positive_pole_indices=[
-            index for index in eachindex(linewidths) if !(index in indices)
+            index for index in eachindex(linewidths) if !(index in pair)
         ],
         provenance=(
-            contract_id="d3-linewidth-lc-identity-continued-qrp-sum.v1",
-            pole_scope=:qrp_three,
-            feedline_like_poles=:report_only,
+            contract_id="d3-unordered-rp-subspace-linewidth.v1",
+            pole_scope=:unordered_rp_two_pole_subspace,
+            q_and_feedline_like_poles=:report_only,
             frequency_rank_assignment=:forbidden,
         ),
     )

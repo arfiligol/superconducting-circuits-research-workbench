@@ -640,13 +640,18 @@ end
     add_intrinsic_interferometric_purcell_filter!(plan; id,
         readout_attachment, feedline_attachment, readout_spec, filter_spec,
         mtl_model, c1g_f, c2g_f, c12_f, c0r_f=0.0,
-        coupling_orientation=:same_direction)
+        coupling_orientation=:same_direction,
+        readout_breakpoints_m=nothing, filter_breakpoints_m=nothing)
 
 Insert two grounded-head/open-tail quarter-wave resonators, their finite MTL
 window, and the complete three-branch IDC from the filter open tail to an
 exposed feedline attachment. `c0r_f` is owned at the readout attachment; an
 exact zero records the parameter without emitting a physical branch. This
 component contains no feedline or port.
+
+When supplied, the two breakpoint arrays are the caller-bound complete line
+grids. The coupled-window endpoints and section alignment are still validated
+by the shared transmission-line lowering path.
 """
 function add_intrinsic_interferometric_purcell_filter!(
     plan::CircuitPlan;
@@ -661,6 +666,8 @@ function add_intrinsic_interferometric_purcell_filter!(
     c12_f,
     c0r_f=0.0,
     coupling_orientation=:same_direction,
+    readout_breakpoints_m=nothing,
+    filter_breakpoints_m=nothing,
 )
     component_id = strip(string(id))
     isempty(component_id) &&
@@ -692,14 +699,16 @@ function add_intrinsic_interferometric_purcell_filter!(
         mtl_model.section_length_m,
     )
     mtl_dx = mtl_model.length_m / mtl_section_count
-    readout_breakpoints = [
-        mtl_model.start1_m + index * mtl_dx
-        for index in 0:mtl_section_count
-    ]
-    filter_breakpoints = [
-        mtl_model.start2_m + index * mtl_dx
-        for index in 0:mtl_section_count
-    ]
+    readout_breakpoints = isnothing(readout_breakpoints_m) ?
+        [
+            mtl_model.start1_m + index * mtl_dx
+            for index in 0:mtl_section_count
+        ] : collect(readout_breakpoints_m)
+    filter_breakpoints = isnothing(filter_breakpoints_m) ?
+        [
+            mtl_model.start2_m + index * mtl_dx
+            for index in 0:mtl_section_count
+        ] : collect(filter_breakpoints_m)
 
     readout_resonator = add_quarter_wave_resonator!(
         plan;

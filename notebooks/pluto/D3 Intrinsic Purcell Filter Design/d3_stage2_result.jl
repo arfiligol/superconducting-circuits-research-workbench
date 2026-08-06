@@ -40,7 +40,7 @@ export Stage2RunSpec,
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v4"
 const QUBIT_RECEIPT_SCHEMA = "d3-stage2-qubit-admittance-receipt.v1"
-const OBJECTIVE_CONTRACT = "d3-stage2-stage3-full-qrp-objective.v2"
+const OBJECTIVE_CONTRACT = "d3-stage2-direct-hybridized-objective.v3"
 const FOUNDATION_CONTRACT = "d3-stage2-candidate-foundation.v5"
 const MAX_PHYSICAL_LINE_SECTION_LENGTH_M = 50e-6
 const OBJECTIVE_AUTHORITY = (
@@ -48,14 +48,14 @@ const OBJECTIVE_AUTHORITY = (
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
     target_revision=10,
     target_contract_sha256=
-        "2853586e4c82e9912d5ef9cf178a22d45c534d70b6352da06aee13c2777ef3a9",
-    notch_authority=:rp_on,
+        "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
+    notch_authority=:distributed_rp_on,
     effective_diagonal_frequency_extraction=
-        :q_feedline_downfolded_rp_complex_operator,
+        :complete_complement_rp_complex_operator,
     effective_exchange_extraction=
-        :q_feedline_downfolded_rp_complex_midpoint_residue,
-    linewidth_pole_scope=:qrp_three,
-    primary_linewidth_extraction=:L_C,
+        :complete_complement_rp_complex_midpoint_residue,
+    linewidth_pole_scope=:unordered_rp_two_pole_subspace,
+    primary_linewidth_extraction=:exact_open_unordered_rp_poles,
 )
 const CANDIDATE_NAMES =
     (:lr_open_m, :lr_short_m, :lc_m, :lp_open_m, :lp_short_m, :u_IDC)
@@ -985,6 +985,9 @@ function evaluate_stage2_winner(
     hb_evaluator,
     qubit_evaluator,
 )
+    error(
+        "The LC/Equivalent-before-Objective Stage-2 winner path is superseded by the revision-10 direct-Hybridized search authority. Winner-only closure must use a separately bound post-winner entry point.",
+    )
     _validate_optimization_provenance(optimization, specification)
     winner = _winner_record(optimization)
     _validate_candidate_bounds(
@@ -1623,6 +1626,9 @@ function write_stage2_result(
     output_directory;
     linear_quantity_payload_builder,
 )
+    error(
+        "The historical dual-authority Stage-2 result publisher is superseded and cannot publish revision-10 direct-Hybridized search results.",
+    )
     _revalidate_evaluated_result(evaluated)
     destination = abspath(String(output_directory))
     ispath(destination) && error("D3 Stage-2 output directory already exists: $(destination)")
