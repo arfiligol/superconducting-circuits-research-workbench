@@ -209,6 +209,11 @@ function _candidate_dict(candidate)
     )
 end
 
+
+_local_candidate(candidate) = NamedTuple{D3_LENGTH_NAMES}(Tuple(
+    getproperty(candidate, name) for name in D3_LENGTH_NAMES
+))
+
 function d3_candidate_wrapper_identity(candidate)
     values = _candidate(candidate)
     payload = Dict(
@@ -336,7 +341,31 @@ function _request!(controller::_Controller, state)
     ))
     if haskey(controller.cache, key)
         controller.cache_hits += 1
-        return controller.cache[key]
+        cached = controller.cache[key]
+        try
+            cached.state.id == state.id &&
+                cached.state.outer_counts == state.outer_counts &&
+                cached.state.mtl_count == state.mtl_count || _fail(
+                "lc_producer.cache_mismatch",
+                "Cached local state does not bind the requested exact grid.",
+            )
+            return _state_result(
+                (
+                    status="PASS",
+                    values_hz=cached.values_hz,
+                    checks=cached.checks,
+                    evidence=cached.evidence,
+                ),
+                state,
+            )
+        catch exception
+            exception isa D3CandidateLCNotEvaluable && rethrow()
+            _fail(
+                "lc_producer.cache_mismatch",
+                "Cached local state is malformed or stale.",
+                (state=state, exception=sprint(showerror, exception)),
+            )
+        end
     end
     raw = try
         controller.state_evaluator(controller.candidate, state)
@@ -416,6 +445,30 @@ function _lc_result(raw, label)
         _fail("lc_producer.malformed", "$(label) derivatives must be finite.")
     return (roots=roots, derivatives=derivatives, lc_readback=lc,
         checks=raw.checks, evidence=hasproperty(raw, :evidence) ? raw.evidence : nothing)
+end
+
+function _evaluate_lc(evaluator, candidate, state, label)
+    raw = try
+        evaluator(candidate, state)
+    catch exception
+        exception isa InterruptException && rethrow()
+        exception isa D3CandidateLCNotEvaluable && rethrow()
+        _fail(
+            "lc_producer.lc_evaluator",
+            "$(label) exact LC evaluation failed.",
+            (state=state.state, exception=sprint(showerror, exception)),
+        )
+    end
+    try
+        return _lc_result(raw, label)
+    catch exception
+        exception isa D3CandidateLCNotEvaluable && rethrow()
+        _fail(
+            "lc_producer.malformed",
+            "$(label) exact LC result is malformed.",
+            (state=state.state, exception=sprint(showerror, exception)),
+        )
+    end
 end
 
 _relative(reference, operational) = abs(reference - operational) / max(abs(operational), floatmin(Float64))
@@ -512,6 +565,7 @@ function produce_d3_candidate_lc_evidence(
     normalized_source = _source(source)
     wrapper = d3_candidate_wrapper_identity(values)
     physics = d3_local_lc_physics_identity(values, normalized_source)
+    local_candidate = _local_candidate(values)
     base_outer = (
         r_short=_ceil_count(values.lr_short_m, 50.0e-6),
         r_open=_ceil_count(values.lr_open_m, 50.0e-6),
@@ -519,7 +573,9 @@ function produce_d3_candidate_lc_evidence(
         p_open=_ceil_count(values.lp_open_m, 50.0e-6),
     )
     base_mtl = _ceil_count(values.lc_m, 10.0e-6)
-    controller = _Controller(0, 0, 0, cache, state_evaluator, values, physics.sha256)
+    controller = _Controller(
+        0, 0, 0, cache, state_evaluator, local_candidate, physics.sha256,
+    )
     rounds = Any[]
     round_outer = base_outer
     round_mtl = base_mtl
@@ -545,8 +601,12 @@ function produce_d3_candidate_lc_evidence(
         push!(rounds, (round=round_index, mtl=mtl, cpw=cpw, mtl_recheck=recheck,
             joint=joint))
         if joint.passed
-            operational_lc = _lc_result(lc_evaluator(values, operational), "operational")
-            reference_lc = _lc_result(lc_evaluator(values, joint_reference), "joint reference")
+            operational_lc = _evaluate_lc(
+                lc_evaluator, local_candidate, operational, "operational",
+            )
+            reference_lc = _evaluate_lc(
+                lc_evaluator, local_candidate, joint_reference, "joint reference",
+            )
             lc_comparison = _lc_comparison(operational_lc, reference_lc)
             return _success_payload(values, normalized_source, wrapper, physics, rounds,
                 controller, operational, joint_reference, joint, operational_lc,

@@ -309,13 +309,18 @@ function _effective_evidence(effective, model_identity)
     )
 end
 
-function _notch_evidence(notch)
+function _notch_evidence(notch, model_identity)
     notch.quantity == :f_n_rp_on &&
         notch.provenance.contract_id == "d3-intrinsic-pair-rp-on-z21-zero.v1" &&
         notch.provenance.coupling_state == :rp_on &&
         all(values(notch.residual_gates)) || _fail(
         "full_qrp_receipt.failed_gate",
         "Intrinsic RP-on notch extraction is not qualified.",
+    )
+    _sha(notch.provenance.circuit_plan_sha256, "notch circuit plan") ==
+        model_identity.circuit_plan_sha256 || _fail(
+        "full_qrp_receipt.model_mismatch",
+        "Intrinsic RP-on notch extraction belongs to another circuit plan.",
     )
     return Dict(
         "contract_id" => String(notch.provenance.contract_id),
@@ -377,7 +382,7 @@ function _core_evidence(foundation, candidate, lc_qualification, q2d_artifact_sh
     model_identity = _validate_foundation(foundation, values, lc_qualification)
     metrics, authority = _metrics(foundation.metrics, model_identity)
     effective = _effective_evidence(foundation.extractions.effective_rp, model_identity)
-    notch = _notch_evidence(foundation.extractions.notch)
+    notch = _notch_evidence(foundation.extractions.notch, model_identity)
     identity = _identity_evidence(
         foundation.extractions.identity_continuation,
         foundation.extractions.linewidth_lc,

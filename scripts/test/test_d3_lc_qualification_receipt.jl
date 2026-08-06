@@ -72,6 +72,8 @@ const LC_CHECKS = (
 )
 
 function state_evaluator(candidate, state)
+    hasproperty(candidate, :u_IDC) &&
+        error("Local state evaluator must not receive the wrapper-only u_IDC coordinate.")
     return (
         status="PASS",
         values_hz=(f_r=6.0e9, f_p=6.0e9, f_n=5.0e9),
@@ -81,6 +83,8 @@ function state_evaluator(candidate, state)
 end
 
 function lc_evaluator(candidate, state)
+    hasproperty(candidate, :u_IDC) &&
+        error("Local LC evaluator must not receive the wrapper-only u_IDC coordinate.")
     root(name, frequency) = (
         frequency_hz=frequency,
         absolute_error_hz=1.25,
@@ -193,6 +197,16 @@ end
         ),
         D3CandidateLCNotEvaluable,
     ) == "lc_producer.round_cap"
+
+    @test rejection_code(
+        () -> produce_d3_candidate_lc_evidence(
+            candidate(),
+            source_identity();
+            state_evaluator=state_evaluator,
+            lc_evaluator=(candidate, state) -> error("LC backend unavailable"),
+        ),
+        D3CandidateLCNotEvaluable,
+    ) == "lc_producer.lc_evaluator"
 end
 
 @testset "D3 LC receipt strict current authority" begin
@@ -444,6 +458,26 @@ end
             D3FullQRPReceiptNotEvaluable,
         ) == "full_qrp_receipt.operand_mismatch"
         @test calls[] == 1
+
+        mismatched_notch = merge(foundation.extractions.notch, (
+            provenance=merge(
+                foundation.extractions.notch.provenance,
+                (circuit_plan_sha256=HASH_B,),
+            ),
+        ))
+        mismatched_foundation = merge(foundation, (
+            extractions=merge(foundation.extractions, (notch=mismatched_notch,)),
+        ))
+        @test rejection_code(
+            () -> produce_d3_full_qrp_qualification_evidence(
+                mismatched_foundation,
+                candidate(),
+                lc_authorization;
+                q2d_artifact_sha256=source_identity()["q2d_artifact_sha256"],
+            ),
+            D3FullQRPReceiptNotEvaluable,
+        ) == "full_qrp_receipt.model_mismatch"
+
         @test rejection_code(
             () -> authorize_d3_stage2_full_qrp_receipt(
                 nothing,
