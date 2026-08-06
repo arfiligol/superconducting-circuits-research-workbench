@@ -496,16 +496,115 @@ function _d3_q2d_material_authority(value, label; role_evidence)
         requested_context = layers["requested"]["material_context"]
         requested_context["material_profile_hash"] == value["material_profile_hash"] ||
             error("$(label) requested profile hash is inconsistent.")
-        requested_context["material_profile"]["material_profile_id"] ==
-            value["material_profile_id"] ||
+        requested_profile = requested_context["material_profile"]
+        requested_profile["material_profile_id"] == value["material_profile_id"] ||
             error("$(label) requested profile id is inconsistent.")
         requested_context["readback_required"] === true ||
             error("$(label) must require independent material readback.")
+        requested_material_name = _d3_q2d_text(
+            requested_profile["solver_material_name"],
+            "$(label) requested solver material",
+        )
+        requested_profile["solver_material_id"] == requested_material_name ||
+            error("$(label) requested solver material id and name are inconsistent.")
+        requested_materials = requested_context["compiled_materials"]
+        requested_materials isa AbstractVector ||
+            error("$(label) requested compiled materials must be an array.")
+        length(requested_materials) == 1 ||
+            error("$(label) must request exactly one compiled material.")
+        requested_material = only(requested_materials)
+        requested_material isa AbstractDict ||
+            error("$(label) requested compiled material must be an object.")
+        _d3_q2d_text(
+            requested_material["aedt_material_name"],
+            "$(label) requested compiled material",
+        ) == requested_material_name ||
+            error("$(label) requested compiled material name is inconsistent.")
+        requested_material["source_physical_material_key"] ==
+            requested_profile["physical_material_id"] ||
+            error("$(label) requested compiled material source is inconsistent.")
         resolved = layers["resolved"]
         resolved["material_profile_hash"] == value["material_profile_hash"] ||
             error("$(label) resolved profile hash is inconsistent.")
         readback = layers["readback"]
         readback["status"] == "PASS" || error("$(label) material readback did not pass.")
+        applied_write = layers["applied_write_attempt"]
+        applied_write isa AbstractDict ||
+            error("$(label) applied write attempt must be an object.")
+        _d3_q2d_exact_fields(
+            applied_write,
+            (
+                :schema_version,
+                :status,
+                :independent_readback,
+                :material_count,
+                :materials,
+                :data_class,
+                :allowed_consumers,
+                :publication_state,
+                :promotion_eligible,
+            ),
+            "$(label) applied write attempt",
+        )
+        applied_write["schema_version"] == "aedt-material-write-attempt.v1" ||
+            error("$(label) applied write attempt schema is unsupported.")
+        applied_write["status"] == "write_attempt_accepted_by_api" ||
+            error("$(label) applied material write was not accepted by the API.")
+        applied_write["independent_readback"] === false || error(
+            "$(label) applied write attempt must declare its non-independent write role.",
+        )
+        applied_write["data_class"] == value["data_class"] ||
+            error("$(label) applied write data class is inconsistent.")
+        applied_write["allowed_consumers"] == value["allowed_consumers"] ||
+            error("$(label) applied write allowed consumers are inconsistent.")
+        applied_write["publication_state"] == value["publication_state"] ||
+            error("$(label) applied write publication state is inconsistent.")
+        applied_write["promotion_eligible"] === false ||
+            error("$(label) applied write must not be promotion eligible.")
+        material_count = applied_write["material_count"]
+        material_count isa Integer && !(material_count isa Bool) ||
+            error("$(label) applied material count must be an integer.")
+        applied_materials = applied_write["materials"]
+        applied_materials isa AbstractVector ||
+            error("$(label) applied materials must be an array.")
+        material_count == 1 &&
+            length(applied_materials) == material_count &&
+            length(requested_materials) == material_count ||
+            error("$(label) applied and requested writes must contain exactly one material.")
+        applied_material = only(applied_materials)
+        applied_material isa AbstractDict ||
+            error("$(label) applied material must be an object.")
+        _d3_q2d_exact_fields(
+            applied_material,
+            (
+                :aedt_material_name,
+                :source_physical_material_key,
+                :material_kind,
+                :applied,
+                :unsupported_properties,
+            ),
+            "$(label) applied material",
+        )
+        applied_material["material_kind"] == "dielectric" ||
+            error("$(label) applied material kind must be dielectric.")
+        applied_properties = applied_material["applied"]
+        applied_properties isa AbstractDict ||
+            error("$(label) applied material properties must be an object.")
+        _d3_q2d_exact_fields(
+            applied_properties,
+            (:permittivity, :permeability),
+            "$(label) applied material properties",
+        )
+        unsupported_properties = applied_material["unsupported_properties"]
+        unsupported_properties isa AbstractDict ||
+            error("$(label) unsupported material properties must be an object.")
+        _d3_q2d_exact_fields(
+            unsupported_properties,
+            (:fields,),
+            "$(label) unsupported material properties",
+        )
+        unsupported_properties["fields"] isa AbstractDict ||
+            error("$(label) unsupported material property fields must be an object.")
         requested_properties =
             requested_context["material_profile"]["electromagnetic_model"]
         resolved_properties = resolved["properties"]
@@ -529,6 +628,9 @@ function _d3_q2d_material_authority(value, label; role_evidence)
             ) == _d3_q2d_real(
                 readback_property["normalized_value"],
                 "$(label) read-back $(property_name)",
+            ) == _d3_q2d_real(
+                applied_properties[property_name],
+                "$(label) applied $(property_name)",
             ) || error("$(label) $(property_name) readback is inconsistent.")
         end
         for property_name in ("dielectric_loss_tangent", "conductivity")
@@ -544,6 +646,15 @@ function _d3_q2d_material_authority(value, label; role_evidence)
             readback["stored_material_name"],
             "$(label) read-back material",
         ) || error("$(label) stored material readback is inconsistent.")
+        resolved_material == _d3_q2d_text(
+            applied_material["aedt_material_name"],
+            "$(label) applied material",
+        ) || error("$(label) applied material name is inconsistent.")
+        resolved_material == requested_material_name ||
+            error("$(label) requested material name is inconsistent with readback.")
+        applied_material["source_physical_material_key"] ==
+            requested_profile["physical_material_id"] ||
+            error("$(label) applied material source is inconsistent.")
         assignments = collect(value["substrate_assignments"])
         !isempty(assignments) || error("$(label) substrate assignments are empty.")
         for assignment in assignments
