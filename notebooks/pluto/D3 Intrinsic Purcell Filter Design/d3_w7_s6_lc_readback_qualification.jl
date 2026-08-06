@@ -452,7 +452,7 @@ function lc_readback_main()
         schema_version="d3-root-derivative-lc-readback.v1",
         evidence_id=LC_EVIDENCE_ID,
         generated_at_utc=string(now(UTC)),
-        lifecycle_state="CONVERGING",
+        lifecycle_state="ACCEPTED",
         data_class="project-internal",
         authority_status="diagnostic_only",
         promotion_eligible=false,
