@@ -12,6 +12,9 @@ using SuperconductingCircuitsCore
 
 using ..D3CoupledOptimizer: OptimizationResult, RejectedEvaluation, ValidEvaluation
 
+include(joinpath(@__DIR__, "d3_resonator_input.jl"))
+using .D3ResonatorInput: validate_d3_rev10_q2d_identity
+
 export Stage2RunSpec,
     Stage2EvaluatedResult,
     evaluate_stage2_winner,
@@ -182,6 +185,11 @@ function _json_generic_copy(value)
             String(key) => _json_generic_copy(item)
             for (key, item) in pairs(value)
         )
+    elseif value isa NamedTuple
+        return Dict{String,Any}(
+            String(key) => _json_generic_copy(item)
+            for (key, item) in pairs(value)
+        )
     elseif value isa AbstractArray || value isa Tuple
         return Any[_json_generic_copy(item) for item in value]
     end
@@ -199,6 +207,7 @@ function _validated_q2d_spec(value)
         "geometry_um",
         "solver",
         "loss_model",
+        "authority",
         "single_l_per_m_h",
         "single_c_per_m_f",
         "l_matrix_per_m_h",
@@ -227,73 +236,187 @@ function _validated_q2d_spec(value)
         "adaptive_frequency_hz",
         "aedt_version",
         "pyaedt_version",
-        "runtime_bundle_sha256",
     )
     Set(keys(solver)) == Set(solver_fields) || error(
         "D3 Stage-2 Q2D solver fields must be exactly $(collect(solver_fields)).",
     )
-    q2d["artifact_id"] = _nonempty_text(q2d["artifact_id"], "Q2D artifact_id")
-    q2d["artifact_sha256"] = _sha256_text(
-        q2d["artifact_sha256"],
-        "Q2D artifact_sha256",
-    )
-    q2d["single_case_id"] = _nonempty_text(q2d["single_case_id"], "Q2D single_case_id")
-    q2d["pair_case_id"] = _nonempty_text(q2d["pair_case_id"], "Q2D pair_case_id")
-    q2d["topology_id"] = _nonempty_text(q2d["topology_id"], "Q2D topology_id")
-    q2d["topology_id"] == "continuous_upper_ground" || error(
-        "D3 Stage-2 Q2D topology must be continuous_upper_ground.",
-    )
-    q2d["loss_model"] = _nonempty_text(q2d["loss_model"], "Q2D loss_model")
-    q2d["loss_model"] == "lossless_R_equals_G_equals_zero" || error(
-        "D3 Stage-2 Q2D loss model must be lossless_R_equals_G_equals_zero.",
-    )
-    q2d["coupling_orientation"] = _nonempty_text(
+    artifact_id = _nonempty_text(q2d["artifact_id"], "Q2D artifact_id")
+    artifact_sha256 = _sha256_text(q2d["artifact_sha256"], "Q2D artifact_sha256")
+    single_case_id = _nonempty_text(q2d["single_case_id"], "Q2D single_case_id")
+    pair_case_id = _nonempty_text(q2d["pair_case_id"], "Q2D pair_case_id")
+    topology_id = _nonempty_text(q2d["topology_id"], "Q2D topology_id")
+    loss_model = _nonempty_text(q2d["loss_model"], "Q2D loss_model")
+    coupling_orientation = _nonempty_text(
         q2d["coupling_orientation"],
         "Q2D coupling_orientation",
     )
-    q2d["coupling_orientation"] == "same_direction" || error(
-        "D3 Stage-2 Q2D coupling orientation must be same_direction.",
+    normalized_geometry = (
+        w=_positive_real(geometry["w"], "Q2D geometry w"),
+        s=_positive_real(geometry["s"], "Q2D geometry s"),
+        d=_positive_real(geometry["d"], "Q2D geometry d"),
+        h=_positive_real(geometry["h"], "Q2D geometry h"),
+        upper_ground_clearance=_nonnegative_real(
+            geometry["upper_ground_clearance"],
+            "Q2D geometry upper_ground_clearance",
+        ),
+        metal_thickness=_positive_real(
+            geometry["metal_thickness"],
+            "Q2D geometry metal_thickness",
+        ),
     )
-    normalized_geometry = Dict(
-        name => _positive_real(geometry[name], "Q2D geometry $(name)")
-        for name in ("w", "s", "d", "h", "metal_thickness")
-    )
-    normalized_geometry["upper_ground_clearance"] = _nonnegative_real(
-        geometry["upper_ground_clearance"],
-        "Q2D geometry upper_ground_clearance",
-    )
-    normalized_geometry["upper_ground_clearance"] == 0.0 || error(
-        "D3 Stage-2 continuous-upper-ground Q2D input requires zero clearance.",
-    )
-    q2d["geometry_um"] = normalized_geometry
-    q2d["solver"] = Dict(
-        "adaptive_frequency_hz" => _positive_real(
+    normalized_solver = (
+        adaptive_frequency_hz=_positive_real(
             solver["adaptive_frequency_hz"],
             "Q2D adaptive frequency",
         ),
-        "aedt_version" => _nonempty_text(solver["aedt_version"], "Q2D AEDT version"),
-        "pyaedt_version" =>
-            _nonempty_text(solver["pyaedt_version"], "Q2D PyAEDT version"),
-        "runtime_bundle_sha256" => _sha256_text(
-            solver["runtime_bundle_sha256"],
-            "Q2D runtime bundle SHA-256",
+        aedt_version=_nonempty_text(solver["aedt_version"], "Q2D AEDT version"),
+        pyaedt_version=_nonempty_text(
+            solver["pyaedt_version"],
+            "Q2D PyAEDT version",
         ),
     )
-    q2d["single_l_per_m_h"] =
-        _positive_real(q2d["single_l_per_m_h"], "Q2D single-line L per metre")
-    q2d["single_c_per_m_f"] =
-        _positive_real(q2d["single_c_per_m_f"], "Q2D single-line C per metre")
-    q2d["l_matrix_per_m_h"] =
-        _finite_vector(q2d["l_matrix_per_m_h"], 4, "Q2D L matrix")
-    q2d["c_matrix_per_m_f"] =
-        _finite_vector(q2d["c_matrix_per_m_f"], 4, "Q2D C matrix")
-    for name in ("section_length_m", "mtl_section_length_m")
-        q2d[name] = _positive_real(q2d[name], "Q2D $(name)")
-        q2d[name] <= MAX_PHYSICAL_LINE_SECTION_LENGTH_M || error(
-            "D3 Stage-2 Q2D $(name) must not exceed 50 um.",
-        )
-    end
-    return _json_generic_copy(q2d)
+    authority = _string_key_dict(q2d["authority"], "D3 Stage-2 Q2D authority")
+    authority_fields = (
+        "payload_sha256",
+        "single_result_id",
+        "pair_result_id",
+        "source_database_sha256",
+        "material_profile_id",
+        "material_profile_sha256",
+        "material_authority_sha256",
+        "single_evidence_sha256",
+        "pair_evidence_sha256",
+        "single_raw_sources_sha256",
+        "pair_raw_sources_sha256",
+        "basis",
+        "orientation",
+        "row_column_order",
+        "l_matrix_unit",
+        "c_matrix_unit",
+        "data_class",
+        "allowed_consumers",
+        "publication_state",
+        "promotion_eligible",
+    )
+    Set(keys(authority)) == Set(authority_fields) || error(
+        "D3 Stage-2 Q2D authority fields must be exactly $(collect(authority_fields)).",
+    )
+    normalized_authority = (
+        payload_sha256=_sha256_text(
+            authority["payload_sha256"],
+            "Q2D payload SHA-256",
+        ),
+        single_result_id=_sha256_text(
+            authority["single_result_id"],
+            "Q2D single result id",
+        ),
+        pair_result_id=_sha256_text(
+            authority["pair_result_id"],
+            "Q2D pair result id",
+        ),
+        source_database_sha256=_sha256_text(
+            authority["source_database_sha256"],
+            "Q2D database SHA-256",
+        ),
+        material_profile_id=_nonempty_text(
+            authority["material_profile_id"],
+            "Q2D material profile id",
+        ),
+        material_profile_sha256=_sha256_text(
+            authority["material_profile_sha256"],
+            "Q2D material profile SHA-256",
+        ),
+        material_authority_sha256=_sha256_text(
+            authority["material_authority_sha256"],
+            "Q2D material authority SHA-256",
+        ),
+        single_evidence_sha256=_sha256_text(
+            authority["single_evidence_sha256"],
+            "Q2D single evidence SHA-256",
+        ),
+        pair_evidence_sha256=_sha256_text(
+            authority["pair_evidence_sha256"],
+            "Q2D pair evidence SHA-256",
+        ),
+        single_raw_sources_sha256=_sha256_text(
+            authority["single_raw_sources_sha256"],
+            "Q2D single source manifest SHA-256",
+        ),
+        pair_raw_sources_sha256=_sha256_text(
+            authority["pair_raw_sources_sha256"],
+            "Q2D pair source manifest SHA-256",
+        ),
+        basis=_nonempty_text(authority["basis"], "Q2D basis"),
+        orientation=_nonempty_text(authority["orientation"], "Q2D orientation"),
+        row_column_order=_nonempty_text(authority["row_column_order"], "Q2D matrix order"),
+        l_matrix_unit=_nonempty_text(authority["l_matrix_unit"], "Q2D L unit"),
+        c_matrix_unit=_nonempty_text(authority["c_matrix_unit"], "Q2D C unit"),
+        data_class=_nonempty_text(authority["data_class"], "Q2D data class"),
+        allowed_consumers=Tuple(String.(authority["allowed_consumers"])),
+        publication_state=_nonempty_text(
+            authority["publication_state"],
+            "Q2D publication state",
+        ),
+        promotion_eligible=authority["promotion_eligible"],
+    )
+    l_values = _finite_vector(q2d["l_matrix_per_m_h"], 4, "Q2D L matrix")
+    c_values = _finite_vector(q2d["c_matrix_per_m_f"], 4, "Q2D C matrix")
+    current = validate_d3_rev10_q2d_identity((
+        section_length_m=_positive_real(
+            q2d["section_length_m"],
+            "Q2D section length",
+        ),
+        mtl_section_length_m=_positive_real(
+            q2d["mtl_section_length_m"],
+            "Q2D MTL section length",
+        ),
+        readout_l_per_m_h=_positive_real(
+            q2d["single_l_per_m_h"],
+            "Q2D single-line L per metre",
+        ),
+        readout_c_per_m_f=_positive_real(
+            q2d["single_c_per_m_f"],
+            "Q2D single-line C per metre",
+        ),
+        filter_l_per_m_h=_positive_real(
+            q2d["single_l_per_m_h"],
+            "Q2D single-line L per metre",
+        ),
+        filter_c_per_m_f=_positive_real(
+            q2d["single_c_per_m_f"],
+            "Q2D single-line C per metre",
+        ),
+        l_matrix_per_m_h=[l_values[1] l_values[2]; l_values[3] l_values[4]],
+        c_matrix_per_m_f=[c_values[1] c_values[2]; c_values[3] c_values[4]],
+        coupling_orientation=Symbol(coupling_orientation),
+        q2d_artifact_id=artifact_id,
+        q2d_artifact_sha256=artifact_sha256,
+        q2d_topology_id=Symbol(topology_id),
+        q2d_geometry_um=normalized_geometry,
+        q2d_single_case_id=single_case_id,
+        q2d_pair_case_id=pair_case_id,
+        q2d_solver=normalized_solver,
+        q2d_loss_model=loss_model,
+        q2d_authority=normalized_authority,
+    ))
+    return Dict{String,Any}(
+        "artifact_id" => current.q2d_artifact_id,
+        "artifact_sha256" => current.q2d_artifact_sha256,
+        "topology_id" => String(current.q2d_topology_id),
+        "single_case_id" => current.q2d_single_case_id,
+        "pair_case_id" => current.q2d_pair_case_id,
+        "geometry_um" => _json_generic_copy(current.q2d_geometry_um),
+        "solver" => _json_generic_copy(current.q2d_solver),
+        "loss_model" => current.q2d_loss_model,
+        "authority" => _json_generic_copy(current.q2d_authority),
+        "single_l_per_m_h" => current.readout_l_per_m_h,
+        "single_c_per_m_f" => current.readout_c_per_m_f,
+        "l_matrix_per_m_h" => vec(permutedims(current.l_matrix_per_m_h)),
+        "c_matrix_per_m_f" => vec(permutedims(current.c_matrix_per_m_f)),
+        "coupling_orientation" => String(current.coupling_orientation),
+        "section_length_m" => current.section_length_m,
+        "mtl_section_length_m" => current.mtl_section_length_m,
+    )
 end
 
 function _validated_bounds(value)
@@ -499,6 +622,7 @@ function _q2d_snapshot_from_fixed_line_identity(value)
         "q2d_pair_case_id",
         "q2d_solver",
         "q2d_loss_model",
+        "q2d_authority",
         "section_length_m",
         "mtl_section_length_m",
         "readout_l_per_m_h",
@@ -512,7 +636,7 @@ function _q2d_snapshot_from_fixed_line_identity(value)
     Set(keys(identity)) == Set(fields) || error(
         "D3 fixed-line identity fields must be exactly $(collect(fields)).",
     )
-    identity["contract_id"] == "d3-selected-continuous-ground-fixed-line.v1" ||
+    identity["contract_id"] == "d3-selected-continuous-ground-fixed-line.v2" ||
         error("D3 fixed-line identity uses the wrong contract.")
     readout_l = _positive_real(
         identity["readout_l_per_m_h"],
@@ -540,6 +664,7 @@ function _q2d_snapshot_from_fixed_line_identity(value)
         "geometry_um" => identity["q2d_geometry_um"],
         "solver" => identity["q2d_solver"],
         "loss_model" => identity["q2d_loss_model"],
+        "authority" => identity["q2d_authority"],
         "single_l_per_m_h" => readout_l,
         "single_c_per_m_f" => readout_c,
         "l_matrix_per_m_h" => _flatten_fixed_matrix(
