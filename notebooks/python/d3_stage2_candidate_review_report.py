@@ -528,6 +528,7 @@ def _fixed_line_q2d_snapshot(response_match: Mapping[str, Any]) -> dict[str, Any
         "q2d_pair_case_id",
         "q2d_solver",
         "q2d_loss_model",
+        "q2d_authority",
         "section_length_m",
         "mtl_section_length_m",
         "readout_l_per_m_h",
@@ -552,7 +553,7 @@ def _fixed_line_q2d_snapshot(response_match: Mapping[str, Any]) -> dict[str, Any
     computed_sha256 = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     if computed_sha256 != response_match["fixed_line_input_sha256"]:
         raise ValueError("fixed-line canonical JSON disagrees with its reported SHA-256.")
-    if identity["contract_id"] != "d3-selected-continuous-ground-fixed-line.v1":
+    if identity["contract_id"] != "d3-selected-continuous-ground-fixed-line.v2":
         raise ValueError("fixed-line identity uses the wrong contract.")
 
     geometry = dict(_mapping(identity["q2d_geometry_um"], "fixed-line Q2D geometry"))
@@ -579,7 +580,6 @@ def _fixed_line_q2d_snapshot(response_match: Mapping[str, Any]) -> dict[str, Any
         "adaptive_frequency_hz",
         "aedt_version",
         "pyaedt_version",
-        "runtime_bundle_sha256",
     }
     if set(solver) != solver_fields:
         raise ValueError("fixed-line Q2D solver fields are incomplete.")
@@ -589,15 +589,74 @@ def _fixed_line_q2d_snapshot(response_match: Mapping[str, Any]) -> dict[str, Any
         ),
         "aedt_version": solver["aedt_version"],
         "pyaedt_version": solver["pyaedt_version"],
-        "runtime_bundle_sha256": _sha256(
-            solver["runtime_bundle_sha256"], "fixed-line runtime bundle SHA-256"
-        ),
     }
     if normalized_solver["adaptive_frequency_hz"] <= 0:
         raise ValueError("fixed-line adaptive frequency must be positive.")
     for name in ("aedt_version", "pyaedt_version"):
         if not isinstance(normalized_solver[name], str) or not normalized_solver[name].strip():
             raise ValueError(f"fixed-line {name} must be non-empty text.")
+
+    authority = dict(_mapping(identity["q2d_authority"], "fixed-line Q2D authority"))
+    authority_fields = {
+        "payload_sha256",
+        "single_result_id",
+        "pair_result_id",
+        "source_database_sha256",
+        "material_profile_id",
+        "material_profile_sha256",
+        "material_authority_sha256",
+        "single_evidence_sha256",
+        "pair_evidence_sha256",
+        "single_raw_sources_sha256",
+        "pair_raw_sources_sha256",
+        "basis",
+        "orientation",
+        "row_column_order",
+        "l_matrix_unit",
+        "c_matrix_unit",
+        "data_class",
+        "allowed_consumers",
+        "publication_state",
+        "promotion_eligible",
+    }
+    if set(authority) != authority_fields:
+        raise ValueError("fixed-line Q2D authority fields are incomplete.")
+    for name in (
+        "payload_sha256",
+        "single_result_id",
+        "pair_result_id",
+        "source_database_sha256",
+        "material_profile_sha256",
+        "material_authority_sha256",
+        "single_evidence_sha256",
+        "pair_evidence_sha256",
+        "single_raw_sources_sha256",
+        "pair_raw_sources_sha256",
+    ):
+        authority[name] = _sha256(authority[name], f"fixed-line authority {name}")
+    for name in (
+        "material_profile_id",
+        "basis",
+        "orientation",
+        "row_column_order",
+        "l_matrix_unit",
+        "c_matrix_unit",
+    ):
+        if not isinstance(authority[name], str) or not authority[name].strip():
+            raise ValueError(f"fixed-line authority {name} must be non-empty text.")
+    consumers = authority["allowed_consumers"]
+    if (
+        not isinstance(consumers, list)
+        or not consumers
+        or any(not isinstance(value, str) or not value.strip() for value in consumers)
+    ):
+        raise ValueError("fixed-line authority allowed_consumers must be non-empty text.")
+    if (
+        authority["data_class"] != "project-internal"
+        or authority["publication_state"] != "diagnostic"
+        or authority["promotion_eligible"] is not False
+    ):
+        raise ValueError("fixed-line Q2D authority is not diagnostic project-internal evidence.")
 
     def matrix_rows(value: Any, label: str) -> list[list[float]]:
         if not isinstance(value, list) or len(value) != 2:
@@ -648,6 +707,7 @@ def _fixed_line_q2d_snapshot(response_match: Mapping[str, Any]) -> dict[str, Any
         "geometry_um": normalized_geometry,
         "solver": normalized_solver,
         "loss_model": identity["q2d_loss_model"],
+        "authority": authority,
         "single_l_per_m_h": readout_l,
         "single_c_per_m_f": readout_c,
         "l_matrix_per_m_h": [value for row in l_matrix for value in row],
