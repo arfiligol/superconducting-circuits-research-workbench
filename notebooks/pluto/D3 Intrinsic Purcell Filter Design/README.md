@@ -12,12 +12,12 @@ The host Design Target owns the physics and optimization semantics:
 - `d3_idc_input.jl` validates one provenance-bearing private EM mapping and
   always returns all three IDC capacitances. No canonical mapping artifact is
   currently committed in this public repository.
-- `d3_resonator_input.jl` validates one caller-selected, provenance-bearing
-  continuous-upper-ground public Q2D input. Both physical stages bind its
-  exact wrapper SHA, geometry, matrices, coupling orientation, and numerical
-  section length into one shared fixed-line identity. D3 physical CPW/MTL
-  discretization is limited to 50 µm or finer; the Run manifest owns which
-  validated cross-section is being explored.
+- `d3_resonator_input.jl` first validates one sealed material-aware-v4 Q2D
+  authority generically, then binds the accepted Rev10 consumer to the exact
+  W7/S6/D3/H8 artifact. Both physical stages retain its bytes, material/source
+  authority, geometry, raw Maxwell matrices, coupling orientation, and section
+  lengths in one Fixed-line V2 identity. The 50 µm structural ceiling is not a
+  spatial-grid eligibility receipt.
 - `d3_stage_models.jl` accepts exactly
   `(lr_open,lr_short,lc,lp_open,lp_short,u_IDC)` for both Stage 2 and Stage 3.
   Stage 2 response-matches the five lengths to read-only
@@ -187,10 +187,10 @@ reading order is:
 `REPORT_RENDER_CONFIG` for image width, typography, spacing, table sizing, and
 semantic curve colors. The D3 producer owns the plotted quantities, units,
 labels, and fixed section order. Missing evidence is rendered explicitly as
-`NOT_AVAILABLE`; the renderer never consults an unbound external file. In
-particular, the current canonical Q2D artifact does not yet carry the material
-stack or dielectric constants, so those fields cannot be promoted into the
-report until the Q2D artifact contract is extended.
+`NOT_AVAILABLE`; the renderer never consults an unbound external file. The
+current artifact carries requested/resolved/applied/read-back Silicon-11.9
+authority, while loss tangent and conductivity remain non-authoritative and
+unavailable; the report preserves that distinction.
 
 The converging V1 review artifact remains PNG. A later PDF export should render
 the same fixed sections as separate logical pages and merge those pages; it
