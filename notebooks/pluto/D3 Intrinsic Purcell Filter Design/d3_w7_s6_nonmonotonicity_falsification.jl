@@ -11,9 +11,9 @@ using SuperconductingCircuitsCore
 const FALSIFIER_SOURCE_DIR = @__DIR__
 const FALSIFIER_SOURCE_PATH = abspath(@__FILE__)
 const REQUIRED_CONVERGENCE_RECEIPT_SHA256 =
-    "212ae923c757e21bba0ea045ac775346d79eb882fbe3e783fd3461b4e10bea09"
+    "8917bd26e96c57711e56f8388bdc6e54cb2fc5a150a559e546717e53770d2566"
 const REQUIRED_CONVERGENCE_RUNNER_SHA256 =
-    "799261f6bd05e1769311f244f4307aec44964872b9230838c7ef6b56815187b2"
+    "320b6d2a2919ad6bd8913f5d10b134c8020a65a2f979859f253de102f496f6f4"
 const OPERATOR_RELATIVE_TOLERANCE = 1.0e-9
 const BACKWARD_RESIDUAL_TOLERANCE = 1.0e-10
 
@@ -241,7 +241,7 @@ function falsification_main()
     cpw_f_n = [record.values_hz.f_n for record in records if record.state.outer_total in 391:393]
     receipt = (
         schema_version="d3-spatial-nonmonotonicity-falsification.v1",
-        evidence_id="d3-w7s6-mtl70-73-cpw391-393-nonmonotonicity-falsification-v1",
+        evidence_id="d3-w7s6-mtl70-73-cpw391-393-nonmonotonicity-falsification-v2",
         generated_at_utc=string(now(UTC)),
         lifecycle_state="CONVERGING",
         data_class="project-internal",
