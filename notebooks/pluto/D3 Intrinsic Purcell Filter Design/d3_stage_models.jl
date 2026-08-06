@@ -11,6 +11,10 @@ isdefined(@__MODULE__, :D3IDCInput) ||
     include(joinpath(@__DIR__, "d3_idc_input.jl"))
 using .D3IDCInput: D3IDCMapping, d3_idc_mapping_semantic_sha256
 
+isdefined(@__MODULE__, :D3ResonatorInput) ||
+    include(joinpath(@__DIR__, "d3_resonator_input.jl"))
+using .D3ResonatorInput: validate_d3_rev10_q2d_input
+
 const D3_PHYSICAL_VARIABLE_ORDER = (
     :lr_open_m,
     :lr_short_m,
@@ -33,8 +37,6 @@ const D3_RESPONSE_EQUIVALENT_VARIABLE_ORDER = (
     :u_IDC,
 )
 
-const D3_SELECTED_Q2D_TOPOLOGY = :continuous_upper_ground
-const D3_MAX_PHYSICAL_LINE_SECTION_LENGTH_M = 50e-6
 const D3_SELECTED_IDC_MAPPING_ID =
     "d3-same-die-filter-feedline-idc-q3d-tensor-fit-v1"
 const D3_SELECTED_IDC_MAPPING_SHA256 =
@@ -1005,110 +1007,19 @@ function _d3_stage3_fixed_line_keywords(fixed)
 end
 
 function _d3_selected_q2d_line_input(fixed)
-    lines = _d3_stage3_fixed_line_keywords(fixed)
-    required = (
-        :q2d_artifact_id,
-        :q2d_artifact_sha256,
-        :q2d_topology_id,
-        :q2d_geometry_um,
-        :q2d_single_case_id,
-        :q2d_pair_case_id,
-        :q2d_solver,
-        :q2d_loss_model,
-    )
-    all(name -> hasproperty(fixed, name), required) || error(
-        "D3 fixed line input must come from the selected provenance-bearing Q2D loader.",
-    )
-    artifact_id = strip(String(fixed.q2d_artifact_id))
-    artifact_sha256 = lowercase(strip(String(fixed.q2d_artifact_sha256)))
-    topology_id = Symbol(fixed.q2d_topology_id)
-    isempty(artifact_id) && error("D3 fixed line input Q2D artifact id must not be empty.")
-    occursin(r"^[0-9a-f]{64}$", artifact_sha256) || error(
-        "D3 fixed line input Q2D artifact SHA-256 must be lowercase hexadecimal.",
-    )
-    topology_id == D3_SELECTED_Q2D_TOPOLOGY || error(
-        "D3 fixed line input must use continuous upper ground.",
-    )
-    lines.section_length_m <= D3_MAX_PHYSICAL_LINE_SECTION_LENGTH_M || error(
-        "D3 physical CPW section length must not exceed 50 um.",
-    )
-    lines.mtl_section_length_m <= D3_MAX_PHYSICAL_LINE_SECTION_LENGTH_M || error(
-        "D3 physical MTL section length must not exceed 50 um.",
-    )
-    lines.readout_l_per_m_h == lines.filter_l_per_m_h &&
-        lines.readout_c_per_m_f == lines.filter_c_per_m_f || error(
-        "D3 selected Q2D input must use its one artifact-owned single-line L/C pair.",
-    )
-
-    geometry = fixed.q2d_geometry_um
-    _d3_stage_require_exact_fields(
-        geometry,
-        (:w, :s, :d, :h, :upper_ground_clearance, :metal_thickness),
-        "D3 Q2D geometry",
-    )
-    all(
-        name -> begin
-            value = Float64(getproperty(geometry, name))
-            isfinite(value) && value > 0
-        end,
-        (:w, :s, :d, :h, :metal_thickness),
-    ) || error("D3 Q2D physical geometry values must be finite and positive.")
-    Float64(geometry.upper_ground_clearance) == 0.0 || error(
-        "D3 continuous-upper-ground input requires zero upper-ground clearance.",
-    )
-    normalized_geometry = (
-        w=Float64(geometry.w),
-        s=Float64(geometry.s),
-        d=Float64(geometry.d),
-        h=Float64(geometry.h),
-        upper_ground_clearance=Float64(geometry.upper_ground_clearance),
-        metal_thickness=Float64(geometry.metal_thickness),
-    )
-    single_case_id = strip(String(fixed.q2d_single_case_id))
-    pair_case_id = strip(String(fixed.q2d_pair_case_id))
-    isempty(single_case_id) && error("D3 Q2D single-line case id must not be empty.")
-    isempty(pair_case_id) && error("D3 Q2D coupled-pair case id must not be empty.")
-    solver = fixed.q2d_solver
-    _d3_stage_require_exact_fields(
-        solver,
-        (:adaptive_frequency_hz, :aedt_version, :pyaedt_version, :runtime_bundle_sha256),
-        "D3 Q2D solver",
-    )
-    adaptive_frequency_hz = _d3_stage_positive(
-        solver,
-        :adaptive_frequency_hz,
-        "D3 Q2D solver",
-    )
-    aedt_version = strip(String(solver.aedt_version))
-    pyaedt_version = strip(String(solver.pyaedt_version))
-    isempty(aedt_version) && error("D3 Q2D AEDT version must not be empty.")
-    isempty(pyaedt_version) && error("D3 Q2D PyAEDT version must not be empty.")
-    runtime_bundle_sha256 = lowercase(strip(String(solver.runtime_bundle_sha256)))
-    occursin(r"^[0-9a-f]{64}$", runtime_bundle_sha256) || error(
-        "D3 Q2D runtime bundle SHA-256 must be lowercase hexadecimal.",
-    )
-    loss_model = strip(String(fixed.q2d_loss_model))
-    loss_model == "lossless_R_equals_G_equals_zero" || error(
-        "D3 selected Q2D input must use its declared lossless model.",
-    )
-    lines.coupling_orientation == :same_direction || error(
-        "D3 selected Q2D input requires same-direction MTL coupling.",
-    )
+    current = validate_d3_rev10_q2d_input(fixed)
+    lines = _d3_stage3_fixed_line_keywords(current)
     identity = (
-        contract_id="d3-selected-continuous-ground-fixed-line.v1",
-        q2d_artifact_id=artifact_id,
-        q2d_artifact_sha256=artifact_sha256,
-        q2d_topology_id=String(topology_id),
-        q2d_geometry_um=normalized_geometry,
-        q2d_single_case_id=single_case_id,
-        q2d_pair_case_id=pair_case_id,
-        q2d_solver=(
-            adaptive_frequency_hz=adaptive_frequency_hz,
-            aedt_version=aedt_version,
-            pyaedt_version=pyaedt_version,
-            runtime_bundle_sha256=runtime_bundle_sha256,
-        ),
-        q2d_loss_model=loss_model,
+        contract_id="d3-selected-continuous-ground-fixed-line.v2",
+        q2d_artifact_id=current.q2d_artifact_id,
+        q2d_artifact_sha256=current.q2d_artifact_sha256,
+        q2d_topology_id=String(current.q2d_topology_id),
+        q2d_geometry_um=current.q2d_geometry_um,
+        q2d_single_case_id=current.q2d_single_case_id,
+        q2d_pair_case_id=current.q2d_pair_case_id,
+        q2d_solver=current.q2d_solver,
+        q2d_loss_model=current.q2d_loss_model,
+        q2d_authority=current.q2d_authority,
         section_length_m=lines.section_length_m,
         mtl_section_length_m=lines.mtl_section_length_m,
         readout_l_per_m_h=lines.readout_l_per_m_h,
@@ -1133,14 +1044,15 @@ function _d3_selected_q2d_line_input(fixed)
     return merge(
         lines,
         (
-            q2d_artifact_id=artifact_id,
-            q2d_artifact_sha256=artifact_sha256,
-            q2d_topology_id=topology_id,
-            q2d_geometry_um=normalized_geometry,
-            q2d_single_case_id=single_case_id,
-            q2d_pair_case_id=pair_case_id,
+            q2d_artifact_id=current.q2d_artifact_id,
+            q2d_artifact_sha256=current.q2d_artifact_sha256,
+            q2d_topology_id=current.q2d_topology_id,
+            q2d_geometry_um=current.q2d_geometry_um,
+            q2d_single_case_id=current.q2d_single_case_id,
+            q2d_pair_case_id=current.q2d_pair_case_id,
             q2d_solver=identity.q2d_solver,
-            q2d_loss_model=loss_model,
+            q2d_loss_model=current.q2d_loss_model,
+            q2d_authority=current.q2d_authority,
             fixed_line_input_sha256=fixed_line_input_sha256,
             fixed_line_input_identity=identity,
             fixed_line_input_identity_canonical_json=

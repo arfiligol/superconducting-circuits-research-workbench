@@ -1,0 +1,985 @@
+{
+  "schema_version": "orpen-q2d-intrinsic-purcell-maxwell-lc-cases.v4",
+  "artifact_status": "complete",
+  "metadata": {
+    "reference_group": "Ground",
+    "directions": {
+      "voltage": "V[i] = potential(Ti) - potential(Ground)",
+      "current": "positive I[i] flows in +z",
+      "positive_z": "normal to the XY cross-section and along line propagation"
+    },
+    "extraction_frequency_hz": 6000000000.0,
+    "adaptive_frequency_expression": "6GHz",
+    "loss_terms": {
+      "R": {
+        "status": "unavailable",
+        "assumed_zero_for_v1": true,
+        "unit": "ohm/m"
+      },
+      "G": {
+        "status": "unavailable",
+        "assumed_zero_for_v1": true,
+        "unit": "S/m"
+      }
+    },
+    "solver_provenance": {
+      "solver": "Ansys Electronics Desktop 2D Extractor",
+      "aedt_version": "2024.2",
+      "pyaedt_version": "0.26.2"
+    },
+    "material_authority": {
+      "material_profile_id": "d3-q2d-silicon-er11p9-scalar-v1",
+      "material_profile_hash": "ab92f6e20284f0c803a07f4f9368e1d2dc85ed051372c8db22f65d83efedef60",
+      "material_authority_hash": "b96d249391a5420af07cc614b117fa0fb398e8078acd8bd7bc3e4e11d4c267af",
+      "data_class": "project-internal",
+      "allowed_consumers": [
+        "d3_q2d",
+        "rev10_five_slot_search",
+        "stage_2_stage_3_closure"
+      ],
+      "publication_state": "diagnostic",
+      "promotion_eligible": false
+    },
+    "common_request_authority": {
+      "air_height_nm": 200000,
+      "basis": "distributed_maxwell_per_unit_length",
+      "die_thickness_nm": 500000,
+      "ground_width_nm": 150000,
+      "h_nm": 8000,
+      "metal_thickness_nm": 200,
+      "orientation": "xy_cross_section_positive_z_propagation",
+      "s_nm": 6000,
+      "schema_version": "d3-q2d-common-request-authority.v1",
+      "topology": "same_face_continuous_upper_ground",
+      "w_nm": 7000
+    },
+    "run_provenance": {
+      "run_id": "2026-08-05-rev10-tolerance-w7-s6-d3-h6p0-to9p0-step0p1-er11p9-consumers-v1-Run02",
+      "project_name": "d3_continuous_ground_multidimensional_q2d",
+      "manifest_schema_version": 1,
+      "recipe_id": "q2d",
+      "case_ids": [
+        "single__w7000_s6000_h8000__e3aadd091c",
+        "pair__w7000_s6000_d3000_h8000__1b4ad74450"
+      ],
+      "selected_case_status": "solve_complete"
+    },
+    "source_integrity": {
+      "algorithm": "sha256",
+      "all_sources_hashed": true,
+      "solver_export_sizes_verified": true,
+      "material_result_database": {
+        "path": "/home/ili/.codex/worktrees/1942/SCQ_Design/build/task-worktrees/orpen-si119/build/simulation/aedt/d3_continuous_ground_multidimensional_q2d/q2d_material_results_v3_consumers_v1.sqlite3",
+        "size_bytes": 1253376,
+        "sha256": "21874a582c1ffac4fac457866c5c6d94e67c9693857cdc40db96d5d45c400a90"
+      },
+      "cases": {
+        "single__w7000_s6000_h8000__e3aadd091c": [
+          {
+            "path": "manifest.yaml",
+            "size_bytes": 130022,
+            "sha256": "743364ccfc51297821b39cb59e1a5469218ea6b59034b1b64e1c423739233ccd"
+          },
+          {
+            "path": "points.json",
+            "size_bytes": 48922,
+            "sha256": "659e618933989f8993edfc356b6ee56296a4de34636ff6cc9f64ebd26e1e82d7"
+          },
+          {
+            "path": "metadata/single__w7000_s6000_h8000__e3aadd091c_q2d_cross_section.json",
+            "size_bytes": 1460,
+            "sha256": "7034bbaebad43d853e5837dddaabecee75eaf072fd8877370257e5309a029d2e"
+          },
+          {
+            "path": "points/single__w7000_s6000_h8000__e3aadd091c/q2d/assignment_summary.json",
+            "size_bytes": 541,
+            "sha256": "e31b25fde8a30b40cfd97c166d2eb89c977600d006aa8d132a4b94d78581ef65"
+          },
+          {
+            "path": "points/single__w7000_s6000_h8000__e3aadd091c/q2d/simulation_metadata.json",
+            "size_bytes": 13064,
+            "sha256": "d8c848337852223e10467f1417bff84f5f2ebac63676567a4fea68acc797a56c"
+          },
+          {
+            "path": "logs/workers/single__w7000_s6000_h8000__e3aadd091c__q2d/aedt_preflight.json",
+            "size_bytes": 13557,
+            "sha256": "05e38d944c8ba97b191196f327a3492118b84f542bcb998a4a43582fb7ecee67"
+          },
+          {
+            "path": "points/single__w7000_s6000_h8000__e3aadd091c/q2d/aedt_convergenceCG.prop",
+            "size_bytes": 2427,
+            "sha256": "a3b0543ff430419f30f0d1f0f4425a59587f335d13430c109e61ead6ab67badb"
+          },
+          {
+            "path": "points/single__w7000_s6000_h8000__e3aadd091c/q2d/aedt_convergenceCGRL.prop",
+            "size_bytes": 2100,
+            "sha256": "e6ebe742a8ff27cb7a178def840fae440d0ef54c07e559337096272b9ce671e3"
+          },
+          {
+            "path": "points/single__w7000_s6000_h8000__e3aadd091c/q2d/cg_maxwell_matrix.csv",
+            "size_bytes": 217,
+            "sha256": "554936aa5cf78f55c7ece197b30fd94357d2a574e4fe1da5e2bb4dadb35a742a"
+          },
+          {
+            "path": "points/single__w7000_s6000_h8000__e3aadd091c/q2d/rl_maxwell_matrix.csv",
+            "size_bytes": 215,
+            "sha256": "32ef46ce843d528ab9dcae637852a3c5eda81f3c3c211a2dbcf4fb2118257f56"
+          },
+          {
+            "path": "metadata/single__w7000_s6000_h8000__e3aadd091c_aedt_material_context.json",
+            "size_bytes": 3882,
+            "sha256": "f2e732ed457dfcfef5145baa86f715634ffcd64c94174e6ff2e8e9565cf375c6"
+          },
+          {
+            "path": "points/single__w7000_s6000_h8000__e3aadd091c/q2d/aedt_material_context_applied.json",
+            "size_bytes": 708,
+            "sha256": "025e1b88a630a44a0eb2be5fd1bdfd3f4f6a5e9e89981fcbc9e64b76bf0ce9a2"
+          },
+          {
+            "path": "points/single__w7000_s6000_h8000__e3aadd091c/q2d/aedt_material_readback.json",
+            "size_bytes": 12249,
+            "sha256": "cced6855216dc815a4fa73b2d5bc4c748f2d3fc6e346a519bb8b1cca973f8001"
+          },
+          {
+            "path": "logs/single__w7000_s6000_h8000__e3aadd091c/q2d/q2d_workflow_state.json",
+            "size_bytes": 17205,
+            "sha256": "e67ca50bb8ddb2292dd7841a766ac01bda6d06d6033c394901098c1e91254959"
+          },
+          {
+            "path": "points/single__w7000_s6000_h8000__e3aadd091c/q2d/q2d_semantic_geometry_plan.json",
+            "size_bytes": 3097,
+            "sha256": "2b718d262417c1b5c4f078bea479b3e49f1032352eafaa5c5f3c33b2d953de58"
+          },
+          {
+            "path": "points/single__w7000_s6000_h8000__e3aadd091c/q2d/q2d_semantic_object_inventory.json",
+            "size_bytes": 1044,
+            "sha256": "8ca28c6535f414ea6ddcd57190acf5fa13020cd82a2e5de2e2b3dcf8cbd3cdb6"
+          }
+        ],
+        "pair__w7000_s6000_d3000_h8000__1b4ad74450": [
+          {
+            "path": "manifest.yaml",
+            "size_bytes": 130022,
+            "sha256": "743364ccfc51297821b39cb59e1a5469218ea6b59034b1b64e1c423739233ccd"
+          },
+          {
+            "path": "points.json",
+            "size_bytes": 48922,
+            "sha256": "659e618933989f8993edfc356b6ee56296a4de34636ff6cc9f64ebd26e1e82d7"
+          },
+          {
+            "path": "metadata/pair__w7000_s6000_d3000_h8000__1b4ad74450_q2d_cross_section.json",
+            "size_bytes": 1777,
+            "sha256": "491dde34e4943d74cfc547d80b9d443eec7179c08b18f32bb9b67099148e9ac4"
+          },
+          {
+            "path": "points/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/assignment_summary.json",
+            "size_bytes": 750,
+            "sha256": "426862d06e809e038cef7f9c469724aa3c584e4e1a46c846601930823849c16e"
+          },
+          {
+            "path": "points/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/simulation_metadata.json",
+            "size_bytes": 13134,
+            "sha256": "bc6ee48687d52bf83d769dadb52a2bb9fa7e292ad37d1055dd74efd3262036d1"
+          },
+          {
+            "path": "logs/workers/pair__w7000_s6000_d3000_h8000__1b4ad74450__q2d/aedt_preflight.json",
+            "size_bytes": 13573,
+            "sha256": "bae15ceed41ab4198c8c069e5c7bb4e8b2416b7e7502c230e154d70b027beb30"
+          },
+          {
+            "path": "points/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/aedt_convergenceCG.prop",
+            "size_bytes": 2535,
+            "sha256": "4f617d1df12e3cf5d7de90ab575aa66906e51738a3ad286f7cbab3ef4e435f98"
+          },
+          {
+            "path": "points/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/aedt_convergenceCGRL.prop",
+            "size_bytes": 2209,
+            "sha256": "2d53e38791c5479a8e38e92701e83102009c69ef5c69df56e033c9396c3a2f3f"
+          },
+          {
+            "path": "points/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/cg_maxwell_matrix.csv",
+            "size_bytes": 363,
+            "sha256": "d083152a11676ed3c011718f33dfbcc584f09ca128155e6a0ec4431b1f93acb2"
+          },
+          {
+            "path": "points/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/rl_maxwell_matrix.csv",
+            "size_bytes": 359,
+            "sha256": "4075cfbeed55f2cb9f8f93e70eca0490b233ad7d4e35396a0797db2ff0f53bf0"
+          },
+          {
+            "path": "metadata/pair__w7000_s6000_d3000_h8000__1b4ad74450_aedt_material_context.json",
+            "size_bytes": 3882,
+            "sha256": "f2e732ed457dfcfef5145baa86f715634ffcd64c94174e6ff2e8e9565cf375c6"
+          },
+          {
+            "path": "points/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/aedt_material_context_applied.json",
+            "size_bytes": 708,
+            "sha256": "025e1b88a630a44a0eb2be5fd1bdfd3f4f6a5e9e89981fcbc9e64b76bf0ce9a2"
+          },
+          {
+            "path": "points/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/aedt_material_readback.json",
+            "size_bytes": 12265,
+            "sha256": "ee698ae69f7b2bfa89a8e02db830479b6e3b322444c78afd08d671671cb24e44"
+          },
+          {
+            "path": "logs/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/q2d_workflow_state.json",
+            "size_bytes": 17311,
+            "sha256": "79ef6dc085d39d575c435e0b70991c978c457ae63db62df38e041de68031253b"
+          },
+          {
+            "path": "points/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/q2d_semantic_geometry_plan.json",
+            "size_bytes": 3958,
+            "sha256": "a5024553dc8bba7abe4596e5609df60f8fdf29ebfa8373dd5247b6411d5868a6"
+          },
+          {
+            "path": "points/pair__w7000_s6000_d3000_h8000__1b4ad74450/q2d/q2d_semantic_object_inventory.json",
+            "size_bytes": 1392,
+            "sha256": "2b751feed83beef42fcfb6f9290de61c0da283f72cec195cd37d2984ef79befb"
+          }
+        ]
+      }
+    }
+  },
+  "cases": [
+    {
+      "schema_version": "orpen-q2d-single-reference-maxwell-lc.v1",
+      "id": "single__w7000_s6000_h8000__e3aadd091c",
+      "case_role": "single_reference",
+      "parameters": {
+        "case_role": "single_reference",
+        "trace_width_um": 7.0,
+        "trace_gap_um": 6.0,
+        "inter_trace_ground_width_um": "",
+        "flip_chip_gap_height_um": 8.0,
+        "upper_ground_clearance_width_um": 0.0
+      },
+      "topology": {
+        "schema_version": "q2d-single-reference-continuous-upper-ground.v1",
+        "resonator_die": "D0",
+        "resonator_face": "top",
+        "trace_names": [
+          "T1"
+        ],
+        "upper_die": "D1",
+        "upper_die_substrate_present": true,
+        "upper_ground_face": "bottom",
+        "upper_ground_clearance_width_um": 0.0,
+        "upper_ground_clearance_alignment": "not_applicable",
+        "upper_ground_metal_policy": "continuous_over_full_modeled_lateral_extent",
+        "reference_group": "Ground"
+      },
+      "metadata": {
+        "conductor_order": [
+          "T1"
+        ],
+        "reference_group": "Ground",
+        "directions": {
+          "voltage": "V[i] = potential(Ti) - potential(Ground)",
+          "current": "positive I[i] flows in +z",
+          "positive_z": "normal to the XY cross-section and along line propagation"
+        },
+        "matrix_representation": {
+          "kind": "distributed_maxwell_per_unit_length",
+          "row_column_order": "conductor_order",
+          "shape": [
+            1,
+            1
+          ],
+          "C": "F/m; one signal-to-Ground Maxwell self entry",
+          "L": "H/m; one signal-to-Ground Maxwell self entry"
+        }
+      },
+      "l_matrix_h_per_m": [
+        [
+          3.788309072034884e-07
+        ]
+      ],
+      "c_matrix_f_per_m": [
+        [
+          1.5851727751577202e-10
+        ]
+      ],
+      "convergence": {
+        "CG": {
+          "problem_type": "CG",
+          "completed_passes": 19,
+          "maximum_passes": 99,
+          "target_percent": 0.01,
+          "current_percent": [
+            0.0059612,
+            0.0035917
+          ]
+        },
+        "RL": {
+          "problem_type": "RL",
+          "completed_passes": 16,
+          "maximum_passes": 99,
+          "target_percent": 0.01,
+          "current_percent": [
+            0.0044565,
+            0.0021497
+          ]
+        }
+      },
+      "selected_result": {
+        "result_id": "698550388234887bb768cf7d23659ef184ca4031fb16f5a852895a055571e570",
+        "request_cache_key": "e3aadd091cfe6a46d99f6f3d77f896268763be717ca6e11a2e8c50b14bec4a00",
+        "source_case_id": "single__w7000_s6000_h8000__e3aadd091c",
+        "source_run_root": "/home/ili/.codex/worktrees/1942/SCQ_Design/build/task-worktrees/orpen-si119/build/simulation/aedt/d3_continuous_ground_multidimensional_q2d/2026-08-05-rev10-tolerance-w7-s6-d3-h6p0-to9p0-step0p1-er11p9-consumers-v1-Run02",
+        "solver_completed_at": "2026-08-05T16:25:20Z",
+        "material_evidence_snapshot_hash": "1d17de1bab2b21fdd6ee74e180f4cef017c5eaede79494a07536204b6ac5c231",
+        "common_request_authority": {
+          "air_height_nm": 200000,
+          "basis": "distributed_maxwell_per_unit_length",
+          "die_thickness_nm": 500000,
+          "ground_width_nm": 150000,
+          "h_nm": 8000,
+          "metal_thickness_nm": 200,
+          "orientation": "xy_cross_section_positive_z_propagation",
+          "s_nm": 6000,
+          "schema_version": "d3-q2d-common-request-authority.v1",
+          "topology": "same_face_continuous_upper_ground",
+          "w_nm": 7000
+        }
+      },
+      "material_authority": {
+        "material_profile_id": "d3-q2d-silicon-er11p9-scalar-v1",
+        "material_profile_hash": "ab92f6e20284f0c803a07f4f9368e1d2dc85ed051372c8db22f65d83efedef60",
+        "material_authority_hash": "b96d249391a5420af07cc614b117fa0fb398e8078acd8bd7bc3e4e11d4c267af",
+        "material_evidence_snapshot_hash": "1d17de1bab2b21fdd6ee74e180f4cef017c5eaede79494a07536204b6ac5c231",
+        "data_class": "project-internal",
+        "allowed_consumers": [
+          "d3_q2d",
+          "rev10_five_slot_search",
+          "stage_2_stage_3_closure"
+        ],
+        "publication_state": "diagnostic",
+        "promotion_eligible": false,
+        "provenance_layers": {
+          "requested": {
+            "material_context": {
+              "schema_version": "aedt-material-context.v2",
+              "material_condition": "NOT_AVAILABLE",
+              "registry_hash": "df3d48e8315df918102d6531cbe4e92b07f54df359c695da807b0789e2f1238e",
+              "layer_stack_hash": null,
+              "material_profile": {
+                "schema_version": "d3-q2d-material-profile.v1",
+                "material_profile_id": "d3-q2d-silicon-er11p9-scalar-v1",
+                "material_profile_version": 1,
+                "target_scope": "new_d3_q2d_single_and_coupled_pair",
+                "physical_material_id": "d3-target-specific-silicon-er11p9",
+                "physical_material_family": "silicon",
+                "solver_material_id": "D3Silicon_er11p9",
+                "solver_material_name": "D3Silicon_er11p9",
+                "source_type": "custom_project_material",
+                "default_vs_explicit_override": "explicit_custom_override",
+                "electromagnetic_model": {
+                  "relative_permittivity": {
+                    "value": 11.9,
+                    "unit": "1",
+                    "role": "scalar_isotropic_frequency_independent_target_policy"
+                  },
+                  "relative_permeability": {
+                    "value": 1.0,
+                    "unit": "1",
+                    "role": "explicit_nonmagnetic_modeling_assumption"
+                  },
+                  "temperature_K": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "empirical_condition": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "crystallographic_orientation": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "doping_resistivity": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "empirical_frequency_validity_range": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "dispersion": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "anisotropy": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "dielectric_loss_tangent": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "unconsumed by the lossless LC extraction; not assumed zero"
+                  },
+                  "conductivity": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "unconsumed by the lossless LC extraction; not assumed zero"
+                  }
+                },
+                "scientific_claims": {
+                  "measurement": false,
+                  "ansys_default": false,
+                  "cryogenic_material_claim": false
+                },
+                "data_class": "project-internal",
+                "allowed_consumers": [
+                  "d3_q2d",
+                  "rev10_five_slot_search",
+                  "stage_2_stage_3_closure"
+                ],
+                "publication_state": "diagnostic",
+                "promotion_eligible": false
+              },
+              "material_profile_hash": "ab92f6e20284f0c803a07f4f9368e1d2dc85ed051372c8db22f65d83efedef60",
+              "readback_required": true,
+              "policy_source": {
+                "repository": "OrPen",
+                "revision": "fb6890bd17de0af01d8b46cade788050f9be6636",
+                "integration_baseline_revision": "8cf659a585958f26d2ea4a8b5d2d295a3258a2a3",
+                "path": "orpen_sc_pdk/simulation/aedt/d3_q2d_material.py",
+                "sha256": "9596e0116256db2944b225c37ef7ab862de9a6f61247341f97593d7d7cdbc281",
+                "runtime_bundle_sha256": "1b6e443e5bb7bc0861eeb3b189b6cccc9b4e23dab18562f0b46d8e176b95bfc2"
+              },
+              "bindings": [],
+              "compiled_materials": [
+                {
+                  "aedt_material_name": "D3Silicon_er11p9",
+                  "source_physical_material_key": "d3-target-specific-silicon-er11p9",
+                  "material_kind": "dielectric",
+                  "supported_properties": {
+                    "permittivity": 11.9,
+                    "permeability": 1.0,
+                    "dielectric_loss_tangent": null,
+                    "conductivity": null
+                  },
+                  "unsupported_properties": {
+                    "fields": {}
+                  },
+                  "source_layer_names": []
+                }
+              ]
+            }
+          },
+          "resolved": {
+            "material_profile_hash": "ab92f6e20284f0c803a07f4f9368e1d2dc85ed051372c8db22f65d83efedef60",
+            "stored_material_name": "D3Silicon_er11p9",
+            "source_type": "custom_project_material",
+            "properties": {
+              "permittivity": {
+                "property_type": "simple",
+                "normalized_value": 11.9,
+                "scientific_authority": true
+              },
+              "permeability": {
+                "property_type": "simple",
+                "normalized_value": 1.0,
+                "scientific_authority": true
+              },
+              "dielectric_loss_tangent": {
+                "property_type": "simple",
+                "normalized_value": 0.0,
+                "scientific_authority": false
+              },
+              "conductivity": {
+                "property_type": "simple",
+                "normalized_value": 0.0,
+                "scientific_authority": false
+              }
+            },
+            "solver_identity": {
+              "aedt_version": "2024.2",
+              "aedt_version_raw": "2024.2.0",
+              "pyaedt_version": "0.26.2"
+            },
+            "policy_source": {
+              "repository": "OrPen",
+              "revision": "fb6890bd17de0af01d8b46cade788050f9be6636",
+              "integration_baseline_revision": "8cf659a585958f26d2ea4a8b5d2d295a3258a2a3",
+              "path": "orpen_sc_pdk/simulation/aedt/d3_q2d_material.py",
+              "sha256": "9596e0116256db2944b225c37ef7ab862de9a6f61247341f97593d7d7cdbc281",
+              "runtime_bundle_sha256": "1b6e443e5bb7bc0861eeb3b189b6cccc9b4e23dab18562f0b46d8e176b95bfc2"
+            },
+            "readback_method": "post-save-GetProjectMaterialNames-GetData-direct-object-property.v1"
+          },
+          "applied_write_attempt": {
+            "schema_version": "aedt-material-write-attempt.v1",
+            "status": "write_attempt_accepted_by_api",
+            "independent_readback": false,
+            "material_count": 1,
+            "materials": [
+              {
+                "aedt_material_name": "D3Silicon_er11p9",
+                "source_physical_material_key": "d3-target-specific-silicon-er11p9",
+                "material_kind": "dielectric",
+                "applied": {
+                  "permittivity": 11.9,
+                  "permeability": 1.0
+                },
+                "unsupported_properties": {
+                  "fields": {}
+                }
+              }
+            ],
+            "data_class": "project-internal",
+            "allowed_consumers": [
+              "d3_q2d",
+              "rev10_five_slot_search",
+              "stage_2_stage_3_closure"
+            ],
+            "publication_state": "diagnostic",
+            "promotion_eligible": false
+          },
+          "readback": {
+            "status": "PASS",
+            "stored_material_name": "D3Silicon_er11p9",
+            "properties": {
+              "permittivity": {
+                "property_type": "simple",
+                "raw_value": "11.9",
+                "normalized_value": 11.9,
+                "scientific_authority": true
+              },
+              "permeability": {
+                "property_type": "simple",
+                "raw_value": "1",
+                "normalized_value": 1.0,
+                "scientific_authority": true
+              },
+              "dielectric_loss_tangent": {
+                "property_type": "simple",
+                "raw_value": "0",
+                "normalized_value": 0.0,
+                "scientific_authority": false
+              },
+              "conductivity": {
+                "property_type": "simple",
+                "raw_value": "0",
+                "normalized_value": 0.0,
+                "scientific_authority": false
+              }
+            },
+            "substrate_assignments": [
+              {
+                "object_name": "q2d_die_D0",
+                "stored_material_name": "D3Silicon_er11p9"
+              },
+              {
+                "object_name": "q2d_die_D1",
+                "stored_material_name": "D3Silicon_er11p9"
+              }
+            ],
+            "method": "post-save-GetProjectMaterialNames-GetData-direct-object-property.v1"
+          }
+        },
+        "substrate_assignments": [
+          {
+            "object_name": "q2d_die_D0",
+            "stored_material_name": "D3Silicon_er11p9"
+          },
+          {
+            "object_name": "q2d_die_D1",
+            "stored_material_name": "D3Silicon_er11p9"
+          }
+        ]
+      },
+      "common_request_authority": {
+        "air_height_nm": 200000,
+        "basis": "distributed_maxwell_per_unit_length",
+        "die_thickness_nm": 500000,
+        "ground_width_nm": 150000,
+        "h_nm": 8000,
+        "metal_thickness_nm": 200,
+        "orientation": "xy_cross_section_positive_z_propagation",
+        "s_nm": 6000,
+        "schema_version": "d3-q2d-common-request-authority.v1",
+        "topology": "same_face_continuous_upper_ground",
+        "w_nm": 7000
+      },
+      "derived": {
+        "z0_ohm": 48.885988310001935
+      }
+    },
+    {
+      "schema_version": "orpen-q2d-coupled-pair-maxwell-lc.v1",
+      "id": "pair__w7000_s6000_d3000_h8000__1b4ad74450",
+      "case_role": "coupled_pair",
+      "parameters": {
+        "case_role": "coupled_pair",
+        "trace_width_um": 7.0,
+        "trace_gap_um": 6.0,
+        "inter_trace_ground_width_um": 3.0,
+        "flip_chip_gap_height_um": 8.0,
+        "upper_ground_clearance_width_um": 0.0
+      },
+      "topology": {
+        "schema_version": "q2d-same-face-continuous-upper-ground.v1",
+        "resonator_die": "D0",
+        "resonator_face": "top",
+        "trace_names": [
+          "T1",
+          "T2"
+        ],
+        "upper_die": "D1",
+        "upper_die_substrate_present": true,
+        "upper_ground_face": "bottom",
+        "upper_ground_clearance_width_um": 0.0,
+        "upper_ground_metal_policy": "continuous_over_full_modeled_lateral_extent",
+        "reference_group": "Ground"
+      },
+      "metadata": {
+        "conductor_order": [
+          "T1",
+          "T2"
+        ],
+        "reference_group": "Ground",
+        "directions": {
+          "voltage": "V[i] = potential(Ti) - potential(Ground)",
+          "current": "positive I[i] flows in +z",
+          "positive_z": "normal to the XY cross-section and along line propagation"
+        },
+        "matrix_representation": {
+          "kind": "distributed_maxwell_per_unit_length",
+          "row_column_order": "conductor_order",
+          "shape": [
+            2,
+            2
+          ],
+          "C": "F/m; Maxwell off-diagonal retained as negative",
+          "L": "H/m; Maxwell mutual entries retained as positive"
+        }
+      },
+      "l_matrix_h_per_m": [
+        [
+          3.799417410057405e-07,
+          1.495299415758173e-08
+        ],
+        [
+          1.495299415758173e-08,
+          3.799405738536101e-07
+        ]
+      ],
+      "c_matrix_f_per_m": [
+        [
+          1.577696520905595e-10,
+          -1.390725020136303e-11
+        ],
+        [
+          -1.390725020136303e-11,
+          1.577591545674956e-10
+        ]
+      ],
+      "convergence": {
+        "CG": {
+          "problem_type": "CG",
+          "completed_passes": 20,
+          "maximum_passes": 99,
+          "target_percent": 0.01,
+          "current_percent": [
+            0.006715,
+            0.0039691
+          ]
+        },
+        "RL": {
+          "problem_type": "RL",
+          "completed_passes": 17,
+          "maximum_passes": 99,
+          "target_percent": 0.01,
+          "current_percent": [
+            0.0043887,
+            0.0022229
+          ]
+        }
+      },
+      "selected_result": {
+        "result_id": "5f431ca3418500e9dbfa32b4ee6bef6e28d3eb13423bf7d3e336086a23de10fb",
+        "request_cache_key": "1b4ad744506aee81d90c24b72297fe789ea95d93d02896943043d86d68c6f0ab",
+        "source_case_id": "pair__w7000_s6000_d3000_h8000__1b4ad74450",
+        "source_run_root": "/home/ili/.codex/worktrees/1942/SCQ_Design/build/task-worktrees/orpen-si119/build/simulation/aedt/d3_continuous_ground_multidimensional_q2d/2026-08-05-rev10-tolerance-w7-s6-d3-h6p0-to9p0-step0p1-er11p9-consumers-v1-Run02",
+        "solver_completed_at": "2026-08-05T16:31:59Z",
+        "material_evidence_snapshot_hash": "6fb461b964592ae85f767bda6ec76ffbd9a357bab8c7151f821ace8a6026441a",
+        "common_request_authority": {
+          "air_height_nm": 200000,
+          "basis": "distributed_maxwell_per_unit_length",
+          "die_thickness_nm": 500000,
+          "ground_width_nm": 150000,
+          "h_nm": 8000,
+          "metal_thickness_nm": 200,
+          "orientation": "xy_cross_section_positive_z_propagation",
+          "s_nm": 6000,
+          "schema_version": "d3-q2d-common-request-authority.v1",
+          "topology": "same_face_continuous_upper_ground",
+          "w_nm": 7000
+        }
+      },
+      "material_authority": {
+        "material_profile_id": "d3-q2d-silicon-er11p9-scalar-v1",
+        "material_profile_hash": "ab92f6e20284f0c803a07f4f9368e1d2dc85ed051372c8db22f65d83efedef60",
+        "material_authority_hash": "b96d249391a5420af07cc614b117fa0fb398e8078acd8bd7bc3e4e11d4c267af",
+        "material_evidence_snapshot_hash": "6fb461b964592ae85f767bda6ec76ffbd9a357bab8c7151f821ace8a6026441a",
+        "data_class": "project-internal",
+        "allowed_consumers": [
+          "d3_q2d",
+          "rev10_five_slot_search",
+          "stage_2_stage_3_closure"
+        ],
+        "publication_state": "diagnostic",
+        "promotion_eligible": false,
+        "provenance_layers": {
+          "requested": {
+            "material_context": {
+              "schema_version": "aedt-material-context.v2",
+              "material_condition": "NOT_AVAILABLE",
+              "registry_hash": "df3d48e8315df918102d6531cbe4e92b07f54df359c695da807b0789e2f1238e",
+              "layer_stack_hash": null,
+              "material_profile": {
+                "schema_version": "d3-q2d-material-profile.v1",
+                "material_profile_id": "d3-q2d-silicon-er11p9-scalar-v1",
+                "material_profile_version": 1,
+                "target_scope": "new_d3_q2d_single_and_coupled_pair",
+                "physical_material_id": "d3-target-specific-silicon-er11p9",
+                "physical_material_family": "silicon",
+                "solver_material_id": "D3Silicon_er11p9",
+                "solver_material_name": "D3Silicon_er11p9",
+                "source_type": "custom_project_material",
+                "default_vs_explicit_override": "explicit_custom_override",
+                "electromagnetic_model": {
+                  "relative_permittivity": {
+                    "value": 11.9,
+                    "unit": "1",
+                    "role": "scalar_isotropic_frequency_independent_target_policy"
+                  },
+                  "relative_permeability": {
+                    "value": 1.0,
+                    "unit": "1",
+                    "role": "explicit_nonmagnetic_modeling_assumption"
+                  },
+                  "temperature_K": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "empirical_condition": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "crystallographic_orientation": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "doping_resistivity": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "empirical_frequency_validity_range": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "dispersion": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "anisotropy": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "not represented by the accepted scalar D3 Q2D target policy"
+                  },
+                  "dielectric_loss_tangent": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "unconsumed by the lossless LC extraction; not assumed zero"
+                  },
+                  "conductivity": {
+                    "status": "NOT_AVAILABLE",
+                    "reason": "unconsumed by the lossless LC extraction; not assumed zero"
+                  }
+                },
+                "scientific_claims": {
+                  "measurement": false,
+                  "ansys_default": false,
+                  "cryogenic_material_claim": false
+                },
+                "data_class": "project-internal",
+                "allowed_consumers": [
+                  "d3_q2d",
+                  "rev10_five_slot_search",
+                  "stage_2_stage_3_closure"
+                ],
+                "publication_state": "diagnostic",
+                "promotion_eligible": false
+              },
+              "material_profile_hash": "ab92f6e20284f0c803a07f4f9368e1d2dc85ed051372c8db22f65d83efedef60",
+              "readback_required": true,
+              "policy_source": {
+                "repository": "OrPen",
+                "revision": "fb6890bd17de0af01d8b46cade788050f9be6636",
+                "integration_baseline_revision": "8cf659a585958f26d2ea4a8b5d2d295a3258a2a3",
+                "path": "orpen_sc_pdk/simulation/aedt/d3_q2d_material.py",
+                "sha256": "9596e0116256db2944b225c37ef7ab862de9a6f61247341f97593d7d7cdbc281",
+                "runtime_bundle_sha256": "1b6e443e5bb7bc0861eeb3b189b6cccc9b4e23dab18562f0b46d8e176b95bfc2"
+              },
+              "bindings": [],
+              "compiled_materials": [
+                {
+                  "aedt_material_name": "D3Silicon_er11p9",
+                  "source_physical_material_key": "d3-target-specific-silicon-er11p9",
+                  "material_kind": "dielectric",
+                  "supported_properties": {
+                    "permittivity": 11.9,
+                    "permeability": 1.0,
+                    "dielectric_loss_tangent": null,
+                    "conductivity": null
+                  },
+                  "unsupported_properties": {
+                    "fields": {}
+                  },
+                  "source_layer_names": []
+                }
+              ]
+            }
+          },
+          "resolved": {
+            "material_profile_hash": "ab92f6e20284f0c803a07f4f9368e1d2dc85ed051372c8db22f65d83efedef60",
+            "stored_material_name": "D3Silicon_er11p9",
+            "source_type": "custom_project_material",
+            "properties": {
+              "permittivity": {
+                "property_type": "simple",
+                "normalized_value": 11.9,
+                "scientific_authority": true
+              },
+              "permeability": {
+                "property_type": "simple",
+                "normalized_value": 1.0,
+                "scientific_authority": true
+              },
+              "dielectric_loss_tangent": {
+                "property_type": "simple",
+                "normalized_value": 0.0,
+                "scientific_authority": false
+              },
+              "conductivity": {
+                "property_type": "simple",
+                "normalized_value": 0.0,
+                "scientific_authority": false
+              }
+            },
+            "solver_identity": {
+              "aedt_version": "2024.2",
+              "aedt_version_raw": "2024.2.0",
+              "pyaedt_version": "0.26.2"
+            },
+            "policy_source": {
+              "repository": "OrPen",
+              "revision": "fb6890bd17de0af01d8b46cade788050f9be6636",
+              "integration_baseline_revision": "8cf659a585958f26d2ea4a8b5d2d295a3258a2a3",
+              "path": "orpen_sc_pdk/simulation/aedt/d3_q2d_material.py",
+              "sha256": "9596e0116256db2944b225c37ef7ab862de9a6f61247341f97593d7d7cdbc281",
+              "runtime_bundle_sha256": "1b6e443e5bb7bc0861eeb3b189b6cccc9b4e23dab18562f0b46d8e176b95bfc2"
+            },
+            "readback_method": "post-save-GetProjectMaterialNames-GetData-direct-object-property.v1"
+          },
+          "applied_write_attempt": {
+            "schema_version": "aedt-material-write-attempt.v1",
+            "status": "write_attempt_accepted_by_api",
+            "independent_readback": false,
+            "material_count": 1,
+            "materials": [
+              {
+                "aedt_material_name": "D3Silicon_er11p9",
+                "source_physical_material_key": "d3-target-specific-silicon-er11p9",
+                "material_kind": "dielectric",
+                "applied": {
+                  "permittivity": 11.9,
+                  "permeability": 1.0
+                },
+                "unsupported_properties": {
+                  "fields": {}
+                }
+              }
+            ],
+            "data_class": "project-internal",
+            "allowed_consumers": [
+              "d3_q2d",
+              "rev10_five_slot_search",
+              "stage_2_stage_3_closure"
+            ],
+            "publication_state": "diagnostic",
+            "promotion_eligible": false
+          },
+          "readback": {
+            "status": "PASS",
+            "stored_material_name": "D3Silicon_er11p9",
+            "properties": {
+              "permittivity": {
+                "property_type": "simple",
+                "raw_value": "11.9",
+                "normalized_value": 11.9,
+                "scientific_authority": true
+              },
+              "permeability": {
+                "property_type": "simple",
+                "raw_value": "1",
+                "normalized_value": 1.0,
+                "scientific_authority": true
+              },
+              "dielectric_loss_tangent": {
+                "property_type": "simple",
+                "raw_value": "0",
+                "normalized_value": 0.0,
+                "scientific_authority": false
+              },
+              "conductivity": {
+                "property_type": "simple",
+                "raw_value": "0",
+                "normalized_value": 0.0,
+                "scientific_authority": false
+              }
+            },
+            "substrate_assignments": [
+              {
+                "object_name": "q2d_die_D0",
+                "stored_material_name": "D3Silicon_er11p9"
+              },
+              {
+                "object_name": "q2d_die_D1",
+                "stored_material_name": "D3Silicon_er11p9"
+              }
+            ],
+            "method": "post-save-GetProjectMaterialNames-GetData-direct-object-property.v1"
+          }
+        },
+        "substrate_assignments": [
+          {
+            "object_name": "q2d_die_D0",
+            "stored_material_name": "D3Silicon_er11p9"
+          },
+          {
+            "object_name": "q2d_die_D1",
+            "stored_material_name": "D3Silicon_er11p9"
+          }
+        ]
+      },
+      "common_request_authority": {
+        "air_height_nm": 200000,
+        "basis": "distributed_maxwell_per_unit_length",
+        "die_thickness_nm": 500000,
+        "ground_width_nm": 150000,
+        "h_nm": 8000,
+        "metal_thickness_nm": 200,
+        "orientation": "xy_cross_section_positive_z_propagation",
+        "s_nm": 6000,
+        "schema_version": "d3-q2d-common-request-authority.v1",
+        "topology": "same_face_continuous_upper_ground",
+        "w_nm": 7000
+      }
+    }
+  ],
+  "artifact_identity": {
+    "algorithm": "sha256",
+    "payload_sha256": "7922f869c6566309fb0511d3b9e2b4e596d70f520c06cd65eb664ba8a858b181",
+    "artifact_id": "orpen-q2d-maxwell-lc-7922f869c6566309fb0511d3b9e2b4e596d70f520c06cd65eb664ba8a858b181"
+  }
+}
