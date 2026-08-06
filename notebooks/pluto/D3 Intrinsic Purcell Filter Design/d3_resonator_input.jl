@@ -490,14 +490,60 @@ function _d3_q2d_material_authority(value, label; role_evidence)
         ) : nothing
     if role_evidence
         layers = value["provenance_layers"]
+        Set(keys(layers)) ==
+            Set(("requested", "resolved", "applied_write_attempt", "readback")) ||
+            error("$(label) provenance layers are incomplete.")
         requested_context = layers["requested"]["material_context"]
         requested_context["material_profile_hash"] == value["material_profile_hash"] ||
             error("$(label) requested profile hash is inconsistent.")
         requested_context["material_profile"]["material_profile_id"] ==
             value["material_profile_id"] ||
             error("$(label) requested profile id is inconsistent.")
-        layers["resolved"]["material_profile_hash"] == value["material_profile_hash"] ||
+        requested_context["readback_required"] === true ||
+            error("$(label) must require independent material readback.")
+        resolved = layers["resolved"]
+        resolved["material_profile_hash"] == value["material_profile_hash"] ||
             error("$(label) resolved profile hash is inconsistent.")
+        readback = layers["readback"]
+        readback["status"] == "PASS" || error("$(label) material readback did not pass.")
+        requested_properties =
+            requested_context["material_profile"]["electromagnetic_model"]
+        resolved_properties = resolved["properties"]
+        readback_properties = readback["properties"]
+        for (requested_name, property_name) in (
+            ("relative_permittivity", "permittivity"),
+            ("relative_permeability", "permeability"),
+        )
+            requested_value = _d3_q2d_real(
+                requested_properties[requested_name]["value"],
+                "$(label) requested $(property_name)",
+            )
+            resolved_property = resolved_properties[property_name]
+            readback_property = readback_properties[property_name]
+            resolved_property["scientific_authority"] === true &&
+                readback_property["scientific_authority"] === true ||
+                error("$(label) $(property_name) must retain scientific authority.")
+            requested_value == _d3_q2d_real(
+                resolved_property["normalized_value"],
+                "$(label) resolved $(property_name)",
+            ) == _d3_q2d_real(
+                readback_property["normalized_value"],
+                "$(label) read-back $(property_name)",
+            ) || error("$(label) $(property_name) readback is inconsistent.")
+        end
+        for property_name in ("dielectric_loss_tangent", "conductivity")
+            resolved_properties[property_name]["scientific_authority"] === false &&
+                readback_properties[property_name]["scientific_authority"] === false ||
+                error("$(label) $(property_name) must remain non-authoritative.")
+        end
+        resolved_material = _d3_q2d_text(
+            resolved["stored_material_name"],
+            "$(label) resolved material",
+        )
+        resolved_material == _d3_q2d_text(
+            readback["stored_material_name"],
+            "$(label) read-back material",
+        ) || error("$(label) stored material readback is inconsistent.")
         assignments = collect(value["substrate_assignments"])
         !isempty(assignments) || error("$(label) substrate assignments are empty.")
         for assignment in assignments
@@ -505,8 +551,11 @@ function _d3_q2d_material_authority(value, label; role_evidence)
             _d3_q2d_text(
                 assignment["stored_material_name"],
                 "$(label) substrate material",
-            )
+            ) == resolved_material ||
+                error("$(label) substrate material disagrees with readback.")
         end
+        value["substrate_assignments"] == readback["substrate_assignments"] ||
+            error("$(label) substrate assignment readback is inconsistent.")
     end
     return (
         material_profile_id=_d3_q2d_text(
@@ -765,6 +814,17 @@ function _d3_q2d_validate_case(case, role, common, bundle_material, directions)
         single ? (1, 1) : (2, 2),
         "D3 Q2D C'",
     )
+    if !single
+        common.orientation == "xy_cross_section_positive_z_propagation" &&
+            directions["current"] == "positive I[i] flows in +z" &&
+            directions["positive_z"] ==
+                "normal to the XY cross-section and along line propagation" ||
+            error("D3 Q2D coupled-pair signs require the declared same +z basis.")
+        c_matrix[1, 2] <= 0 && c_matrix[2, 1] <= 0 ||
+            error("D3 Q2D Maxwell C' mutual entries must be nonpositive.")
+        l_matrix[1, 2] >= 0 && l_matrix[2, 1] >= 0 ||
+            error("D3 Q2D same-direction L' mutual entries must be nonnegative.")
+    end
     z0_ohm = if single
         Set(keys(case["derived"])) == Set(["z0_ohm"]) ||
             error("D3 single reference may derive only z0.")
