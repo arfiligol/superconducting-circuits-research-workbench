@@ -88,10 +88,13 @@ def render_values(
             axis.text(0.5, 0.5, "No evaluable points", ha="center", va="center")
             continue
         x, labels = x_values(axis_name, rows)
+        if axis_name != "joint":
+            axis.set_xscale("log", base=2)
         for quantity, color, label in QUANTITIES:
             y = [float(row[f"{quantity}_hz"]) / 1e9 for row in rows]
             axis.plot(x, y, "o-", color=color, label=label, linewidth=1.8, markersize=5)
         axis.set_xticks(x, labels)
+        axis.tick_params(axis="x", labelsize=9)
         axis.set_ylabel("Extracted frequency (GHz)")
         axis.legend(ncols=3, loc="best")
         if axis_name in ("mtl_first", "mtl_recheck"):
@@ -126,15 +129,30 @@ def render_deltas(
             axis.text(0.5, 0.5, "No evaluable points", ha="center", va="center")
             continue
         x, labels = x_values(axis_name, rows)
+        if axis_name != "joint":
+            axis.set_xscale("log", base=2)
+        axis.axhline(
+            0.1,
+            color="#666666",
+            linestyle="--",
+            linewidth=1.0,
+            label=r"0.1% gate ($f_r$/$f_p$)",
+        )
+        axis.axhline(
+            1.0,
+            color="#111111",
+            linestyle=":",
+            linewidth=1.2,
+            label=r"1% gate ($f_n$)",
+        )
         for quantity, color, label in QUANTITIES:
             y = [max(float(row[f"delta_{quantity}_percent"]), floor) for row in rows]
-            gate = 1.0 if quantity == "f_n" else 0.1
             axis.plot(x, y, "o-", color=color, label=label, linewidth=1.8, markersize=5)
-            axis.axhline(gate, color=color, linestyle="--", linewidth=1.0, alpha=0.7)
         axis.set_yscale("log")
         axis.set_xticks(x, labels)
+        axis.tick_params(axis="x", labelsize=9)
         axis.set_ylabel("Change to retained fine reference (%)")
-        axis.legend(ncols=3, loc="best")
+        axis.legend(ncols=3, loc="best", fontsize=8)
         if axis_name in ("mtl_first", "mtl_recheck"):
             axis.set_xlabel("MTL-window section count")
         elif axis_name == "single_trace":
@@ -146,7 +164,7 @@ def render_deltas(
             axis.set_xlabel("Joint line-section count = Single-Trace total + 2 * MTL")
     figure.suptitle(
         "D3 Rev10 W7/S6 local distributed intrinsic-pair spatial convergence\n"
-        f"Grid-change Gate · status={status} · dashed: 0.1% ($f_r$/$f_p$), 1% ($f_n$)",
+        f"Grid-change Gate · status={status} · exact zero changes shown at 1e-9%",
         fontsize=14,
     )
     figure.savefig(output_path, dpi=180, bbox_inches="tight")
