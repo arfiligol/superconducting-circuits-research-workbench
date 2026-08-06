@@ -386,6 +386,10 @@ function extraction_comparison(operational, reference)
         Cp_f=lc_deltas.Cp_f <= DIAGONAL_EXTRACTION_TOLERANCE,
         Lp_h=lc_deltas.Lp_h <= DIAGONAL_EXTRACTION_TOLERANCE,
     )
+    notch_lc_checks = (
+        Cn_f=lc_deltas.Cn_f <= NOTCH_EXTRACTION_TOLERANCE,
+        Ln_h=lc_deltas.Ln_h <= NOTCH_EXTRACTION_TOLERANCE,
+    )
     return (
         derivative_and_c_n_star_deltas_fraction=derivative_deltas,
         derivative_and_c_n_star_deltas_percent=map(value -> 100value, derivative_deltas),
@@ -393,15 +397,17 @@ function extraction_comparison(operational, reference)
         lc_deltas_fraction=lc_deltas,
         lc_deltas_percent=map(value -> 100value, lc_deltas),
         diagonal_lc_checks=diagonal_lc_checks,
-        c_n_l_n_deltas_role="report_only",
-        passed=all(values(derivative_checks)) && all(values(diagonal_lc_checks)),
+        notch_lc_checks=notch_lc_checks,
+        passed=all(values(derivative_checks)) &&
+               all(values(diagonal_lc_checks)) &&
+               all(values(notch_lc_checks)),
     )
 end
 
 function first_blocker(operational, reference, comparison)
     operational.status == "PASS" || return "operational root/derivative/LC qualification failed"
     reference.status == "PASS" || return "retained-reference root/derivative/LC qualification failed"
-    comparison.passed || return "operational-to-reference extraction stability exceeds 0.1%"
+    comparison.passed || return "operational-to-reference quantity-specific stability gate failed"
     return nothing
 end
 
@@ -473,7 +479,7 @@ function lc_readback_main()
             root_residual_tolerance=ROOT_RESIDUAL_TOLERANCE,
             diagonal_extraction_stability_tolerance=DIAGONAL_EXTRACTION_TOLERANCE,
             notch_extraction_stability_tolerance=NOTCH_EXTRACTION_TOLERANCE,
-            c_n_l_n_delta_role="report_only",
+            c_n_l_n_extraction_stability_tolerance=NOTCH_EXTRACTION_TOLERANCE,
             terminal_order=("P_r", "P_p"),
             time_convention="exp(-i*omega*t)",
             loss_model="R'=G'=0 downstream lossless-circuit assumption",
