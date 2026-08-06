@@ -4,6 +4,9 @@
 # result belongs to the same compiled model, and atomically publishes the
 # Human-review inputs from that single in-memory foundation.
 
+isdefined(@__MODULE__, :D3LCQualificationReceipt) ||
+    include(joinpath(@__DIR__, "d3_lc_qualification_receipt.jl"))
+
 module D3Stage2Result
 
 using Printf
@@ -11,6 +14,13 @@ using SHA
 using SuperconductingCircuitsCore
 
 using ..D3CoupledOptimizer: OptimizationResult, RejectedEvaluation, ValidEvaluation
+using ..D3LCQualificationReceipt: D3AuthorizedStage2LC,
+    D3_LC_QUALIFICATION_POLICY_SHA256,
+    authorize_d3_stage2_lc_receipt,
+    d3_lc_qualification_receipt_identity,
+    revalidate_d3_stage2_lc_receipt,
+    validate_d3_lc_qualification_receipt_identity,
+    validate_d3_stage2_lc_authorization_match
 
 include(joinpath(@__DIR__, "d3_resonator_input.jl"))
 using .D3ResonatorInput: validate_d3_rev10_q2d_identity
@@ -21,7 +31,7 @@ export Stage2RunSpec,
     write_stage2_result
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
-const SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v2"
+const SUMMARY_SCHEMA = "d3-stage2-physical-candidate-summary.v3"
 const QUBIT_RECEIPT_SCHEMA = "d3-stage2-qubit-admittance-receipt.v1"
 const OBJECTIVE_CONTRACT = "d3-stage2-stage3-full-qrp-objective.v2"
 const FOUNDATION_CONTRACT = "d3-stage2-candidate-foundation.v5"
@@ -58,6 +68,7 @@ struct Stage2RunSpec
     response_frequency_hz::Vector{Float64}
     qubit_frequency_hz::Vector{Float64}
     q2d_spec::Dict{String,Any}
+    lc_qualification_receipt_sha256::String
     bounds::Dict{String,Any}
     optimizer_configuration::Dict{String,Any}
 
@@ -67,6 +78,7 @@ struct Stage2RunSpec
         response_frequency_hz,
         qubit_frequency_hz,
         q2d_spec,
+        lc_qualification_receipt_sha256,
         bounds,
         optimizer_configuration,
     )
@@ -80,13 +92,25 @@ struct Stage2RunSpec
         )
         response = _frequency_grid(response_frequency_hz, "response")
         qubit = _frequency_grid(qubit_frequency_hz, "qubit-admittance")
+        lc_receipt_sha256 = validate_d3_lc_qualification_receipt_identity(
+            lc_qualification_receipt_sha256,
+        )
         q2d = _validated_q2d_spec(q2d_spec)
         bound_values = _validated_bounds(bounds)
         optimizer = _validated_optimizer_configuration(
             optimizer_configuration,
             bound_values,
         )
-        return new(id, slot, response, qubit, q2d, bound_values, optimizer)
+        return new(
+            id,
+            slot,
+            response,
+            qubit,
+            q2d,
+            lc_receipt_sha256,
+            bound_values,
+            optimizer,
+        )
     end
 end
 
@@ -96,6 +120,7 @@ function Stage2RunSpec(;
     response_frequency_hz,
     qubit_frequency_hz,
     q2d_spec,
+    lc_qualification_receipt_sha256=nothing,
     bounds,
     optimizer_configuration,
 )
@@ -105,16 +130,18 @@ function Stage2RunSpec(;
         response_frequency_hz,
         qubit_frequency_hz,
         q2d_spec,
+        lc_qualification_receipt_sha256,
         bounds,
         optimizer_configuration,
     )
 end
 
 """One optimizer winner re-evaluated through the canonical Stage-2 path."""
-struct Stage2EvaluatedResult{O,R,F,J,H,Q}
+struct Stage2EvaluatedResult{O,R,L,F,J,H,Q}
     specification::Stage2RunSpec
     optimization::O
     winner_record::R
+    lc_qualification::L
     foundation::F
     objective::J
     hb_trace::H
@@ -741,7 +768,30 @@ function _validate_q2d_publication_binding(foundation, specification)
     return snapshot
 end
 
-function _validate_foundation(foundation, candidate, specification)
+function _revalidate_lc_qualification(
+    qualification::D3AuthorizedStage2LC,
+    candidate,
+    specification,
+)
+    return revalidate_d3_stage2_lc_receipt(
+        qualification,
+        candidate;
+        q2d_artifact_sha256=specification.q2d_spec["artifact_sha256"],
+        expected_receipt_sha256=specification.lc_qualification_receipt_sha256,
+    )
+end
+
+function _validate_foundation(
+    foundation,
+    candidate,
+    specification,
+    qualification::D3AuthorizedStage2LC,
+)
+    renewed = _revalidate_lc_qualification(
+        qualification,
+        candidate,
+        specification,
+    )
     hasproperty(foundation, :contract_id) &&
         foundation.contract_id == FOUNDATION_CONTRACT || error(
         "D3 Stage-2 result requires the current candidate foundation.",
@@ -757,6 +807,19 @@ function _validate_foundation(foundation, candidate, specification)
     foundation.stage.candidate == candidate || error(
         "Re-evaluated Stage-2 foundation does not retain the optimizer winner candidate.",
     )
+    hasproperty(foundation.stage, :lc_qualification) || error(
+        "D3 Stage-2 foundation does not retain its LC qualification authority.",
+    )
+    stage_qualification = foundation.stage.lc_qualification
+    stage_qualification isa D3AuthorizedStage2LC || error(
+        "D3 Stage-2 foundation retains an unsupported LC qualification authority.",
+    )
+    stage_renewed = _revalidate_lc_qualification(
+        stage_qualification,
+        candidate,
+        specification,
+    )
+    validate_d3_stage2_lc_authorization_match(stage_renewed, renewed)
     _validate_q2d_publication_binding(foundation, specification)
     return _model_identity(
         foundation.cqed_handoff.source_model_identity,
@@ -860,11 +923,13 @@ end
 Select the optimizer's incumbent, evaluate one canonical physical foundation,
 and derive the objective, HB trace, and weighted-qubit admittance from that same
 foundation. Callbacks receive `(foundation, specification)` except the
-foundation callback, which receives `(candidate, specification)`.
+foundation callback, which receives
+`(candidate, specification, lc_qualification)`.
 """
 function evaluate_stage2_winner(
     optimization::OptimizationResult,
     specification::Stage2RunSpec;
+    lc_qualification_receipt=nothing,
     foundation_evaluator,
     objective_evaluator,
     hb_evaluator,
@@ -877,11 +942,22 @@ function evaluate_stage2_winner(
         specification.bounds,
         "D3 Stage-2 optimizer winner",
     )
-    foundation = foundation_evaluator(winner.candidate, specification)
+    lc_qualification = authorize_d3_stage2_lc_receipt(
+        lc_qualification_receipt,
+        winner.candidate;
+        q2d_artifact_sha256=specification.q2d_spec["artifact_sha256"],
+        expected_receipt_sha256=specification.lc_qualification_receipt_sha256,
+    )
+    foundation = foundation_evaluator(
+        winner.candidate,
+        specification,
+        lc_qualification,
+    )
     model_identity = _validate_foundation(
         foundation,
         winner.candidate,
         specification,
+        lc_qualification,
     )
     _require_same_grid(
         foundation.response_closure.frequency_hz,
@@ -908,10 +984,41 @@ function evaluate_stage2_winner(
         specification,
         optimization,
         winner,
+        lc_qualification,
         foundation,
         objective,
         hb,
         qubit,
+    )
+end
+
+function _revalidate_evaluated_result(evaluated::Stage2EvaluatedResult)
+    specification = evaluated.specification
+    optimization = evaluated.optimization
+    _validate_optimization_provenance(optimization, specification)
+    winner = _winner_record(optimization)
+    winner.record_id == evaluated.winner_record.record_id &&
+        winner.candidate_id == evaluated.winner_record.candidate_id &&
+        winner.candidate == evaluated.winner_record.candidate &&
+        winner.cost == evaluated.winner_record.cost || error(
+        "D3 Stage-2 retained winner no longer equals the optimizer incumbent.",
+    )
+    _validate_candidate_bounds(
+        winner.candidate,
+        specification.bounds,
+        "D3 Stage-2 retained optimizer winner",
+    )
+    model_identity = _validate_foundation(
+        evaluated.foundation,
+        winner.candidate,
+        specification,
+        evaluated.lc_qualification,
+    )
+    _validate_objective(evaluated.objective, model_identity, winner.cost)
+    return _revalidate_lc_qualification(
+        evaluated.lc_qualification,
+        winner.candidate,
+        specification,
     )
 end
 
@@ -1296,6 +1403,7 @@ function _effective_rp_linear_review_payload(foundation)
 end
 
 function _summary(evaluated, artifact_hashes)
+    lc_qualification = _revalidate_evaluated_result(evaluated)
     optimization = evaluated.optimization
     foundation = evaluated.foundation
     stage = foundation.stage
@@ -1338,6 +1446,11 @@ function _summary(evaluated, artifact_hashes)
         "model_identity" => _json_value(model_identity, "model identity"),
         "slot_hz" => evaluated.specification.slot_hz,
         "q2d_spec" => _json_value(q2d_snapshot, "artifact-derived Q2D specification"),
+        "lc_qualification_receipt" => _json_value(
+            d3_lc_qualification_receipt_identity(lc_qualification),
+            "LC qualification receipt identity",
+        ),
+        "lc_qualification_policy_sha256" => D3_LC_QUALIFICATION_POLICY_SHA256,
         "bounds" => _json_value(evaluated.specification.bounds, "optimizer bounds"),
         "cma" => Dict(
             "evaluations" => length(history),
@@ -1422,10 +1535,7 @@ function write_stage2_result(
     output_directory;
     linear_quantity_payload_builder,
 )
-    _validate_q2d_publication_binding(
-        evaluated.foundation,
-        evaluated.specification,
-    )
+    _revalidate_evaluated_result(evaluated)
     destination = abspath(String(output_directory))
     ispath(destination) && error("D3 Stage-2 output directory already exists: $(destination)")
     parent = dirname(destination)
@@ -1505,6 +1615,7 @@ function write_stage2_result(
         ispath(destination) && error(
             "D3 Stage-2 output directory appeared during publication: $(destination)",
         )
+        _revalidate_evaluated_result(evaluated)
         mv(temporary, destination)
         return destination
     catch

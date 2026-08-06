@@ -1,6 +1,6 @@
 # D3 Stage 2 and Stage 3 model construction. Both physical stages own the
-# same fabrication coordinates. Stage 2 response-matches those coordinates to
-# a finite Equivalent Circuit; Stage 3 retains the distributed realization.
+# same fabrication coordinates. Stage 2 consumes receipt-qualified LC readback
+# for the finite Equivalent Circuit; Stage 3 retains the distributed realization.
 # Cost semantics and optimizer orchestration remain outside this file.
 
 using LinearAlgebra
@@ -10,6 +10,13 @@ using SuperconductingCircuitsCore
 isdefined(@__MODULE__, :D3IDCInput) ||
     include(joinpath(@__DIR__, "d3_idc_input.jl"))
 using .D3IDCInput: D3IDCMapping, d3_idc_mapping_semantic_sha256
+
+isdefined(@__MODULE__, :D3LCQualificationReceipt) ||
+    include(joinpath(@__DIR__, "d3_lc_qualification_receipt.jl"))
+using .D3LCQualificationReceipt: D3AuthorizedStage2LC,
+    D3_LC_QUALIFICATION_CONTRACT,
+    D3_LC_QUALIFICATION_POLICY_SHA256,
+    authorize_d3_stage2_lc_receipt
 
 isdefined(@__MODULE__, :D3ResonatorInput) ||
     include(joinpath(@__DIR__, "d3_resonator_input.jl"))
@@ -328,6 +335,54 @@ function _d3_stage2_validate_resonator_mapping(
         "D3 Stage-2 resonator mapping SHA-256 disagrees with its declared contract.",
     )
     return resonator_mapping
+end
+
+function _d3_stage2_receipt_qualified_resonators(
+    authorization::D3AuthorizedStage2LC,
+    resonator_mapping::D3Stage2ResonatorMapping,
+    lengths,
+)
+    selected = _d3_selected_q2d_line_input(resonator_mapping.fixed_line_input)
+    receipt = authorization.receipt
+    lc = authorization.lc_readback
+    return merge(
+        lc,
+        (
+            mapping_id="d3-frequency-priority-lc-qualification-receipt",
+            mapping_sha256=receipt.sha256,
+            q2d_artifact_id=selected.q2d_artifact_id,
+            q2d_artifact_sha256=selected.q2d_artifact_sha256,
+            topology_id=String(selected.q2d_topology_id),
+            fixed_line_input_sha256=selected.fixed_line_input_sha256,
+            fixed_line_input_identity=selected.fixed_line_input_identity,
+            fixed_line_input_identity_canonical_json=
+                selected.fixed_line_input_identity_canonical_json,
+            match_contract_id=D3_LC_QUALIFICATION_CONTRACT,
+            physical_lengths=lengths,
+            match_evidence=(
+                reference_model=(
+                    role=:receipt_qualified_physical_length_to_equivalent_lc,
+                    final_stage2_hb_model=:resolved_lumped_equivalent_circuit,
+                    topology=:two_grounded_head_open_tail_quarter_wave_resonators_with_mtl_window,
+                    terminal_coordinates=(:readout_open_tail, :filter_open_tail),
+                    diagonal_match_state=:mtl_mutual_terms_disabled_diagonal_loading_preserved,
+                    bridge_match_state=:full_mtl_mutual_terms_preserved,
+                    internal_coordinate_elimination=:frequency_dependent_dynamic_schur_complement,
+                    section_length_m=selected.section_length_m,
+                    mtl_section_length_m=selected.mtl_section_length_m,
+                ),
+                qualification_receipt=(
+                    schema_version=receipt.normalized.schema_version,
+                    evidence_id=receipt.normalized.evidence_id,
+                    receipt_sha256=receipt.sha256,
+                    policy_sha256=D3_LC_QUALIFICATION_POLICY_SHA256,
+                    candidate_id=receipt.normalized.candidate.id,
+                    source=receipt.normalized.source,
+                    frequency_deltas=receipt.normalized.frequency_deltas,
+                ),
+            ),
+        ),
+    )
 end
 
 function _d3_stage2_resonator_response_model(lengths, lines; diagonal)
@@ -798,17 +853,19 @@ end
 
 """
     d3_stage2_equivalent_model(
-        candidate, fixed, resonator_mapping, idc_mapping; id=...)
+        candidate, fixed, resonator_mapping, idc_mapping;
+        lc_qualification_receipt, id=...)
 
 Build one physically constrained Stage-2 Equivalent candidate. The optimizer
 owns the five CPW/MTL lengths and `u_IDC`; the six LC values are read-only
-outputs of one provenance-bearing response-match map.
+outputs of one exact, validated LC qualification receipt.
 """
 function d3_stage2_equivalent_model(
     candidate,
     fixed,
     resonator_mapping::D3Stage2ResonatorMapping,
     idc_mapping::D3IDCMapping;
+    lc_qualification_receipt=nothing,
     id="d3-stage2-equivalent-candidate",
 )
     _d3_stage_require_exact_fields(
@@ -816,13 +873,19 @@ function d3_stage2_equivalent_model(
         D3_STAGE2_VARIABLE_ORDER,
         "D3 Stage-2 physical candidate",
     )
+    lc_qualification = authorize_d3_stage2_lc_receipt(
+        lc_qualification_receipt,
+        candidate;
+        q2d_artifact_sha256=resonator_mapping.contract.q2d_artifact_sha256,
+    )
     _d3_stage2_validate_resonator_mapping(resonator_mapping, fixed)
     _d3_stage_require_physical_idc_mapping(idc_mapping)
     lengths = _d3_stage_physical_lengths(
         candidate,
         "D3 Stage-2 physical candidate",
     )
-    response_match = _d3_stage2_response_matched_resonators(
+    response_match = _d3_stage2_receipt_qualified_resonators(
+        lc_qualification,
         resonator_mapping,
         lengths,
     )
@@ -853,6 +916,7 @@ function d3_stage2_equivalent_model(
             variable_order=D3_STAGE2_VARIABLE_ORDER,
             candidate=candidate,
             lengths=lengths,
+            lc_qualification=lc_qualification,
             response_match=response_match,
             resolved_equivalent_candidate=resolved_candidate,
         ),
@@ -864,8 +928,13 @@ function d3_stage2_equivalent_model(
     fixed,
     resonator_mapping,
     idc_mapping;
+    lc_qualification_receipt=nothing,
     kwargs...,
 )
+    isnothing(lc_qualification_receipt) && error(
+        "D3 Stage-2 formal evaluation requires one exact LC qualification " *
+        "receipt before any Equivalent model construction.",
+    )
     error(
         "D3 Stage-2 formal evaluation requires the attested selected-Q2D " *
         "resonator mapping and a validated D3IDCMapping; raw callables are diagnostic-only.",
@@ -1268,7 +1337,7 @@ end
 
 """
     d3_stage2_candidate_metrics(
-        candidate, fixed, resonator_mapping, idc_mapping; ...)
+        candidate, fixed, resonator_mapping, idc_mapping; lc_qualification_receipt, ...)
 
 Compile one complete Equivalent candidate and extract exactly the six raw
 revision-9 objective operands. Expensive response-closure and L_A calibration
@@ -1279,6 +1348,7 @@ function d3_stage2_candidate_metrics(
     fixed,
     resonator_mapping,
     idc_mapping;
+    lc_qualification_receipt=nothing,
     readout_effective_root_band_hz,
     filter_effective_root_band_hz,
     effective_operator_gate_policy,
@@ -1292,6 +1362,7 @@ function d3_stage2_candidate_metrics(
         fixed,
         resonator_mapping,
         idc_mapping;
+        lc_qualification_receipt=lc_qualification_receipt,
         id=id,
     )
     model = d3_exact_n_compiled_model(stage.built)
@@ -1396,7 +1467,7 @@ end
 
 """
     d3_stage2_candidate_foundation(
-        candidate, fixed, resonator_mapping, idc_mapping; ...)
+        candidate, fixed, resonator_mapping, idc_mapping; lc_qualification_receipt, ...)
 
 Execute the complete Stage-2 path that is already physically defined:
 candidate construction, compiled seven-node model, neutral `7 -> 6`
@@ -1413,6 +1484,7 @@ function d3_stage2_candidate_foundation(
     fixed,
     resonator_mapping,
     idc_mapping;
+    lc_qualification_receipt=nothing,
     response_frequency_hz,
     notch_frequency_bracket_hz,
     linewidth_frequency_band_hz,
@@ -1428,6 +1500,7 @@ function d3_stage2_candidate_foundation(
         fixed,
         resonator_mapping,
         idc_mapping;
+        lc_qualification_receipt=lc_qualification_receipt,
         readout_effective_root_band_hz=
             readout_effective_root_band_hz,
         filter_effective_root_band_hz=
