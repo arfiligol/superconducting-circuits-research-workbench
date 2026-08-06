@@ -683,11 +683,11 @@ function run_experiment(lines, cache_directory, cache_identity)
         lines,
         cache_directory,
         cache_identity,
-        (count, origin) -> grid_state(base_outer, count; origin);
+        (count, origin) -> grid_state(base_outer, count; origin),
+        mtl_discovery;
         axis="mtl_first",
         coordinate=state -> state.mtl_count,
         phase="mtl-first",
-        discovery=mtl_discovery,
     )
     mtl_search.status == "PASS" || return (
         status="NOT_EVALUABLE",
@@ -716,11 +716,11 @@ function run_experiment(lines, cache_directory, cache_identity)
         lines,
         cache_directory,
         cache_identity,
-        (count, origin) -> grid_state(allocate_outer_counts(count), selected_mtl; origin);
+        (count, origin) -> grid_state(allocate_outer_counts(count), selected_mtl; origin),
+        cpw_discovery;
         axis="single_trace",
         coordinate=state -> state.outer_total,
         phase="single-trace",
-        discovery=cpw_discovery,
     )
     cpw_search.status == "PASS" || return (
         status="NOT_EVALUABLE",
@@ -751,11 +751,11 @@ function run_experiment(lines, cache_directory, cache_identity)
         lines,
         cache_directory,
         cache_identity,
-        (count, origin) -> grid_state(selected_outer, count; origin);
+        (count, origin) -> grid_state(selected_outer, count; origin),
+        recheck_discovery;
         axis="mtl_recheck",
         coordinate=state -> state.mtl_count,
         phase="mtl-recheck",
-        discovery=recheck_discovery,
     )
     recheck_search.status == "PASS" || return (
         status="NOT_EVALUABLE",
