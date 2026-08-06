@@ -16,7 +16,7 @@ const Q2D_PATH = joinpath(SOURCE_DIR, "d3_continuous_ground_q2d_maxwell_lc.v4.js
 const REQUIRED_WORKBENCH_ANCESTOR = "4ac63965398929b065e737b622a76478d51d3647"
 const REQUIRED_ORPEN_PRODUCER_REVISION = "80576910d596dbf4720335188e66b6a520cc2e36"
 const REQUIRED_Q2D_SHA256 = "301d3501a30614b994cf3f28d46eb75b545620a164bbb346fa557120d643fe6c"
-const EVIDENCE_ID = "d3-w7s6-local-intrinsic-pair-spatial-convergence-v1"
+const EVIDENCE_ID = "d3-w7s6-local-intrinsic-pair-spatial-convergence-v2"
 const CANDIDATE_ID = "d3-w7s6-historical-length-alignment-witness-v1"
 const LENGTHS = (
     lr_open_m=1.90530e-3,
@@ -350,14 +350,50 @@ function strict_opposite_sign(left, right)
     return !iszero(left) && !iszero(right) && ((left < 0 && right > 0) || (left > 0 && right < 0))
 end
 
-function diagonal_receipt(observable, grid, y_by_frequency, index, branch_identity)
-    response(frequency) = y_by_frequency[frequency][index, index]
-    qualifier = (lower, upper, left, right) -> (
-        pole_free=all(value -> isfinite(real(value)) && isfinite(imag(value)), (left, right)),
-        branch_unambiguous=strict_opposite_sign(imag(left), imag(right)),
-        branch_identity=branch_identity,
+function interior_pole_certificate(model::ProbeModel, lower_hz, upper_hz)
+    if isempty(model.kii)
+        return (
+            status="PASS",
+            method="no interior coordinates",
+            lower_frequency_hz=Float64(lower_hz),
+            upper_frequency_hz=Float64(upper_hz),
+            interior_dimension=0,
+            upper_dynamic_positive_definite=true,
+            interior_capacitance_spd_by_principal_submatrix=true,
+        )
+    end
+    omega_upper = 2π * Float64(upper_hz)
+    upper_dynamic = Symmetric(model.kii - omega_upper^2 * model.cii)
+    factor = cholesky(upper_dynamic; check=false)
+    positive_definite = issuccess(factor)
+    return (
+        status=positive_definite ? "PASS" : "FAIL",
+        method="sparse Cholesky of K_ii - omega_upper^2*C_ii",
+        rationale="positive definiteness at the upper endpoint excludes any interior generalized eigenfrequency throughout the lower bracket",
+        lower_frequency_hz=Float64(lower_hz),
+        upper_frequency_hz=Float64(upper_hz),
+        interior_dimension=size(model.kii, 1),
+        upper_dynamic_positive_definite=positive_definite,
+        interior_capacitance_spd_by_principal_submatrix=true,
     )
-    return d3_signed_zero_midpoint(
+end
+
+function diagonal_receipt(model, observable, grid, y_by_frequency, index, branch_identity)
+    response(frequency) = y_by_frequency[frequency][index, index]
+    certificate = Ref{Any}(nothing)
+    qualifier = function(lower, upper, left, right)
+        pole = interior_pole_certificate(model, lower, upper)
+        certificate[] = pole
+        return (
+            pole_free=pole.status == "PASS" && all(
+                value -> isfinite(real(value)) && isfinite(imag(value)),
+                (left, right),
+            ),
+            branch_unambiguous=strict_opposite_sign(imag(left), imag(right)),
+            branch_identity=branch_identity,
+        )
+    end
+    receipt = d3_signed_zero_midpoint(
         grid,
         response;
         observable_id=observable,
@@ -367,6 +403,7 @@ function diagonal_receipt(observable, grid, y_by_frequency, index, branch_identi
         branch_identity,
         bracket_qualifier=qualifier,
     )
+    return receipt, certificate[]
 end
 
 function notch_receipt(grid, y_by_frequency)
@@ -415,8 +452,22 @@ function evaluate_state(lines, state)
     filter_grid = inclusive_grid(max(FREQUENCY_MIN_HZ, 0.85filter_seed), min(FREQUENCY_MAX_HZ, 1.15filter_seed))
     diagonal_grid = sort(unique(vcat(readout_grid, filter_grid)))
     diagonal_y = evaluate_y_grid(diagonal.probe, diagonal_grid)
-    f_r = diagonal_receipt(:f_r, readout_grid, diagonal_y, 1, "readout-diagonal-quarter-wave-root")
-    f_p = diagonal_receipt(:f_p, filter_grid, diagonal_y, 2, "filter-diagonal-quarter-wave-root")
+    f_r, f_r_pole = diagonal_receipt(
+        diagonal.probe,
+        :f_r,
+        readout_grid,
+        diagonal_y,
+        1,
+        "readout-diagonal-quarter-wave-root",
+    )
+    f_p, f_p_pole = diagonal_receipt(
+        diagonal.probe,
+        :f_p,
+        filter_grid,
+        diagonal_y,
+        2,
+        "filter-diagonal-quarter-wave-root",
+    )
     if f_r.status != "PASS" || f_p.status != "PASS"
         result = (
             status="NOT_EVALUABLE",
@@ -424,6 +475,7 @@ function evaluate_state(lines, state)
             grid=grid_record,
             reason="diagonal midpoint extraction failed",
             extraction=(f_r=f_r, f_p=f_p, f_n=nothing),
+            pole_certificates=(f_r=f_r_pole, f_p=f_p_pole),
             values_hz=nothing,
             elapsed_seconds=time() - started,
         )
@@ -446,6 +498,7 @@ function evaluate_state(lines, state)
         grid=grid_record,
         reason=status == "COMPLETE" ? nothing : "notch midpoint extraction failed",
         extraction=(f_r=f_r, f_p=f_p, f_n=f_n),
+        pole_certificates=(f_r=f_r_pole, f_p=f_p_pole),
         values_hz=values,
         invariants=(diagonal=diagonal.probe.matrix_gate, physical=physical.probe.matrix_gate),
         elapsed_seconds=time() - started,
