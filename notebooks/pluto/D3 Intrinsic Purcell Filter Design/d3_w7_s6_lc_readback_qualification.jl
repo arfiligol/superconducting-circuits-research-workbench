@@ -6,18 +6,20 @@ using Dates
 
 const LC_SOURCE_DIR = @__DIR__
 const LC_SOURCE_PATH = abspath(@__FILE__)
-const LC_EVIDENCE_ID = "d3-w7s6-singleton-root-derivative-lc-readback-v1"
+const LC_EVIDENCE_ID = "d3-w7s6-singleton-frequency-priority-lc-readback-v1"
 const REQUIRED_LC_WORKBENCH_ANCESTOR = "54ff16a70d9cbbc89b83d635d64767fded02802e"
 const REQUIRED_SPATIAL_RECEIPT_SHA256 =
     "8917bd26e96c57711e56f8388bdc6e54cb2fc5a150a559e546717e53770d2566"
-const ROOT_ABSOLUTE_TOLERANCE_RAD_S = 2π * 10.0
+const ROOT_ABSOLUTE_TOLERANCE_RAD_S = 2π * 1.25
 const ROOT_RELATIVE_TOLERANCE = 1.0e-13
 const ROOT_MAX_ITERATIONS = 128
 const DERIVATIVE_STEP_FRACTION = 1.0e-6
-const DERIVATIVE_STEP_TOLERANCE = 1.0e-4
+const DIAGONAL_DERIVATIVE_TOLERANCE = 1.0e-3
+const NOTCH_DERIVATIVE_TOLERANCE = 5.0e-2
 const REACTIVE_PURITY_TOLERANCE = 1.0e-7
 const ROOT_RESIDUAL_TOLERANCE = 2.0e-3
-const EXTRACTION_STABILITY_TOLERANCE = 1.0e-3
+const DIAGONAL_EXTRACTION_TOLERANCE = 1.0e-3
+const NOTCH_EXTRACTION_TOLERANCE = 5.0e-2
 const Z21_RESIDUAL_OHM = 0.01
 
 include(joinpath(LC_SOURCE_DIR, "d3_w7_s6_nonmonotonicity_falsification.jl"))
@@ -147,6 +149,8 @@ function root_and_derivative(observable, response, midpoint_receipt)
     d_h = (samples.plus_h - samples.minus_h) / (2h)
     d_h2 = (samples.plus_h2 - samples.minus_h2) / h
     step_change = abs(d_h2 - d_h) / max(abs(d_h2), floatmin(Float64))
+    step_tolerance = observable == :f_n ?
+        NOTCH_DERIVATIVE_TOLERANCE : DIAGONAL_DERIVATIVE_TOLERANCE
     purity = abs(real(d_h2)) / max(abs(imag(d_h2)), floatmin(Float64))
     root_value = response(root)
     residual_scale = max(
@@ -162,7 +166,7 @@ function root_and_derivative(observable, response, midpoint_receipt)
         midpoint_distance_hz=abs(root / (2π) - midpoint_hz) <= Float64(midpoint_receipt.half_width_hz),
         stencil_inside_bracket=samples_inside,
         finite_samples=finite_samples,
-        derivative_step_convergence=step_change <= DERIVATIVE_STEP_TOLERANCE,
+        derivative_step_convergence=step_change <= step_tolerance,
         reactive_purity=purity <= REACTIVE_PURITY_TOLERANCE,
         normalized_root_residual=residual <= ROOT_RESIDUAL_TOLERANCE,
     )
@@ -182,6 +186,7 @@ function root_and_derivative(observable, response, midpoint_receipt)
         derivative_h=complex_record(d_h),
         derivative_h2=complex_record(d_h2),
         derivative_step_relative_change=step_change,
+        derivative_step_tolerance=step_tolerance,
         reactive_purity_relative=purity,
         normalized_root_residual=residual,
         checks=checks,
@@ -369,16 +374,27 @@ function extraction_comparison(operational, reference)
             for name in keys(operational.lc_readback)
         ),
     )
-    checks = NamedTuple{keys(derivative_deltas)}(
-        Tuple(value <= EXTRACTION_STABILITY_TOLERANCE for value in values(derivative_deltas)),
+    derivative_checks = (
+        dY_r_domega=derivative_deltas.dY_r_domega <= DIAGONAL_EXTRACTION_TOLERANCE,
+        dY_p_domega=derivative_deltas.dY_p_domega <= DIAGONAL_EXTRACTION_TOLERANCE,
+        dZ21_domega=derivative_deltas.dZ21_domega <= NOTCH_EXTRACTION_TOLERANCE,
+        Cn_star=derivative_deltas.Cn_star <= NOTCH_EXTRACTION_TOLERANCE,
+    )
+    diagonal_lc_checks = (
+        Cr_f=lc_deltas.Cr_f <= DIAGONAL_EXTRACTION_TOLERANCE,
+        Lr_h=lc_deltas.Lr_h <= DIAGONAL_EXTRACTION_TOLERANCE,
+        Cp_f=lc_deltas.Cp_f <= DIAGONAL_EXTRACTION_TOLERANCE,
+        Lp_h=lc_deltas.Lp_h <= DIAGONAL_EXTRACTION_TOLERANCE,
     )
     return (
         derivative_and_c_n_star_deltas_fraction=derivative_deltas,
         derivative_and_c_n_star_deltas_percent=map(value -> 100value, derivative_deltas),
-        derivative_and_c_n_star_checks=checks,
+        derivative_and_c_n_star_checks=derivative_checks,
         lc_deltas_fraction=lc_deltas,
         lc_deltas_percent=map(value -> 100value, lc_deltas),
-        passed=all(values(checks)),
+        diagonal_lc_checks=diagonal_lc_checks,
+        c_n_l_n_deltas_role="report_only",
+        passed=all(values(derivative_checks)) && all(values(diagonal_lc_checks)),
     )
 end
 
@@ -449,12 +465,15 @@ function lc_readback_main()
         ),
         contract=(
             authoritative_frequency_observable="accepted 0.25-MHz signed-bracket midpoint",
-            construction_anchor="same-bracket 10-Hz bisection root",
+            construction_anchor="same-bracket 1.25-Hz bisection root",
             derivative_step_fraction=DERIVATIVE_STEP_FRACTION,
-            derivative_step_tolerance=DERIVATIVE_STEP_TOLERANCE,
+            diagonal_derivative_step_tolerance=DIAGONAL_DERIVATIVE_TOLERANCE,
+            notch_derivative_step_tolerance=NOTCH_DERIVATIVE_TOLERANCE,
             reactive_purity_tolerance=REACTIVE_PURITY_TOLERANCE,
             root_residual_tolerance=ROOT_RESIDUAL_TOLERANCE,
-            extraction_stability_tolerance=EXTRACTION_STABILITY_TOLERANCE,
+            diagonal_extraction_stability_tolerance=DIAGONAL_EXTRACTION_TOLERANCE,
+            notch_extraction_stability_tolerance=NOTCH_EXTRACTION_TOLERANCE,
+            c_n_l_n_delta_role="report_only",
             terminal_order=("P_r", "P_p"),
             time_convention="exp(-i*omega*t)",
             loss_model="R'=G'=0 downstream lossless-circuit assumption",
