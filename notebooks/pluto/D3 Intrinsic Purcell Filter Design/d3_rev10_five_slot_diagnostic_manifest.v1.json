@@ -1,0 +1,114 @@
+{
+  "contract_id": "d3-rev10-five-slot-direct-hybridized-diagnostic-run.v1",
+  "approval_status": "human_approved",
+  "accepted_at": "2026-08-07",
+  "data_classification": "project-internal",
+  "evidence_status": "diagnostic_non_promotable",
+  "sources": {
+    "root_commit": "7f701c7a1c47438a107a046d11642d2fdccdf915",
+    "workbench_commit": "e2e91ad7836c6830cf0023584667b05df7511951",
+    "orpen_commit": "80576910d596dbf4720335188e66b6a520cc2e36",
+    "target_contract_sha256": "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
+    "q2d_artifact_sha256": "301d3501a30614b994cf3f28d46eb75b545620a164bbb346fa557120d643fe6c",
+    "q3d_input_sha256": "b3e0c7aa403856e238f7121825f3691c7b3be13afa1a43ac6895f21191e832e2",
+    "idc_mapping_sha256": "db549a78564ab1dd25aba4cd0004304651ea3da7a1e66ce92bbb31bceb79e66c",
+    "fixed_input_canonical_sha256": "46a0e0c4699eab5ffc2a4c869708ef77a669f879837a69db7dd9ed49d55bd7be"
+  },
+  "fixed_physical_inputs": {
+    "q2d_section_length_m": 0.00005,
+    "q2d_mtl_section_length_m": 0.00001,
+    "q3d_gap_um": 8.0,
+    "idc_gap_um": 8.0,
+    "feedline_length_m": 0.001,
+    "feedline_n_sections": 20,
+    "feedline_l_per_m_h": 4.04313e-7,
+    "feedline_c_per_m_f": 1.7986e-10,
+    "port_resistance_ohm": 50.0
+  },
+  "slots_hz": [5600000000.0, 5700000000.0, 5800000000.0, 5900000000.0, 6000000000.0],
+  "variables": [
+    {"name": "lr_open_m", "unit": "m", "lower": 0.0, "upper": 0.003},
+    {"name": "lr_short_m", "unit": "m", "lower": 0.0, "upper": 0.003},
+    {"name": "lc_m", "unit": "m", "lower": 0.0, "upper": 0.0006},
+    {"name": "lp_open_m", "unit": "m", "lower": 0.0, "upper": 0.003},
+    {"name": "lp_short_m", "unit": "m", "lower": 0.0, "upper": 0.003},
+    {"name": "u_IDC", "unit": "um", "lower": 20.0, "upper": 100.0}
+  ],
+  "starts": [
+    {
+      "name": "human_initializer",
+      "candidate": {
+        "lr_open_m": 0.002,
+        "lr_short_m": 0.002,
+        "lc_m": 0.0003,
+        "lp_open_m": 0.002,
+        "lp_short_m": 0.002,
+        "u_IDC": 60.0
+      }
+    },
+    {
+      "name": "fixed_asymmetric",
+      "candidate": {
+        "lr_open_m": 0.00215,
+        "lr_short_m": 0.00185,
+        "lc_m": 0.00033,
+        "lp_open_m": 0.00185,
+        "lp_short_m": 0.00215,
+        "u_IDC": 54.0
+      }
+    }
+  ],
+  "cma_es": {
+    "seed_formula": "slot_MHz + 10000 * restart_index",
+    "restart_indices": [0, 1],
+    "sigma_normalized": 0.15,
+    "population": 9,
+    "maximum_iterations": 100,
+    "maximum_evaluations": 900,
+    "ftol_cost": 1e-8,
+    "xtol_normalized": 0.0001,
+    "cross_slot_state_reuse": false
+  },
+  "extraction": {
+    "root_band_rule": "[slot_hz - 50e6, slot_hz + 50e6]",
+    "notch_bracket_hz": [4750000000.0, 5250000000.0],
+    "minimum_q_reference_overlap": 0.5,
+    "minimum_each_rp_subspace_overlap": 0.5,
+    "minimum_unordered_set_assignment_margin": 0.05,
+    "effective_operator_gate_policy": {
+      "maximum_elimination_condition_number": 1e10,
+      "maximum_relative_elimination_solve_residual": 1e-10,
+      "maximum_relative_reciprocity_error": 1e-12,
+      "maximum_relative_passivity_violation": 1e-12,
+      "maximum_relative_root_residual": 1e-10,
+      "maximum_root_growth_rate_hz": 1.0,
+      "minimum_normalized_residue_slope": 0.001,
+      "maximum_relative_coupling_spread": 0.01,
+      "maximum_relative_determinant_closure_error": 1e-10
+    }
+  },
+  "spatial_refinement": {
+    "levels": [0, 1, 2, 3],
+    "rule": "joint_exact_N_to_2N",
+    "maximum_adjacent_relative_change": 0.001,
+    "required_consecutive_passes": 2,
+    "cared_outputs": [
+      "f_r_eff_hz",
+      "f_p_eff_hz",
+      "f_n_hz",
+      "abs_real_J_eff_hz",
+      "unordered_rp_kappa_sum_hz",
+      "unordered_rp_linewidth_fraction_min"
+    ]
+  },
+  "failure_policy": {
+    "candidate_failure": "NOT_EVALUABLE",
+    "optimizer_boundary_value": "+Inf",
+    "persisted_scientific_cost_on_failure": null,
+    "stale_or_substituted_result_allowed": false,
+    "abort_remaining_slots_only_on": "RUN_SOURCE_INVALID"
+  },
+  "execution_order": "ascending_slots",
+  "winner_closure": "PENDING_ALLOWED",
+  "publication": "none"
+}
