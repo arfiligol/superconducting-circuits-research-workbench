@@ -16,7 +16,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "857e2990b9b7355c54dd8a1a9936d45259c23c54549c573e280da2b81aa801d6"
+    "76551b8566f35ea046b09c56cfd664c89c58efd57e2f11bb095ec91266e52e30"
 const EXPECTED_CORE_ENTRY = realpath(joinpath(
     CORE_ROOT,
     "src",
@@ -108,6 +108,7 @@ function extraction_profile(manifest, slot_hz)
     ))
     band = (slot_hz - 50.0e6, slot_hz + 50.0e6)
     bracket = Tuple(Float64.(extraction["notch_bracket_hz"]))
+    disposition = extraction["numeric_control_disposition"]
     return (
         readout_effective_root_band_hz=band,
         filter_effective_root_band_hz=band,
@@ -119,6 +120,15 @@ function extraction_profile(manifest, slot_hz)
             Float64(extraction["minimum_each_rp_subspace_overlap"]),
         minimum_unordered_set_assignment_margin=
             Float64(extraction["minimum_unordered_set_assignment_margin"]),
+        numeric_control_disposition=(
+            authority=Symbol(disposition["authority"]),
+            root_windows=Symbol(disposition["root_windows"]),
+            effective_operator_controls=
+                Symbol(disposition["effective_operator_controls"]),
+            notch_window=Symbol(disposition["notch_window"]),
+            overlap_and_assignment_controls=
+                Symbol(disposition["overlap_and_assignment_controls"]),
+        ),
         complement=:complete_hybridized_complement,
     )
 end
@@ -437,6 +447,18 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
     manifest["execution_order"] == "ascending_slots" || error(
         "Rev10 manifest execution order is not ascending_slots.",
     )
+    gate_reconciliation = manifest["human_gate_reconciliation"]
+    gate_reconciliation_path = joinpath(
+        @__DIR__,
+        String(gate_reconciliation["path"]),
+    )
+    isfile(gate_reconciliation_path) || error(
+        "Rev10 Human-gate reconciliation ledger is missing.",
+    )
+    file_sha256(gate_reconciliation_path) ==
+        String(gate_reconciliation["sha256"]) || error(
+            "Rev10 Human-gate reconciliation ledger bytes changed.",
+        )
 
     workbench_head = command_output("git", "rev-parse", "HEAD")
     base = String(manifest["sources"]["workbench_commit"])
@@ -484,6 +506,10 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
     run_identity = (
         contract_id=String(manifest["contract_id"]),
         manifest_sha256=EXPECTED_MANIFEST_SHA256,
+        human_gate_reconciliation=(
+            locator=basename(gate_reconciliation_path),
+            sha256=String(gate_reconciliation["sha256"]),
+        ),
         slot_hz=slot_hz,
         workbench_task_commit=workbench_head,
         source_commits=manifest["sources"],

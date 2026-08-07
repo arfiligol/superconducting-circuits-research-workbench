@@ -4,9 +4,13 @@
   "accepted_at": "2026-08-07",
   "data_classification": "project-internal",
   "evidence_status": "diagnostic_non_promotable",
+  "human_gate_reconciliation": {
+    "path": "d3_rev10_human_gate_reconciliation.v1.json",
+    "sha256": "4d33f649b9579b40714ed20a34ef32256f18e317e074ef7981af236595dfa760"
+  },
   "sources": {
-    "root_commit": "7f701c7a1c47438a107a046d11642d2fdccdf915",
-    "workbench_commit": "e2e91ad7836c6830cf0023584667b05df7511951",
+    "root_commit": "baa50f6a23ed93ef12549118f14d2553265920aa",
+    "workbench_commit": "3ca2fb55dcdfd3151e2464ed766faf9dae0ea1cc",
     "orpen_commit": "80576910d596dbf4720335188e66b6a520cc2e36",
     "target_contract_sha256": "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
     "q2d_artifact_sha256": "301d3501a30614b994cf3f28d46eb75b545620a164bbb346fa557120d643fe6c",
@@ -95,6 +99,13 @@
       "minimum_normalized_residue_slope": 0.001,
       "maximum_relative_coupling_spread": 0.01,
       "maximum_relative_determinant_closure_error": 1e-10
+    },
+    "numeric_control_disposition": {
+      "authority": "diagnostic_only",
+      "root_windows": "selection_anchors",
+      "effective_operator_controls": "proposed_inactive",
+      "notch_window": "selection_seed_only",
+      "overlap_and_assignment_controls": "proposed_inactive"
     }
   },
   "spatial_refinement": {
@@ -112,7 +123,8 @@
     ]
   },
   "failure_policy": {
-    "candidate_failure": "NOT_EVALUABLE",
+    "candidate_failure": "NOT_EVALUABLE_ONLY_FOR_TECHNICAL_FACT_OR_HUMAN_SPATIAL_GATE",
+    "finite_out_of_target_value": "VALID_OBJECTIVE_OPERAND",
     "optimizer_boundary_value": "+Inf",
     "persisted_scientific_cost_on_failure": null,
     "stale_or_substituted_result_allowed": false,

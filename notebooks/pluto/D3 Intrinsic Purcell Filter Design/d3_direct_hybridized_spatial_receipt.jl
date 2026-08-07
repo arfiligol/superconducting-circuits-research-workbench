@@ -25,6 +25,8 @@ const D3_DIRECT_HYBRIDIZED_OBJECTIVE_CONTRACT =
     "d3-stage2-direct-hybridized-objective.v3"
 const D3_DIRECT_HYBRIDIZED_TARGET_CONTRACT_SHA256 =
     "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209"
+const D3_REV10_HUMAN_GATE_RECONCILIATION_SHA256 =
+    "4d33f649b9579b40714ed20a34ef32256f18e317e074ef7981af236595dfa760"
 const _CANDIDATE_FIELDS = (
     :lr_open_m,
     :lr_short_m,
@@ -67,6 +69,7 @@ const _EXTRACTION_FIELDS = (
     :minimum_q_reference_overlap,
     :minimum_each_rp_subspace_overlap,
     :minimum_unordered_set_assignment_margin,
+    :numeric_control_disposition,
     :complement,
 )
 const _GATE_POLICY_FIELDS = (
@@ -81,9 +84,15 @@ const _GATE_POLICY_FIELDS = (
     :maximum_relative_determinant_closure_error,
 )
 const _PASSIVITY_FIELDS = (
+    :machine_relative_resolution,
     :capacitance_reciprocity_error,
     :stiffness_reciprocity_error,
     :conductance_reciprocity_error,
+    :capacitance_positive_definite,
+    :stiffness_minimum_eigenvalue,
+    :stiffness_psd_absolute_tolerance,
+    :conductance_minimum_eigenvalue,
+    :conductance_psd_absolute_tolerance,
     :stiffness_relative_passivity_violation,
     :conductance_relative_passivity_violation,
 )
@@ -120,6 +129,16 @@ const _POLICY_PAYLOAD = Dict{String,Any}(
     "frequency_pair_semantics" => "unordered_ascending_pair",
     "objective_contract_id" => D3_DIRECT_HYBRIDIZED_OBJECTIVE_CONTRACT,
     "target_contract_sha256" => D3_DIRECT_HYBRIDIZED_TARGET_CONTRACT_SHA256,
+    "human_gate_reconciliation" => Dict(
+        "path" => "d3_rev10_human_gate_reconciliation.v1.json",
+        "sha256" => D3_REV10_HUMAN_GATE_RECONCILIATION_SHA256,
+    ),
+    "inactive_numeric_controls" => Dict(
+        "root_windows" => "selection_anchors",
+        "effective_operator_controls" => "proposed_inactive",
+        "notch_window" => "selection_seed_only",
+        "overlap_and_assignment_controls" => "proposed_inactive",
+    ),
     "cared_output_fields" => [
         "unordered_f_r_eff_hz_f_p_eff_hz",
         "f_n_hz",
@@ -314,7 +333,7 @@ end
 function _candidate(candidate)
     raw = _exact_mapping(candidate, _CANDIDATE_FIELDS, "direct-Hybridized candidate")
     return NamedTuple{_CANDIDATE_FIELDS}(Tuple(
-        _real(raw[String(name)], "candidate.$(name)"; positive=true)
+        _real(raw[String(name)], "candidate.$(name)"; nonnegative=true)
         for name in _CANDIDATE_FIELDS
     ))
 end
@@ -335,50 +354,55 @@ function _band(value, label)
 end
 
 function _gate_policy(value)
-    raw = _exact_mapping(value, _GATE_POLICY_FIELDS, "effective-operator gate policy")
-    values = NamedTuple{_GATE_POLICY_FIELDS}(Tuple(
+    raw = _exact_mapping(
+        value,
+        _GATE_POLICY_FIELDS,
+        "effective-operator diagnostic controls",
+    )
+    return NamedTuple{_GATE_POLICY_FIELDS}(Tuple(
         _real(raw[String(name)], "effective_operator_gate_policy.$(name)")
         for name in _GATE_POLICY_FIELDS
     ))
-    values.maximum_elimination_condition_number >= 1 || _fail(
-        "direct_spatial.failed_gate",
-        "Effective-operator condition-number gate is invalid.",
-    )
-    for name in (
-        :maximum_relative_elimination_solve_residual,
-        :maximum_relative_reciprocity_error,
-        :maximum_relative_passivity_violation,
-        :maximum_relative_root_residual,
-        :maximum_root_growth_rate_hz,
-        :maximum_relative_coupling_spread,
-        :maximum_relative_determinant_closure_error,
-    )
-        getproperty(values, name) >= 0 || _fail(
-            "direct_spatial.failed_gate",
-            "Effective-operator gate $(name) must be nonnegative.",
-        )
-    end
-    values.minimum_normalized_residue_slope > 0 || _fail(
-        "direct_spatial.failed_gate",
-        "Effective-operator residue-slope gate must be positive.",
-    )
-    return values
 end
 
 function _extraction_profile(value)
     raw = _exact_mapping(value, _EXTRACTION_FIELDS, "direct extraction profile")
-    minimum_q = _real(raw["minimum_q_reference_overlap"], "minimum_q_reference_overlap"; nonnegative=true)
-    minimum_each = _real(raw["minimum_each_rp_subspace_overlap"], "minimum_each_rp_subspace_overlap"; nonnegative=true)
-    margin = _real(raw["minimum_unordered_set_assignment_margin"], "minimum_unordered_set_assignment_margin"; nonnegative=true)
-    all(value -> value <= 1, (minimum_q, minimum_each, margin)) || _fail(
-        "direct_spatial.malformed",
-        "Overlap and assignment-margin fractions must not exceed one.",
-    )
+    minimum_q = _real(raw["minimum_q_reference_overlap"], "minimum_q_reference_overlap")
+    minimum_each = _real(raw["minimum_each_rp_subspace_overlap"], "minimum_each_rp_subspace_overlap")
+    margin = _real(raw["minimum_unordered_set_assignment_margin"], "minimum_unordered_set_assignment_margin")
     _text(raw["complement"], "extraction complement") == "complete_hybridized_complement" || _fail(
         "direct_spatial.stale",
         "Only the complete Hybridized complement is current.",
     )
     gate_policy = _gate_policy(raw["effective_operator_gate_policy"])
+    disposition = _exact_mapping(
+        raw["numeric_control_disposition"],
+        (
+            :authority,
+            :root_windows,
+            :effective_operator_controls,
+            :notch_window,
+            :overlap_and_assignment_controls,
+        ),
+        "numeric-control disposition",
+    )
+    normalized_disposition = Dict{String,Any}(
+        "authority" => _text(disposition["authority"], "numeric-control authority"),
+        "root_windows" => _text(disposition["root_windows"], "root-window role"),
+        "effective_operator_controls" => _text(disposition["effective_operator_controls"], "operator-control role"),
+        "notch_window" => _text(disposition["notch_window"], "notch-window role"),
+        "overlap_and_assignment_controls" => _text(disposition["overlap_and_assignment_controls"], "overlap-control role"),
+    )
+    normalized_disposition == Dict{String,Any}(
+        "authority" => "diagnostic_only",
+        "root_windows" => "selection_anchors",
+        "effective_operator_controls" => "proposed_inactive",
+        "notch_window" => "selection_seed_only",
+        "overlap_and_assignment_controls" => "proposed_inactive",
+    ) || _fail(
+        "direct_spatial.authority",
+        "Numeric extraction controls must remain proposed, inactive diagnostics.",
+    )
     return Dict{String,Any}(
         "readout_effective_root_band_hz" => collect(_band(raw["readout_effective_root_band_hz"], "readout root band")),
         "filter_effective_root_band_hz" => collect(_band(raw["filter_effective_root_band_hz"], "filter root band")),
@@ -387,6 +411,7 @@ function _extraction_profile(value)
         "minimum_q_reference_overlap" => minimum_q,
         "minimum_each_rp_subspace_overlap" => minimum_each,
         "minimum_unordered_set_assignment_margin" => margin,
+        "numeric_control_disposition" => normalized_disposition,
         "complement" => "complete_hybridized_complement",
     )
 end
@@ -539,22 +564,37 @@ function _grid_identity(value)
     )
 end
 
-function _passivity(value, gate_policy)
+function _passivity(value)
     raw = _exact_mapping(value, _PASSIVITY_FIELDS, "passivity validity")
     parsed = Dict{String,Any}(
-        String(name) => _real(raw[String(name)], "passivity.$(name)"; nonnegative=true)
+        String(name) => name === :capacitance_positive_definite ?
+            raw[String(name)] : _real(raw[String(name)], "passivity.$(name)")
         for name in _PASSIVITY_FIELDS
     )
-    maximum(parsed[String(name)] for name in _PASSIVITY_FIELDS[1:3]) <=
-        gate_policy.maximum_relative_reciprocity_error || _fail(
-            "direct_spatial.failed_gate",
-            "Serialized reciprocity evidence exceeds its bound gate policy.",
-        )
-    maximum(parsed[String(name)] for name in _PASSIVITY_FIELDS[4:5]) <=
-        gate_policy.maximum_relative_passivity_violation || _fail(
-            "direct_spatial.failed_gate",
-            "Serialized passivity evidence exceeds its bound gate policy.",
-        )
+    parsed["capacitance_positive_definite"] === true || _fail(
+        "direct_spatial.invalid_technical_fact",
+        "Serialized capacitance is not positive definite.",
+    )
+    resolution = parsed["machine_relative_resolution"]
+    resolution >= 0 || _fail(
+        "direct_spatial.invalid_technical_fact",
+        "Serialized machine resolution is invalid.",
+    )
+    maximum(parsed[String(name)] for name in (
+        :capacitance_reciprocity_error,
+        :stiffness_reciprocity_error,
+        :conductance_reciprocity_error,
+    )) <= resolution || _fail(
+        "direct_spatial.invalid_technical_fact",
+        "Serialized reciprocity is not machine-resolved.",
+    )
+    parsed["stiffness_minimum_eigenvalue"] >=
+        -parsed["stiffness_psd_absolute_tolerance"] &&
+        parsed["conductance_minimum_eigenvalue"] >=
+            -parsed["conductance_psd_absolute_tolerance"] || _fail(
+                "direct_spatial.invalid_technical_fact",
+                "Serialized K/G passivity is not machine-resolved.",
+            )
     return parsed
 end
 
@@ -572,21 +612,14 @@ function _validity(value, extraction_profile)
     for name in fields
         name === :passivity && continue
         _text(raw[String(name)], "validity.$(name)") == "pass" || _fail(
-            "direct_spatial.failed_gate",
-            "Cared-output validity gate $(name) did not pass.",
+            "direct_spatial.invalid_technical_fact",
+            "Cared-output technical fact $(name) is invalid.",
         )
     end
-    gate_policy_raw = _mapping(
-        extraction_profile["effective_operator_gate_policy"],
-        "effective-operator gate policy",
-    )
-    gate_policy = NamedTuple{_GATE_POLICY_FIELDS}(Tuple(
-        gate_policy_raw[String(name)] for name in _GATE_POLICY_FIELDS
-    ))
     return Dict{String,Any}(
         "status" => "pass",
         "source_identity" => "pass",
-        "passivity" => _passivity(raw["passivity"], gate_policy),
+        "passivity" => _passivity(raw["passivity"]),
         "rp_root_and_operator" => "pass",
         "distributed_rp_on_notch" => "pass",
         "exact_open_poles" => "pass",
@@ -637,7 +670,7 @@ function validate_d3_direct_hybridized_cared_output(value)
         nonnegative=true,
     )
     0 <= fraction_min <= fraction_max <= 1 || _fail(
-        "direct_spatial.failed_gate",
+        "direct_spatial.invalid_technical_fact",
         "Unordered linewidth fractions must form an ordered pair inside [0, 1].",
     )
     extraction = _extraction_profile(raw["extraction_profile"])
