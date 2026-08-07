@@ -200,6 +200,9 @@ mutable struct D3LogPhysicalObjectiveContext{F}
     evaluator::F
     metrics::Vector{MetricSpec}
     cache::Dict{Tuple,Any}
+    cache_lock::ReentrantLock
+    candidate_locks::Dict{Tuple,ReentrantLock}
+    recorded_candidates::Set{Tuple}
     history::Vector{EvaluationRecord}
     runtime_progress_path::Union{Nothing,String}
     runtime_progress_lock::ReentrantLock
@@ -216,6 +219,9 @@ function D3LogPhysicalObjectiveContext(evaluator, metrics, runtime_progress_path
         evaluator,
         collect(metrics),
         Dict{Tuple,Any}(),
+        ReentrantLock(),
+        Dict{Tuple,ReentrantLock}(),
+        Set{Tuple}(),
         EvaluationRecord[],
         progress_path,
         ReentrantLock(),
@@ -309,7 +315,7 @@ function evaluate_with_runtime_progress!(context, stage, candidate)
     end
 end
 
-function d3_evaluate_physical!(context, stage, candidate)
+function d3_physical_candidate_key(candidate)
     propertynames(candidate) == D3_EXPANDED_PHYSICAL_COORDINATES || error(
         "D3 optimizer history accepts only expanded six-field physical candidates.",
     )
@@ -319,91 +325,85 @@ function d3_evaluate_physical!(context, stage, candidate)
     all(value -> isfinite(value) && value > 0, Tuple(candidate)) || error(
         "D3 optimizer history requires finite strictly-positive physical candidates.",
     )
-    key = Tuple(candidate)
-    cache_hit = haskey(context.cache, key)
-    evaluation = if cache_hit
-        context.cache[key]
-    else
-        result = evaluate_with_runtime_progress!(context, stage, candidate)
-        context.cache[key] = result
-        result
+    return Tuple(candidate)
+end
+
+function d3_cached_evaluation!(context, stage, candidate)
+    key = d3_physical_candidate_key(candidate)
+    candidate_lock = lock(context.cache_lock) do
+        get!(context.candidate_locks, key) do
+            ReentrantLock()
+        end
     end
-    return D3CoupledOptimizer._record_evaluation!(
+    return lock(candidate_lock) do
+        found, cached = lock(context.cache_lock) do
+            haskey(context.cache, key) ?
+                (true, context.cache[key]) : (false, nothing)
+        end
+        found && return cached
+        evaluation = evaluate_with_runtime_progress!(context, stage, candidate)
+        lock(context.cache_lock) do
+            context.cache[key] = evaluation
+        end
+        return evaluation
+    end
+end
+
+function d3_evaluate_physical!(context, stage, candidate)
+    key = d3_physical_candidate_key(candidate)
+    cache_hit = key in context.recorded_candidates
+    evaluation = d3_cached_evaluation!(context, stage, candidate)
+    cost = D3CoupledOptimizer._record_evaluation!(
         context,
         stage,
         candidate,
         cache_hit,
         evaluation,
     )
+    push!(context.recorded_candidates, key)
+    return cost
 end
 
-function d3_evaluate_log_batch!(
-    context,
-    stage,
-    reference,
-    latent_values;
-    worker_count,
-)
-    workers = D3CoupledOptimizer._worker_count(worker_count)
-    candidates = [
-        d3_expand_log_physical_candidate(reference, values)
-        for values in latent_values
-    ]
-    keys = Tuple.(candidates)
-    missing_slots = Dict{Tuple,Int}()
-    missing_candidates = NamedTuple[]
-    for (key, candidate) in zip(keys, candidates)
-        if !haskey(context.cache, key) && !haskey(missing_slots, key)
-            push!(missing_candidates, candidate)
-            missing_slots[key] = length(missing_candidates)
-        end
-    end
+function d3_evaluate_log_candidate!(context, stage, reference, latent)
+    candidate = d3_expand_log_physical_candidate(reference, latent)
+    evaluation = d3_cached_evaluation!(context, stage, candidate)
+    breakdown = evaluation isa ValidEvaluation ?
+        cost_breakdown(context.metrics, evaluation) : nothing
+    return isnothing(breakdown) ? Inf : breakdown.total
+end
 
-    results = Vector{Any}(undef, length(missing_candidates))
-    failures = fill!(Vector{Any}(undef, length(missing_candidates)), nothing)
-    if !isempty(missing_candidates)
-        jobs = Channel{Int}(length(missing_candidates))
-        foreach(index -> put!(jobs, index), eachindex(missing_candidates))
-        close(jobs)
-        @sync for _ in 1:min(workers, length(missing_candidates))
-            Threads.@spawn for index in jobs
-                try
-                    results[index] = evaluate_with_runtime_progress!(
-                        context,
-                        stage,
-                        missing_candidates[index],
-                    )
-                catch exception
-                    failures[index] = exception
-                end
-            end
-        end
-    end
-
-    costs = Float64[]
-    for (key, candidate) in zip(keys, candidates)
-        cache_hit = haskey(context.cache, key)
-        evaluation = if cache_hit
-            context.cache[key]
-        else
-            slot = missing_slots[key]
-            isnothing(failures[slot]) || throw(failures[slot])
-            result = results[slot]
-            result isa ValidEvaluation || result isa RejectedEvaluation || error(
-                "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(result)).",
+function d3_replay_cma_generation!(context, reference, optimizer, y, fvals)
+    evaluated_input =
+        D3CoupledOptimizer.CMAEvolutionStrategy.compute_input(optimizer.p, y)
+    size(evaluated_input, 2) == length(fvals) || error(
+        "CMA evaluated-input and cost counts disagree.",
+    )
+    for index in eachindex(fvals)
+        candidate = d3_expand_log_physical_candidate(
+            reference,
+            @view(evaluated_input[:, index]),
+        )
+        key = d3_physical_candidate_key(candidate)
+        evaluation = lock(context.cache_lock) do
+            haskey(context.cache, key) || error(
+                "CMA callback cannot replay a missing evaluated candidate.",
             )
-            context.cache[key] = result
-            result
+            context.cache[key]
         end
-        push!(costs, D3CoupledOptimizer._record_evaluation!(
+        cache_hit = key in context.recorded_candidates
+        recorded_cost = D3CoupledOptimizer._record_evaluation!(
             context,
-            stage,
+            :cma,
             candidate,
             cache_hit,
             evaluation,
-        ))
+        )
+        isequal(recorded_cost, Float64(fvals[index])) || error(
+            "CMA callback cost differs from the cached candidate evaluation.",
+        )
+        push!(context.recorded_candidates, key)
     end
-    return costs
+    return nothing
 end
 
 function optimize_d3_log_physical(
@@ -415,7 +415,6 @@ function optimize_d3_log_physical(
     condition_manifest_id,
     condition_manifest_sha256,
     condition_manifest_approval_status,
-    worker_count::Integer=1,
     runtime_progress_path=nothing,
 )
     manifest_id, manifest_hash, approval_status =
@@ -428,8 +427,6 @@ function optimize_d3_log_physical(
     any(spec -> spec.weight > 0, metrics) || error(
         "At least one metric must have positive weight.",
     )
-    workers = D3CoupledOptimizer._worker_count(worker_count)
-
     initial_latent = zeros(length(D3_LOG_PHYSICAL_COORDINATES))
     initial_candidate = d3_expand_log_physical_candidate(reference, initial_latent)
     context = D3LogPhysicalObjectiveContext(
@@ -443,13 +440,14 @@ function optimize_d3_log_physical(
         "The exact physical reference seed must produce one history record.",
     )
     initial_record = only(initial_records)
-    cma_objective = latent -> d3_evaluate_log_batch!(
+    cma_objective = latent -> d3_evaluate_log_candidate!(
         context,
         :cma,
         reference,
-        eachcol(latent);
-        worker_count=workers,
+        latent,
     )
+    cma_callback = (optimizer, y, fvals, _) ->
+        d3_replay_cma_generation!(context, reference, optimizer, y, fvals)
 
     cma_result = D3CoupledOptimizer.CMAEvolutionStrategy.minimize(
         cma_objective,
@@ -461,8 +459,9 @@ function optimize_d3_log_physical(
         maxfevals=cma.maxfevals,
         ftol=nothing,
         xtol=nothing,
-        parallel_evaluation=true,
-        multi_threading=false,
+        callback=cma_callback,
+        parallel_evaluation=false,
+        multi_threading=true,
         noise_handling=nothing,
         verbosity=0,
     )
@@ -1081,10 +1080,9 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
     )
     specs = metric_specs(slot_hz)
     cma = manifest["cma_es"]
-    worker_count = min(Int(cma["population"]), Threads.nthreads())
     BLAS.set_num_threads(1)
     BLAS.get_num_threads() == 1 || error(
-        "Rev10 parallel CMA requires exactly one BLAS thread per Julia process.",
+        "Rev10 native-threaded CMA requires exactly one BLAS thread per Julia process.",
     )
     restart_results = Any[]
     starts = manifest["starts"]
@@ -1113,7 +1111,6 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
         evidence_status="diagnostic_non_promotable",
         runtime_resources=(
             julia_thread_count=Threads.nthreads(),
-            cma_generation_worker_count=worker_count,
             blas_thread_count=BLAS.get_num_threads(),
         ),
         search_discretization=(
@@ -1180,7 +1177,6 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
             condition_manifest_id=String(manifest["contract_id"]),
             condition_manifest_sha256=EXPECTED_MANIFEST_SHA256,
             condition_manifest_approval_status=String(manifest["approval_status"]),
-            worker_count=worker_count,
             runtime_progress_path=joinpath(
                 restart_dir,
                 "runtime_candidate_progress.jsonl",
@@ -1196,7 +1192,6 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
             restart_index=restart_index,
             restart_name=restart_name,
             settings=settings,
-            worker_count=worker_count,
             result=result,
             l0_by_candidate=l0_records,
         ))
@@ -1275,7 +1270,6 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
         restart_summaries=[(
             restart_index=item.restart_index,
             restart_name=item.restart_name,
-            worker_count=item.worker_count,
             cma=item.result.cma,
             cache_summary=item.result.cache_summary,
             optimization_locator=joinpath(
