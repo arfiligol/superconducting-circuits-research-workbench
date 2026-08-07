@@ -347,7 +347,8 @@ function make_evaluator(
                     exception.details,
                 )
             end
-            if exception isa ErrorException
+            if exception isa ErrorException ||
+                exception isa SuperconductingCircuitsCore.FrameworkValidationError
                 return RejectedEvaluation(
                     "direct_l0_candidate_not_evaluable",
                     "Candidate-local direct-Hybridized L0 evaluation failed.",
