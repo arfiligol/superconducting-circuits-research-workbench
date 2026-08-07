@@ -17,7 +17,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "d3b78e9c839ff1e68a1236f762f438fdafe9c5a92d06d28a7d593f5e8787a586"
+    "c30d6e268187aec40670653e6c07cc8250bce3840a15beade7c0400e9649b5a4"
 const EXPECTED_CORE_ENTRY = realpath(joinpath(
     CORE_ROOT,
     "src",
@@ -123,6 +123,330 @@ function exact_namedtuple(mapping, names)
     return NamedTuple{names}(Tuple(
         Float64(mapping[String(name)]) for name in names
     ))
+end
+
+const D3_LOG_PHYSICAL_COORDINATES = (
+    :lr_open_m,
+    :l_short_m,
+    :lc_m,
+    :lp_open_m,
+    :u_IDC,
+)
+const D3_EXPANDED_PHYSICAL_COORDINATES = (
+    :lr_open_m,
+    :lr_short_m,
+    :lc_m,
+    :lp_open_m,
+    :lp_short_m,
+    :u_IDC,
+)
+
+function d3_expand_log_physical_candidate(reference::NamedTuple, latent)
+    propertynames(reference) == D3_LOG_PHYSICAL_COORDINATES || error(
+        "D3 log-coordinate reference fields must be $(D3_LOG_PHYSICAL_COORDINATES).",
+    )
+    length(latent) == length(D3_LOG_PHYSICAL_COORDINATES) || error(
+        "D3 latent candidate must have exactly five coordinates.",
+    )
+    z = Float64.(latent)
+    all(isfinite, z) || error("D3 latent coordinates must be finite.")
+    reference_values = Float64.(Tuple(reference))
+    all(value -> isfinite(value) && value > 0, reference_values) || error(
+        "D3 physical reference coordinates must be finite and strictly positive.",
+    )
+    physical = reference_values .* exp.(z)
+    all(value -> isfinite(value) && value > 0, physical) || error(
+        "D3 log-coordinate map left the finite strictly-positive Float64 domain.",
+    )
+    l_short = physical[2]
+    return (
+        lr_open_m=physical[1],
+        lr_short_m=l_short,
+        lc_m=physical[3],
+        lp_open_m=physical[4],
+        lp_short_m=l_short,
+        u_IDC=physical[5],
+    )
+end
+
+function d3_physical_candidate_to_log(reference::NamedTuple, candidate::NamedTuple)
+    propertynames(candidate) == D3_EXPANDED_PHYSICAL_COORDINATES || error(
+        "D3 persisted candidate fields must be $(D3_EXPANDED_PHYSICAL_COORDINATES).",
+    )
+    candidate.lr_short_m == candidate.lp_short_m || error(
+        "D3 physical candidate must preserve exact shared-short equality.",
+    )
+    compact = (
+        lr_open_m=candidate.lr_open_m,
+        l_short_m=candidate.lr_short_m,
+        lc_m=candidate.lc_m,
+        lp_open_m=candidate.lp_open_m,
+        u_IDC=candidate.u_IDC,
+    )
+    values = Float64.(Tuple(compact))
+    references = Float64.(Tuple(reference))
+    all(value -> isfinite(value) && value > 0, values) || error(
+        "D3 physical candidate must be finite and strictly positive.",
+    )
+    all(value -> isfinite(value) && value > 0, references) || error(
+        "D3 physical reference coordinates must be finite and strictly positive.",
+    )
+    latent = log.(values ./ references)
+    all(isfinite, latent) || error("D3 inverse log-coordinate map is nonfinite.")
+    return latent
+end
+
+mutable struct D3LogPhysicalObjectiveContext{F}
+    evaluator::F
+    metrics::Vector{MetricSpec}
+    cache::Dict{Tuple,Any}
+    history::Vector{EvaluationRecord}
+end
+
+function D3LogPhysicalObjectiveContext(evaluator, metrics)
+    return D3LogPhysicalObjectiveContext(
+        evaluator,
+        collect(metrics),
+        Dict{Tuple,Any}(),
+        EvaluationRecord[],
+    )
+end
+
+function d3_evaluate_physical!(context, stage, candidate)
+    propertynames(candidate) == D3_EXPANDED_PHYSICAL_COORDINATES || error(
+        "D3 optimizer history accepts only expanded six-field physical candidates.",
+    )
+    candidate.lr_short_m == candidate.lp_short_m || error(
+        "D3 optimizer history requires exact shared-short equality.",
+    )
+    all(value -> isfinite(value) && value > 0, Tuple(candidate)) || error(
+        "D3 optimizer history requires finite strictly-positive physical candidates.",
+    )
+    key = Tuple(candidate)
+    cache_hit = haskey(context.cache, key)
+    evaluation = if cache_hit
+        context.cache[key]
+    else
+        result = context.evaluator(candidate)
+        result isa ValidEvaluation || result isa RejectedEvaluation || error(
+            "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(result)).",
+        )
+        context.cache[key] = result
+        result
+    end
+    return D3CoupledOptimizer._record_evaluation!(
+        context,
+        stage,
+        candidate,
+        cache_hit,
+        evaluation,
+    )
+end
+
+function d3_evaluate_log_batch!(
+    context,
+    stage,
+    reference,
+    latent_values;
+    worker_count,
+)
+    workers = D3CoupledOptimizer._worker_count(worker_count)
+    candidates = [
+        d3_expand_log_physical_candidate(reference, values)
+        for values in latent_values
+    ]
+    keys = Tuple.(candidates)
+    missing_slots = Dict{Tuple,Int}()
+    missing_candidates = NamedTuple[]
+    for (key, candidate) in zip(keys, candidates)
+        if !haskey(context.cache, key) && !haskey(missing_slots, key)
+            push!(missing_candidates, candidate)
+            missing_slots[key] = length(missing_candidates)
+        end
+    end
+
+    results = Vector{Any}(undef, length(missing_candidates))
+    failures = fill!(Vector{Any}(undef, length(missing_candidates)), nothing)
+    if !isempty(missing_candidates)
+        jobs = Channel{Int}(length(missing_candidates))
+        foreach(index -> put!(jobs, index), eachindex(missing_candidates))
+        close(jobs)
+        @sync for _ in 1:min(workers, length(missing_candidates))
+            Threads.@spawn for index in jobs
+                try
+                    results[index] = context.evaluator(missing_candidates[index])
+                catch exception
+                    failures[index] = exception
+                end
+            end
+        end
+    end
+
+    costs = Float64[]
+    for (key, candidate) in zip(keys, candidates)
+        cache_hit = haskey(context.cache, key)
+        evaluation = if cache_hit
+            context.cache[key]
+        else
+            slot = missing_slots[key]
+            isnothing(failures[slot]) || throw(failures[slot])
+            result = results[slot]
+            result isa ValidEvaluation || result isa RejectedEvaluation || error(
+                "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(result)).",
+            )
+            context.cache[key] = result
+            result
+        end
+        push!(costs, D3CoupledOptimizer._record_evaluation!(
+            context,
+            stage,
+            candidate,
+            cache_hit,
+            evaluation,
+        ))
+    end
+    return costs
+end
+
+function optimize_d3_log_physical(
+    evaluator,
+    metrics::AbstractVector{MetricSpec},
+    reference::NamedTuple,
+    cma::CMASettings,
+    promotion_settings::Nothing;
+    condition_manifest_id,
+    condition_manifest_sha256,
+    condition_manifest_approval_status,
+    worker_count::Integer=1,
+)
+    manifest_id, manifest_hash, approval_status =
+        D3CoupledOptimizer._validate_manifest_identity(
+            condition_manifest_id,
+            condition_manifest_sha256,
+            condition_manifest_approval_status,
+        )
+    D3CoupledOptimizer._require_unique_names(metrics, "metric")
+    any(spec -> spec.weight > 0, metrics) || error(
+        "At least one metric must have positive weight.",
+    )
+    workers = D3CoupledOptimizer._worker_count(worker_count)
+
+    initial_latent = zeros(length(D3_LOG_PHYSICAL_COORDINATES))
+    initial_candidate = d3_expand_log_physical_candidate(reference, initial_latent)
+    context = D3LogPhysicalObjectiveContext(evaluator, metrics)
+    d3_evaluate_physical!(context, :initial_seed, initial_candidate)
+    initial_records = D3CoupledOptimizer._stage_records(context, :initial_seed)
+    length(initial_records) == 1 || error(
+        "The exact physical reference seed must produce one history record.",
+    )
+    initial_record = only(initial_records)
+    cma_objective = latent -> d3_evaluate_log_batch!(
+        context,
+        :cma,
+        reference,
+        eachcol(latent);
+        worker_count=workers,
+    )
+
+    cma_result = D3CoupledOptimizer.CMAEvolutionStrategy.minimize(
+        cma_objective,
+        initial_latent,
+        cma.sigma;
+        popsize=cma.popsize,
+        seed=cma.seed,
+        maxiter=cma.maxiter,
+        maxfevals=cma.maxfevals,
+        ftol=nothing,
+        xtol=nothing,
+        parallel_evaluation=true,
+        multi_threading=false,
+        noise_handling=nothing,
+        verbosity=0,
+    )
+
+    cma_records = D3CoupledOptimizer._stage_records(context, :cma)
+    cma_best = D3CoupledOptimizer._best_valid_record(cma_records)
+    cma_valid_count, cma_rejected_count =
+        D3CoupledOptimizer._stage_counts(cma_records)
+    generation_count = length(cma_records) ÷ cma.popsize
+    recent_generation_ranges = Float64[]
+    for generation in max(1, generation_count - 2):generation_count
+        first_index = (generation - 1) * cma.popsize + 1
+        last_index = generation * cma.popsize
+        finite_costs = Float64[
+            record.cost for record in cma_records[first_index:last_index]
+            if !isnothing(record.cost) && isfinite(record.cost)
+        ]
+        length(finite_costs) >= 2 || continue
+        push!(recent_generation_ranges, maximum(finite_costs) - minimum(finite_costs))
+    end
+    cma_ftol_observed = isempty(recent_generation_ranges) ?
+        nothing : maximum(recent_generation_ranges)
+    raw_cma_xtol = maximum(abs.(
+        D3CoupledOptimizer.CMAEvolutionStrategy.sigma(cma_result.p) .*
+        cma_result.p.cov.p,
+    ))
+    cma_xtol_observed = if isfinite(raw_cma_xtol)
+        raw_cma_xtol
+    elseif isnothing(cma_best)
+        nothing
+    else
+        error("CMA-ES produced a nonfinite log-coordinate xtol observation.")
+    end
+    cma_conditions = [
+        D3CoupledOptimizer._condition(
+            "cma.ftol",
+            cma_ftol_observed,
+            "<=",
+            cma.ftol,
+            "cost",
+        ),
+        D3CoupledOptimizer._condition(
+            "cma.xtol",
+            cma_xtol_observed,
+            "<=",
+            cma.xtol,
+            "log_coordinate",
+        ),
+    ]
+    cma_state = if isnothing(cma_best)
+        :no_valid_candidate
+    elseif all(condition -> condition.met === true, cma_conditions)
+        :converged
+    else
+        :not_converged
+    end
+    cma_outcome = SearchStageOutcome(
+        cma_state,
+        String(cma_result.stop.reason),
+        cma.maxiter,
+        cma.maxfevals,
+        Int(cma_result.stop.it),
+        length(cma_records),
+        isnothing(cma_best) ? nothing : cma_best.record_id,
+        cma_valid_count,
+        cma_rejected_count,
+        cma_conditions,
+    )
+    incumbent = D3CoupledOptimizer._best_valid_record(
+        vcat(initial_records, cma_records),
+    )
+    promotion = D3CoupledOptimizer._gate(
+        :not_evaluable,
+        "Diagnostic search did not declare Human-owned promotion limits.",
+        incumbent,
+        ConditionOutcome[],
+    )
+    return OptimizationResult(
+        manifest_id,
+        manifest_hash,
+        approval_status,
+        initial_record.record_id,
+        cma_outcome,
+        promotion,
+        copy(context.history),
+        D3CoupledOptimizer._cache_summary(context),
+    )
 end
 
 function extraction_profile(manifest, slot_hz)
@@ -247,18 +571,13 @@ function bind_inputs(manifest, q2d_path, q3d_path, idc_path)
         "Rev10 IDC length model does not match the Human-directed linear-fit contract.",
     )
     source_support = Tuple(Float64.(idc_model["source_support_um"]))
-    evaluation_range = Tuple(Float64.(idc_model["evaluation_range_um"]))
+    String(idc_model["evaluation_domain"]) == "strictly_positive" || error(
+        "Rev10 IDC OLS evaluation must use the strictly-positive unbounded domain.",
+    )
+    evaluation_range = (nextfloat(0.0), floatmax(Float64))
     Float64(idc_model["source_gap_um"]) == Float64(fixed["idc_gap_um"]) || error(
         "Rev10 IDC fit gap and fixed physical gap disagree.",
     )
-    idc_variable = only(filter(
-        item -> String(item["name"]) == "u_IDC",
-        manifest["variables"],
-    ))
-    evaluation_range == (
-        Float64(idc_variable["lower"]),
-        Float64(idc_variable["upper"]),
-    ) || error("Rev10 IDC evaluation range and optimizer bounds disagree.")
     q2d = bind_d3_rev10_q2d_input(
         load_d3_continuous_ground_q2d_input(q2d_path);
         section_length_m=Float64(fixed["q2d_section_length_m"]),
@@ -282,7 +601,8 @@ function bind_inputs(manifest, q2d_path, q3d_path, idc_path)
     )
     d3_idc_mapping_semantic_sha256(idc) ==
         String(sources["idc_mapping_semantic_sha256"]) || error(
-        "Rev10 IDC linear mapping semantics disagree with the manifest.",
+        "Rev10 strictly-positive IDC mapping semantic identity is not yet " *
+        "integrated into the shared Stage-model authority.",
     )
     inputs = bind_d3_stage2_direct_hybridized_inputs(
         q2d,
@@ -630,16 +950,34 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
     authority = d3_direct_hybridized_objective_authority(
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
     )
-    variable_names = Tuple(Symbol(item["name"]) for item in manifest["variables"])
-    variables = [
-        VariableSpec(
-            Symbol(item["name"]),
-            String(item["unit"]),
-            Float64(item["lower"]),
-            Float64(item["upper"]),
+    physical_search = manifest["physical_search"]
+    physical_coordinate_names = Tuple(
+        Symbol(item["name"]) for item in physical_search["coordinates"]
+    )
+    physical_coordinate_names == D3_LOG_PHYSICAL_COORDINATES || error(
+        "Rev10 physical search must contain the exact five log-mapped coordinates.",
+    )
+    isnothing(physical_search["scientific_upper_bounds"]) || error(
+        "Rev10 physical search may not declare scientific upper bounds.",
+    )
+    String(physical_search["latent_domain"]) == "R^5" &&
+        String(physical_search["physical_map"]) ==
+            "physical_i=reference_start_i*exp(z_i)" &&
+        String(physical_search["shared_short_rule"]) ==
+            "lr_short_m=lp_short_m=l_short_m_exactly" &&
+        isnothing(physical_search["equality_penalty"]) || error(
+            "Rev10 log-coordinate and shared-short search semantics are invalid.",
         )
-        for item in manifest["variables"]
-    ]
+    reference_start = manifest["reference_start"]
+    reference_name = String(reference_start["name"])
+    reference = exact_namedtuple(
+        reference_start["candidate"],
+        D3_LOG_PHYSICAL_COORDINATES,
+    )
+    expanded_reference = d3_expand_log_physical_candidate(
+        reference,
+        zeros(length(D3_LOG_PHYSICAL_COORDINATES)),
+    )
     specs = metric_specs(slot_hz)
     cma = manifest["cma_es"]
     worker_count = min(Int(cma["population"]), Threads.nthreads())
@@ -681,14 +1019,35 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
             inner_loop_level=0,
             winner_spatial_refinement="selected_best_candidate_only",
         ),
+        search_coordinates=(
+            physical_coordinates=D3_LOG_PHYSICAL_COORDINATES,
+            latent_coordinates=Tuple(Symbol.(physical_search["latent_coordinates"])),
+            latent_domain="R^5",
+            physical_map="physical_i=reference_start_i*exp(z_i)",
+            scientific_upper_bounds=nothing,
+            shared_short_rule="lr_short_m=lp_short_m=l_short_m_exactly",
+            persisted_candidate_fields=D3_EXPANDED_PHYSICAL_COORDINATES,
+        ),
+        reference_start=(
+            name=reference_name,
+            compact_physical_candidate=reference,
+            expanded_physical_candidate=expanded_reference,
+            external_seed_provenance=
+                reference_start["report_only_external_seed_provenance"],
+        ),
     )
     write_new_json(joinpath(destination, "run_identity.json"), run_identity)
 
     for (start, restart_index) in zip(starts, restart_indices)
         restart_name = String(start["name"])
+        Int(start["restart_index"]) == restart_index || error(
+            "Rev10 restart record and restart index disagree.",
+        )
+        String(start["reference_start"]) == reference_name || error(
+            "Every Rev10 restart must use the same Human Spring2025 reference seed.",
+        )
         restart_dir = joinpath(destination, "restart-$(restart_index)-$(restart_name)")
         mkpath(restart_dir)
-        initial = exact_namedtuple(start["candidate"], variable_names)
         evaluator, l0_records = make_evaluator(
             inputs,
             profile,
@@ -699,23 +1058,22 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
         seed = round(Int, slot_hz / 1.0e6) + 10000 * restart_index
         settings = CMASettings(
             seed=seed,
-            sigma=Float64(cma["sigma_normalized"]),
+            sigma=Float64(cma["sigma_log_coordinate"]),
             popsize=Int(cma["population"]),
             maxiter=Int(cma["maximum_iterations"]),
             maxfevals=Int(cma["maximum_evaluations"]),
             ftol=Float64(cma["ftol_cost"]),
-            xtol=Float64(cma["xtol_normalized"]),
+            xtol=Float64(cma["xtol_log_coordinate"]),
         )
         println(
             "START slot=$(slot_hz / 1e9)GHz restart=$(restart_index) " *
             "seed=$(seed)",
         )
         flush(stdout)
-        result = optimize_d3(
+        result = optimize_d3_log_physical(
             evaluator,
-            variables,
             specs,
-            initial,
+            reference,
             settings,
             nothing;
             condition_manifest_id=String(manifest["contract_id"]),
