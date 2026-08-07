@@ -29,6 +29,38 @@ realpath(pathof(SuperconductingCircuitsCore)) == EXPECTED_CORE_ENTRY || error(
 const Q2D_PATH = joinpath(D3_ROOT, "d3_continuous_ground_q2d_maxwell_lc.v4.json")
 
 @testset "D3 direct-Hybridized exact grid plan" begin
+    reduction = (
+        input_schema="synthetic-q3d-authority.v1",
+        ordered_labels=("Q1_L", "Q1_R", "read"),
+        reduction_method="synthetic_test_only",
+    )
+    q3d_model = (
+        model_id="synthetic-q3d-model",
+        capacitance_source_id="synthetic-q3d-source",
+        C0r_fF=1.0,
+        C01_fF=2.0,
+        C02_fF=3.0,
+        C12_fF=4.0,
+        Cr1_fF=5.0,
+        Cr2_fF=6.0,
+        L_J_per_junction_nH=7.0,
+        electrostatic_reduction=reduction,
+    )
+    q3d_identity = _d3_require_same_q3d_model(q3d_model, deepcopy(q3d_model))
+    @test q3d_identity.branch_values_fF_and_nH.C0r_fF == 1.0
+    @test_throws ErrorException _d3_require_same_q3d_model(
+        merge(q3d_model, (C0r_fF=1.1,)),
+        q3d_model,
+    )
+    @test_throws ErrorException _d3_require_same_q3d_model(
+        merge(q3d_model, (
+            electrostatic_reduction=merge(reduction, (
+                reduction_method="mismatched_reduction",
+            )),
+        )),
+        q3d_model,
+    )
+
     authority = load_d3_continuous_ground_q2d_input(Q2D_PATH)
     q2d = bind_d3_rev10_q2d_input(
         authority;

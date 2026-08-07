@@ -22,6 +22,10 @@ isdefined(@__MODULE__, :D3ResonatorInput) ||
     include(joinpath(@__DIR__, "d3_resonator_input.jl"))
 using .D3ResonatorInput: D3Rev10Q2DInput, validate_d3_rev10_q2d_input
 
+isdefined(@__MODULE__, :D3FloatingQubitInput) ||
+    include(joinpath(@__DIR__, "d3_floating_qubit_input.jl"))
+using .D3FloatingQubitInput: load_floating_qubit_nominal_input
+
 const D3_PHYSICAL_VARIABLE_ORDER = (
     :lr_open_m,
     :lr_short_m,
@@ -226,6 +230,109 @@ function _d3_stage_sha256(value, label)
     return text
 end
 
+function _d3_q3d_model_identity(model)
+    branch_fields = (
+        :C0r_fF,
+        :C01_fF,
+        :C02_fF,
+        :C12_fF,
+        :Cr1_fF,
+        :Cr2_fF,
+        :L_J_per_junction_nH,
+    )
+    all(name -> hasproperty(model, name), branch_fields) || error(
+        "D3 Q3D floating-qubit model is missing one or more normalized branch values.",
+    )
+    values = NamedTuple{branch_fields}(Tuple(
+        begin
+            value = Float64(getproperty(model, name))
+            isfinite(value) && value > 0 || error(
+                "D3 Q3D floating-qubit $(name) must be finite and positive.",
+            )
+            value
+        end
+        for name in branch_fields
+    ))
+    hasproperty(model, :model_id) && hasproperty(model, :capacitance_source_id) || error(
+        "D3 Q3D floating-qubit model must declare model_id and capacitance_source_id.",
+    )
+    model_id = strip(String(model.model_id))
+    capacitance_source_id = strip(String(model.capacitance_source_id))
+    !isempty(model_id) && !isempty(capacitance_source_id) || error(
+        "D3 Q3D floating-qubit model/source identities must be nonempty.",
+    )
+    hasproperty(model, :electrostatic_reduction) || error(
+        "D3 Q3D floating-qubit model must carry its validated electrostatic reduction.",
+    )
+    reduction = model.electrostatic_reduction
+    hasproperty(reduction, :input_schema) || error(
+        "D3 Q3D electrostatic reduction must declare input_schema.",
+    )
+    input_schema = strip(String(reduction.input_schema))
+    !isempty(input_schema) || error(
+        "D3 Q3D electrostatic reduction input_schema must be nonempty.",
+    )
+    reduction_json = SuperconductingCircuitsCore.JSON3.write(reduction)
+    return (
+        model_id=model_id,
+        capacitance_source_id=capacitance_source_id,
+        input_schema=input_schema,
+        branch_values_fF_and_nH=values,
+        electrostatic_reduction_sha256=
+            bytes2hex(SHA.sha256(codeunits(reduction_json))),
+    )
+end
+
+function _d3_require_same_q3d_model(supplied_model, reloaded_model)
+    supplied = _d3_q3d_model_identity(supplied_model)
+    reloaded = _d3_q3d_model_identity(reloaded_model)
+    supplied == reloaded || error(
+        "D3 Q3D floating-qubit values or reduction evidence disagree with the exact source bytes.",
+    )
+    return reloaded
+end
+
+function _d3_bind_q3d_authority(raw_authority)
+    required = (:model, :input_path, :input_sha256)
+    all(name -> hasproperty(raw_authority, name), required) || error(
+        "D3 Q3D authority must be the validated nominal-loader result with model, input_path, and input_sha256.",
+    )
+    input_path = abspath(String(raw_authority.input_path))
+    isfile(input_path) || error(
+        "D3 Q3D authority source file does not exist: $(input_path)",
+    )
+    declared_sha256 = _d3_stage_sha256(
+        raw_authority.input_sha256,
+        "D3 Q3D floating-qubit input SHA-256",
+    )
+    supplied_reduction = hasproperty(raw_authority.model, :electrostatic_reduction) ?
+        raw_authority.model.electrostatic_reduction : error(
+            "D3 Q3D authority model is missing electrostatic_reduction.",
+        )
+    gap_um = hasproperty(supplied_reduction, :evaluation_gap_um) ?
+        supplied_reduction.evaluation_gap_um : nothing
+    reloaded = load_floating_qubit_nominal_input(
+        input_path,
+        (; kwargs...) -> (; kwargs...);
+        gap_um=gap_um,
+    )
+    reloaded_sha256 = _d3_stage_sha256(
+        reloaded.input_sha256,
+        "D3 reloaded Q3D floating-qubit input SHA-256",
+    )
+    reloaded_sha256 == declared_sha256 || error(
+        "D3 Q3D authority source bytes disagree with the declared SHA-256.",
+    )
+    identity = _d3_require_same_q3d_model(
+        raw_authority.model,
+        reloaded.model,
+    )
+    return (
+        model=reloaded.model,
+        identity=merge(identity, (input_sha256=reloaded_sha256,)),
+    )
+end
+
 """Bind the complete fixed input authority for direct-Hybridized Stage 2.
 
 The sealed Rev10 Q2D input, reduced Q3D floating-qubit model, fixed feedline
@@ -234,9 +341,8 @@ not construct an internal merged tuple.
 """
 function bind_d3_stage2_direct_hybridized_inputs(
     q2d_input::D3Rev10Q2DInput,
-    q3d_qubit_model,
+    q3d_authority,
     idc_mapping::D3IDCMapping;
-    q3d_input_sha256,
     feedline_length_m,
     feedline_n_sections,
     feedline_l_per_m_h,
@@ -245,10 +351,8 @@ function bind_d3_stage2_direct_hybridized_inputs(
 )
     q2d = validate_d3_rev10_q2d_input(q2d_input)
     _d3_stage_require_physical_idc_mapping(idc_mapping)
-    q3d_sha256 = _d3_stage_sha256(
-        q3d_input_sha256,
-        "D3 Q3D floating-qubit input SHA-256",
-    )
+    q3d = _d3_bind_q3d_authority(q3d_authority)
+    q3d_qubit_model = q3d.model
     qubit_fields_fF = (
         c0r_f=:C0r_fF,
         c01_f=:C01_fF,
@@ -309,22 +413,10 @@ function bind_d3_stage2_direct_hybridized_inputs(
         section_length_m=q2d.section_length_m,
         mtl_section_length_m=q2d.mtl_section_length_m,
     )
-    q3d_identity = (
-        input_sha256=q3d_sha256,
-        model_id=hasproperty(q3d_qubit_model, :model_id) ?
-            String(q3d_qubit_model.model_id) : error(
-                "D3 Q3D floating-qubit model must declare model_id.",
-            ),
-        capacitance_source_id=
-            hasproperty(q3d_qubit_model, :capacitance_source_id) ?
-            String(q3d_qubit_model.capacitance_source_id) : error(
-                "D3 Q3D floating-qubit model must declare capacitance_source_id.",
-            ),
-    )
     source_identity = (
         contract_id="d3-rev10-direct-hybridized-fixed-input.v1",
         q2d=q2d_identity,
-        q3d=q3d_identity,
+        q3d=q3d.identity,
         idc=(
             mapping_id=idc_mapping.mapping_id,
             mapping_sha256=idc_mapping.mapping_sha256,
