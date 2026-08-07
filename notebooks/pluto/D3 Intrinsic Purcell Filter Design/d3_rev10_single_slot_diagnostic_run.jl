@@ -1,8 +1,18 @@
-# Task-local executable for one Rev10 direct-Hybridized diagnostic slot.
-# It owns orchestration and evidence persistence only; Circuit-owned equations,
-# cared outputs, and Objective semantics are consumed without redefinition.
+# Task-local Rev10 targeted-Schur CMA runner. Circuit equations and cared-output
+# extraction are owned by the shared D3 model files; this file only binds the
+# accepted manifest, runs one slot, and persists minimal diagnostic evidence.
 
-const WORKBENCH_ROOT = normpath(joinpath(@__DIR__, "..", "..", ".."))
+const WORKBENCH_ROOT = normpath(get(
+    ENV,
+    "D3_WORKBENCH_ROOT",
+    joinpath(@__DIR__, "..", "..", ".."),
+))
+const D3_SOURCE_ROOT = joinpath(
+    WORKBENCH_ROOT,
+    "notebooks",
+    "pluto",
+    "D3 Intrinsic Purcell Filter Design",
+)
 const CORE_ROOT = joinpath(
     WORKBENCH_ROOT,
     "core",
@@ -11,35 +21,35 @@ const CORE_ROOT = joinpath(
 )
 pushfirst!(LOAD_PATH, CORE_ROOT)
 
-using SHA
 using LinearAlgebra
+using SHA
 using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "3a2f512326fe785cccb624ce5b3e4e23143c9fec3c701e3bf84b6b63c4434349"
-const EXPECTED_CORE_ENTRY = realpath(joinpath(
-    CORE_ROOT,
-    "src",
-    "SuperconductingCircuitsCore.jl",
-))
-realpath(pathof(SuperconductingCircuitsCore)) == EXPECTED_CORE_ENTRY || error(
-    "Rev10 run must load SuperconductingCircuitsCore from this exact Workbench checkout.",
+    "75eec8ba050455c71927b2a99b4fbee8e0e3cc06e22106e15643fcfcfe2a456e"
+const MANIFEST_BASENAME = "d3_rev10_five_slot_search.v1.json"
+const EXPANDED_COORDINATES = (
+    :lr_open_m,
+    :lr_short_m,
+    :lc_m,
+    :lp_open_m,
+    :lp_short_m,
+    :u_IDC,
 )
+const IDC_BOUNDS_UM = (35.0, 75.0)
 
-include(joinpath(@__DIR__, "d3_circuit_plans.jl"))
-include(joinpath(@__DIR__, "d3_exact_n_response.jl"))
-include(joinpath(@__DIR__, "d3_stage_models.jl"))
-include(joinpath(@__DIR__, "d3_stage_objectives.jl"))
-include(joinpath(@__DIR__, "d3_coupled_optimizer.jl"))
-include(joinpath(@__DIR__, "d3_direct_hybridized_spatial_receipt.jl"))
+include(joinpath(D3_SOURCE_ROOT, "d3_circuit_plans.jl"))
+include(joinpath(D3_SOURCE_ROOT, "d3_exact_n_response.jl"))
+include(joinpath(D3_SOURCE_ROOT, "d3_stage_models.jl"))
+include(joinpath(D3_SOURCE_ROOT, "d3_stage_objectives.jl"))
+include(joinpath(D3_SOURCE_ROOT, "d3_coupled_optimizer.jl"))
 
-using .D3CoupledOptimizer
-using .D3DirectHybridizedSpatialReceipt
 using .D3FloatingQubitInput: load_floating_qubit_nominal_input
 using .D3IDCInput: d3_idc_mapping_semantic_sha256, load_d3_idc_mapping
 using .D3ResonatorInput:
     bind_d3_rev10_q2d_input, load_d3_continuous_ground_q2d_input
+const CMAES = D3CoupledOptimizer.CMAEvolutionStrategy
 
 file_sha256(path) = open(path, "r") do io
     bytes2hex(SHA.sha256(io))
@@ -52,7 +62,7 @@ end
 
 function write_new_json(path, payload)
     destination = abspath(String(path))
-    ispath(destination) && error("Refusing to overwrite run evidence: $(destination)")
+    ispath(destination) && error("Refusing to overwrite evidence: $(destination)")
     mkpath(dirname(destination))
     temporary, io = mktemp(dirname(destination); cleanup=false)
     try
@@ -77,664 +87,167 @@ function append_jsonl(path, payload)
     return nothing
 end
 
-function write_candidate_events(path, history, l0_by_candidate)
-    ispath(path) && error("Refusing to overwrite candidate events: $(path)")
-    for record in history
-        record.cache_hit && continue
-        candidate_sha = candidate_sha256(record.candidate)
-        if record.evaluation isa ValidEvaluation
-            l0 = l0_by_candidate[candidate_sha]
-            append_jsonl(path, (
-                event="VALID",
-                record_id=record.record_id,
-                stage=record.stage,
-                inner_loop_level=0,
-                candidate_sha256=candidate_sha,
-                candidate=record.candidate,
-                l0_objective_receipt=l0.receipt,
-                objective=l0.objective,
-            ))
-        else
-            rejection = record.evaluation
-            append_jsonl(path, (
-                event="NOT_EVALUABLE",
-                record_id=record.record_id,
-                stage=record.stage,
-                candidate_sha256=candidate_sha,
-                candidate=record.candidate,
-                code=rejection.code,
-                reason=rejection.reason,
-                details=rejection.details,
-                cost=nothing,
-            ))
+function parse_cli(args)
+    options = Dict{String,Any}(
+        "manifest" => joinpath(@__DIR__, MANIFEST_BASENAME),
+        "slot_ghz" => nothing,
+        "q3d_input" => nothing,
+        "idc_input" => nothing,
+        "output_dir" => nothing,
+        "mode" => "cma",
+    )
+    index = 1
+    while index <= length(args)
+        argument = args[index]
+        if argument in ("--single-point", "--dry-run")
+            options["mode"] = argument == "--single-point" ? "single_point" : "dry_run"
+            index += 1
+            continue
         end
+        key = get(Dict(
+            "--manifest" => "manifest",
+            "--slot-ghz" => "slot_ghz",
+            "--q3d-input" => "q3d_input",
+            "--idc-input" => "idc_input",
+            "--output-dir" => "output_dir",
+        ), argument, nothing)
+        isnothing(key) && error("Unknown argument $(argument).")
+        index < length(args) || error("$(argument) requires one value.")
+        options[key] = args[index + 1]
+        index += 2
     end
-    return path
-end
-
-function candidate_sha256(candidate)
-    return bytes2hex(SHA.sha256(codeunits(JSON3.write(candidate))))
-end
-
-function exact_namedtuple(mapping, names)
-    Set(String.(keys(mapping))) == Set(String.(names)) || error(
-        "Mapping fields differ from required fields $(names).",
-    )
-    return NamedTuple{names}(Tuple(
-        Float64(mapping[String(name)]) for name in names
-    ))
-end
-
-const D3_COMPACT_PHYSICAL_COORDINATES = (
-    :lr_open_m,
-    :l_short_m,
-    :lc_m,
-    :lp_open_m,
-    :u_IDC,
-)
-const D3_IDC_SOURCE_BOUNDS_UM = (35.0, 75.0)
-const D3_EXPANDED_PHYSICAL_COORDINATES = (
-    :lr_open_m,
-    :lr_short_m,
-    :lc_m,
-    :lp_open_m,
-    :lp_short_m,
-    :u_IDC,
-)
-
-function d3_expand_log_physical_candidate(reference::NamedTuple, latent)
-    propertynames(reference) == D3_COMPACT_PHYSICAL_COORDINATES || error(
-        "D3 compact physical reference fields must be $(D3_COMPACT_PHYSICAL_COORDINATES).",
-    )
-    length(latent) == length(D3_COMPACT_PHYSICAL_COORDINATES) || error(
-        "D3 latent candidate must have exactly five coordinates.",
-    )
-    coordinates = Float64.(latent)
-    all(isfinite, coordinates) || error("D3 latent coordinates must be finite.")
-    0.0 <= coordinates[5] <= 1.0 || error(
-        "D3 normalized IDC coordinate must be inside [0, 1].",
-    )
-    reference_values = Float64.(Tuple(reference))
-    all(value -> isfinite(value) && value > 0, reference_values[1:4]) || error(
-        "D3 physical length references must be finite and strictly positive.",
-    )
-    D3_IDC_SOURCE_BOUNDS_UM[1] <= reference_values[5] <=
-        D3_IDC_SOURCE_BOUNDS_UM[2] || error(
-        "D3 IDC reference must be inside the Q3D source-support interval.",
-    )
-    physical_lengths = reference_values[1:4] .* exp.(coordinates[1:4])
-    all(value -> isfinite(value) && value > 0, physical_lengths) || error(
-        "D3 physical-length map left the finite strictly-positive Float64 domain.",
-    )
-    u_idc = D3_IDC_SOURCE_BOUNDS_UM[1] +
-        (D3_IDC_SOURCE_BOUNDS_UM[2] - D3_IDC_SOURCE_BOUNDS_UM[1]) *
-        coordinates[5]
-    l_short = physical_lengths[2]
-    return (
-        lr_open_m=physical_lengths[1],
-        lr_short_m=l_short,
-        lc_m=physical_lengths[3],
-        lp_open_m=physical_lengths[4],
-        lp_short_m=l_short,
-        u_IDC=u_idc,
-    )
-end
-
-function d3_physical_candidate_to_log(reference::NamedTuple, candidate::NamedTuple)
-    propertynames(candidate) == D3_EXPANDED_PHYSICAL_COORDINATES || error(
-        "D3 persisted candidate fields must be $(D3_EXPANDED_PHYSICAL_COORDINATES).",
-    )
-    candidate.lr_short_m == candidate.lp_short_m || error(
-        "D3 physical candidate must preserve exact shared-short equality.",
-    )
-    compact = (
-        lr_open_m=candidate.lr_open_m,
-        l_short_m=candidate.lr_short_m,
-        lc_m=candidate.lc_m,
-        lp_open_m=candidate.lp_open_m,
-        u_IDC=candidate.u_IDC,
-    )
-    values = Float64.(Tuple(compact))
-    references = Float64.(Tuple(reference))
-    all(value -> isfinite(value) && value > 0, values[1:4]) || error(
-        "D3 physical candidate lengths must be finite and strictly positive.",
-    )
-    all(value -> isfinite(value) && value > 0, references[1:4]) || error(
-        "D3 physical reference lengths must be finite and strictly positive.",
-    )
-    all(
-        value -> D3_IDC_SOURCE_BOUNDS_UM[1] <= value <=
-            D3_IDC_SOURCE_BOUNDS_UM[2],
-        (values[5], references[5]),
-    ) || error(
-        "D3 IDC candidate and reference must be inside the Q3D source-support interval.",
-    )
-    latent = vcat(
-        log.(values[1:4] ./ references[1:4]),
-        (values[5] - D3_IDC_SOURCE_BOUNDS_UM[1]) /
-            (D3_IDC_SOURCE_BOUNDS_UM[2] - D3_IDC_SOURCE_BOUNDS_UM[1]),
-    )
-    all(isfinite, latent) || error("D3 inverse log-coordinate map is nonfinite.")
-    return latent
-end
-
-mutable struct D3LogPhysicalObjectiveContext{F}
-    evaluator::F
-    metrics::Vector{MetricSpec}
-    cache::Dict{Tuple,Any}
-    cache_lock::ReentrantLock
-    candidate_locks::Dict{Tuple,ReentrantLock}
-    recorded_candidates::Set{Tuple}
-    history::Vector{EvaluationRecord}
-    runtime_progress_path::Union{Nothing,String}
-    runtime_progress_lock::ReentrantLock
-    runtime_completion_sequence::Int
-end
-
-function D3LogPhysicalObjectiveContext(evaluator, metrics, runtime_progress_path)
-    progress_path = isnothing(runtime_progress_path) ?
-        nothing : abspath(String(runtime_progress_path))
-    !isnothing(progress_path) && ispath(progress_path) && error(
-        "Refusing to overwrite runtime candidate progress: $(progress_path)",
-    )
-    return D3LogPhysicalObjectiveContext(
-        evaluator,
-        collect(metrics),
-        Dict{Tuple,Any}(),
-        ReentrantLock(),
-        Dict{Tuple,ReentrantLock}(),
-        Set{Tuple}(),
-        EvaluationRecord[],
-        progress_path,
-        ReentrantLock(),
-        0,
-    )
-end
-
-function emit_runtime_candidate_progress!(
-    context,
-    stage,
-    candidate,
-    evaluation,
-    elapsed_seconds;
-    exception=nothing,
-)
-    isnothing(context.runtime_progress_path) && return nothing
-    status, cost, evidence = if !isnothing(exception)
-        (
-            "EXECUTION_EXCEPTION",
-            nothing,
-            (
-                exception_type=string(typeof(exception)),
-                exception=sprint(showerror, exception),
-            ),
-        )
-    elseif evaluation isa ValidEvaluation
-        (
-            "VALID",
-            cost_breakdown(context.metrics, evaluation).total,
-            nothing,
-        )
-    else
-        evaluation isa RejectedEvaluation || error(
-            "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(evaluation)).",
-        )
-        (
-            "NOT_EVALUABLE",
-            nothing,
-            (
-                code=evaluation.code,
-                reason=evaluation.reason,
-                details=evaluation.details,
-            ),
-        )
+    isnothing(options["slot_ghz"]) && error("--slot-ghz is required.")
+    isnothing(options["q3d_input"]) && error("--q3d-input is required.")
+    isnothing(options["idc_input"]) && error("--idc-input is required.")
+    options["slot_ghz"] = parse(Float64, String(options["slot_ghz"]))
+    if options["mode"] != "dry_run" && isnothing(options["output_dir"])
+        error("--output-dir is required unless --dry-run is selected.")
     end
-    lock(context.runtime_progress_lock) do
-        context.runtime_completion_sequence += 1
-        append_jsonl(context.runtime_progress_path, (
-            schema_version="d3-rev10-runtime-candidate-progress.v1",
-            authority="diagnostic_non_authoritative",
-            completion_sequence=context.runtime_completion_sequence,
-            stage=stage,
-            candidate_sha256=candidate_sha256(candidate),
-            expanded_candidate=candidate,
-            status=status,
-            elapsed_seconds=elapsed_seconds,
-            cost=cost,
-            evidence=evidence,
-        ))
-    end
-    return nothing
+    return options
 end
 
-function evaluate_with_runtime_progress!(context, stage, candidate)
-    started_ns = time_ns()
-    try
-        evaluation = context.evaluator(candidate)
-        evaluation isa ValidEvaluation || evaluation isa RejectedEvaluation || error(
-            "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(evaluation)).",
+function load_manifest(path)
+    absolute = abspath(String(path))
+    isfile(absolute) || error("Search manifest does not exist: $(absolute)")
+    file_sha256(absolute) == EXPECTED_MANIFEST_SHA256 || error(
+        "Search manifest bytes differ from the accepted task manifest.",
+    )
+    manifest = JSON3.read(read(absolute, String), Dict{String,Any})
+    manifest["contract_id"] == "d3-rev10-five-slot-targeted-schur-search.v1" ||
+        error("Search manifest contract id is wrong.")
+    manifest["semantic_state"] == "ACCEPTED" || error(
+        "Search manifest semantic state is not ACCEPTED.",
+    )
+    cma = manifest["cma_es"]
+    Int(cma["runs_per_slot"]) == 1 || error(
+        "Rev10 targeted-Schur search must contain exactly one CMA run.",
+    )
+    String(cma["seed_formula"]) == "round(Int,slot_hz/1e6)" || error(
+        "Rev10 CMA seed formula is wrong.",
+    )
+    cma["native_multi_threading"] === true &&
+        cma["parallel_evaluation"] === false || error(
+            "Rev10 CMA must use native scalar multi-threading only.",
         )
-        elapsed_seconds = (time_ns() - started_ns) / 1.0e9
-        emit_runtime_candidate_progress!(
-            context,
-            stage,
-            candidate,
-            evaluation,
-            elapsed_seconds,
-        )
-        return evaluation
-    catch exception
-        elapsed_seconds = (time_ns() - started_ns) / 1.0e9
-        emit_runtime_candidate_progress!(
-            context,
-            stage,
-            candidate,
-            nothing,
-            elapsed_seconds;
-            exception=exception,
-        )
-        rethrow()
-    end
+    Int(cma["blas_thread_count"]) == 1 || error("Rev10 CMA requires BLAS=1.")
+    cma["cross_slot_state_reuse"] === false || error(
+        "Rev10 slots must not reuse CMA state.",
+    )
+    return absolute, manifest
 end
 
-function d3_physical_candidate_key(candidate)
-    propertynames(candidate) == D3_EXPANDED_PHYSICAL_COORDINATES || error(
-        "D3 optimizer history accepts only expanded six-field physical candidates.",
+function seed_candidate(manifest, slot_hz)
+    matches = filter(
+        item -> Float64(item["slot_hz"]) == slot_hz,
+        manifest["slot_seeds"],
     )
-    candidate.lr_short_m == candidate.lp_short_m || error(
-        "D3 optimizer history requires exact shared-short equality.",
+    length(matches) == 1 || error("Manifest must contain one exact seed for the slot.")
+    raw = only(matches)["candidate"]
+    short = Float64(raw["l_short_m"])
+    candidate = (
+        lr_open_m=Float64(raw["lr_open_m"]),
+        lr_short_m=short,
+        lc_m=Float64(raw["lc_m"]),
+        lp_open_m=Float64(raw["lp_open_m"]),
+        lp_short_m=short,
+        u_IDC=Float64(raw["u_IDC"]),
     )
+    propertynames(candidate) == EXPANDED_COORDINATES || error("Seed order is wrong.")
     all(value -> isfinite(value) && value > 0, Tuple(candidate)) || error(
-        "D3 optimizer history requires finite strictly-positive physical candidates.",
+        "Seed values must be finite and positive.",
     )
-    return Tuple(candidate)
+    IDC_BOUNDS_UM[1] <= candidate.u_IDC <= IDC_BOUNDS_UM[2] || error(
+        "Seed IDC value is outside the accepted interpolation interval.",
+    )
+    return candidate
 end
 
-function d3_cached_evaluation!(context, stage, candidate)
-    key = d3_physical_candidate_key(candidate)
-    candidate_lock = lock(context.cache_lock) do
-        get!(context.candidate_locks, key) do
-            ReentrantLock()
-        end
-    end
-    return lock(candidate_lock) do
-        found, cached = lock(context.cache_lock) do
-            haskey(context.cache, key) ?
-                (true, context.cache[key]) : (false, nothing)
-        end
-        found && return cached
-        evaluation = evaluate_with_runtime_progress!(context, stage, candidate)
-        lock(context.cache_lock) do
-            context.cache[key] = evaluation
-        end
-        return evaluation
-    end
-end
-
-function d3_evaluate_physical!(context, stage, candidate)
-    key = d3_physical_candidate_key(candidate)
-    cache_hit = key in context.recorded_candidates
-    evaluation = d3_cached_evaluation!(context, stage, candidate)
-    cost = D3CoupledOptimizer._record_evaluation!(
-        context,
-        stage,
-        candidate,
-        cache_hit,
-        evaluation,
-    )
-    push!(context.recorded_candidates, key)
-    return cost
-end
-
-function d3_evaluate_log_candidate!(context, stage, reference, latent)
-    candidate = d3_expand_log_physical_candidate(reference, latent)
-    evaluation = d3_cached_evaluation!(context, stage, candidate)
-    breakdown = evaluation isa ValidEvaluation ?
-        cost_breakdown(context.metrics, evaluation) : nothing
-    return isnothing(breakdown) ? Inf : breakdown.total
-end
-
-function d3_replay_cma_generation!(context, reference, optimizer, y, fvals)
-    evaluated_input =
-        D3CoupledOptimizer.CMAEvolutionStrategy.compute_input(optimizer.p, y)
-    size(evaluated_input, 2) == length(fvals) || error(
-        "CMA evaluated-input and cost counts disagree.",
-    )
-    for index in eachindex(fvals)
-        candidate = d3_expand_log_physical_candidate(
-            reference,
-            @view(evaluated_input[:, index]),
-        )
-        key = d3_physical_candidate_key(candidate)
-        evaluation = lock(context.cache_lock) do
-            haskey(context.cache, key) || error(
-                "CMA callback cannot replay a missing evaluated candidate.",
-            )
-            context.cache[key]
-        end
-        cache_hit = key in context.recorded_candidates
-        recorded_cost = D3CoupledOptimizer._record_evaluation!(
-            context,
-            :cma,
-            candidate,
-            cache_hit,
-            evaluation,
-        )
-        isequal(recorded_cost, Float64(fvals[index])) || error(
-            "CMA callback cost differs from the cached candidate evaluation.",
-        )
-        push!(context.recorded_candidates, key)
-    end
-    return nothing
-end
-
-function optimize_d3_log_physical(
-    evaluator,
-    metrics::AbstractVector{MetricSpec},
-    reference::NamedTuple,
-    cma::CMASettings,
-    promotion_settings::Nothing;
-    condition_manifest_id,
-    condition_manifest_sha256,
-    condition_manifest_approval_status,
-    runtime_progress_path=nothing,
-)
-    manifest_id, manifest_hash, approval_status =
-        D3CoupledOptimizer._validate_manifest_identity(
-            condition_manifest_id,
-            condition_manifest_sha256,
-            condition_manifest_approval_status,
-        )
-    D3CoupledOptimizer._require_unique_names(metrics, "metric")
-    any(spec -> spec.weight > 0, metrics) || error(
-        "At least one metric must have positive weight.",
-    )
-    initial_latent = vcat(
-        zeros(4),
-        (reference.u_IDC - D3_IDC_SOURCE_BOUNDS_UM[1]) /
-            (D3_IDC_SOURCE_BOUNDS_UM[2] - D3_IDC_SOURCE_BOUNDS_UM[1]),
-    )
-    initial_candidate = d3_expand_log_physical_candidate(reference, initial_latent)
-    context = D3LogPhysicalObjectiveContext(
-        evaluator,
-        metrics,
-        runtime_progress_path,
-    )
-    d3_evaluate_physical!(context, :initial_seed, initial_candidate)
-    initial_records = D3CoupledOptimizer._stage_records(context, :initial_seed)
-    length(initial_records) == 1 || error(
-        "The exact physical reference seed must produce one history record.",
-    )
-    initial_record = only(initial_records)
-    cma_objective = latent -> d3_evaluate_log_candidate!(
-        context,
-        :cma,
-        reference,
-        latent,
-    )
-    cma_callback = (optimizer, y, fvals, _) ->
-        d3_replay_cma_generation!(context, reference, optimizer, y, fvals)
-
-    cma_result = D3CoupledOptimizer.CMAEvolutionStrategy.minimize(
-        cma_objective,
-        initial_latent,
-        cma.sigma;
-        popsize=cma.popsize,
-        seed=cma.seed,
-        maxiter=cma.maxiter,
-        maxfevals=cma.maxfevals,
-        ftol=nothing,
-        xtol=nothing,
-        lower=vcat(fill(-Inf, 4), 0.0),
-        upper=vcat(fill(Inf, 4), 1.0),
-        callback=cma_callback,
-        parallel_evaluation=false,
-        multi_threading=true,
-        noise_handling=nothing,
-        verbosity=0,
-    )
-
-    cma_records = D3CoupledOptimizer._stage_records(context, :cma)
-    cma_best = D3CoupledOptimizer._best_valid_record(cma_records)
-    cma_valid_count, cma_rejected_count =
-        D3CoupledOptimizer._stage_counts(cma_records)
-    generation_count = length(cma_records) ÷ cma.popsize
-    recent_generation_ranges = Float64[]
-    for generation in max(1, generation_count - 2):generation_count
-        first_index = (generation - 1) * cma.popsize + 1
-        last_index = generation * cma.popsize
-        finite_costs = Float64[
-            record.cost for record in cma_records[first_index:last_index]
-            if !isnothing(record.cost) && isfinite(record.cost)
-        ]
-        length(finite_costs) >= 2 || continue
-        push!(recent_generation_ranges, maximum(finite_costs) - minimum(finite_costs))
-    end
-    cma_ftol_observed = isempty(recent_generation_ranges) ?
-        nothing : maximum(recent_generation_ranges)
-    raw_cma_xtol = maximum(abs.(
-        D3CoupledOptimizer.CMAEvolutionStrategy.sigma(cma_result.p) .*
-        cma_result.p.cov.p,
-    ))
-    cma_xtol_observed = if isfinite(raw_cma_xtol)
-        raw_cma_xtol
-    elseif isnothing(cma_best)
-        nothing
-    else
-        error("CMA-ES produced a nonfinite latent-coordinate xtol observation.")
-    end
-    cma_conditions = [
-        D3CoupledOptimizer._condition(
-            "cma.ftol",
-            cma_ftol_observed,
-            "<=",
-            cma.ftol,
-            "cost",
-        ),
-        D3CoupledOptimizer._condition(
-            "cma.xtol",
-            cma_xtol_observed,
-            "<=",
-            cma.xtol,
-            "latent_coordinate",
-        ),
-    ]
-    cma_state = if isnothing(cma_best)
-        :no_valid_candidate
-    elseif all(condition -> condition.met === true, cma_conditions)
-        :converged
-    else
-        :not_converged
-    end
-    cma_outcome = SearchStageOutcome(
-        cma_state,
-        String(cma_result.stop.reason),
-        cma.maxiter,
-        cma.maxfevals,
-        Int(cma_result.stop.it),
-        length(cma_records),
-        isnothing(cma_best) ? nothing : cma_best.record_id,
-        cma_valid_count,
-        cma_rejected_count,
-        cma_conditions,
-    )
-    incumbent = D3CoupledOptimizer._best_valid_record(
-        vcat(initial_records, cma_records),
-    )
-    promotion = D3CoupledOptimizer._gate(
-        :not_evaluable,
-        "Diagnostic search did not declare Human-owned promotion limits.",
-        incumbent,
-        ConditionOutcome[],
-    )
-    return OptimizationResult(
-        manifest_id,
-        manifest_hash,
-        approval_status,
-        initial_record.record_id,
-        cma_outcome,
-        promotion,
-        copy(context.history),
-        D3CoupledOptimizer._cache_summary(context),
-    )
-end
-
-function extraction_profile(manifest, slot_hz)
-    extraction = manifest["extraction"]
-    policy = extraction["effective_operator_gate_policy"]
-    gate_names = (
-        :maximum_elimination_condition_number,
-        :maximum_relative_elimination_solve_residual,
-        :maximum_relative_reciprocity_error,
-        :maximum_relative_passivity_violation,
-        :maximum_relative_root_residual,
-        :maximum_root_growth_rate_hz,
-        :minimum_normalized_residue_slope,
-        :maximum_relative_coupling_spread,
-        :maximum_relative_determinant_closure_error,
-    )
-    gate_policy = NamedTuple{gate_names}(Tuple(
-        Float64(policy[String(name)]) for name in gate_names
-    ))
-    band = (slot_hz - 50.0e6, slot_hz + 50.0e6)
-    bracket = Tuple(Float64.(extraction["notch_bracket_hz"]))
-    disposition = extraction["numeric_control_disposition"]
-    return (
-        readout_effective_root_band_hz=band,
-        filter_effective_root_band_hz=band,
-        effective_operator_gate_policy=gate_policy,
-        notch_frequency_bracket_hz=bracket,
-        minimum_q_reference_overlap=
-            Float64(extraction["minimum_q_reference_overlap"]),
-        minimum_each_rp_subspace_overlap=
-            Float64(extraction["minimum_each_rp_subspace_overlap"]),
-        minimum_unordered_set_assignment_margin=
-            Float64(extraction["minimum_unordered_set_assignment_margin"]),
-        numeric_control_disposition=(
-            authority=Symbol(disposition["authority"]),
-            root_windows=Symbol(disposition["root_windows"]),
-            effective_operator_controls=
-                Symbol(disposition["effective_operator_controls"]),
-            notch_window=Symbol(disposition["notch_window"]),
-            overlap_and_assignment_controls=
-                Symbol(disposition["overlap_and_assignment_controls"]),
-        ),
-        complement=:complete_hybridized_complement,
-    )
-end
-
-function metric_specs(slot_hz)
+function initial_latent(candidate)
     return [
-        MetricSpec(:fr_eff_complete_complement_rp_hz, slot_hz, 0.5e6, 1.0),
-        MetricSpec(:fp_eff_complete_complement_rp_hz, slot_hz, 0.5e6, 1.0),
-        MetricSpec(:J_eff_complete_complement_rp_coherent_hz, 5.0e6, 2.0e6, 1.0),
-        MetricSpec(:notch_distributed_rp_on_hz, 5.0e9, 10.0e6, 1.0),
-        MetricSpec(:kappa_sum_unordered_rp_subspace_hz, 20.0e6, 1.0e6, 1.0),
-        MetricSpec(:linewidth_fraction_min_unordered_rp_subspace, 0.5, 0.2, 1.0),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        (candidate.u_IDC - IDC_BOUNDS_UM[1]) /
+            (IDC_BOUNDS_UM[2] - IDC_BOUNDS_UM[1]),
     ]
 end
 
-function objective_metrics(cared)
-    source = cared["source_profile_identity"]
-    model = source["model_identity"]
+function latent_candidate(seed, latent)
+    length(latent) == 5 || throw(ArgumentError("CMA latent vector must have length five."))
+    values = Float64.(latent)
+    all(isfinite, values) || throw(ArgumentError("CMA latent values must be finite."))
+    0.0 <= values[5] <= 1.0 || throw(ArgumentError("IDC latent value left [0,1]."))
+    lengths = (
+        seed.lr_open_m * exp(values[1]),
+        seed.lr_short_m * exp(values[2]),
+        seed.lc_m * exp(values[3]),
+        seed.lp_open_m * exp(values[4]),
+    )
+    all(value -> isfinite(value) && value > 0, lengths) || throw(ArgumentError(
+        "Log-positive length mapping left the finite positive Float64 domain.",
+    ))
+    short = lengths[2]
     return (
-        stage_id=:stage2_direct_hybridized,
-        model_family=:hybridized_distributed_lumped,
-        circuit_plan_sha256=String(model["circuit_plan_sha256"]),
-        capacitance_sha256=String(model["capacitance_sha256"]),
-        inverse_inductance_sha256=String(model["inverse_inductance_sha256"]),
-        selector_sha256=String(model["selector_sha256"]),
-        effective_diagonal_frequency_extraction=
-            :complete_complement_rp_complex_operator,
-        effective_exchange_extraction=
-            :complete_complement_rp_complex_midpoint_residue,
-        notch_authority=:distributed_rp_on,
-        linewidth_pole_scope=:unordered_rp_two_pole_subspace,
-        primary_linewidth_extraction=:exact_open_unordered_rp_poles,
-        fr_eff_complete_complement_rp_hz=Float64(cared["f_r_eff_hz"]),
-        fp_eff_complete_complement_rp_hz=Float64(cared["f_p_eff_hz"]),
-        J_eff_complete_complement_rp_coherent_hz=
-            Float64(cared["abs_real_J_eff_hz"]),
-        notch_distributed_rp_on_hz=Float64(cared["f_n_hz"]),
-        kappa_sum_unordered_rp_subspace_hz=
-            Float64(cared["unordered_rp_kappa_sum_hz"]),
-        linewidth_fraction_min_unordered_rp_subspace=
-            Float64(cared["unordered_rp_linewidth_fraction_min"]),
-        linewidth_fraction_max_unordered_rp_subspace=
-            Float64(cared["unordered_rp_linewidth_fraction_max"]),
+        lr_open_m=lengths[1],
+        lr_short_m=short,
+        lc_m=lengths[3],
+        lp_open_m=lengths[4],
+        lp_short_m=short,
+        u_IDC=IDC_BOUNDS_UM[1] +
+            (IDC_BOUNDS_UM[2] - IDC_BOUNDS_UM[1]) * values[5],
     )
 end
 
-function optimizer_metrics(metrics)
-    return ValidEvaluation((
-        fr_eff_complete_complement_rp_hz=
-            metrics.fr_eff_complete_complement_rp_hz,
-        fp_eff_complete_complement_rp_hz=
-            metrics.fp_eff_complete_complement_rp_hz,
-        J_eff_complete_complement_rp_coherent_hz=
-            metrics.J_eff_complete_complement_rp_coherent_hz,
-        notch_distributed_rp_on_hz=metrics.notch_distributed_rp_on_hz,
-        kappa_sum_unordered_rp_subspace_hz=
-            metrics.kappa_sum_unordered_rp_subspace_hz,
-        linewidth_fraction_min_unordered_rp_subspace=
-            metrics.linewidth_fraction_min_unordered_rp_subspace,
-    ))
-end
-
-function bind_inputs(manifest, q2d_path, q3d_path, idc_path)
+function bind_inputs(manifest, q3d_path, idc_path)
     sources = manifest["sources"]
+    q2d_path = joinpath(D3_SOURCE_ROOT, "d3_continuous_ground_q2d_maxwell_lc.v4.json")
     for (path, key) in (
         (q2d_path, "q2d_artifact_sha256"),
         (q3d_path, "q3d_input_sha256"),
         (idc_path, "idc_mapping_sha256"),
     )
-        isfile(path) || error("Required Rev10 input does not exist: $(path)")
+        isfile(path) || error("Required input does not exist: $(path)")
         file_sha256(path) == String(sources[key]) || error(
-            "Required Rev10 input bytes disagree with manifest field $(key).",
+            "Input bytes disagree with manifest field $(key).",
         )
     end
     fixed = manifest["fixed_physical_inputs"]
-    idc_model = manifest["idc_length_model"]
-    idc_model["model"] == "capacitance_fF=a_fF_per_um*length_um+b_fF" &&
-        idc_model["fit_method"] == "ordinary_least_squares_at_selected_gap" &&
-        idc_model["outside_source_support"] == "reject" || error(
-        "Rev10 IDC length model must reject values outside its source support.",
-    )
-    source_support = Tuple(Float64.(idc_model["source_support_um"]))
-    source_support == D3_IDC_SOURCE_BOUNDS_UM || error(
-        "Rev10 IDC source support must be exactly 35--75 um.",
-    )
-    String(idc_model["evaluation_domain"]) == "closed_source_support" || error(
-        "Rev10 IDC OLS evaluation must use only its closed source-support interval.",
-    )
-    Float64(idc_model["source_gap_um"]) == Float64(fixed["idc_gap_um"]) || error(
-        "Rev10 IDC fit gap and fixed physical gap disagree.",
-    )
     q2d = bind_d3_rev10_q2d_input(
         load_d3_continuous_ground_q2d_input(q2d_path);
-        section_length_m=Float64(fixed["q2d_section_length_m"]),
-        mtl_section_length_m=Float64(fixed["q2d_mtl_section_length_m"]),
+        section_length_m=Float64(fixed["q2d_section_length_um"]) * 1e-6,
+        mtl_section_length_m=Float64(fixed["q2d_mtl_section_length_um"]) * 1e-6,
     )
     q3d = load_floating_qubit_nominal_input(
         q3d_path,
         (; kwargs...) -> (; kwargs...);
         gap_um=Float64(fixed["q3d_gap_um"]),
     )
-    idc = load_d3_idc_mapping(
-        idc_path;
-        gap_um=Float64(fixed["idc_gap_um"]),
-    )
-    idc.source_length_range_um == source_support || error(
-        "Rev10 IDC Q3D source-support range disagrees with the manifest.",
-    )
-    idc.mapping_id == String(sources["idc_runtime_mapping_id"]) || error(
-        "Rev10 IDC runtime mapping id disagrees with the manifest.",
-    )
+    idc = load_d3_idc_mapping(idc_path; gap_um=Float64(fixed["idc_gap_um"]))
     d3_idc_mapping_semantic_sha256(idc) ==
         String(sources["idc_mapping_semantic_sha256"]) || error(
-        "Rev10 interpolation-only IDC mapping semantic identity is not yet " *
-        "integrated into the shared Stage-model authority.",
-    )
+            "IDC semantic identity differs from the accepted interpolation-only mapping.",
+        )
     inputs = bind_d3_stage2_direct_hybridized_inputs(
         q2d,
         q3d,
@@ -747,601 +260,442 @@ function bind_inputs(manifest, q2d_path, q3d_path, idc_path)
     )
     inputs.source_identity.canonical_sha256 ==
         String(sources["fixed_input_canonical_sha256"]) || error(
-            "Canonical direct-Hybridized fixed input identity is wrong.",
+            "Fixed-input canonical identity $(inputs.source_identity.canonical_sha256) " *
+            "differs from manifest $(sources["fixed_input_canonical_sha256"]).",
         )
     return inputs
 end
 
-function make_evaluator(
-    inputs,
-    profile,
-    slot_hz,
-    specs,
-    restart_dir,
-)
-    l0_by_candidate = Dict{String,Any}()
-    metadata_lock = ReentrantLock()
-
-    function evaluator(candidate)
-        candidate_sha = candidate_sha256(candidate)
-        l0 = try
-            plan = d3_stage2_direct_hybridized_grid_plan(
-                candidate,
-                inputs;
-                refinement_level=0,
-            )
-            request = d3_direct_hybridized_spatial_level_request(
-                inputs,
-                plan,
-                profile,
-            )
-            cared = validate_d3_direct_hybridized_cared_output(
-                evaluate_d3_direct_hybridized_cared_output_request(
-                    candidate,
-                    slot_hz,
-                    request.evaluation_input,
-                ),
-            )
-            (
-                cared_output=cared,
-                request_identity=d3_direct_hybridized_spatial_cache_key(
-                    candidate,
-                    slot_hz,
-                    request,
-                ),
-            )
-        catch exception
-            exception isa InterruptException && rethrow()
-            if exception isa D3DirectHybridizedSpatialNotEvaluable
-                return RejectedEvaluation(
-                    exception.code,
-                    exception.reason,
-                    exception.details,
-                )
-            end
-            if exception isa ErrorException ||
-                exception isa SuperconductingCircuitsCore.FrameworkValidationError
-                return RejectedEvaluation(
-                    "direct_l0_candidate_not_evaluable",
-                    "Candidate-local direct-Hybridized L0 evaluation failed.",
-                    (
-                        candidate_sha256=candidate_sha,
-                        refinement_level=0,
-                        exception_type=string(typeof(exception)),
-                        exception=sprint(showerror, exception),
-                    ),
-                )
-            end
-            rethrow()
-        end
-
-        metrics = objective_metrics(l0.cared_output)
-        expected_model = (
-            circuit_plan_sha256=metrics.circuit_plan_sha256,
-            capacitance_sha256=metrics.capacitance_sha256,
-            inverse_inductance_sha256=metrics.inverse_inductance_sha256,
-            selector_sha256=metrics.selector_sha256,
+function build_context(manifest, inputs; refinement_level)
+    topology = manifest["fixed_node_topology"]
+    reference_slot = Float64(topology["reference_slot_hz"])
+    reference = seed_candidate(manifest, reference_slot)
+    plan = d3_stage2_direct_hybridized_grid_plan(
+        reference,
+        inputs;
+        refinement_level=refinement_level,
+    )
+    context = build_d3_stage2_targeted_schur_objective_context(
+        reference,
+        inputs;
+        grid_plan=plan,
+        id="d3-rev10-five-slot-targeted-schur-N$(1 << refinement_level)",
+    )
+    factor = 1 << refinement_level
+    expected = topology["section_counts"]
+    counts = context.provenance.topology_counts
+    for (actual, key) in (
+        (counts.readout.short, "readout_short"),
+        (counts.readout.open, "readout_open"),
+        (counts.readout.mtl, "coupled_mtl"),
+        (counts.filter.short, "filter_short"),
+        (counts.filter.open, "filter_open"),
+        (counts.filter.mtl, "coupled_mtl"),
+        (counts.feedline_left, "feedline_left"),
+        (counts.feedline_right, "feedline_right"),
+    )
+        actual == factor * Int(expected[key]) || error(
+            "Targeted-Schur context count $(actual) disagrees with $(factor)x $(key).",
         )
-        evaluation = optimizer_metrics(metrics)
+    end
+    size(context.full_kernel.c0, 1) == factor * (Int(topology["matrix_dimension"]) - 2) + 2 ||
+        error("Targeted-Schur matrix dimension disagrees with the fixed-node manifest.")
+    if refinement_level == 0
+        plan.canonical_sha256 == String(topology["reference_grid_plan_sha256"]) ||
+            error(
+                "Reference grid-plan identity $(plan.canonical_sha256) differs " *
+                "from manifest $(topology["reference_grid_plan_sha256"]).",
+            )
+    end
+    return context
+end
+
+function targeted_metrics(cared)
+    return (
+        contract_id="d3-stage2-targeted-schur-candidate-metrics.v1",
+        stage_id=cared.stage_id,
+        model_family=cared.model_family,
+        source_profile_identity=cared.source_profile_identity,
+        grid_identity=cared.grid_identity,
+        fr_eff_complete_complement_rp_hz=cared.f_r_eff_hz,
+        fp_eff_complete_complement_rp_hz=cared.f_p_eff_hz,
+        J_eff_complete_complement_rp_coherent_hz=cared.abs_real_J_eff_hz,
+        notch_distributed_rp_on_hz=cared.f_n_hz,
+        kappa_sum_local_hybrid_rp_hz=cared.local_hybrid_kappa_sum_hz,
+        linewidth_fraction_min_local_hybrid_rp=
+            cared.local_hybrid_linewidth_fraction_min,
+        linewidth_fraction_max_local_hybrid_rp=
+            cared.local_hybrid_linewidth_fraction_max,
+        effective_diagonal_frequency_extraction=
+            :complete_complement_rp_complex_operator,
+        effective_exchange_extraction=
+            :complete_complement_rp_complex_midpoint_residue,
+        notch_authority=:distributed_rp_on,
+        linewidth_pole_scope=:complete_complement_rp_local_hybrid_two_pole,
+        primary_linewidth_extraction=:targeted_schur_determinant_poles,
+    )
+end
+
+function cared_payload(cared)
+    return (
+        f_r_eff_hz=cared.f_r_eff_hz,
+        f_p_eff_hz=cared.f_p_eff_hz,
+        f_n_hz=cared.f_n_hz,
+        abs_real_J_eff_hz=cared.abs_real_J_eff_hz,
+        local_hybrid_kappa_sum_hz=cared.local_hybrid_kappa_sum_hz,
+        local_hybrid_linewidth_fraction_min=
+            cared.local_hybrid_linewidth_fraction_min,
+        local_hybrid_linewidth_fraction_max=
+            cared.local_hybrid_linewidth_fraction_max,
+        source_profile_sha256=cared.source_profile_identity.canonical_sha256,
+        grid_sha256=cared.grid_identity.canonical_sha256,
+        validity=cared.validity,
+    )
+end
+
+function evaluate_candidate(candidate, context, slot_hz)
+    started = time_ns()
+    try
+        cared = d3_stage2_direct_cared_outputs(
+            candidate,
+            context;
+            slot_hz=slot_hz,
+            readout_root_anchor_hz=slot_hz,
+            filter_root_anchor_hz=slot_hz,
+            notch_zero_anchor_hz=5.0e9,
+        )
+        metrics = targeted_metrics(cared)
         objective = d3_stage2_objective(
             metrics,
             slot_hz,
             D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-            expected_model,
+            (
+                source_profile_identity=cared.source_profile_identity,
+                grid_identity=cared.grid_identity,
+            ),
         )
-        breakdown = cost_breakdown(specs, evaluation)
-        isapprox(objective.cost, breakdown.total; rtol=1.0e-14, atol=0.0) ||
-            error("Circuit Objective and optimizer scalarization disagree.")
-        objective_path = write_new_json(joinpath(
-            restart_dir,
-            "l0_objective_receipts",
-            "$(candidate_sha).json",
-        ), (
-            schema_version="d3-rev10-direct-hybridized-l0-objective-receipt.v1",
-            candidate_sha256=candidate_sha,
+        return (
+            status="VALID",
             candidate=candidate,
-            slot_hz=slot_hz,
-            inner_loop_level=0,
-            request_identity=l0.request_identity,
-            cared_output=l0.cared_output,
-            objective=objective,
-            promotion="none",
-            publication="none",
-        ))
-        receipt_record = (
-            locator=relpath(objective_path, restart_dir),
-            sha256=file_sha256(objective_path),
-            inner_loop_level=0,
-        )
-        lock(metadata_lock) do
-            l0_by_candidate[candidate_sha] = (
-                cared_output=l0.cared_output,
-                objective=objective,
-                receipt=receipt_record,
-            )
-        end
-        return evaluation
-    end
-    return evaluator, l0_by_candidate
-end
-
-function best_valid(restarts)
-    best = nothing
-    ordinal = 0
-    for restart in restarts
-        for record in restart.result.history
-            ordinal += 1
-            isnothing(record.cost) && continue
-            candidate_sha = candidate_sha256(record.candidate)
-            l0 = restart.l0_by_candidate[candidate_sha]
-            candidate = (
-                restart_index=restart.restart_index,
-                restart_name=restart.restart_name,
-                ordinal=ordinal,
-                record=record,
-                l0_cared_output=l0.cared_output,
-                l0_objective=l0.objective,
-                l0_receipt=l0.receipt,
-                cma_state=restart.result.cma.state,
-            )
-            if isnothing(best) || record.cost < best.record.cost
-                best = candidate
-            end
-        end
-    end
-    return best
-end
-
-function validate_selected_candidate_spatially(
-    candidate,
-    l0_cared_output,
-    inputs,
-    profile,
-    slot_hz,
-    authority,
-    specs,
-    destination,
-)
-    l0_plan = d3_stage2_direct_hybridized_grid_plan(
-        candidate,
-        inputs;
-        refinement_level=0,
-    )
-    l0_request = d3_direct_hybridized_spatial_level_request(
-        inputs,
-        l0_plan,
-        profile,
-    )
-    l0_key = d3_direct_hybridized_spatial_cache_key(candidate, slot_hz, l0_request)
-    spatial_cache = Dict{String,Any}(
-        l0_key => Dict(
-            "cared_output" => deepcopy(l0_cared_output),
-            "cared_output_sha256" =>
-                D3SemanticHash.semantic_value_sha256(l0_cared_output),
-        ),
-    )
-    evidence = try
-        produce_d3_direct_hybridized_spatial_evidence(
-            candidate;
-            slot_hz=slot_hz,
-            objective_authority=authority,
-            level_request=(values, slot, level) -> begin
-                plan = d3_stage2_direct_hybridized_grid_plan(
-                    values,
-                    inputs;
-                    refinement_level=level,
-                )
-                d3_direct_hybridized_spatial_level_request(
-                    inputs,
-                    plan,
-                    profile,
-                )
-            end,
-            cache=spatial_cache,
+            cost=Float64(objective.cost),
+            cared=cared_payload(cared),
+            objective=(
+                contract_id=objective.contract_id,
+                normalized_residuals=objective.normalized_residuals,
+                target_diagnostics=objective.target_diagnostics,
+            ),
+            rejection=nothing,
+            elapsed_seconds=(time_ns() - started) / 1e9,
         )
     catch exception
-        exception isa InterruptException && rethrow()
-        if exception isa D3DirectHybridizedSpatialNotEvaluable
-            return (
-                status="NOT_VALIDATED",
-                spatial_receipt=nothing,
-                validated_finest_objective=nothing,
-                validated_finest_objective_receipt=nothing,
-                failure=(
-                    code=exception.code,
-                    reason=exception.reason,
-                    details=exception.details,
-                    cost=nothing,
-                ),
-            )
-        end
-        rethrow()
-    end
-
-    validation_dir = joinpath(destination, "winner_spatial_validation")
-    receipt = write_d3_direct_hybridized_spatial_receipt(
-        joinpath(validation_dir, "spatial_receipt.json"),
-        evidence,
-    )
-    authorization = authorize_d3_direct_hybridized_spatial_receipt(
-        receipt,
-        candidate;
-        slot_hz=slot_hz,
-        objective_authority=authority,
-    )
-    metrics = objective_metrics(authorization.cared_output)
-    expected_model = (
-        circuit_plan_sha256=metrics.circuit_plan_sha256,
-        capacitance_sha256=metrics.capacitance_sha256,
-        inverse_inductance_sha256=metrics.inverse_inductance_sha256,
-        selector_sha256=metrics.selector_sha256,
-    )
-    evaluation = optimizer_metrics(metrics)
-    objective = evaluate_d3_direct_hybridized_objective_with_spatial_evidence(
-        authorization,
-        candidate,
-        authorization.cared_output;
-        slot_hz=slot_hz,
-        objective_authority=authority,
-        objective_evaluator=renewed -> d3_stage2_objective(
-            metrics,
-            slot_hz,
-            D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-            expected_model,
-        ),
-    )
-    breakdown = cost_breakdown(specs, evaluation)
-    isapprox(objective.cost, breakdown.total; rtol=1.0e-14, atol=0.0) ||
-        error("Spatially validated Objective and optimizer scalarization disagree.")
-    identity = d3_direct_hybridized_spatial_receipt_identity(authorization)
-    objective_path = write_new_json(
-        joinpath(validation_dir, "validated_finest_objective.json"),
-        (
-            schema_version="d3-rev10-direct-hybridized-validated-finest-objective.v1",
-            candidate_sha256=candidate_sha256(candidate),
+        exception isa D3TargetedSchurNotEvaluable || rethrow()
+        return (
+            status="NOT_EVALUABLE",
             candidate=candidate,
-            slot_hz=slot_hz,
-            spatial_receipt_identity=identity,
-            cared_output=authorization.cared_output,
-            objective=objective,
-            promotion="none",
-            publication="none",
-        ),
-    )
-    return (
-        status="PASS",
-        spatial_receipt=(
-            locator=relpath(receipt.path, destination),
-            identity=identity,
-        ),
-        validated_finest_objective=objective,
-        validated_finest_objective_receipt=(
-            locator=relpath(objective_path, destination),
-            sha256=file_sha256(objective_path),
-        ),
-        failure=nothing,
+            cost=nothing,
+            cared=nothing,
+            objective=nothing,
+            rejection=(
+                code=exception.code,
+                reason=exception.reason,
+                details=exception.details,
+            ),
+            elapsed_seconds=(time_ns() - started) / 1e9,
+        )
+    end
+end
+
+mutable struct SearchState{C,S}
+    context::C
+    seed::S
+    slot_hz::Float64
+    lock::ReentrantLock
+    candidate_locks::Dict{NTuple{5,Float64},ReentrantLock}
+    cache::Dict{NTuple{5,Float64},Any}
+    progress_path::String
+    generation::Int
+    summaries::Vector{Any}
+    best::Any
+end
+
+function SearchState(context, seed, slot_hz, progress_path)
+    return SearchState(
+        context,
+        seed,
+        slot_hz,
+        ReentrantLock(),
+        Dict{NTuple{5,Float64},ReentrantLock}(),
+        Dict{NTuple{5,Float64},Any}(),
+        String(progress_path),
+        0,
+        Any[],
+        nothing,
     )
 end
 
-function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
-    manifest_absolute = abspath(String(manifest_path))
-    file_sha256(manifest_absolute) == EXPECTED_MANIFEST_SHA256 || error(
-        "Run manifest bytes differ from the Human-approved task manifest.",
-    )
-    manifest = JSON3.read(read(manifest_absolute, String), Dict{String,Any})
-    manifest["approval_status"] == "human_approved" || error(
-        "Rev10 diagnostic execution manifest is not Human-approved.",
-    )
-    slots = Float64.(manifest["slots_hz"])
-    slot_hz in slots || error("Requested slot is outside the accepted Rev10 tuple.")
-    manifest["execution_order"] == "ascending_slots" || error(
-        "Rev10 manifest execution order is not ascending_slots.",
-    )
-    Int(manifest["inner_loop_level"]) == 0 || error(
-        "Rev10 CMA inner loop must use fixed refinement level zero.",
-    )
-    manifest["spatial_refinement"]["application"] ==
-        "selected_best_candidate_only" || error(
-            "Rev10 spatial refinement must apply only to the selected best candidate.",
-        )
-    gate_reconciliation = manifest["human_gate_reconciliation"]
-    gate_reconciliation_path = joinpath(
-        @__DIR__,
-        String(gate_reconciliation["path"]),
-    )
-    isfile(gate_reconciliation_path) || error(
-        "Rev10 Human-gate reconciliation ledger is missing.",
-    )
-    file_sha256(gate_reconciliation_path) ==
-        String(gate_reconciliation["sha256"]) || error(
-            "Rev10 Human-gate reconciliation ledger bytes changed.",
-        )
+latent_key(latent) = Tuple(Float64.(latent))
 
-    workbench_head = command_output("git", "rev-parse", "HEAD")
-    base = String(manifest["sources"]["workbench_commit"])
-    ancestry_command = Cmd([
-        "git", "merge-base", "--is-ancestor", base, workbench_head,
-    ])
-    success(run(Cmd(ancestry_command; dir=WORKBENCH_ROOT))) || error(
-            "Current Workbench task commit does not descend from integrated authority.",
-        )
-    isempty(command_output("git", "status", "--porcelain=v1")) || error(
-        "Rev10 scientific run requires a clean exact Workbench task commit.",
-    )
-    destination = abspath(String(output_dir))
-    ispath(destination) && error("Refusing to reuse existing slot output: $(destination)")
-    mkpath(destination)
-
-    q2d_path = joinpath(
-        @__DIR__,
-        "d3_continuous_ground_q2d_maxwell_lc.v4.json",
-    )
-    inputs = bind_inputs(manifest, q2d_path, abspath(q3d_path), abspath(idc_path))
-    profile = extraction_profile(manifest, slot_hz)
-    authority = d3_direct_hybridized_objective_authority(
-        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-    )
-    physical_search = manifest["physical_search"]
-    physical_coordinate_names = Tuple(
-        Symbol(item["name"]) for item in physical_search["coordinates"]
-    )
-    physical_coordinate_names == D3_COMPACT_PHYSICAL_COORDINATES || error(
-        "Rev10 physical search must contain the exact five compact coordinates.",
-    )
-    search_bounds = physical_search["human_search_bounds"]
-    String(search_bounds["length_coordinates"]) == "strictly_positive_unbounded" &&
-        Tuple(Float64.(search_bounds["u_IDC_um"])) == D3_IDC_SOURCE_BOUNDS_UM || error(
-        "Rev10 search bounds must leave lengths positive-unbounded and bind IDC to 35--75 um.",
-    )
-    String(physical_search["latent_domain"]) == "R^4_x_[0,1]" &&
-        String(physical_search["physical_map"]) ==
-            "length_i=reference_start_i*exp(z_i);u_IDC_um=35+40*x_IDC" &&
-        String(physical_search["shared_short_rule"]) ==
-            "lr_short_m=lp_short_m=l_short_m_exactly" &&
-        isnothing(physical_search["equality_penalty"]) || error(
-            "Rev10 latent-coordinate and shared-short search semantics are invalid.",
-        )
-    reference_start = manifest["reference_start"]
-    reference_name = String(reference_start["name"])
-    reference = exact_namedtuple(
-        reference_start["candidate"],
-        D3_COMPACT_PHYSICAL_COORDINATES,
-    )
-    expanded_reference = d3_expand_log_physical_candidate(
-        reference,
-        vcat(
-            zeros(4),
-            (reference.u_IDC - D3_IDC_SOURCE_BOUNDS_UM[1]) /
-                (D3_IDC_SOURCE_BOUNDS_UM[2] - D3_IDC_SOURCE_BOUNDS_UM[1]),
-        ),
-    )
-    specs = metric_specs(slot_hz)
-    cma = manifest["cma_es"]
-    BLAS.set_num_threads(1)
-    BLAS.get_num_threads() == 1 || error(
-        "Rev10 native-threaded CMA requires exactly one BLAS thread per Julia process.",
-    )
-    restart_results = Any[]
-    starts = manifest["starts"]
-    restart_indices = Int.(cma["restart_indices"])
-    length(starts) == length(restart_indices) || error(
-        "Rev10 start and restart-index counts differ.",
-    )
-
-    run_identity = (
-        contract_id=String(manifest["contract_id"]),
-        manifest_sha256=EXPECTED_MANIFEST_SHA256,
-        human_gate_reconciliation=(
-            locator=basename(gate_reconciliation_path),
-            sha256=String(gate_reconciliation["sha256"]),
-        ),
-        slot_hz=slot_hz,
-        workbench_task_commit=workbench_head,
-        source_commits=manifest["sources"],
-        fixed_input_canonical_sha256=inputs.source_identity.canonical_sha256,
-        input_files=(
-            q2d=(name=basename(q2d_path), sha256=file_sha256(q2d_path)),
-            q3d=(name=basename(q3d_path), sha256=file_sha256(q3d_path)),
-            idc=(name=basename(idc_path), sha256=file_sha256(idc_path)),
-        ),
-        data_classification="project-internal",
-        evidence_status="diagnostic_non_promotable",
-        runtime_resources=(
-            julia_thread_count=Threads.nthreads(),
-            blas_thread_count=BLAS.get_num_threads(),
-        ),
-        search_discretization=(
-            inner_loop_level=0,
-            winner_spatial_refinement="selected_best_candidate_only",
-        ),
-        search_coordinates=(
-            physical_coordinates=D3_COMPACT_PHYSICAL_COORDINATES,
-            latent_coordinates=Tuple(Symbol.(physical_search["latent_coordinates"])),
-            latent_domain="R^4_x_[0,1]",
-            physical_map=
-                "length_i=reference_start_i*exp(z_i);u_IDC_um=35+40*x_IDC",
-            human_search_bounds=(
-                length_coordinates="strictly_positive_unbounded",
-                u_IDC_um=D3_IDC_SOURCE_BOUNDS_UM,
-            ),
-            shared_short_rule="lr_short_m=lp_short_m=l_short_m_exactly",
-            persisted_candidate_fields=D3_EXPANDED_PHYSICAL_COORDINATES,
-        ),
-        reference_start=(
-            name=reference_name,
-            compact_physical_candidate=reference,
-            expanded_physical_candidate=expanded_reference,
-            external_seed_provenance=
-                reference_start["report_only_external_seed_provenance"],
-        ),
-    )
-    write_new_json(joinpath(destination, "run_identity.json"), run_identity)
-
-    for (start, restart_index) in zip(starts, restart_indices)
-        restart_name = String(start["name"])
-        Int(start["restart_index"]) == restart_index || error(
-            "Rev10 restart record and restart index disagree.",
-        )
-        String(start["reference_start"]) == reference_name || error(
-            "Every Rev10 restart must use the same Human Spring2025 reference seed.",
-        )
-        restart_dir = joinpath(destination, "restart-$(restart_index)-$(restart_name)")
-        mkpath(restart_dir)
-        evaluator, l0_records = make_evaluator(
-            inputs,
-            profile,
-            slot_hz,
-            specs,
-            restart_dir,
-        )
-        seed = round(Int, slot_hz / 1.0e6) + 10000 * restart_index
-        settings = CMASettings(
-            seed=seed,
-            sigma=Float64(cma["sigma_latent_coordinate"]),
-            popsize=Int(cma["population"]),
-            maxiter=Int(cma["maximum_iterations"]),
-            maxfevals=Int(cma["maximum_evaluations"]),
-            ftol=Float64(cma["ftol_cost"]),
-            xtol=Float64(cma["xtol_latent_coordinate"]),
-        )
-        println(
-            "START slot=$(slot_hz / 1e9)GHz restart=$(restart_index) " *
-            "seed=$(seed)",
-        )
-        flush(stdout)
-        result = optimize_d3_log_physical(
-            evaluator,
-            specs,
-            reference,
-            settings,
-            nothing;
-            condition_manifest_id=String(manifest["contract_id"]),
-            condition_manifest_sha256=EXPECTED_MANIFEST_SHA256,
-            condition_manifest_approval_status=String(manifest["approval_status"]),
-            runtime_progress_path=joinpath(
-                restart_dir,
-                "runtime_candidate_progress.jsonl",
-            ),
-        )
-        write_candidate_events(
-            joinpath(restart_dir, "candidate_events.jsonl"),
-            result.history,
-            l0_records,
-        )
-        write_new_json(joinpath(restart_dir, "optimization.json"), result)
-        push!(restart_results, (
-            restart_index=restart_index,
-            restart_name=restart_name,
-            settings=settings,
-            result=result,
-            l0_by_candidate=l0_records,
-        ))
-        println(
-            "END slot=$(slot_hz / 1e9)GHz restart=$(restart_index) " *
-            "state=$(result.cma.state) valid=$(result.cma.valid_candidate_count) " *
-            "rejected=$(result.cma.rejected_candidate_count)",
-        )
-        flush(stdout)
-    end
-
-    selected = best_valid(restart_results)
-    outcome = if isnothing(selected)
-        (
-            status="NO_FINITE_L0_CANDIDATE",
-            selected_best_candidate=nothing,
-            winner_spatial_validation=(
-                status="NOT_RUN_NO_FINITE_L0_CANDIDATE",
-                spatial_receipt=nothing,
-                failure=nothing,
-            ),
-            validated_finest_objective=nothing,
-            validated_finest_objective_receipt=nothing,
-        )
-    else
-        spatial = validate_selected_candidate_spatially(
-            selected.record.candidate,
-            selected.l0_cared_output,
-            inputs,
-            profile,
-            slot_hz,
-            authority,
-            specs,
-            destination,
-        )
-        validated_target_pass = spatial.status == "PASS" &&
-            Bool(spatial.validated_finest_objective.target_gates_pass)
-        status = if spatial.status != "PASS"
-            "BEST_FINITE_L0_CANDIDATE_SPATIAL_NOT_VALIDATED"
-        elseif validated_target_pass
-            "SLOT_WINNER"
-        else
-            "SPATIALLY_VALIDATED_BEST_CANDIDATE_TARGET_MISS"
+function cached_evaluation!(state, latent)
+    key = latent_key(latent)
+    candidate_lock = lock(state.lock) do
+        get!(state.candidate_locks, key) do
+            ReentrantLock()
         end
-        (
-            status=status,
-            selected_best_candidate=(
-                restart_index=selected.restart_index,
-                restart_name=selected.restart_name,
-                record_id=selected.record.record_id,
-                candidate=selected.record.candidate,
-                cost=selected.record.cost,
-                l0_search_objective=(
-                    cared_output=selected.l0_cared_output,
-                    objective=selected.l0_objective,
-                    receipt=selected.l0_receipt,
+    end
+    return lock(candidate_lock) do
+        found, value = lock(state.lock) do
+            haskey(state.cache, key) ? (true, state.cache[key]) : (false, nothing)
+        end
+        found && return value
+        mapping_failure = nothing
+        candidate = try
+            latent_candidate(state.seed, key)
+        catch exception
+            exception isa ArgumentError || rethrow()
+            mapping_failure = exception
+            nothing
+        end
+        outcome = if isnothing(candidate)
+            (
+                status="NOT_EVALUABLE",
+                candidate=nothing,
+                cost=nothing,
+                cared=nothing,
+                objective=nothing,
+                rejection=(
+                    code="invalid_log_positive_candidate",
+                    reason=sprint(showerror, mapping_failure),
+                    details=(exception_type=string(typeof(mapping_failure)),),
                 ),
-                cma_state=selected.cma_state,
-                cma_convergence_required_for_reporting=false,
-                l0_target_gates_pass=Bool(selected.l0_objective.target_gates_pass),
-            ),
-            winner_spatial_validation=(
-                status=spatial.status,
-                spatial_receipt=spatial.spatial_receipt,
-                failure=spatial.failure,
-            ),
-            validated_finest_objective=spatial.validated_finest_objective,
-            validated_finest_objective_receipt=
-                spatial.validated_finest_objective_receipt,
+                elapsed_seconds=0.0,
+            )
+        else
+            # Only the shared typed candidate rejection is converted to +Inf by
+            # evaluate_candidate; every unexpected implementation error aborts.
+            evaluate_candidate(candidate, state.context, state.slot_hz)
+        end
+        lock(state.lock) do
+            state.cache[key] = outcome
+        end
+        return outcome
+    end
+end
+
+function objective_value!(state, latent)
+    outcome = cached_evaluation!(state, latent)
+    return isnothing(outcome.cost) ? Inf : outcome.cost
+end
+
+function record_initial!(state, latent)
+    outcome = cached_evaluation!(state, latent)
+    row = (
+        event="initial_seed",
+        generation=0,
+        population_index=0,
+        latent=collect(latent_key(latent)),
+        outcome=outcome,
+    )
+    append_jsonl(state.progress_path, row)
+    if !isnothing(outcome.cost)
+        state.best = merge(row, (cost=outcome.cost,))
+    end
+    return outcome
+end
+
+function record_generation!(state, optimizer, y, costs)
+    evaluated = CMAES.compute_input(optimizer.p, y)
+    size(evaluated, 2) == length(costs) || error("CMA callback population mismatch.")
+    state.generation += 1
+    generation_best = nothing
+    for index in eachindex(costs)
+        latent = @view evaluated[:, index]
+        outcome = cached_evaluation!(state, latent)
+        observed = isnothing(outcome.cost) ? Inf : outcome.cost
+        isequal(observed, Float64(costs[index])) || error(
+            "CMA callback cost differs from its cached candidate evaluation.",
         )
+        row = (
+            event="candidate",
+            generation=state.generation,
+            population_index=index,
+            latent=collect(latent_key(latent)),
+            outcome=outcome,
+        )
+        append_jsonl(state.progress_path, row)
+        if !isnothing(outcome.cost)
+            generation_best = isnothing(generation_best) ||
+                outcome.cost < generation_best.cost ?
+                merge(row, (cost=outcome.cost,)) : generation_best
+            state.best = isnothing(state.best) || outcome.cost < state.best.cost ?
+                merge(row, (cost=outcome.cost,)) : state.best
+        end
     end
     summary = (
-        schema_version="d3-rev10-single-slot-direct-hybridized-diagnostic.v1",
-        final_status=outcome.status,
-        run_identity=run_identity,
-        restart_summaries=[(
-            restart_index=item.restart_index,
-            restart_name=item.restart_name,
-            cma=item.result.cma,
-            cache_summary=item.result.cache_summary,
-            optimization_locator=joinpath(
-                "restart-$(item.restart_index)-$(item.restart_name)",
-                "optimization.json",
-            ),
-        ) for item in restart_results],
-        selected_best_candidate=outcome.selected_best_candidate,
-        winner_spatial_validation=outcome.winner_spatial_validation,
-        validated_finest_objective=outcome.validated_finest_objective,
-        validated_finest_objective_receipt=
-            outcome.validated_finest_objective_receipt,
-        winner_closure="PENDING_ALLOWED",
+        event="generation_summary",
+        generation=state.generation,
+        generation_best_cost=
+            isnothing(generation_best) ? nothing : generation_best.cost,
+        cumulative_best_cost=isnothing(state.best) ? nothing : state.best.cost,
+    )
+    push!(state.summaries, summary)
+    append_jsonl(state.progress_path, summary)
+    println(
+        "generation=$(state.generation) best=$(summary.generation_best_cost) " *
+        "cumulative=$(summary.cumulative_best_cost)",
+    )
+    flush(stdout)
+    return nothing
+end
+
+function relative_change(coarse, fine)
+    denominator = abs(Float64(coarse))
+    denominator > 0 || error("Winner validation encountered a zero cared output.")
+    return abs(Float64(fine) - Float64(coarse)) / denominator
+end
+
+function validate_winner(manifest, inputs, slot_hz, winner)
+    fine_context = build_context(manifest, inputs; refinement_level=1)
+    fine = evaluate_candidate(winner.candidate, fine_context, slot_hz)
+    fine.status == "VALID" || return (
+        status="NOT_EVALUABLE_AT_2N",
+        threshold=0.001,
+        fine=fine,
+        relative_changes=nothing,
+        pass=false,
+    )
+    coarse = winner.cared
+    names = (
+        :f_r_eff_hz,
+        :f_p_eff_hz,
+        :f_n_hz,
+        :abs_real_J_eff_hz,
+        :local_hybrid_kappa_sum_hz,
+        :local_hybrid_linewidth_fraction_min,
+    )
+    changes = NamedTuple{names}(Tuple(
+        relative_change(getproperty(coarse, name), getproperty(fine.cared, name))
+        for name in names
+    ))
+    pass = all(value -> value <= 0.001, values(changes))
+    return (
+        status=pass ? "PASS" : "ABOVE_0P1_PERCENT",
+        threshold=0.001,
+        fine=fine,
+        relative_changes=changes,
+        pass=pass,
+    )
+end
+
+function run(options)
+    manifest_path, manifest = load_manifest(options["manifest"])
+    slot_hz = Float64(options["slot_ghz"]) * 1e9
+    slot_hz in Float64.(manifest["slots"]["ordered_hz"]) || error(
+        "Requested slot is outside the accepted ordered Rev10 tuple.",
+    )
+    BLAS.set_num_threads(1)
+    inputs = bind_inputs(
+        manifest,
+        abspath(String(options["q3d_input"])),
+        abspath(String(options["idc_input"])),
+    )
+    context = build_context(manifest, inputs; refinement_level=0)
+    seed = seed_candidate(manifest, slot_hz)
+    source = (
+        manifest_sha256=EXPECTED_MANIFEST_SHA256,
+        manifest_path=manifest_path,
+        manifest_sources=manifest["sources"],
+        workbench_commit=command_output("git", "rev-parse", "HEAD"),
+        workbench_dirty=!isempty(command_output("git", "status", "--porcelain=v1")),
+        fixed_input_canonical_sha256=inputs.source_identity.canonical_sha256,
+        targeted_context_contract=context.contract_id,
+        targeted_context_source_sha256=context.source_profile_identity.canonical_sha256,
+        reference_grid_plan_sha256=context.grid_plan.canonical_sha256,
+        matrix_dimension=size(context.full_kernel.c0, 1),
+        threads=(julia=Threads.nthreads(), blas=BLAS.get_num_threads()),
+    )
+    mode = String(options["mode"])
+    if mode == "dry_run"
+        println(JSON3.write((status="DRY_RUN_READY", slot_hz=slot_hz, source=source)))
+        return nothing
+    end
+
+    destination = abspath(String(options["output_dir"]))
+    ispath(destination) && error("Refusing to reuse output directory $(destination).")
+    mkpath(destination)
+    progress_path = joinpath(destination, "progress.jsonl")
+    state = SearchState(context, seed, slot_hz, progress_path)
+    initial = initial_latent(seed)
+    initial_outcome = record_initial!(state, initial)
+    if mode == "single_point"
+        result = (
+            schema_version="d3-rev10-targeted-schur-search-result.v1",
+            status=initial_outcome.status,
+            mode=mode,
+            slot_hz=slot_hz,
+            source=source,
+            initial_seed=initial_outcome,
+            cma=nothing,
+            winner_validation=nothing,
+            evidence_status="diagnostic_non_promotable",
+        )
+        write_new_json(joinpath(destination, "result.json"), result)
+        return result
+    end
+
+    cma = manifest["cma_es"]
+    Threads.nthreads() >= Int(cma["maximum_concurrent_candidate_evaluations"]) || error(
+        "Full CMA requires at least $(cma["maximum_concurrent_candidate_evaluations"]) Julia threads.",
+    )
+    callback = (optimizer, y, costs, _) -> record_generation!(state, optimizer, y, costs)
+    result = CMAES.minimize(
+        latent -> objective_value!(state, latent),
+        initial,
+        Float64(cma["sigma_latent_coordinate"]);
+        lower=vcat(fill(-Inf, 4), 0.0),
+        upper=vcat(fill(Inf, 4), 1.0),
+        popsize=Int(cma["population"]),
+        seed=round(Int, slot_hz / 1e6),
+        maxiter=Int(cma["maximum_iterations"]),
+        maxfevals=Int(cma["maximum_evaluations"]),
+        ftol=nothing,
+        xtol=nothing,
+        callback=callback,
+        parallel_evaluation=false,
+        multi_threading=true,
+        noise_handling=nothing,
+        verbosity=0,
+    )
+    winner = isnothing(state.best) ? nothing : state.best.outcome
+    validation = isnothing(winner) ? nothing :
+        validate_winner(manifest, inputs, slot_hz, winner)
+    terminal = (
+        schema_version="d3-rev10-targeted-schur-search-result.v1",
+        status=isnothing(winner) ? "NO_FINITE_CANDIDATE" : "RAW_BEST_AVAILABLE",
+        mode=mode,
+        slot_hz=slot_hz,
+        source=source,
+        initial_seed=initial_outcome,
+        cma=(
+            seed=round(Int, slot_hz / 1e6),
+            population=Int(cma["population"]),
+            sigma=Float64(cma["sigma_latent_coordinate"]),
+            generations=state.generation,
+            stop_reason=String(result.stop.reason),
+            stop_iteration=Int(result.stop.it),
+            generation_summaries=state.summaries,
+        ),
+        selected_best=winner,
+        winner_validation=validation,
+        evidence_status="diagnostic_non_promotable",
         promotion="none",
         publication="none",
     )
-    write_new_json(joinpath(destination, "slot_result.json"), summary)
-    println(
-        "RESULT slot=$(slot_hz / 1e9)GHz status=$(summary.final_status) " *
-        "path=$(joinpath(destination, "slot_result.json"))",
-    )
-    return summary
+    write_new_json(joinpath(destination, "result.json"), terminal)
+    return terminal
 end
 
 function main(args)
-    length(args) == 5 || error(
-        "usage: julia d3_rev10_single_slot_diagnostic_run.jl " *
-        "MANIFEST Q3D_INPUT IDC_INPUT OUTPUT_DIR SLOT_HZ",
-    )
-    slot_hz = parse(Float64, args[5])
-    run_single_slot(args[1], args[2], args[3], args[4], slot_hz)
+    run(parse_cli(args))
     return nothing
 end
 
