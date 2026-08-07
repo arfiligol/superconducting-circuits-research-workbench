@@ -1665,11 +1665,11 @@ end
 
 """Extract one exact direct-Hybridized Stage-2 cared-output record.
 
-All numerical bands and gate values are caller-owned run-manifest inputs. A
-successful return proves that the existing source, passivity, RP-root, notch,
-open-pole, and unordered-subspace gates passed. Any failure throws before a
-record exists; the Simulation/EM runtime translates that failure to typed
-`NOT_EVALUABLE` evidence.
+Root ranges are selection anchors, the notch range is a selection seed, and
+the supplied operator/overlap controls are inactive diagnostics. A successful
+return proves only technical source, model, passivity, root, pole, and numerical
+validity. Any technical failure throws before a record exists; the Simulation/EM
+runtime translates that failure to typed `NOT_EVALUABLE` evidence.
 """
 function d3_stage2_candidate_metrics(
     candidate,
@@ -1777,6 +1777,13 @@ function d3_stage2_candidate_metrics(
             Float64(minimum_each_rp_subspace_overlap),
         minimum_unordered_set_assignment_margin=
             Float64(minimum_unordered_set_assignment_margin),
+        numeric_control_disposition=(
+            authority=:diagnostic_only,
+            root_windows=:selection_anchors,
+            effective_operator_controls=:proposed_inactive,
+            notch_window=:selection_seed_only,
+            overlap_and_assignment_controls=:proposed_inactive,
+        ),
         complement=:complete_hybridized_complement,
     )
     validity = (

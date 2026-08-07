@@ -1314,25 +1314,6 @@ function _d3_complete_complement_rp_gate_policy(raw)
     policy = NamedTuple{
         D3_COMPLETE_COMPLEMENT_RP_GATE_FIELDS,
     }(Tuple(values))
-    policy.maximum_elimination_condition_number >= 1 || error(
-        "D3 complete-complement RP maximum elimination condition number must be at least one.",
-    )
-    for name in (
-        :maximum_relative_elimination_solve_residual,
-        :maximum_relative_reciprocity_error,
-        :maximum_relative_passivity_violation,
-        :maximum_relative_root_residual,
-        :maximum_root_growth_rate_hz,
-        :maximum_relative_coupling_spread,
-        :maximum_relative_determinant_closure_error,
-    )
-        getproperty(policy, name) >= 0 || error(
-            "D3 complete-complement RP gate $(name) must be nonnegative.",
-        )
-    end
-    policy.minimum_normalized_residue_slope > 0 || error(
-        "D3 complete-complement RP minimum normalized residue slope must be positive.",
-    )
     return policy
 end
 
@@ -1384,15 +1365,16 @@ function _d3_complete_complement_rp_context(model, raw_gate_policy)
         )
     all(isfinite, capacitance) && all(isfinite, stiffness) &&
         all(isfinite, selector) || error(
-        "D3 complete-complement RP matrices must contain only finite values.",
-    )
+            "D3 complete-complement RP matrices must contain only finite values.",
+        )
+    machine_relative_resolution = 4096 * dimension * eps(Float64)
     capacitance_reciprocity =
         _d3_rp_reciprocity_error(capacitance)
     stiffness_reciprocity =
         _d3_rp_reciprocity_error(stiffness)
     max(capacitance_reciprocity, stiffness_reciprocity) <=
-        gate_policy.maximum_relative_reciprocity_error || error(
-        "D3 complete-complement RP C/K reciprocity exceeds the caller-owned gate.",
+        machine_relative_resolution || error(
+        "D3 complete-complement RP C/K reciprocity is not machine-resolved.",
     )
     capacitance = Matrix(Symmetric((capacitance + transpose(capacitance)) / 2))
     stiffness = Matrix(Symmetric((stiffness + transpose(stiffness)) / 2))
@@ -1406,8 +1388,8 @@ function _d3_complete_complement_rp_context(model, raw_gate_policy)
     conductance_reciprocity =
         _d3_rp_reciprocity_error(conductance)
     conductance_reciprocity <=
-        gate_policy.maximum_relative_reciprocity_error || error(
-        "D3 complete-complement RP port conductance reciprocity exceeds the caller-owned gate.",
+        machine_relative_resolution || error(
+        "D3 complete-complement RP port conductance reciprocity is not machine-resolved.",
     )
     stiffness_eigenvalues = eigvals(Symmetric(stiffness))
     conductance_eigenvalues = eigvals(Symmetric(conductance))
@@ -1420,8 +1402,8 @@ function _d3_complete_complement_rp_context(model, raw_gate_policy)
     conductance_violation =
         max(-minimum(conductance_eigenvalues), 0.0) / conductance_scale
     max(stiffness_violation, conductance_violation) <=
-        gate_policy.maximum_relative_passivity_violation || error(
-        "D3 complete-complement RP K/G passivity exceeds the caller-owned gate.",
+        machine_relative_resolution || error(
+        "D3 complete-complement RP K/G passivity is not machine-resolved.",
     )
     retained_indices = [Int(anchors.r), Int(anchors.p)]
     eliminated_indices = [
@@ -1440,9 +1422,17 @@ function _d3_complete_complement_rp_context(model, raw_gate_policy)
         eliminated_indices=eliminated_indices,
         gate_policy=gate_policy,
         validation=(
+            machine_relative_resolution=machine_relative_resolution,
             capacitance_reciprocity_error=capacitance_reciprocity,
             stiffness_reciprocity_error=stiffness_reciprocity,
             conductance_reciprocity_error=conductance_reciprocity,
+            capacitance_positive_definite=true,
+            stiffness_minimum_eigenvalue=minimum(stiffness_eigenvalues),
+            stiffness_psd_absolute_tolerance=
+                machine_relative_resolution * stiffness_scale,
+            conductance_minimum_eigenvalue=minimum(conductance_eigenvalues),
+            conductance_psd_absolute_tolerance=
+                machine_relative_resolution * conductance_scale,
             stiffness_relative_passivity_violation=stiffness_violation,
             conductance_relative_passivity_violation=conductance_violation,
         ),
@@ -1479,12 +1469,13 @@ function _d3_complete_complement_rp_operator(context, angular_frequency_rad_s)
     derivative_er = derivative[eliminated, retained]
     derivative_ee = derivative[eliminated, eliminated]
 
+    elimination_machine_relative_resolution =
+        4096 * size(d_ee, 1) * eps(Float64)
     elimination_condition_number = cond(d_ee)
-    isfinite(elimination_condition_number) &&
-        elimination_condition_number <=
-            context.gate_policy.maximum_elimination_condition_number || error(
-        "D3 complete-complement RP eliminated block is singular or exceeds the caller-owned condition-number gate.",
-    )
+    elimination_reciprocal_condition =
+        isfinite(elimination_condition_number) &&
+        elimination_condition_number > 0 ?
+        inv(elimination_condition_number) : 0.0
     eliminated_response = try
         d_ee \ d_er
     catch exception
@@ -1505,9 +1496,9 @@ function _d3_complete_complement_rp_operator(context, angular_frequency_rad_s)
         opnorm(d_er, Inf),
     )
     relative_solve_residual <=
-        context.gate_policy.maximum_relative_elimination_solve_residual ||
+        elimination_machine_relative_resolution ||
         error(
-            "D3 complete-complement RP eliminated-block solve residual exceeds the caller-owned gate.",
+            "D3 complete-complement RP eliminated-block solve residual is not machine-resolved.",
         )
     eliminated_response_derivative = try
         d_ee \ (
@@ -1534,9 +1525,9 @@ function _d3_complete_complement_rp_operator(context, angular_frequency_rad_s)
         opnorm(derivative_er - derivative_ee * eliminated_response, Inf),
     )
     relative_derivative_solve_residual <=
-        context.gate_policy.maximum_relative_elimination_solve_residual ||
+        elimination_machine_relative_resolution ||
         error(
-            "D3 complete-complement RP derivative solve residual exceeds the caller-owned gate.",
+            "D3 complete-complement RP derivative solve residual is not machine-resolved.",
         )
 
     effective =
@@ -1547,9 +1538,10 @@ function _d3_complete_complement_rp_operator(context, angular_frequency_rad_s)
         d_re * eliminated_response_derivative
     reciprocity_error =
         _d3_rp_reciprocity_error(effective)
+    effective_machine_relative_resolution = 4096 * 2 * eps(Float64)
     reciprocity_error <=
-        context.gate_policy.maximum_relative_reciprocity_error || error(
-        "D3 complete-complement RP effective-operator reciprocity exceeds the caller-owned gate.",
+        effective_machine_relative_resolution || error(
+        "D3 complete-complement RP effective-operator reciprocity is not machine-resolved.",
     )
     eliminated_term = d_re * eliminated_response
     diagonal_balance_scale = [
@@ -1572,10 +1564,16 @@ function _d3_complete_complement_rp_operator(context, angular_frequency_rad_s)
             Matrix{ComplexF64}(eliminated_response_derivative),
         diagonal_balance_scale=diagonal_balance_scale,
         diagnostics=(
+            elimination_machine_relative_resolution=
+                elimination_machine_relative_resolution,
             elimination_condition_number=elimination_condition_number,
+            elimination_reciprocal_condition=
+                elimination_reciprocal_condition,
             relative_elimination_solve_residual=relative_solve_residual,
             relative_derivative_solve_residual=
                 relative_derivative_solve_residual,
+            effective_machine_relative_resolution=
+                effective_machine_relative_resolution,
             effective_reciprocity_error=reciprocity_error,
         ),
     )
@@ -1590,6 +1588,32 @@ function _d3_complete_complement_rp_principal_indices(context, coordinate)
         context.retained_indices[retained_index],
         context.eliminated_indices...,
     ]
+end
+
+function _d3_complete_complement_rp_simple_root_diagnostics(poles, pole_index)
+    eigenvalue = ComplexF64(poles.physical_eigenvalues[pole_index])
+    raw_eigenvalues = ComplexF64.(poles.raw_eigenvalues)
+    raw_index = findfirst(==(eigenvalue), raw_eigenvalues)
+    isnothing(raw_index) && error(
+        "D3 complete-complement RP selected pole is missing from the raw spectrum.",
+    )
+    state_count = size(poles.state_matrix, 1)
+    machine_relative_resolution = 4096 * state_count * eps(Float64)
+    scale_per_s = max(maximum(abs, raw_eigenvalues), abs(eigenvalue))
+    algebraic_resolution_per_s = machine_relative_resolution * scale_per_s
+    nearest_pole_separation_per_s = minimum(
+        abs(raw_eigenvalues[index] - eigenvalue)
+        for index in eachindex(raw_eigenvalues) if index != raw_index
+    )
+    nearest_pole_separation_per_s > algebraic_resolution_per_s || error(
+        "D3 complete-complement RP selected pole is merged, degenerate, or not machine-resolved as a simple root.",
+    )
+    return (
+        raw_state_index=raw_index,
+        eigenvalue_per_s=eigenvalue,
+        nearest_pole_separation_per_s=nearest_pole_separation_per_s,
+        algebraic_resolution_per_s=algebraic_resolution_per_s,
+    )
 end
 
 function _d3_complete_complement_rp_diagonal_root(
@@ -1610,16 +1634,28 @@ function _d3_complete_complement_rp_diagonal_root(
         context.selector[indices, :],
         context.reference_impedance_ohm,
     )
-    candidates = [
-        index for index in eachindex(poles.frequencies_hz)
-        if band[1] <= real(poles.frequencies_hz[index]) <= band[2] &&
-           imag(poles.frequencies_hz[index]) <=
-               context.gate_policy.maximum_root_growth_rate_hz
+    passive_candidates = collect(eachindex(poles.frequencies_hz))
+    selection_anchor_hz = band[1] + (band[2] - band[1]) / 2
+    selection_distances_hz = [
+        abs(real(poles.frequencies_hz[index]) - selection_anchor_hz)
+        for index in passive_candidates
     ]
-    length(candidates) == 1 || error(
-        "D3 complete-complement $(coordinate) diagonal exposes $(length(candidates)) passive roots inside the caller-owned band; expected exactly one.",
+    minimum_distance_hz = minimum(selection_distances_hz)
+    selection_distance_resolution_hz =
+        4096 * length(poles.raw_eigenvalues) * eps(Float64) * max(
+            selection_anchor_hz,
+            maximum(abs, poles.frequencies_hz),
+        )
+    nearest_candidates = passive_candidates[
+        abs.(selection_distances_hz .- minimum_distance_hz) .<=
+        selection_distance_resolution_hz
+    ]
+    length(nearest_candidates) == 1 || error(
+        "D3 complete-complement $(coordinate) diagonal nearest-anchor root selection is non-unique.",
     )
-    pole_index = only(candidates)
+    pole_index = only(nearest_candidates)
+    simple_root =
+        _d3_complete_complement_rp_simple_root_diagnostics(poles, pole_index)
     root_hz = ComplexF64(poles.frequencies_hz[pole_index])
     root_operator = _d3_complete_complement_rp_operator(
         context,
@@ -1634,10 +1670,6 @@ function _d3_complete_complement_rp_diagonal_root(
         ),
         root_operator.diagonal_balance_scale[retained_index],
     )
-    relative_root_residual <=
-        context.gate_policy.maximum_relative_root_residual || error(
-        "D3 complete-complement $(coordinate) diagonal root residual exceeds the caller-owned gate.",
-    )
     return (
         coordinate=coordinate,
         root_hz=root_hz,
@@ -1645,8 +1677,14 @@ function _d3_complete_complement_rp_diagonal_root(
         frequency_hz=real(root_hz),
         external_linewidth_hz=max(-2 * imag(root_hz), 0.0),
         frequency_band_hz=band,
+        selection_anchor_hz=selection_anchor_hz,
+        selection_distance_resolution_hz=
+            selection_distance_resolution_hz,
+        selected_root_inside_band=
+            band[1] <= real(root_hz) <= band[2],
         principal_subsystem_coordinates=context.coordinate_order[indices],
         principal_subsystem_pole_index=pole_index,
+        simple_root=simple_root,
         relative_root_residual=relative_root_residual,
         operator=root_operator,
         pole_provenance=poles.provenance,
@@ -1669,7 +1707,10 @@ diagonal complex roots and the complex-midpoint
 residue-normalized exchange are one inseparable Stage-2 authority.  This is
 not a normal-mode basis and it is not the raw anchored `h` block: the basis is
 anchored `r/p`, while the named operation is exact frequency-dependent
-complete-complement downfolding.
+complete-complement downfolding. Each supplied root band contributes only its
+midpoint as a selection anchor: the unique nearest passive principal-subsystem
+root is returned, while band containment is recorded as diagnostic evidence
+and is not an eligibility gate.
 """
 function d3_complete_complement_rp_metrics(
     model;
@@ -1699,10 +1740,6 @@ function d3_complete_complement_rp_metrics(
     filter_normalized_slope = _d3_rp_relative_error(
         abs(filter_slope * filter.angular_root_rad_s),
         filter.operator.diagonal_balance_scale[2],
-    )
-    min(readout_normalized_slope, filter_normalized_slope) >=
-        context.gate_policy.minimum_normalized_residue_slope || error(
-        "D3 complete-complement RP residue slope is below the caller-owned normalized gate.",
     )
     normalization_product = readout_slope * filter_slope
     isfinite(real(normalization_product)) &&
@@ -1744,9 +1781,11 @@ function d3_complete_complement_rp_metrics(
         maximum_pairwise_spread_rad_s,
         abs(coupling_samples.midpoint),
     )
-    relative_coupling_spread <=
-        context.gate_policy.maximum_relative_coupling_spread || error(
-        "D3 complete-complement RP three-point coupling spread exceeds the caller-owned gate.",
+    all(
+        value -> isfinite(real(value)) && isfinite(imag(value)),
+        coupling_values,
+    ) || error(
+        "D3 complete-complement RP coupling evidence is non-finite.",
     )
 
     midpoint_dynamic = midpoint_operator.dynamic_stiffness
@@ -1769,11 +1808,9 @@ function d3_complete_complement_rp_metrics(
         effective_phase * exp(effective_logabs - determinant_scale)
     determinant_closure_error = abs(scaled_schur - scaled_effective) /
         max(abs(scaled_schur), abs(scaled_effective), floatmin(Float64))
-    determinant_closure_error <=
-        context.gate_policy.maximum_relative_determinant_closure_error ||
-        error(
-            "D3 complete-complement RP determinant closure exceeds the caller-owned gate.",
-        )
+    isfinite(determinant_closure_error) || error(
+        "D3 complete-complement RP determinant closure error is non-finite.",
+    )
 
     effective_exchange = coupling_samples.midpoint
     return (
@@ -1816,6 +1853,11 @@ function d3_complete_complement_rp_metrics(
             filter=filter.operator,
         ),
         gate_policy=context.gate_policy,
+        numeric_control_disposition=(
+            status=:proposed_inactive,
+            role=:diagnostic_only,
+            fields=D3_COMPLETE_COMPLEMENT_RP_GATE_FIELDS,
+        ),
         context_validation=context.validation,
         source_model_identity=_d3_exact_n_source_model_identity(model),
         provenance=(
@@ -2196,14 +2238,8 @@ function _d3_intrinsic_pair_z21(model, frequency_hz)
     return ComplexF64(response.impedance[2, 1])
 end
 
-"""
-Extract the authoritative intrinsic-pair RP-on notch from a bracketed exact
-linear Z21 zero. The result is independent of the 50-ohm normalization used to
-declare the two observation ports because it is evaluated from the conservative
-terminal impedance matrix.
-"""
-function d3_intrinsic_pair_notch_frequency(
-    built,
+function _d3_intrinsic_pair_notch_from_model(
+    model,
     frequency_bracket_hz;
     frequency_tolerance_hz=1.0e3,
     relative_frequency_tolerance=1.0e-12,
@@ -2212,56 +2248,245 @@ function d3_intrinsic_pair_notch_frequency(
     max_abs_imag_z21_ohm=1.0e-2,
     max_abs_complex_z21_ohm=1.0e-2,
 )
-    model = d3_auxiliary_compiled_port_model(
-        built;
-        contract_id="d3-intrinsic-pair-rp-on-z21-zero.v1",
-    )
     bracket = Float64.(collect(frequency_bracket_hz))
     length(bracket) == 2 && all(isfinite, bracket) &&
         0 < bracket[1] < bracket[2] || error(
         "D3 intrinsic-pair notch bracket must contain two finite increasing positive frequencies.",
     )
-    notch_hz = bracketed_bisection(
-        frequency -> imag(_d3_intrinsic_pair_z21(model, frequency)),
-        bracket;
-        absolute_tolerance=frequency_tolerance_hz,
-        relative_tolerance=relative_frequency_tolerance,
-        max_iterations=max_iterations,
+    selection_anchor_hz = bracket[1] + (bracket[2] - bracket[1]) / 2
+    capacitance = Matrix{Float64}(model.capacitance)
+    stiffness = Matrix{Float64}(model.inverse_inductance)
+    dimension = size(capacitance, 1)
+    size(capacitance) == (dimension, dimension) &&
+        size(stiffness) == (dimension, dimension) || error(
+        "D3 intrinsic-pair notch C/K matrices must be square and shape-matched.",
+    )
+    all(isfinite, capacitance) && all(isfinite, stiffness) || error(
+        "D3 intrinsic-pair notch C/K matrices must be finite.",
+    )
+    machine_relative_resolution = 4096 * dimension * eps(Float64)
+    max(
+        _d3_rp_reciprocity_error(capacitance),
+        _d3_rp_reciprocity_error(stiffness),
+    ) <= machine_relative_resolution || error(
+        "D3 intrinsic-pair notch C/K reciprocity is not machine-resolved.",
+    )
+    capacitance = Matrix(Symmetric((capacitance + transpose(capacitance)) / 2))
+    stiffness = Matrix(Symmetric((stiffness + transpose(stiffness)) / 2))
+    isposdef(Symmetric(capacitance)) || error(
+        "D3 intrinsic-pair notch capacitance must be positive definite.",
+    )
+    stiffness_eigenvalues = eigvals(Symmetric(stiffness))
+    stiffness_scale = max(maximum(abs, stiffness_eigenvalues), floatmin(Float64))
+    minimum(stiffness_eigenvalues) >=
+        -machine_relative_resolution * stiffness_scale || error(
+        "D3 intrinsic-pair notch stiffness is not machine-positive-semidefinite.",
+    )
+    port_indices = Int.(collect(model.port_indices))
+    length(port_indices) == 2 && length(unique(port_indices)) == 2 &&
+        all(index -> 1 <= index <= dimension, port_indices) || error(
+        "D3 intrinsic-pair notch requires two distinct valid port indices.",
+    )
+    input_index, output_index = port_indices
+    rows = [index for index in 1:dimension if index != input_index]
+    columns = [index for index in 1:dimension if index != output_index]
+    angular_anchor_rad_s = 2π * selection_anchor_hz
+    angular_anchor_squared = angular_anchor_rad_s^2
+    scaled_zero_eigenvalues = ComplexF64.(eigvals(
+        stiffness[rows, columns] / angular_anchor_squared,
+        capacitance[rows, columns],
+    ))
+    zero_candidate_indices = [
+        index for index in eachindex(scaled_zero_eigenvalues)
+        if isfinite(scaled_zero_eigenvalues[index]) &&
+           real(scaled_zero_eigenvalues[index]) > 0 &&
+           abs(imag(scaled_zero_eigenvalues[index])) <=
+               machine_relative_resolution *
+               max(abs(scaled_zero_eigenvalues[index]), 1.0)
+    ]
+    isempty(zero_candidate_indices) && error(
+        "D3 intrinsic-pair notch cofactor pencil exposes no finite positive machine-real zero.",
+    )
+    zero_candidate_frequencies_hz = Float64[
+        selection_anchor_hz *
+        sqrt(real(scaled_zero_eigenvalues[index]))
+        for index in zero_candidate_indices
+    ]
+    selection_distance_resolution_hz =
+        machine_relative_resolution * max(
+            selection_anchor_hz,
+            maximum(zero_candidate_frequencies_hz),
+        )
+    selection_distances_hz =
+        abs.(zero_candidate_frequencies_hz .- selection_anchor_hz)
+    minimum_selection_distance_hz = minimum(selection_distances_hz)
+    nearest_positions = findall(
+        distance -> abs(distance - minimum_selection_distance_hz) <=
+            selection_distance_resolution_hz,
+        selection_distances_hz,
+    )
+    length(nearest_positions) == 1 || error(
+        "D3 intrinsic-pair notch nearest-anchor zero is not machine-unique.",
+    )
+    selected_position = only(nearest_positions)
+    selected_zero_index = zero_candidate_indices[selected_position]
+    finite_zero_indices = findall(isfinite, scaled_zero_eigenvalues)
+    other_finite_zero_indices = [
+        index for index in finite_zero_indices if index != selected_zero_index
+    ]
+    nearest_scaled_zero_separation = isempty(other_finite_zero_indices) ? Inf :
+        minimum(
+            abs(
+                scaled_zero_eigenvalues[index] -
+                scaled_zero_eigenvalues[selected_zero_index],
+            )
+            for index in other_finite_zero_indices
+        )
+    scaled_zero_resolution = machine_relative_resolution * max(
+        maximum(abs, scaled_zero_eigenvalues[finite_zero_indices]),
+        1.0,
+    )
+    nearest_scaled_zero_separation > scaled_zero_resolution || error(
+        "D3 intrinsic-pair notch selected zero is not machine-resolved as a simple cofactor root.",
+    )
+    notch_hz = zero_candidate_frequencies_hz[selected_position]
+
+    scaled_pole_eigenvalues = Float64.(eigvals(
+        Symmetric(stiffness / angular_anchor_squared),
+        Symmetric(capacitance),
+    ))
+    conservative_pole_frequencies_hz = Float64[
+        selection_anchor_hz * sqrt(value)
+        for value in scaled_pole_eigenvalues
+        if isfinite(value) && value > 0
+    ]
+    isempty(conservative_pole_frequencies_hz) && error(
+        "D3 intrinsic-pair notch conservative model exposes no finite positive poles.",
+    )
+    nearest_pole_separation_hz = minimum(
+        abs.(conservative_pole_frequencies_hz .- notch_hz),
+    )
+    zero_pole_resolution_hz = machine_relative_resolution * max(
+        notch_hz,
+        maximum(conservative_pole_frequencies_hz),
+    )
+    nearest_pole_separation_hz > zero_pole_resolution_hz || error(
+        "D3 intrinsic-pair notch zero is machine-degenerate with a conservative pole.",
     )
     z21 = _d3_intrinsic_pair_z21(model, notch_hz)
+    isfinite(real(z21)) && isfinite(imag(z21)) || error(
+        "D3 intrinsic-pair notch Z21 evaluation is non-finite.",
+    )
     tolerances = (
         real=Float64(max_abs_real_z21_ohm),
         imag=Float64(max_abs_imag_z21_ohm),
         complex=Float64(max_abs_complex_z21_ohm),
     )
-    all(value -> isfinite(value) && value >= 0, values(tolerances)) || error(
-        "D3 intrinsic-pair Z21 residual tolerances must be finite and nonnegative.",
+    all(isfinite, values(tolerances)) || error(
+        "D3 intrinsic-pair Z21 residual tolerances must be finite.",
     )
-    residual_gates = (
+    legacy_solver_controls = (
+        absolute_frequency_tolerance_hz=Float64(frequency_tolerance_hz),
+        relative_frequency_tolerance=Float64(relative_frequency_tolerance),
+        max_iterations=Int(max_iterations),
+    )
+    all(isfinite, (
+        legacy_solver_controls.absolute_frequency_tolerance_hz,
+        legacy_solver_controls.relative_frequency_tolerance,
+    )) || error(
+        "D3 intrinsic-pair legacy solver controls must be finite.",
+    )
+    residuals_ohm = (
+        real=abs(real(z21)),
+        imag=abs(imag(z21)),
+        complex=abs(z21),
+    )
+    residual_comparisons = (
         real=abs(real(z21)) <= tolerances.real,
         imag=abs(imag(z21)) <= tolerances.imag,
         complex=abs(z21) <= tolerances.complex,
-    )
-    all(values(residual_gates)) || error(
-        "D3 intrinsic-pair Z21 root failed its complex residual gates.",
     )
     return (
         quantity=:f_n_rp_on,
         frequency_hz=notch_hz,
         z21_ohm=z21,
         frequency_bracket_hz=bracket,
-        frequency_tolerance_hz=Float64(frequency_tolerance_hz),
+        selection_anchor_hz=selection_anchor_hz,
+        selected_zero_inside_bracket=
+            bracket[1] <= notch_hz <= bracket[2],
+        cofactor_indices=(
+            removed_input_row=input_index,
+            removed_output_column=output_index,
+            retained_rows=rows,
+            retained_columns=columns,
+        ),
+        zero_candidates=(
+            scaled_squared_frequency_eigenvalues=scaled_zero_eigenvalues,
+            physical_candidate_indices=zero_candidate_indices,
+            frequencies_hz=zero_candidate_frequencies_hz,
+            selected_position=selected_position,
+            selected_generalized_eigenvalue=
+                scaled_zero_eigenvalues[selected_zero_index],
+            nearest_finite_spectrum_separation=
+                nearest_scaled_zero_separation,
+            finite_spectrum_resolution=scaled_zero_resolution,
+            selection_distances_hz=selection_distances_hz,
+            selection_distance_resolution_hz=
+                selection_distance_resolution_hz,
+        ),
+        conservative_poles=(
+            scaled_squared_frequency_eigenvalues=scaled_pole_eigenvalues,
+            frequencies_hz=conservative_pole_frequencies_hz,
+            nearest_selected_zero_separation_hz=
+                nearest_pole_separation_hz,
+            zero_pole_resolution_hz=zero_pole_resolution_hz,
+        ),
+        machine_validation=(
+            machine_relative_resolution=machine_relative_resolution,
+            capacitance_positive_definite=true,
+            stiffness_minimum_eigenvalue=minimum(stiffness_eigenvalues),
+            stiffness_psd_absolute_tolerance=
+                machine_relative_resolution * stiffness_scale,
+        ),
+        legacy_solver_controls=legacy_solver_controls,
         residual_tolerances_ohm=tolerances,
-        residual_gates=residual_gates,
+        residuals_ohm=residuals_ohm,
+        residual_comparisons=residual_comparisons,
+        numeric_control_disposition=(
+            frequency_interval=:selection_seed_only,
+            legacy_solver_controls=:proposed_inactive,
+            residual_tolerances=:proposed_inactive,
+            role=:diagnostic_only,
+        ),
         model=model,
         provenance=(
             contract_id="d3-intrinsic-pair-rp-on-z21-zero.v1",
             circuit_plan_sha256=model.provenance.circuit_plan_sha256,
             coupling_state=:rp_on,
             excluded_subsystems=(:qubit, :c0r, :idc, :feedline),
-            numerical_authority=:exact_linear_terminal_impedance,
+            numerical_authority=
+                :cofactor_generalized_eigenzero_plus_exact_linear_terminal_impedance,
             hb_ptc_role=:optional_cross_check,
         ),
+    )
+end
+
+"""
+Extract the authoritative intrinsic-pair RP-on notch by selecting the unique
+machine-real cofactor transmission zero nearest the supplied interval midpoint.
+The interval is selection provenance, not an eligibility boundary. The exact
+conservative Z21 evaluation is independent of the 50-ohm normalization used to
+declare the two observation ports.
+"""
+function d3_intrinsic_pair_notch_frequency(built, frequency_bracket_hz; kwargs...)
+    model = d3_auxiliary_compiled_port_model(
+        built;
+        contract_id="d3-intrinsic-pair-rp-on-z21-zero.v1",
+    )
+    return _d3_intrinsic_pair_notch_from_model(
+        model,
+        frequency_bracket_hz;
+        kwargs...,
     )
 end
 
@@ -2640,8 +2865,8 @@ function d3_exact_open_unordered_rp_subspace_assignment(
         (rp_gate, "minimum_each_rp_subspace_overlap"),
         (margin_gate, "minimum_unordered_set_assignment_margin"),
     )
-        isfinite(value) && 0 < value <= 1 || error(
-            "D3 exact-open $(label) must be finite in (0, 1].",
+        isfinite(value) || error(
+            "D3 exact-open $(label) must be finite.",
         )
     end
 
@@ -2775,16 +3000,7 @@ function d3_exact_open_unordered_rp_subspace_assignment(
     ), rev=true)
     best = assignments[1]
     runner_up = assignments[2]
-    best.selected.q >= q_gate || error(
-        "D3 exact-open q-complement overlap is below the caller-declared gate.",
-    )
-    minimum(best.selected.rp) >= rp_gate || error(
-        "D3 exact-open RP-subspace overlap is below the caller-declared gate.",
-    )
     assignment_margin = best.mean_score - runner_up.mean_score
-    assignment_margin >= margin_gate || error(
-        "D3 exact-open unordered q+RP-set assignment is ambiguous under the caller-declared margin.",
-    )
 
     selected_raw_indices = (
         positive_raw_indices[best.q_index],
@@ -2832,6 +3048,10 @@ function d3_exact_open_unordered_rp_subspace_assignment(
             minimum_q_reference_overlap=q_gate,
             minimum_each_rp_subspace_overlap=rp_gate,
             minimum_unordered_set_assignment_margin=margin_gate,
+            numeric_control_disposition=(
+                status=:proposed_inactive,
+                role=:diagnostic_only,
+            ),
         ),
         energy_metric=(
             construction=_d3_exact_n_reference_construction(energy_metric.construction),

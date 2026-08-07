@@ -80,6 +80,26 @@ end
     @test detuned_objective.normalized_residuals.r_r ≈ -1.2
     @test detuned_objective.normalized_residuals.r_p ≈ 1.2
 
+    far_from_targets = merge(
+        metrics,
+        (
+            fr_eff_complete_complement_rp_hz=4.67e9,
+            fp_eff_complete_complement_rp_hz=4.68e9,
+            notch_distributed_rp_on_hz=5.64e9,
+        ),
+    )
+    far_objective = d3_stage2_objective(
+        far_from_targets,
+        slot_hz,
+        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+        TEST_MODEL_IDENTITY,
+    )
+    @test isfinite(far_objective.cost)
+    @test !far_objective.target_gates_pass
+    @test far_objective.normalized_residuals.r_r == -1860.0
+    @test far_objective.normalized_residuals.r_p == -1840.0
+    @test far_objective.normalized_residuals.r_n == 64.0
+
     legacy_metrics = merge(
         TEST_MODEL_IDENTITY,
         (

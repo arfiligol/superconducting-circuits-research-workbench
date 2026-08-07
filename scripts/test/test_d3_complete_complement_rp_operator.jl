@@ -126,14 +126,28 @@ end
         assignment.assignment.unordered_rp_raw_state_indices
     @test swapped_assignment.unordered_rp_linewidth.linewidth_sum_hz ≈
         assignment.unordered_rp_linewidth.linewidth_sum_hz
-    @test_throws ErrorException d3_exact_open_unordered_rp_subspace_assignment(
+    diagnostic_assignment = d3_exact_open_unordered_rp_subspace_assignment(
         model,
         references,
         metric;
-        minimum_q_reference_overlap=0.5,
-        minimum_each_rp_subspace_overlap=0.5,
-        minimum_unordered_set_assignment_margin=0.5,
+        minimum_q_reference_overlap=1.0e300,
+        minimum_each_rp_subspace_overlap=-1.0e300,
+        minimum_unordered_set_assignment_margin=1.0e300,
         cqed_handoff=handoff,
+    )
+    @test diagnostic_assignment.assignment.unordered_rp_raw_state_indices ==
+        assignment.assignment.unordered_rp_raw_state_indices
+    @test diagnostic_assignment.unordered_rp_linewidth.linewidth_sum_hz ==
+        assignment.unordered_rp_linewidth.linewidth_sum_hz
+    @test diagnostic_assignment.assignment.minimum_q_reference_overlap ==
+        1.0e300
+    @test diagnostic_assignment.assignment.minimum_each_rp_subspace_overlap ==
+        -1.0e300
+    @test diagnostic_assignment.assignment.minimum_unordered_set_assignment_margin ==
+        1.0e300
+    @test diagnostic_assignment.assignment.numeric_control_disposition == (
+        status=:proposed_inactive,
+        role=:diagnostic_only,
     )
     wrong_source = merge(references, (
         source_model_identity=merge(identity, (
@@ -172,6 +186,72 @@ end
     )
 end
 
+@testset "D3 intrinsic-pair cofactor notch anchor" begin
+    target_hz = 6.0e9
+    capacitance = [2.0 -0.5; -0.5 2.0] .* 1.0e-12
+    stiffness = Matrix(Diagonal(fill(
+        (2π * 8.0e9)^2 * 2.0e-12,
+        2,
+    )))
+    stiffness[1, 2] = stiffness[2, 1] =
+        (2π * target_hz)^2 * capacitance[2, 1]
+    model = (
+        capacitance=capacitance,
+        inverse_inductance=stiffness,
+        port_indices=[1, 2],
+        provenance=(circuit_plan_sha256=repeat("2", 64),),
+    )
+    receipt = _d3_intrinsic_pair_notch_from_model(
+        model,
+        (4.9e9, 5.1e9),
+    )
+    @test receipt.frequency_hz ≈ target_hz rtol=1.0e-12
+    @test receipt.selection_anchor_hz == 5.0e9
+    @test !receipt.selected_zero_inside_bracket
+    @test receipt.zero_candidates.nearest_finite_spectrum_separation >
+        receipt.zero_candidates.finite_spectrum_resolution
+    @test receipt.conservative_poles.nearest_selected_zero_separation_hz >
+        receipt.conservative_poles.zero_pole_resolution_hz
+    @test abs(receipt.z21_ohm) <= 1.0e-12
+
+    extreme = _d3_intrinsic_pair_notch_from_model(
+        model,
+        (4.9e9, 5.1e9);
+        frequency_tolerance_hz=-1.0e300,
+        relative_frequency_tolerance=1.0e300,
+        max_iterations=-1,
+        max_abs_real_z21_ohm=-1.0e300,
+        max_abs_imag_z21_ohm=1.0e300,
+        max_abs_complex_z21_ohm=-1.0e300,
+    )
+    @test extreme.frequency_hz == receipt.frequency_hz
+    @test extreme.z21_ohm == receipt.z21_ohm
+    @test extreme.residual_tolerances_ohm == (
+        real=-1.0e300,
+        imag=1.0e300,
+        complex=-1.0e300,
+    )
+    @test extreme.numeric_control_disposition.residual_tolerances ==
+        :proposed_inactive
+
+    missing_zero_model = merge(model, (
+        capacitance=Matrix{Float64}(I, 2, 2),
+        inverse_inductance=[2.0 0.5; 0.5 2.0],
+    ))
+    @test_throws ErrorException _d3_intrinsic_pair_notch_from_model(
+        missing_zero_model,
+        (4.9e9, 5.1e9),
+    )
+
+    degenerate_model = merge(model, (
+        inverse_inductance=(2π * target_hz)^2 .* capacitance,
+    ))
+    @test_throws ErrorException _d3_intrinsic_pair_notch_from_model(
+        degenerate_model,
+        (4.9e9, 5.1e9),
+    )
+end
+
 const TEST_GATE_POLICY = (
     maximum_elimination_condition_number=1.0e12,
     maximum_relative_elimination_solve_residual=1.0e-11,
@@ -196,11 +276,49 @@ const TEST_GATE_POLICY = (
     @test receipt.eliminated_coordinates == [:q, :f1, :fc, :f2]
     @test receipt.readout.frequency_hz ≈ 5.0e9 rtol=1.0e-12
     @test receipt.filter.frequency_hz ≈ 6.0e9 rtol=1.0e-12
+    @test receipt.readout.selection_anchor_hz == 5.0e9
+    @test receipt.filter.selection_anchor_hz == 6.0e9
+    @test receipt.readout.selected_root_inside_band
+    @test receipt.filter.selected_root_inside_band
+    @test receipt.readout.simple_root.nearest_pole_separation_per_s >
+        receipt.readout.simple_root.algebraic_resolution_per_s
+    @test receipt.filter.simple_root.nearest_pole_separation_per_s >
+        receipt.filter.simple_root.algebraic_resolution_per_s
     @test receipt.coherent_exchange_hz ≈ 5.0e6 rtol=1.0e-12
     @test receipt.total_exchange_hz ≈ 5.0e6 rtol=1.0e-12
     @test abs(receipt.dissipative_cross_coupling_hz) <= 1.0e-6
     @test receipt.relative_coupling_spread <= 1.0e-12
     @test receipt.determinant_closure.relative_error <= 1.0e-12
+    @test receipt.numeric_control_disposition == (
+        status=:proposed_inactive,
+        role=:diagnostic_only,
+        fields=D3_COMPLETE_COMPLEMENT_RP_GATE_FIELDS,
+    )
+    @test receipt.context_validation.machine_relative_resolution ==
+        4096 * length(model.coordinate_order) * eps(Float64)
+
+    extreme_policy = (
+        maximum_elimination_condition_number=-1.0e300,
+        maximum_relative_elimination_solve_residual=-1.0e300,
+        maximum_relative_reciprocity_error=-1.0e300,
+        maximum_relative_passivity_violation=-1.0e300,
+        maximum_relative_root_residual=-1.0e300,
+        maximum_root_growth_rate_hz=-1.0e300,
+        minimum_normalized_residue_slope=1.0e300,
+        maximum_relative_coupling_spread=-1.0e300,
+        maximum_relative_determinant_closure_error=-1.0e300,
+    )
+    extreme_receipt = d3_complete_complement_rp_metrics(
+        model;
+        readout_root_band_hz=(4.9e9, 5.1e9),
+        filter_root_band_hz=(5.9e9, 6.1e9),
+        gate_policy=extreme_policy,
+    )
+    @test extreme_receipt.gate_policy == extreme_policy
+    @test extreme_receipt.readout.frequency_hz == receipt.readout.frequency_hz
+    @test extreme_receipt.filter.frequency_hz == receipt.filter.frequency_hz
+    @test extreme_receipt.effective_exchange_rad_s ==
+        receipt.effective_exchange_rad_s
 
     extended = merge(model, (
         capacitance=Matrix{Float64}(I, 7, 7),
@@ -230,6 +348,19 @@ const TEST_GATE_POLICY = (
     )
     @test receipt.readout.root_hz ≈ legacy.readout.root_hz rtol=1.0e-12
     @test receipt.filter.root_hz ≈ legacy.filter.root_hz rtol=1.0e-12
+
+    outside_band_receipt = d3_complete_complement_rp_metrics(
+        model;
+        readout_root_band_hz=(5.55e9, 5.65e9),
+        filter_root_band_hz=(5.55e9, 5.65e9),
+        gate_policy=TEST_GATE_POLICY,
+    )
+    @test outside_band_receipt.readout.frequency_hz ≈ 5.0e9 rtol=1.0e-12
+    @test outside_band_receipt.readout.selection_anchor_hz == 5.6e9
+    @test !outside_band_receipt.readout.selected_root_inside_band
+    @test outside_band_receipt.filter.frequency_hz ≈ 6.0e9 rtol=1.0e-12
+    @test outside_band_receipt.filter.selection_anchor_hz == 5.6e9
+    @test !outside_band_receipt.filter.selected_root_inside_band
 
     context =
         _d3_complete_complement_rp_context(model, TEST_GATE_POLICY)
@@ -274,11 +405,28 @@ end
         J_circuit_h_rp_pre_downfold_report_only_hz,
     )
 
-    @test_throws ErrorException d3_complete_complement_rp_metrics(
-        synthetic_d3_model();
-        readout_root_band_hz=(4.0e9, 9.0e9),
-        filter_root_band_hz=(5.9e9, 6.1e9),
-        gate_policy=TEST_GATE_POLICY,
+    ambiguous_model = synthetic_d3_model()
+    ambiguous_model.inverse_inductance[1, 1] =
+        ambiguous_model.inverse_inductance[2, 2]
+    ambiguous_context = _d3_complete_complement_rp_context(
+        ambiguous_model,
+        TEST_GATE_POLICY,
+    )
+    ambiguous_error = try
+        _d3_complete_complement_rp_diagonal_root(
+            ambiguous_model,
+            ambiguous_context,
+            :r,
+            (5.55e9, 5.65e9),
+        )
+        nothing
+    catch error
+        error
+    end
+    @test ambiguous_error isa ErrorException
+    @test occursin(
+        "nearest-anchor root selection is non-unique",
+        sprint(showerror, ambiguous_error),
     )
     asymmetric = synthetic_d3_model()
     asymmetric.inverse_inductance[2, 3] *= 1.01
@@ -288,7 +436,7 @@ end
         filter_root_band_hz=(5.9e9, 6.1e9),
         gate_policy=TEST_GATE_POLICY,
     )
-    @test_throws ErrorException d3_complete_complement_rp_metrics(
+    inactive_spread_receipt = d3_complete_complement_rp_metrics(
         mediated_model;
         readout_root_band_hz=(4.9e9, 5.1e9),
         filter_root_band_hz=(5.9e9, 6.1e9),
@@ -297,4 +445,9 @@ end
             (maximum_relative_coupling_spread=0.0,),
         ),
     )
+    @test inactive_spread_receipt.coherent_exchange_hz ==
+        receipt.coherent_exchange_hz
+    @test inactive_spread_receipt.gate_policy.maximum_relative_coupling_spread ==
+        0.0
+    @test inactive_spread_receipt.relative_coupling_spread > 0
 end
