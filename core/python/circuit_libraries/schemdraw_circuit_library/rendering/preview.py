@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,7 +9,6 @@ from typing import Literal
 
 import schemdraw
 import schemdraw.elements as elm
-from matplotlib import pyplot as plt
 
 from schemdraw_circuit_library.theme import Theme, theme_color
 
@@ -53,6 +53,8 @@ def run_preview_cli(
 ) -> int:
     """Run a local authoring preview for a component module."""
 
+    pyplot = importlib.import_module("matplotlib.pyplot")
+
     parser = argparse.ArgumentParser(
         description=f"Preview Schemdraw ElementCompound components from {module_name}."
     )
@@ -71,7 +73,7 @@ def run_preview_cli(
         if not args.no_show:
             drawing.draw(show=True)
         else:
-            plt.close("all")
+            pyplot.close("all")
 
     return 0
 
