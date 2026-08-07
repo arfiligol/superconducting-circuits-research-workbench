@@ -358,21 +358,7 @@ function _candidate_id(candidate::NamedTuple)
     return bytes2hex(SHA.sha256(payload))
 end
 
-function _evaluate!(context::ObjectiveContext, stage::Symbol, values)
-    candidate = _candidate(context.variables, values)
-    key = Tuple(candidate)
-    cache_hit = haskey(context.cache, key)
-    evaluation = if cache_hit
-        context.cache[key]
-    else
-        result = context.evaluator(candidate)
-        result isa Evaluation || error(
-            "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(result)).",
-        )
-        context.cache[key] = result
-        result
-    end
-
+function _record_evaluation!(context, stage, candidate, cache_hit, evaluation)
     breakdown = evaluation isa ValidEvaluation ? cost_breakdown(context.metrics, evaluation) : nothing
     external_cost = isnothing(breakdown) ? nothing : breakdown.total
     record_id = string(stage, "-", lpad(length(context.history) + 1, 6, '0'))
@@ -387,6 +373,79 @@ function _evaluate!(context::ObjectiveContext, stage::Symbol, values)
         breakdown,
     ))
     return isnothing(external_cost) ? Inf : external_cost
+end
+
+function _evaluate!(context::ObjectiveContext, stage::Symbol, values)
+    candidate = _candidate(context.variables, values)
+    key = Tuple(candidate)
+    cache_hit = haskey(context.cache, key)
+    evaluation = if cache_hit
+        context.cache[key]
+    else
+        result = context.evaluator(candidate)
+        result isa Evaluation || error(
+            "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(result)).",
+        )
+        context.cache[key] = result
+        result
+    end
+    return _record_evaluation!(context, stage, candidate, cache_hit, evaluation)
+end
+
+function _worker_count(value::Integer)
+    value >= 1 || error("CMA worker_count must be at least one.")
+    value <= typemax(Int) || error("CMA worker_count exceeds Int range.")
+    return Int(value)
+end
+
+function _evaluate_batch!(context::ObjectiveContext, stage::Symbol, values; worker_count::Integer)
+    workers = _worker_count(worker_count)
+    candidates = [_candidate(context.variables, candidate_values) for candidate_values in values]
+    keys = Tuple.(candidates)
+    missing_slots = Dict{Tuple,Int}()
+    missing_candidates = NamedTuple[]
+    for (key, candidate) in zip(keys, candidates)
+        if !haskey(context.cache, key) && !haskey(missing_slots, key)
+            push!(missing_candidates, candidate)
+            missing_slots[key] = length(missing_candidates)
+        end
+    end
+
+    results = Vector{Any}(undef, length(missing_candidates))
+    failures = fill!(Vector{Any}(undef, length(missing_candidates)), nothing)
+    if !isempty(missing_candidates)
+        jobs = Channel{Int}(length(missing_candidates))
+        foreach(index -> put!(jobs, index), eachindex(missing_candidates))
+        close(jobs)
+        @sync for _ in 1:min(workers, length(missing_candidates))
+            Threads.@spawn for index in jobs
+                try
+                    results[index] = context.evaluator(missing_candidates[index])
+                catch exception
+                    failures[index] = exception
+                end
+            end
+        end
+    end
+
+    costs = Float64[]
+    for (key, candidate) in zip(keys, candidates)
+        cache_hit = haskey(context.cache, key)
+        evaluation = if cache_hit
+            context.cache[key]
+        else
+            slot = missing_slots[key]
+            isnothing(failures[slot]) || throw(failures[slot])
+            result = results[slot]
+            result isa Evaluation || error(
+                "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(result)).",
+            )
+            context.cache[key] = result
+            result
+        end
+        push!(costs, _record_evaluation!(context, stage, candidate, cache_hit, evaluation))
+    end
+    return costs
 end
 
 function _initial_values(variables, initial_candidate::NamedTuple)
@@ -551,7 +610,8 @@ end
     optimize_d3(evaluator, variables, metrics, initial_candidate, cma,
                 promotion_or_nothing; condition_manifest_id,
                 condition_manifest_sha256,
-                condition_manifest_approval_status)
+                condition_manifest_approval_status,
+                worker_count::Integer=1)
 
 Evaluate the exact seed once and run real bounded CMA-ES. Candidate rejection,
 search limits, nonconvergence, and promotion failure are returned as structured
@@ -559,6 +619,11 @@ outcomes. Malformed contracts, evaluator bugs, nonfinite data, and
 optimizer-library failures remain execution errors. The function performs no
 artifact writes. Independent CMA-ES restarts are deliberately owned by the
 caller so their seeds and budgets remain explicit in the Run manifest.
+
+`worker_count` is a resource-only setting of at least one. Every value uses the
+same ordered batch path; values above one require a multithreaded Julia process
+for real concurrency. Results, errors, cache accounting, and history are
+replayed in original population-column order.
 
 `promotion_or_nothing=nothing` records a diagnostic `:not_evaluable`
 promotion outcome with no synthetic thresholds. It does not change CMA-ES,
@@ -579,6 +644,7 @@ function optimize_d3(
     condition_manifest_id,
     condition_manifest_sha256,
     condition_manifest_approval_status,
+    worker_count::Integer=1,
 )
     manifest_id, manifest_hash, approval_status = _validate_manifest_identity(
         condition_manifest_id,
@@ -588,6 +654,7 @@ function optimize_d3(
     _require_unique_names(variables, "variable")
     _require_unique_names(metrics, "metric")
     any(spec -> spec.weight > 0, metrics) || error("At least one metric must have positive weight.")
+    workers = _worker_count(worker_count)
 
     initial_values = _initial_values(variables, initial_candidate)
     initial_unit = _to_unit_box(variables, initial_values)
@@ -596,10 +663,11 @@ function optimize_d3(
     initial_seed_records = _stage_records(context, :initial_seed)
     length(initial_seed_records) == 1 || error("The exact initial seed must produce exactly one history record.")
     initial_seed_record = only(initial_seed_records)
-    cma_objective = normalized -> _evaluate!(
+    cma_objective = normalized -> _evaluate_batch!(
         context,
         :cma,
-        _from_unit_box(variables, normalized),
+        (_from_unit_box(variables, column) for column in eachcol(normalized));
+        worker_count=workers,
     )
 
     cma_result = CMAEvolutionStrategy.minimize(
@@ -617,7 +685,7 @@ function optimize_d3(
         # evaluates the declared joint absolute ftol/xtol contract below.
         ftol = nothing,
         xtol = nothing,
-        parallel_evaluation = false,
+        parallel_evaluation = true,
         multi_threading = false,
         noise_handling = nothing,
         verbosity = 0,
