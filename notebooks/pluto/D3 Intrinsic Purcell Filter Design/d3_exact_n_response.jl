@@ -7,38 +7,65 @@ using LinearAlgebra
 using SHA
 using SuperconductingCircuitsCore
 
+function _d3_exact_n_write_float_bits!(chunk, used, value)
+    bits = reinterpret(UInt64, iszero(value) ? 0.0 : Float64(value))
+    @inbounds for shift in 63:-1:0
+        used += 1
+        chunk[used] = UInt8('0') + UInt8((bits >> shift) & 0x01)
+    end
+    return used
+end
+
 function _d3_exact_n_matrix_sha256(label, matrix)
     values = Matrix{Float64}(matrix)
-    buffer = IOBuffer()
-    write(
-        buffer,
-        "d3-float64-matrix-v1|$(String(label))|rows=$(size(values, 1))|cols=$(size(values, 2))",
+    context = SHA.SHA2_256_CTX()
+    SHA.update!(
+        context,
+        codeunits(
+            "d3-float64-matrix-v1|$(String(label))|rows=$(size(values, 1))|cols=$(size(values, 2))",
+        ),
     )
+    chunk = Vector{UInt8}(undef, 4096)
+    used = 0
     for row in axes(values, 1), column in axes(values, 2)
-        value = iszero(values[row, column]) ? 0.0 : values[row, column]
-        write(buffer, UInt8('|'))
-        write(buffer, bitstring(value))
+        if used + 65 > length(chunk)
+            SHA.update!(context, chunk, used)
+            used = 0
+        end
+        used += 1
+        chunk[used] = UInt8('|')
+        used = _d3_exact_n_write_float_bits!(chunk, used, values[row, column])
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    used > 0 && SHA.update!(context, chunk, used)
+    return bytes2hex(SHA.digest!(context))
 end
 
 function _d3_exact_n_complex_matrix_sha256(label, matrix)
     values = Matrix{ComplexF64}(matrix)
-    buffer = IOBuffer()
-    write(
-        buffer,
-        "d3-complex128-matrix-v1|$(String(label))|rows=$(size(values, 1))|cols=$(size(values, 2))",
+    context = SHA.SHA2_256_CTX()
+    SHA.update!(
+        context,
+        codeunits(
+            "d3-complex128-matrix-v1|$(String(label))|rows=$(size(values, 1))|cols=$(size(values, 2))",
+        ),
     )
+    chunk = Vector{UInt8}(undef, 4096)
+    used = 0
     for row in axes(values, 1), column in axes(values, 2)
+        if used + 130 > length(chunk)
+            SHA.update!(context, chunk, used)
+            used = 0
+        end
         value = values[row, column]
-        real_value = iszero(real(value)) ? 0.0 : Float64(real(value))
-        imag_value = iszero(imag(value)) ? 0.0 : Float64(imag(value))
-        write(buffer, UInt8('|'))
-        write(buffer, bitstring(real_value))
-        write(buffer, UInt8(','))
-        write(buffer, bitstring(imag_value))
+        used += 1
+        chunk[used] = UInt8('|')
+        used = _d3_exact_n_write_float_bits!(chunk, used, real(value))
+        used += 1
+        chunk[used] = UInt8(',')
+        used = _d3_exact_n_write_float_bits!(chunk, used, imag(value))
     end
-    return bytes2hex(SHA.sha256(take!(buffer)))
+    used > 0 && SHA.update!(context, chunk, used)
+    return bytes2hex(SHA.digest!(context))
 end
 
 function _d3_exact_n_required_compiled_provenance(compiled, name)
