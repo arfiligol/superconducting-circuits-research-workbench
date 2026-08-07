@@ -76,6 +76,39 @@ function append_jsonl(path, payload)
     return nothing
 end
 
+function write_candidate_events(path, history, objective_by_candidate, receipt_by_candidate)
+    ispath(path) && error("Refusing to overwrite candidate events: $(path)")
+    for record in history
+        record.cache_hit && continue
+        candidate_sha = candidate_sha256(record.candidate)
+        if record.evaluation isa ValidEvaluation
+            append_jsonl(path, (
+                event="VALID",
+                record_id=record.record_id,
+                stage=record.stage,
+                candidate_sha256=candidate_sha,
+                candidate=record.candidate,
+                receipt=receipt_by_candidate[candidate_sha],
+                objective=objective_by_candidate[candidate_sha],
+            ))
+        else
+            rejection = record.evaluation
+            append_jsonl(path, (
+                event="NOT_EVALUABLE",
+                record_id=record.record_id,
+                stage=record.stage,
+                candidate_sha256=candidate_sha,
+                candidate=record.candidate,
+                code=rejection.code,
+                reason=rejection.reason,
+                details=rejection.details,
+                cost=nothing,
+            ))
+        end
+    end
+    return path
+end
+
 function candidate_sha256(candidate)
     return bytes2hex(SHA.sha256(codeunits(JSON3.write(candidate))))
 end
@@ -273,14 +306,11 @@ function make_evaluator(
     specs,
     restart_dir,
 )
-    spatial_cache = Dict{String,Any}()
     objective_by_candidate = Dict{String,Any}()
     receipt_by_candidate = Dict{String,Any}()
-    event_path = joinpath(restart_dir, "candidate_events.jsonl")
-    evaluation_count = Ref(0)
+    metadata_lock = ReentrantLock()
 
     function evaluator(candidate)
-        evaluation_count[] += 1
         candidate_sha = candidate_sha256(candidate)
         try
             evidence = produce_d3_direct_hybridized_spatial_evidence(
@@ -299,7 +329,7 @@ function make_evaluator(
                         profile,
                     )
                 end,
-                cache=spatial_cache,
+                cache=Dict{String,Any}(),
             )
             receipt_path = joinpath(
                 restart_dir,
@@ -356,46 +386,19 @@ function make_evaluator(
                 promotion="none",
                 publication="none",
             ))
-            objective_by_candidate[candidate_sha] = objective
-            receipt_by_candidate[candidate_sha] = (
+            receipt_record = (
                 locator=relpath(receipt.path, restart_dir),
                 identity=identity,
                 objective_locator=relpath(objective_path, restart_dir),
             )
-            append_jsonl(event_path, (
-                event="VALID",
-                candidate_sha256=candidate_sha,
-                candidate=candidate,
-                receipt=receipt_by_candidate[candidate_sha],
-                objective=objective,
-            ))
-            if evaluation_count[] == 1 || evaluation_count[] % 10 == 0
-                println(
-                    "slot=$(slot_hz / 1e9)GHz evaluated=$(evaluation_count[]) " *
-                    "valid cost=$(objective.cost)",
-                )
-                flush(stdout)
+            lock(metadata_lock) do
+                objective_by_candidate[candidate_sha] = objective
+                receipt_by_candidate[candidate_sha] = receipt_record
             end
             return evaluation
         catch exception
             exception isa InterruptException && rethrow()
             if exception isa D3DirectHybridizedSpatialNotEvaluable
-                append_jsonl(event_path, (
-                    event="NOT_EVALUABLE",
-                    candidate_sha256=candidate_sha,
-                    candidate=candidate,
-                    code=exception.code,
-                    reason=exception.reason,
-                    details=exception.details,
-                    cost=nothing,
-                ))
-                if evaluation_count[] == 1 || evaluation_count[] % 10 == 0
-                    println(
-                        "slot=$(slot_hz / 1e9)GHz evaluated=$(evaluation_count[]) " *
-                        "rejected code=$(exception.code)",
-                    )
-                    flush(stdout)
-                end
                 return RejectedEvaluation(
                     exception.code,
                     exception.reason,
@@ -496,6 +499,7 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
     ]
     specs = metric_specs(slot_hz)
     cma = manifest["cma_es"]
+    worker_count = min(Int(cma["population"]), Threads.nthreads())
     restart_results = Any[]
     starts = manifest["starts"]
     restart_indices = Int.(cma["restart_indices"])
@@ -521,6 +525,10 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
         ),
         data_classification="project-internal",
         evidence_status="diagnostic_non_promotable",
+        runtime_resources=(
+            julia_thread_count=Threads.nthreads(),
+            cma_generation_worker_count=worker_count,
+        ),
     )
     write_new_json(joinpath(destination, "run_identity.json"), run_identity)
 
@@ -562,12 +570,20 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
             condition_manifest_id=String(manifest["contract_id"]),
             condition_manifest_sha256=EXPECTED_MANIFEST_SHA256,
             condition_manifest_approval_status=String(manifest["approval_status"]),
+            worker_count=worker_count,
+        )
+        write_candidate_events(
+            joinpath(restart_dir, "candidate_events.jsonl"),
+            result.history,
+            objectives,
+            receipts,
         )
         write_new_json(joinpath(restart_dir, "optimization.json"), result)
         push!(restart_results, (
             restart_index=restart_index,
             restart_name=restart_name,
             settings=settings,
+            worker_count=worker_count,
             result=result,
             objective_by_candidate=objectives,
             receipt_by_candidate=receipts,
@@ -608,6 +624,7 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
         restart_summaries=[(
             restart_index=item.restart_index,
             restart_name=item.restart_name,
+            worker_count=item.worker_count,
             cma=item.result.cma,
             cache_summary=item.result.cache_summary,
             optimization_locator=joinpath(
