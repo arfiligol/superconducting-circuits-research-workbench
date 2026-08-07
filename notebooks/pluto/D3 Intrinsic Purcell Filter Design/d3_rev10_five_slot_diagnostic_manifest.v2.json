@@ -18,16 +18,16 @@
     "superseded_scope": "former_finite_six_coordinate_search_bounds_and_independent_short_arms"
   },
   "sources": {
-    "root_commit": "6494f828277a139df37854c56753679002e1a4f8",
-    "workbench_commit": "4006521c26e8004bc9d8cd68dfb3d1705f3231bf",
+    "root_commit": "820bc4c8b7184a4853d2bac8e1541e00734a3657",
+    "workbench_commit": "70d0f5561aed8b1b3e33107f008da5d7edd33c99",
     "orpen_commit": "80576910d596dbf4720335188e66b6a520cc2e36",
     "target_contract_sha256": "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
     "q2d_artifact_sha256": "301d3501a30614b994cf3f28d46eb75b545620a164bbb346fa557120d643fe6c",
     "q3d_input_sha256": "b3e0c7aa403856e238f7121825f3691c7b3be13afa1a43ac6895f21191e832e2",
     "idc_mapping_sha256": "db549a78564ab1dd25aba4cd0004304651ea3da7a1e66ce92bbb31bceb79e66c",
     "idc_runtime_mapping_id": "d3-same-die-filter-feedline-idc-q3d-gap8-linear-length-v1",
-    "idc_mapping_semantic_sha256": "b7d55f4ff7e03bc1260b2e084c9d02806cf85d243f9c37a4d041fbfd50c08e0b",
-    "fixed_input_canonical_sha256": "d025246468921465f4921118f3906d03df36439e82156f53d251544fd073bab9"
+    "idc_mapping_semantic_sha256": "426e635ef28a75d40b3e33b65a2ce3d3cce35a367663b24fa6b3d704df5f3818",
+    "fixed_input_canonical_sha256": "54c5707f1af7b379bcce6fea088ddec2705b8f67ff080b1cd0bb21b56f1b309b"
   },
   "fixed_physical_inputs": {
     "q2d_section_length_m": 0.00005,

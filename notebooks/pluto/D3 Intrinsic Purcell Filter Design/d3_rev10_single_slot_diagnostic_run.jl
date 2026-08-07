@@ -17,7 +17,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "c30d6e268187aec40670653e6c07cc8250bce3840a15beade7c0400e9649b5a4"
+    "b22cf18273c0e67582568aa1ab01d8236ba66251df3bf0a10f80021845b501ec"
 const EXPECTED_CORE_ENTRY = realpath(joinpath(
     CORE_ROOT,
     "src",
@@ -574,7 +574,6 @@ function bind_inputs(manifest, q2d_path, q3d_path, idc_path)
     String(idc_model["evaluation_domain"]) == "strictly_positive" || error(
         "Rev10 IDC OLS evaluation must use the strictly-positive unbounded domain.",
     )
-    evaluation_range = (nextfloat(0.0), floatmax(Float64))
     Float64(idc_model["source_gap_um"]) == Float64(fixed["idc_gap_um"]) || error(
         "Rev10 IDC fit gap and fixed physical gap disagree.",
     )
@@ -591,7 +590,6 @@ function bind_inputs(manifest, q2d_path, q3d_path, idc_path)
     idc = load_d3_idc_mapping(
         idc_path;
         gap_um=Float64(fixed["idc_gap_um"]),
-        evaluation_length_range_um=evaluation_range,
     )
     idc.source_length_range_um == source_support || error(
         "Rev10 IDC Q3D source-support range disagrees with the manifest.",
