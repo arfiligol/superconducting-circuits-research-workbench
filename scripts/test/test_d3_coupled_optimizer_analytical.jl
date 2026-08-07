@@ -124,6 +124,31 @@ end
     @test proposed.promotion.state === :not_evaluable
     @test approved.promotion.state === :met
 
+    diagnostic = optimize_d3(
+        analytic_evaluator,
+        VARIABLES,
+        METRICS,
+        INITIAL_CANDIDATE,
+        CMASettings(
+            seed=11,
+            sigma=0.2,
+            popsize=4,
+            maxiter=2,
+            maxfevals=8,
+            ftol=1.0e-6,
+            xtol=1.0e-4,
+        ),
+        nothing;
+        condition_manifest_id="d3-diagnostic-no-promotion-test",
+        condition_manifest_sha256=repeat("c", 64),
+        condition_manifest_approval_status="human_approved",
+    )
+    @test diagnostic.promotion.state === :not_evaluable
+    @test isempty(diagnostic.promotion.conditions)
+    @test isempty(diagnostic.promotion.unmet_condition_ids)
+    @test occursin("did not declare", diagnostic.promotion.reason)
+    @test diagnostic.promotion.candidate_record_id !== nothing
+
     seed_only_evaluator = candidate -> candidate == INITIAL_CANDIDATE ?
         ValidEvaluation((
             x=candidate.x,

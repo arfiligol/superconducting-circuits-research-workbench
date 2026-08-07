@@ -549,7 +549,7 @@ end
 
 """
     optimize_d3(evaluator, variables, metrics, initial_candidate, cma,
-                promotion; condition_manifest_id,
+                promotion_or_nothing; condition_manifest_id,
                 condition_manifest_sha256,
                 condition_manifest_approval_status)
 
@@ -559,6 +559,10 @@ outcomes. Malformed contracts, evaluator bugs, nonfinite data, and
 optimizer-library failures remain execution errors. The function performs no
 artifact writes. Independent CMA-ES restarts are deliberately owned by the
 caller so their seeds and budgets remain explicit in the Run manifest.
+
+`promotion_or_nothing=nothing` records a diagnostic `:not_evaluable`
+promotion outcome with no synthetic thresholds. It does not change CMA-ES,
+the incumbent, cost calculation, or history.
 
 An `agent_proposed` or `sol_reviewed` manifest may drive an explicitly
 requested exploration, but its promotion outcome is always `:not_evaluable`
@@ -571,7 +575,7 @@ function optimize_d3(
     metrics::AbstractVector{MetricSpec},
     initial_candidate::NamedTuple,
     cma::CMASettings,
-    promotion_settings::PromotionSettings;
+    promotion_settings::Union{Nothing,PromotionSettings};
     condition_manifest_id,
     condition_manifest_sha256,
     condition_manifest_approval_status,
@@ -672,14 +676,22 @@ function optimize_d3(
     )
 
     incumbent = _best_valid_record(vcat(initial_seed_records, cma_records))
-    promotion_conditions = _promotion_conditions(
-        incumbent,
-        cma_state,
-        metrics,
-        promotion_settings;
-        stage_ran = true,
-    )
-    promotion_outcome = if approval_status != "human_approved"
+    promotion_conditions = isnothing(promotion_settings) ? ConditionOutcome[] :
+        _promotion_conditions(
+            incumbent,
+            cma_state,
+            metrics,
+            promotion_settings;
+            stage_ran=true,
+        )
+    promotion_outcome = if isnothing(promotion_settings)
+        _gate(
+            :not_evaluable,
+            "Diagnostic search did not declare Human-owned promotion limits.",
+            incumbent,
+            promotion_conditions,
+        )
+    elseif approval_status != "human_approved"
         _gate(
             :not_evaluable,
             "Manifest state $(approval_status) may produce exploration evidence but cannot evaluate promotion.",
