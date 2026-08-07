@@ -1,0 +1,263 @@
+{
+  "schema_version": "d3-human-gate-reconciliation.v1",
+  "contract_id": "d3-rev10-five-slot-human-gate-reconciliation.v1",
+  "status": "current",
+  "semantic_state": "CONVERGING",
+  "recorded_at": "2026-08-07",
+  "data_classification": "project-internal",
+  "purpose": "Separate Human-authorized D3 Gates from repository delivery facts and inactive agent proposals before the Rev10 diagnostic search.",
+  "authority": {
+    "human_only_gate_policy_sha256": "fd1b1a8d4a779dc15677d903defc174c53b98f2bbb2321fcf45ab0411d716d7c",
+    "collaboration_policy_sha256": "677e36fb71c8943c436959289c24e7a6d16a35f4ce35e2f9997b70b908e3b538",
+    "model_routing_policy_sha256": "eab313c5a838886aa7eb94fb47e20be6f01c85ace80950ea5890dd31c62727e8",
+    "root_commit": "bac69f6d03bdf1212bf1c73eacfca5ab8c2479ad",
+    "workbench_integrated_commit": "2e928d7ba2441163a7de2d1c3842a93c60190247",
+    "orpen_commit": "80576910d596dbf4720335188e66b6a520cc2e36",
+    "target_contract_sha256": "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
+    "pre_reconciliation_task_commit": "159b8ad0ce24dc82e933663d2f5baed42c040bce"
+  },
+  "routing_record": {
+    "routing_decision": "owning_agent_direct_write_after_internal_writer_stall",
+    "worker_identity": "Lead_D3_Design",
+    "reviewer_identity": "Lead_D3_Design_Sol_exact_diff_reviewed",
+    "direct_write_exception": "The bounded internal gate-ledger writer produced no bytes or result after a bounded wait and follow-up; a single design-local JSON ledger was required immediately to stop inactive recommendations from blocking the accepted run.",
+    "shared_code_owner": "Lead_Circuit_Model_Development",
+    "shared_request_id": "d3-rev10-root-band-objective-not-eligibility-20260807"
+  },
+  "classification_rule": {
+    "A": "ACTIVE HUMAN GATE: enforce only when bound to an exact Human instruction or Human-accepted contract.",
+    "B": "REPOSITORY DELIVERY CHECK OR TECHNICAL FACT: may stop broken execution but is not a scientific, product, eligibility, closure, promotion, or acceptance Gate.",
+    "C": "PROPOSED/INACTIVE: measure and report only; must not reject a candidate or evidence, emit a Gate failure, block Objective evaluation, or block safe work."
+  },
+  "A_active_human_gates": [
+    {
+      "id": "rev10_ordered_slot_tuple",
+      "scope": "ordered slot targets",
+      "authority_identity": "target.acceptance.revision_10 in target contract c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
+      "values": {
+        "slots_hz": [5600000000.0, 5700000000.0, 5800000000.0, 5900000000.0, 6000000000.0],
+        "adjacent_spacing_hz": 100000000.0,
+        "spacing_exact": true
+      },
+      "enforcement": "Execute the five searches in this order and do not import the historical Rev9 four-slot tuple."
+    },
+    {
+      "id": "rev10_direct_objective",
+      "scope": "one simultaneous six-residual direct-Hybridized Objective",
+      "authority_identity": "Human-selected Rev10 targets plus target contract c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209 and accepted direct-Hybridized workflow",
+      "values": {
+        "readout_diagonal_target": "slot_hz",
+        "filter_diagonal_target": "slot_hz",
+        "diagonal_residual_scale_hz": 500000.0,
+        "diagonal_absolute_target_gate_hz": 500000.0,
+        "coherent_exchange_target_hz": 5000000.0,
+        "coherent_exchange_residual_scale_hz": 2000000.0,
+        "intrinsic_notch_target_hz": 5000000000.0,
+        "intrinsic_notch_residual_scale_hz": 10000000.0,
+        "unordered_rp_linewidth_sum_target_hz": 20000000.0,
+        "linewidth_sum_residual_scale_hz": 1000000.0,
+        "linewidth_fraction_min_target": 0.5,
+        "linewidth_fraction_residual_scale": 0.2,
+        "residual_weights": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+      },
+      "enforcement": "Every finite candidate contributes all six residuals to one squared-norm cost; target distance is never an extraction failure."
+    },
+    {
+      "id": "unordered_rp_balance_gate",
+      "scope": "unordered RP linewidth balance",
+      "authority_identity": "target.acceptance.d3_direct_rp_pole_linewidth_objective_v1 in target contract c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
+      "values": {
+        "inclusive_minimum": 0.3,
+        "inclusive_maximum": 0.7,
+        "optimization_target": [0.5, 0.5]
+      },
+      "enforcement": "The inclusive 30/70 balance is a target gate; it does not prevent reporting the raw finite candidate and cost."
+    },
+    {
+      "id": "direct_hybridized_three_stage_workflow",
+      "scope": "model and optimizer authority",
+      "authority_identity": "target.acceptance.d3_rev10_direct_hybridized_three_stage_workflow_v1 in target contract c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
+      "values": {
+        "optimizer_coordinates": ["lr_open_m", "lr_short_m", "lc_m", "lp_open_m", "lp_short_m", "u_IDC"],
+        "all_coordinates_evaluated_together": true,
+        "stage2_optimizer": "direct_Hybridized_Full_QRP_CMA_ES_per_slot",
+        "per_candidate_equivalent_lc_hb_fit": "forbidden",
+        "winner_only_closure": true,
+        "stage3_optimizer": "forbidden"
+      },
+      "enforcement": "No free-LC optimizer, per-candidate LC readback, independent Hybridized optimizer, or automatic feedback path may become reachable."
+    },
+    {
+      "id": "diagnostic_search_bounds",
+      "scope": "six physical search coordinates",
+      "authority_identity": "Direct Human acceptance: D3 Rev10 five-slot diagnostic execution bounds V1, Human-modified bounds, 2026-08-07",
+      "values": {
+        "lr_open_m": [0.0, 0.003],
+        "lr_short_m": [0.0, 0.003],
+        "lc_m": [0.0, 0.0006],
+        "lp_open_m": [0.0, 0.003],
+        "lp_short_m": [0.0, 0.003],
+        "u_IDC_um": [20.0, 100.0],
+        "lr_short_equals_lp_short": false,
+        "sum_constraint": false
+      },
+      "enforcement": "Use the Human-modified bounds exactly; a technical inability to compile an exact zero-length boundary is recorded as that candidate's technical failure and does not change the bounds or stop the search."
+    },
+    {
+      "id": "deterministic_two_start_cma_es",
+      "scope": "diagnostic optimizer execution controls",
+      "authority_identity": "Direct Human acceptance of the existing two-start CMA-ES settings, 2026-08-07",
+      "values": {
+        "starts": [
+          {"name": "human_initializer", "candidate": [0.002, 0.002, 0.0003, 0.002, 0.002, 60.0]},
+          {"name": "fixed_asymmetric", "candidate": [0.00215, 0.00185, 0.00033, 0.00185, 0.00215, 54.0]}
+        ],
+        "seed_formula": "slot_MHz + 10000 * restart_index",
+        "restart_indices": [0, 1],
+        "sigma_normalized": 0.15,
+        "population": 9,
+        "maximum_iterations": 100,
+        "maximum_evaluations_per_restart": 900,
+        "ftol_cost": 1e-08,
+        "xtol_normalized": 0.0001,
+        "cross_slot_state_reuse": false
+      },
+      "enforcement": "These are reproducible run controls, not scientific target gates. Preserve and report the lowest-cost finite candidate even when CMA reports nonconvergence."
+    },
+    {
+      "id": "candidate_specific_spatial_refinement",
+      "scope": "direct-Hybridized spatial discretization",
+      "authority_identity": "Direct Human <0.1% physical-quantity requirement plus Human acceptance of existing N-to-2N spatial refinement settings, 2026-08-07",
+      "values": {
+        "levels": [0, 1, 2, 3],
+        "joint_section_count_multiplier": 2,
+        "level_zero_max_cpw_and_feedline_cell_m": 0.00005,
+        "level_zero_max_mtl_cell_m": 0.00001,
+        "maximum_adjacent_relative_change": 0.001,
+        "required_consecutive_passes": 2,
+        "cared_outputs": ["unordered_f_r_eff_hz_f_p_eff_hz", "f_n_hz", "abs_real_J_eff_hz", "unordered_rp_kappa_sum_hz", "unordered_rp_linewidth_fraction_min"]
+      },
+      "enforcement": "Refine the same exact candidate jointly N-to-2N and require the Human-specified change bound before using the finest endpoint for its Objective."
+    },
+    {
+      "id": "physical_foundation_and_data_boundary",
+      "scope": "current Rev10 source authority",
+      "authority_identity": "target.acceptance.d3_q2d_material_authority_v1 and d3_current_w7_s6_geometry_v1 in target contract c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
+      "values": {
+        "geometry": "W7/S6/D3/H8 continuous upper ground",
+        "epsilon_r": 11.9,
+        "mu_r": 1.0,
+        "q2d_artifact_sha256": "301d3501a30614b994cf3f28d46eb75b545620a164bbb346fa557120d643fe6c",
+        "material_profile_id": "d3-q2d-silicon-er11p9-scalar-v1",
+        "data_classification": "project-internal",
+        "publication": "none",
+        "promotion_eligible": false,
+        "experiment_a_consumed": false
+      },
+      "enforcement": "Use only exact current source identities and preserve diagnostic/non-promotable classification."
+    },
+    {
+      "id": "qualitative_exact_model_validity",
+      "scope": "actual physical and numerical existence requirements",
+      "authority_identity": "Human-accepted direct-Hybridized failure meanings in target.acceptance.d3_rev10_direct_hybridized_three_stage_workflow_v1 and direct Human correction, 2026-08-07",
+      "values": {
+        "fail_fast_facts": ["genuinely_missing_root_zero_or_pole", "nonfinite_result", "nonunique_or_machine_unresolved_root_or_pole", "merged_root_or_pole", "actual_singular_eliminated_solve", "nonpassive_physical_result", "source_or_topology_identity_mismatch"]
+      },
+      "enforcement": "Fail only on the actual fact; do not substitute a stale, penalty-valued, reference, or fabricated scientific result."
+    },
+    {
+      "id": "finite_out_of_target_values_are_objective_evidence",
+      "scope": "root zero and pole extraction versus target distance",
+      "authority_identity": "Direct Human correction in D3 Design Lead, 2026-08-07",
+      "values": {
+        "slot_centered_50_mhz_interval_role": "selection_anchor_and_diagnostic_only",
+        "out_of_interval_value_role": "finite_Objective_operand",
+        "target_distance_may_emit_NOT_EVALUABLE": false
+      },
+      "enforcement": "If a finite deterministic physical value exists, return it and let the Objective cost guide CMA-ES."
+    }
+  ],
+  "B_repository_delivery_checks_and_technical_facts": [
+    {"id": "build_and_load", "items": ["compiler_error", "module_load_failure", "dependency_resolution_failure"]},
+    {"id": "schema_and_bytes", "items": ["invalid_JSON_or_schema", "missing_or_corrupt_file", "hash_mismatch", "stale_contract_or_receipt", "candidate_slot_source_or_grid_identity_mismatch", "receipt_revalidation_failure"]},
+    {"id": "numeric_representation", "items": ["NaN_or_Inf", "dimension_or_unit_mismatch", "matrix_shape_mismatch", "actual_linear_solve_or_eigendecomposition_failure", "machine_resolved_singularity_or_degeneracy", "machine_resolved_nonpassivity_or_negative_energy"]},
+    {"id": "artifact_safety", "items": ["refuse_overwrite_of_existing_run_or_receipt", "preserve_failed_runs_as_non_results", "no_stale_or_substituted_scientific_value"]},
+    {"id": "delivery", "items": ["clean_exact_worktree_for_scientific_run", "Git_diff_integrity", "PR_head_base_tree_identity", "repository_required_CI", "authorized_merge_and_root_pin_verification"]}
+  ],
+  "C_proposed_inactive": [
+    {
+      "id": "slot_local_effective_root_band_as_eligibility",
+      "proposed_value": "[slot_hz - 50e6, slot_hz + 50e6]",
+      "current_role": "selection anchor and inside_or_outside diagnostic only",
+      "must_not": ["reject_candidate", "emit_NOT_EVALUABLE", "block_Objective"]
+    },
+    {
+      "id": "intrinsic_notch_bracket_as_eligibility",
+      "proposed_value_hz": [4750000000.0, 5250000000.0],
+      "current_role": "initial search seed or diagnostic interval only",
+      "must_not": ["reject_a_finite_zero_outside_interval", "block_Objective"]
+    },
+    {
+      "id": "unordered_subspace_overlap_thresholds",
+      "proposed_values": {
+        "minimum_q_reference_overlap": 0.5,
+        "minimum_each_rp_subspace_overlap": 0.5,
+        "minimum_unordered_set_assignment_margin": 0.05
+      },
+      "current_role": "report measured overlaps and margin only",
+      "must_not": ["reject_candidate", "change_assignment_by_threshold", "block_Objective"]
+    },
+    {
+      "id": "effective_operator_numeric_thresholds",
+      "proposed_values": {
+        "maximum_elimination_condition_number": 10000000000.0,
+        "maximum_relative_elimination_solve_residual": 1e-10,
+        "maximum_relative_reciprocity_error": 1e-12,
+        "maximum_relative_passivity_violation": 1e-12,
+        "maximum_relative_root_residual": 1e-10,
+        "maximum_root_growth_rate_hz": 1.0,
+        "minimum_normalized_residue_slope": 0.001,
+        "maximum_relative_coupling_spread": 0.01,
+        "maximum_relative_determinant_closure_error": 1e-10
+      },
+      "current_role": "report measured diagnostics only; machine-derived existence and finite-arithmetic facts remain category B",
+      "must_not": ["reject_candidate", "emit_failed_gate", "block_Objective"]
+    },
+    {
+      "id": "winner_only_closure_numeric_controls",
+      "proposed_values": "all unaccepted Equivalent, Exact-N, HB, and structured-fit windows, grids, norms, tolerances, and bound-pinning rules",
+      "current_role": "PENDING diagnostic planning after a direct winner exists",
+      "must_not": ["block_raw_direct_search", "change_winner", "select_runner_up"]
+    },
+    {
+      "id": "stage3_numeric_controls",
+      "proposed_values": "all unaccepted EM mesh, replay, tolerance, sensitivity, loading, crosstalk, and cross-slot thresholds",
+      "current_role": "PENDING Stage-3 planning",
+      "must_not": ["block_Stage2_search", "mutate_Stage2_target_or_bounds"]
+    },
+    {
+      "id": "promotion_and_publication_thresholds",
+      "proposed_values": "none accepted",
+      "current_role": "inactive; current results remain project-internal diagnostic and non-promotable",
+      "must_not": ["suppress_raw_diagnostic_evidence", "imply_publication_authority"]
+    }
+  ],
+  "execution_effects": {
+    "raw_best_finite_candidate": "always_reportable",
+    "nonconverged_CMA_state": "report_with_raw_incumbent; not a scientific Gate failure",
+    "human_target_gate_miss": "report_target_miss_and_raw_cost; do not relabel as missing or NOT_EVALUABLE",
+    "category_C_runtime_action": "remove from rejection paths before the next scientific run",
+    "shared_dependency": "Circuit Model owner is implementing nonblocking extraction under request d3-rev10-root-band-objective-not-eligibility-20260807",
+    "shared_dependency_classification": "repository implementation dependency, not a missing Human decision"
+  },
+  "superseded_or_non_result_evidence": [
+    "Revision_9_four_slot_tuple_5p9_6p0_6p1_6p2_GHz",
+    "prior_85_row_failed_search_with_60_KeyError_r_and_25_old_uIDC_domain_rejections",
+    "five_blocker_state_placeholder_PNGs_and_their_register",
+    "historical_singleton_LC_receipt_as_a_Rev10_candidate_envelope",
+    "per_candidate_Equivalent_LC_HB_or_fit_objective_route",
+    "independent_Hybridized_or_Stage3_optimizer"
+  ],
+  "human_decisions_needed": [],
+  "next_executable_step": "After the shared nonblocking extractor is integrated and the D3 consumer is aligned to it, run the accepted ascending two-start CMA-ES search and preserve every finite Objective result."
+}
