@@ -75,14 +75,55 @@ begin
         lp_short_m=1.05 * REFERENCE_CANDIDATE.lp_short_m,
         u_IDC=55.0,
     )
+
+    env_count(name, default) = parse(Int, get(ENV, name, string(default)))
+    READOUT_AGGREGATE_COUNT = env_count("D3_FIXED_NODE_READOUT_COUNT", 380)
+    FILTER_AGGREGATE_COUNT = env_count("D3_FIXED_NODE_FILTER_COUNT", 380)
+    MTL_COUNT = env_count("D3_FIXED_NODE_MTL_COUNT", 196)
+    FEEDLINE_LEFT_COUNT = env_count("D3_FIXED_NODE_FEEDLINE_LEFT_COUNT", 20)
+    FEEDLINE_RIGHT_COUNT = env_count("D3_FIXED_NODE_FEEDLINE_RIGHT_COUNT", 20)
+    FEEDLINE_LEFT_COUNT == FEEDLINE_RIGHT_COUNT || error(
+        "The split feedline requires equal left/right section counts.",
+    )
+
+    function split_cpw_count(aggregate_count, mtl_count, short_m, open_m)
+        remaining = aggregate_count - mtl_count
+        remaining >= 2 || error("Aggregate line count must leave two or more CPW sections.")
+        short_count = clamp(
+            round(Int, remaining * short_m / (short_m + open_m)),
+            1,
+            remaining - 1,
+        )
+        return (short=short_count, open=remaining - short_count)
+    end
+
+    readout_cpw_counts = split_cpw_count(
+        READOUT_AGGREGATE_COUNT,
+        MTL_COUNT,
+        REFERENCE_CANDIDATE.lr_short_m,
+        REFERENCE_CANDIDATE.lr_open_m,
+    )
+    filter_cpw_counts = split_cpw_count(
+        FILTER_AGGREGATE_COUNT,
+        MTL_COUNT,
+        REFERENCE_CANDIDATE.lp_short_m,
+        REFERENCE_CANDIDATE.lp_open_m,
+    )
     FIXED_COUNTS = (
-        readout_short=43,
-        mtl=65,
-        readout_open=61,
-        filter_short=43,
-        filter_open=61,
-        feedline_left=10,
-        feedline_right=10,
+        readout_short=readout_cpw_counts.short,
+        mtl=MTL_COUNT,
+        readout_open=readout_cpw_counts.open,
+        filter_short=filter_cpw_counts.short,
+        filter_open=filter_cpw_counts.open,
+        feedline_left=FEEDLINE_LEFT_COUNT,
+        feedline_right=FEEDLINE_RIGHT_COUNT,
+    )
+    AGGREGATE_COUNTS = (
+        readout=READOUT_AGGREGATE_COUNT,
+        filter=FILTER_AGGREGATE_COUNT,
+        mtl=MTL_COUNT,
+        feedline_left=FEEDLINE_LEFT_COUNT,
+        feedline_right=FEEDLINE_RIGHT_COUNT,
     )
     TRAINING_SCALE = 1.10
     WARM_REBUILD_SAMPLES = 3
@@ -159,7 +200,7 @@ begin
         q3d,
         idc;
         feedline_length_m=1.0e-3,
-        feedline_n_sections=20,
+        feedline_n_sections=FEEDLINE_LEFT_COUNT + FEEDLINE_RIGHT_COUNT,
         feedline_l_per_m_h=4.04313e-7,
         feedline_c_per_m_f=1.7986e-10,
         port_resistance_ohm=50.0,
@@ -326,11 +367,25 @@ begin
         Symmetric(validation_model.capacitance),
     )
     kernel_squared = eigvals(Symmetric(k_workspace), Symmetric(c_workspace))
-    positive_direct = sort(sqrt.(direct_squared[direct_squared .> 0]) ./ (2π))
-    positive_kernel = sort(sqrt.(kernel_squared[kernel_squared .> 0]) ./ (2π))
+    squared_frequency_scale = max(
+        maximum(abs, direct_squared),
+        maximum(abs, kernel_squared),
+        floatmin(Float64),
+    )
+    squared_frequency_resolution =
+        eps(Float64) * length(direct_squared) * squared_frequency_scale
+    positive_direct = sort(sqrt.(direct_squared[
+        direct_squared .> squared_frequency_resolution
+    ]) ./ (2π))
+    positive_kernel = sort(sqrt.(kernel_squared[
+        kernel_squared .> squared_frequency_resolution
+    ]) ./ (2π))
     length(positive_direct) == length(positive_kernel) || error("Kernel changed mode count.")
     spectrum_comparison = (
         mode_count=length(positive_direct),
+        raw_positive_mode_count_direct=count(>(0), direct_squared),
+        raw_positive_mode_count_kernel=count(>(0), kernel_squared),
+        squared_frequency_machine_resolution=squared_frequency_resolution,
         maximum_absolute_frequency_error_hz=maximum(abs, positive_kernel - positive_direct),
         maximum_relative_frequency_error=maximum(
             abs.(positive_kernel - positive_direct) ./ positive_direct,
@@ -406,6 +461,7 @@ begin
         ),
         reference_candidate=REFERENCE_CANDIDATE,
         validation_candidate=VALIDATION_CANDIDATE,
+        aggregate_counts=AGGREGATE_COUNTS,
         fixed_counts=FIXED_COUNTS,
         matrix_dimension=size(kernel.reference_model.capacitance, 1),
         matrix_comparison=matrix_comparison,
