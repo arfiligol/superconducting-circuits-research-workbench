@@ -201,15 +201,112 @@ mutable struct D3LogPhysicalObjectiveContext{F}
     metrics::Vector{MetricSpec}
     cache::Dict{Tuple,Any}
     history::Vector{EvaluationRecord}
+    runtime_progress_path::Union{Nothing,String}
+    runtime_progress_lock::ReentrantLock
+    runtime_completion_sequence::Int
 end
 
-function D3LogPhysicalObjectiveContext(evaluator, metrics)
+function D3LogPhysicalObjectiveContext(evaluator, metrics, runtime_progress_path)
+    progress_path = isnothing(runtime_progress_path) ?
+        nothing : abspath(String(runtime_progress_path))
+    !isnothing(progress_path) && ispath(progress_path) && error(
+        "Refusing to overwrite runtime candidate progress: $(progress_path)",
+    )
     return D3LogPhysicalObjectiveContext(
         evaluator,
         collect(metrics),
         Dict{Tuple,Any}(),
         EvaluationRecord[],
+        progress_path,
+        ReentrantLock(),
+        0,
     )
+end
+
+function emit_runtime_candidate_progress!(
+    context,
+    stage,
+    candidate,
+    evaluation,
+    elapsed_seconds;
+    exception=nothing,
+)
+    isnothing(context.runtime_progress_path) && return nothing
+    status, cost, evidence = if !isnothing(exception)
+        (
+            "EXECUTION_EXCEPTION",
+            nothing,
+            (
+                exception_type=string(typeof(exception)),
+                exception=sprint(showerror, exception),
+            ),
+        )
+    elseif evaluation isa ValidEvaluation
+        (
+            "VALID",
+            cost_breakdown(context.metrics, evaluation).total,
+            nothing,
+        )
+    else
+        evaluation isa RejectedEvaluation || error(
+            "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(evaluation)).",
+        )
+        (
+            "NOT_EVALUABLE",
+            nothing,
+            (
+                code=evaluation.code,
+                reason=evaluation.reason,
+                details=evaluation.details,
+            ),
+        )
+    end
+    lock(context.runtime_progress_lock) do
+        context.runtime_completion_sequence += 1
+        append_jsonl(context.runtime_progress_path, (
+            schema_version="d3-rev10-runtime-candidate-progress.v1",
+            authority="diagnostic_non_authoritative",
+            completion_sequence=context.runtime_completion_sequence,
+            stage=stage,
+            candidate_sha256=candidate_sha256(candidate),
+            expanded_candidate=candidate,
+            status=status,
+            elapsed_seconds=elapsed_seconds,
+            cost=cost,
+            evidence=evidence,
+        ))
+    end
+    return nothing
+end
+
+function evaluate_with_runtime_progress!(context, stage, candidate)
+    started_ns = time_ns()
+    try
+        evaluation = context.evaluator(candidate)
+        evaluation isa ValidEvaluation || evaluation isa RejectedEvaluation || error(
+            "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(evaluation)).",
+        )
+        elapsed_seconds = (time_ns() - started_ns) / 1.0e9
+        emit_runtime_candidate_progress!(
+            context,
+            stage,
+            candidate,
+            evaluation,
+            elapsed_seconds,
+        )
+        return evaluation
+    catch exception
+        elapsed_seconds = (time_ns() - started_ns) / 1.0e9
+        emit_runtime_candidate_progress!(
+            context,
+            stage,
+            candidate,
+            nothing,
+            elapsed_seconds;
+            exception=exception,
+        )
+        rethrow()
+    end
 end
 
 function d3_evaluate_physical!(context, stage, candidate)
@@ -227,10 +324,7 @@ function d3_evaluate_physical!(context, stage, candidate)
     evaluation = if cache_hit
         context.cache[key]
     else
-        result = context.evaluator(candidate)
-        result isa ValidEvaluation || result isa RejectedEvaluation || error(
-            "Evaluator must return ValidEvaluation or RejectedEvaluation; received $(typeof(result)).",
-        )
+        result = evaluate_with_runtime_progress!(context, stage, candidate)
         context.cache[key] = result
         result
     end
@@ -274,7 +368,11 @@ function d3_evaluate_log_batch!(
         @sync for _ in 1:min(workers, length(missing_candidates))
             Threads.@spawn for index in jobs
                 try
-                    results[index] = context.evaluator(missing_candidates[index])
+                    results[index] = evaluate_with_runtime_progress!(
+                        context,
+                        stage,
+                        missing_candidates[index],
+                    )
                 catch exception
                     failures[index] = exception
                 end
@@ -318,6 +416,7 @@ function optimize_d3_log_physical(
     condition_manifest_sha256,
     condition_manifest_approval_status,
     worker_count::Integer=1,
+    runtime_progress_path=nothing,
 )
     manifest_id, manifest_hash, approval_status =
         D3CoupledOptimizer._validate_manifest_identity(
@@ -333,7 +432,11 @@ function optimize_d3_log_physical(
 
     initial_latent = zeros(length(D3_LOG_PHYSICAL_COORDINATES))
     initial_candidate = d3_expand_log_physical_candidate(reference, initial_latent)
-    context = D3LogPhysicalObjectiveContext(evaluator, metrics)
+    context = D3LogPhysicalObjectiveContext(
+        evaluator,
+        metrics,
+        runtime_progress_path,
+    )
     d3_evaluate_physical!(context, :initial_seed, initial_candidate)
     initial_records = D3CoupledOptimizer._stage_records(context, :initial_seed)
     length(initial_records) == 1 || error(
@@ -1078,6 +1181,10 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
             condition_manifest_sha256=EXPECTED_MANIFEST_SHA256,
             condition_manifest_approval_status=String(manifest["approval_status"]),
             worker_count=worker_count,
+            runtime_progress_path=joinpath(
+                restart_dir,
+                "runtime_candidate_progress.jsonl",
+            ),
         )
         write_candidate_events(
             joinpath(restart_dir, "candidate_events.jsonl"),
