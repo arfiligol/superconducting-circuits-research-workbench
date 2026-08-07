@@ -829,7 +829,9 @@ function d3_numerical_cqed_handoff(model)
         "D3 local oscillator normalization requires positive K diagonal entries.",
     )
 
-    inverse_capacitance = capacitance \ Matrix{Float64}(I, dimension, dimension)
+    capacitance_factorization = lu(capacitance)
+    inverse_capacitance =
+        capacitance_factorization \ Matrix{Float64}(I, dimension, dimension)
     impedance_ohm = sqrt.(
         LinearAlgebra.diag(inverse_capacitance) ./
         LinearAlgebra.diag(stiffness),
@@ -867,15 +869,17 @@ function d3_numerical_cqed_handoff(model)
     square_root_y0 = Diagonal(1 ./ sqrt.(reference_impedance_ohm))
     conductance =
         selector * Diagonal(1 ./ reference_impedance_ohm) * transpose(selector)
+    capacitance_solved_stiffness = capacitance_factorization \ stiffness
+    capacitance_solved_conductance = capacitance_factorization \ conductance
     identity_dimension = Matrix{Float64}(I, dimension, dimension)
     zero_dimension = zeros(Float64, dimension, dimension)
     closed_flux_velocity_generator = [
         zero_dimension identity_dimension
-        -(capacitance \ stiffness) zero_dimension
+        -capacitance_solved_stiffness zero_dimension
     ]
     open_flux_velocity_generator = [
         zero_dimension identity_dimension
-        -(capacitance \ stiffness) -(capacitance \ conductance)
+        -capacitance_solved_stiffness -capacitance_solved_conductance
     ]
 
     flux_scale = Diagonal(sqrt.(impedance_ohm ./ 2))
@@ -1503,8 +1507,15 @@ function _d3_complete_complement_rp_operator(context, angular_frequency_rad_s)
         isfinite(elimination_condition_number) &&
         elimination_condition_number > 0 ?
         inv(elimination_condition_number) : 0.0
+    d_ee_factorization = try
+        lu(d_ee)
+    catch exception
+        error(
+            "D3 complete-complement RP eliminated-block solve failed: $(sprint(showerror, exception))",
+        )
+    end
     eliminated_response = try
-        d_ee \ d_er
+        d_ee_factorization \ d_er
     catch exception
         error(
             "D3 complete-complement RP eliminated-block solve failed: $(sprint(showerror, exception))",
@@ -1528,7 +1539,7 @@ function _d3_complete_complement_rp_operator(context, angular_frequency_rad_s)
             "D3 complete-complement RP eliminated-block solve residual is not machine-resolved.",
         )
     eliminated_response_derivative = try
-        d_ee \ (
+        d_ee_factorization \ (
             derivative_er -
             derivative_ee * eliminated_response
         )
