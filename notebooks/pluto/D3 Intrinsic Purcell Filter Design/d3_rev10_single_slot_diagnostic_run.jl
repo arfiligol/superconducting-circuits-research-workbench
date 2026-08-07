@@ -27,7 +27,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "75eec8ba050455c71927b2a99b4fbee8e0e3cc06e22106e15643fcfcfe2a456e"
+    "691e2ddc10077f1c1a248451ce223bee7c1ce528479163e789ad3755732722dd"
 const MANIFEST_BASENAME = "d3_rev10_five_slot_search.v1.json"
 const EXPANDED_COORDINATES = (
     :lr_open_m,
@@ -547,6 +547,24 @@ function record_generation!(state, optimizer, y, costs)
     return nothing
 end
 
+function raw_result_payload(source, slot_hz, mode, initial, cma, winner, progress)
+    return (
+        schema_version="d3-rev10-targeted-schur-search-result.v1",
+        status=isnothing(winner) ? "NO_FINITE_CANDIDATE" : "RAW_CMA_COMPLETE",
+        mode=mode,
+        slot_hz=slot_hz,
+        source=source,
+        initial_seed=initial,
+        cma=cma,
+        selected_best=winner,
+        progress=progress,
+        winner_validation="PENDING",
+        evidence_status="diagnostic_non_promotable",
+        promotion="none",
+        publication="none",
+    )
+end
+
 function relative_change(coarse, fine)
     denominator = abs(Float64(coarse))
     denominator > 0 || error("Winner validation encountered a zero cared output.")
@@ -666,30 +684,40 @@ function run(options)
         verbosity=0,
     )
     winner = isnothing(state.best) ? nothing : state.best.outcome
+    progress = (
+        sha256=file_sha256(progress_path),
+        row_count=count(_ -> true, eachline(progress_path)),
+        candidate_count=state.generation * Int(cma["population"]),
+        generation_count=state.generation,
+        completion="package_returned",
+        package_stop_reason=String(result.stop.reason),
+    )
+    cma_record = (
+        seed=round(Int, slot_hz / 1e6),
+        population=Int(cma["population"]),
+        sigma=Float64(cma["sigma_latent_coordinate"]),
+        generations=state.generation,
+        stop_reason=String(result.stop.reason),
+        stop_iteration=Int(result.stop.it),
+        stop_metadata_source="CMAEvolutionStrategy",
+        generation_summaries=state.summaries,
+    )
+    raw = raw_result_payload(
+        source,
+        slot_hz,
+        mode,
+        initial_outcome,
+        cma_record,
+        winner,
+        progress,
+    )
+    write_new_json(joinpath(destination, "raw_result.json"), raw)
     validation = isnothing(winner) ? nothing :
         validate_winner(manifest, inputs, slot_hz, winner)
-    terminal = (
-        schema_version="d3-rev10-targeted-schur-search-result.v1",
+    terminal = merge(raw, (
         status=isnothing(winner) ? "NO_FINITE_CANDIDATE" : "RAW_BEST_AVAILABLE",
-        mode=mode,
-        slot_hz=slot_hz,
-        source=source,
-        initial_seed=initial_outcome,
-        cma=(
-            seed=round(Int, slot_hz / 1e6),
-            population=Int(cma["population"]),
-            sigma=Float64(cma["sigma_latent_coordinate"]),
-            generations=state.generation,
-            stop_reason=String(result.stop.reason),
-            stop_iteration=Int(result.stop.it),
-            generation_summaries=state.summaries,
-        ),
-        selected_best=winner,
         winner_validation=validation,
-        evidence_status="diagnostic_non_promotable",
-        promotion="none",
-        publication="none",
-    )
+    ))
     write_new_json(joinpath(destination, "result.json"), terminal)
     return terminal
 end
