@@ -1875,3 +1875,150 @@ function d3_stage2_direct_cared_outputs(candidate, args...; kwargs...)
         "from bind_d3_stage2_direct_hybridized_inputs.",
     )
 end
+
+"""Return the JSON-ready base multi-view payload for one foundation.
+
+The payload is derived from `foundation.quantity_views`; callers must not
+rebuild a second circuit from a summary. The Stage-2 objective receipt binds
+the revision-10 authority and model identity. `source_summary_sha256` binds the
+payload to the summary that selected this foundation as the winning candidate.
+The canonical Stage-2 publisher adds the matched-open Schur-downfolded `r/p`
+receipt and promotes this base payload to the current report schema.
+"""
+function d3_stage2_quantity_review_payload(
+    foundation,
+    objective,
+    source_summary_sha256,
+)
+    error(
+        "The legacy Stage-2 Equivalent quantity-review payload is superseded; " *
+        "direct-Hybridized search evidence is owned by the cared-output and spatial-receipt path.",
+    )
+    hasproperty(foundation, :contract_id) &&
+        foundation.contract_id == "d3-stage2-candidate-foundation.v5" || error(
+        "D3 quantity review requires the current Stage-2 candidate foundation.",
+    )
+    summary_sha256 = lowercase(strip(String(source_summary_sha256)))
+    occursin(r"^[0-9a-f]{64}$", summary_sha256) || error(
+        "D3 quantity review source_summary_sha256 must be lowercase SHA-256.",
+    )
+    views = foundation.quantity_views
+    anchored = views.anchored_oscillator_representation
+    normal_spectrum = views.fully_hybridized_closed_normal_mode_spectrum
+    open_poles = views.matched_open_port_poles
+    source_identity = foundation.cqed_handoff.source_model_identity
+    hasproperty(objective, :contract_id) &&
+        objective.contract_id == "d3-stage2-direct-hybridized-objective.v3" || error(
+        "D3 quantity review requires the revision-10 Stage-2 objective receipt.",
+    )
+    hasproperty(objective, :stage_id) && objective.stage_id == :stage2_equivalent ||
+        error("D3 quantity review requires a Stage-2 objective receipt.")
+    hasproperty(objective, :model_identity) &&
+        objective.model_identity == source_identity || error(
+        "D3 quantity review foundation and objective model identities disagree.",
+    )
+    expected_authority = (
+        approval_status=:human_approved,
+        target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
+        target_revision=10,
+        target_contract_sha256=
+            "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
+        notch_authority=:rp_on,
+        effective_diagonal_frequency_extraction=
+            :q_feedline_downfolded_rp_complex_operator,
+        effective_exchange_extraction=
+            :q_feedline_downfolded_rp_complex_midpoint_residue,
+        linewidth_pole_scope=:qrp_three,
+        primary_linewidth_extraction=:L_C,
+    )
+    hasproperty(objective, :authority) && objective.authority == expected_authority ||
+        error(
+            "D3 quantity review objective authority does not equal the Human-approved revision-10 contract.",
+        )
+    complex_record(value) = Dict(
+        "real" => Float64(real(value)),
+        "imag" => Float64(imag(value)),
+    )
+    named_values(values) = Dict(
+        String(name) => Float64(value)
+        for (name, value) in pairs(values)
+    )
+    assigned_poles = hasproperty(open_poles, :qrp_identity_assigned) ? Dict(
+        String(name) => Dict(
+            "display_index" => Int(value.display_index),
+            "frequency_hz" => complex_record(value.frequency_hz),
+            "linewidth_hz" => Float64(value.linewidth_hz),
+        )
+        for (name, value) in pairs(open_poles.qrp_identity_assigned)
+    ) : Dict{String,Any}()
+    raw_coordinates = views.coordinate_foundation.raw_physical_node_flux
+    reduced_coordinates =
+        views.coordinate_foundation.reduced_anchored_flux_charge
+    return Dict(
+        "schema_version" => "d3-stage2-linear-quantity-review.v3",
+        "source_summary_sha256" => summary_sha256,
+        "objective_contract_id" => String(objective.contract_id),
+        "objective_authority" => Dict(
+            String(name) => value isa Symbol ? String(value) : value
+            for (name, value) in pairs(objective.authority)
+        ),
+        "coordinate_foundation" => Dict(
+            "raw_physical_node_flux" => Dict(
+                "basis" => String(raw_coordinates.basis),
+                "coordinate_order" => raw_coordinates.coordinate_order,
+            ),
+            "reduced_anchored_flux_charge" => Dict(
+                "basis" => String(reduced_coordinates.basis),
+                "coordinate_order" => string.(reduced_coordinates.coordinate_order),
+                "node_to_anchored_transform" =>
+                    reduced_coordinates.node_to_anchored_transform,
+                "common_charge_reduction" =>
+                    reduced_coordinates.common_charge_reduction,
+            ),
+        ),
+        "anchored_oscillator_representation" => Dict(
+            "coupling_state" => String(anchored.coupling_state),
+            "boundary" => String(anchored.boundary),
+            "coordinate_basis" => String(anchored.coordinate_basis),
+            "representation" => String(anchored.representation),
+            "coordinate_order" => string.(anchored.coordinate_order),
+            "coordinate_rotation" => String(anchored.coordinate_rotation),
+            "normalization" => String(anchored.normalization),
+            "impedance_ohm" => named_values(anchored.impedance_ohm),
+            "h_diagonal_frequency_hz" =>
+                named_values(anchored.h_diagonal_frequency_hz),
+            "h_number_conserving_coupling_hz" =>
+                named_values(anchored.h_number_conserving_coupling_hz),
+            "pairing_diagonal_hz" => named_values(anchored.pairing_diagonal_hz),
+            "pairing_coupling_hz" => named_values(anchored.pairing_coupling_hz),
+        ),
+        "fully_hybridized_closed_normal_mode_spectrum" => Dict(
+            "spectrum" => String(normal_spectrum.spectrum),
+            "coupling_state" => String(normal_spectrum.coupling_state),
+            "boundary" => String(normal_spectrum.boundary),
+            "construction" => String(normal_spectrum.construction),
+            "display_order" => String(normal_spectrum.display_order),
+            "identity_assignment" => String(normal_spectrum.identity_assignment),
+            "frequencies_hz" => Float64.(normal_spectrum.frequencies_hz),
+            "structural_free_mode_count" =>
+                normal_spectrum.structural_free_mode_count,
+        ),
+        "matched_open_port_poles" => Dict(
+            "response_class" => String(open_poles.response_class),
+            "coupling_state" => String(open_poles.coupling_state),
+            "external_port_state" => String(open_poles.external_port_state),
+            "basis_claim" => String(open_poles.basis_claim),
+            "display_order" => String(open_poles.display_order),
+            "identity_assignment" => String(open_poles.identity_assignment),
+            "frequencies_hz" => complex_record.(open_poles.frequencies_hz),
+            "linewidths_hz" => Float64.(open_poles.linewidths_hz),
+            "passivity_roundoff_tolerance_hz" =>
+                Float64(open_poles.passivity_roundoff_tolerance_hz),
+            "qrp_identity_assigned" => assigned_poles,
+        ),
+        "model_identity" => Dict(
+            String(name) => String(value)
+            for (name, value) in pairs(source_identity)
+        ),
+    )
+end

@@ -274,4 +274,13 @@ end
         () -> validate_d3_candidate_lc_evidence(rescheduled),
         D3CandidateLCNotEvaluable,
     ) == "lc_producer.controller"
+
+    @test rejection_code(
+        () -> authorize_d3_stage2_lc_receipt(
+            nothing,
+            candidate();
+            q2d_artifact_sha256=source_identity()["q2d_artifact_sha256"],
+        ),
+        D3LCReceiptNotEvaluable,
+    ) == "lc_receipt.missing"
 end
