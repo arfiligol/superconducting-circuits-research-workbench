@@ -382,6 +382,45 @@ const TEST_GATE_POLICY = (
         (2 * derivative_step)
     @test sample.effective_dynamic_stiffness_derivative ≈
         finite_difference rtol=2.0e-10
+
+    eliminated_block = [
+        0.3717243070512292 -0.03269196422868258 0.3949156824641843 0.2766139415436542
+        -0.03269196422868258 0.005034369308252953 -0.033510494900209714 -0.025672401444875117
+        0.3949156824641843 -0.033510494900209714 0.4202446601633574 0.2931120101728099
+        0.2766139415436542 -0.025672401444875117 0.2931120101728099 0.20670153993124468
+    ]
+    eliminated_retained = [
+        0.0021006178288653483 0.0020603309465085985
+        0.003199423092338292 0.002080781932517929
+        -0.002886493215380696 -0.0021430000634282036
+        -0.003362837231969794 0.00931216417020516
+    ]
+    roundoff_dynamic = vcat(
+        hcat([2.0 0.1; 0.1 3.0], transpose(eliminated_retained)),
+        hcat(eliminated_retained, eliminated_block),
+    )
+    roundoff_order = [3, 1, 2, 4, 5, 6]
+    roundoff_dynamic = roundoff_dynamic[roundoff_order, roundoff_order]
+    roundoff_capacitance = 10.0 .* Matrix{Float64}(I, 6, 6)
+    roundoff_model = merge(model, (
+        capacitance=roundoff_capacitance,
+        inverse_inductance=roundoff_dynamic + roundoff_capacitance,
+        selector=zeros(Float64, 6, 2),
+    ))
+    roundoff_context = _d3_complete_complement_rp_context(
+        roundoff_model,
+        TEST_GATE_POLICY,
+    )
+    roundoff = _d3_complete_complement_rp_operator(roundoff_context, 1.0)
+    @test 4096 * 2 * eps(Float64) <
+        roundoff.diagnostics.effective_reciprocity_error <=
+        roundoff.diagnostics.elimination_machine_relative_resolution
+    @test roundoff.diagnostics.effective_machine_relative_resolution ==
+        roundoff.diagnostics.elimination_machine_relative_resolution
+    @test roundoff.effective_dynamic_stiffness ==
+        transpose(roundoff.effective_dynamic_stiffness)
+    @test roundoff.effective_dynamic_stiffness_derivative ==
+        transpose(roundoff.effective_dynamic_stiffness_derivative)
 end
 
 @testset "D3 q-mediated exchange and fail-closed gates" begin
