@@ -2,7 +2,7 @@
   "schema_version": "d3-human-gate-reconciliation.v1",
   "contract_id": "d3-rev10-five-slot-human-gate-reconciliation.v1",
   "status": "current",
-  "semantic_state": "CONVERGING",
+  "semantic_state": "ACCEPTED",
   "recorded_at": "2026-08-07",
   "data_classification": "project-internal",
   "purpose": "Separate Human-authorized D3 Gates from repository delivery facts and inactive agent proposals before the Rev10 diagnostic search.",
@@ -10,8 +10,8 @@
     "human_only_gate_policy_sha256": "fd1b1a8d4a779dc15677d903defc174c53b98f2bbb2321fcf45ab0411d716d7c",
     "collaboration_policy_sha256": "677e36fb71c8943c436959289c24e7a6d16a35f4ce35e2f9997b70b908e3b538",
     "model_routing_policy_sha256": "eab313c5a838886aa7eb94fb47e20be6f01c85ace80950ea5890dd31c62727e8",
-    "root_commit": "bac69f6d03bdf1212bf1c73eacfca5ab8c2479ad",
-    "workbench_integrated_commit": "2e928d7ba2441163a7de2d1c3842a93c60190247",
+    "root_commit": "6494f828277a139df37854c56753679002e1a4f8",
+    "workbench_integrated_commit": "4006521c26e8004bc9d8cd68dfb3d1705f3231bf",
     "orpen_commit": "80576910d596dbf4720335188e66b6a520cc2e36",
     "target_contract_sha256": "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
     "pre_reconciliation_task_commit": "159b8ad0ce24dc82e933663d2f5baed42c040bce"
@@ -125,10 +125,12 @@
       "enforcement": "These are reproducible run controls, not scientific target gates. Preserve and report the lowest-cost finite candidate even when CMA reports nonconvergence."
     },
     {
-      "id": "candidate_specific_spatial_refinement",
-      "scope": "direct-Hybridized spatial discretization",
-      "authority_identity": "Direct Human <0.1% physical-quantity requirement plus Human acceptance of existing N-to-2N spatial refinement settings, 2026-08-07",
+      "id": "selected_best_candidate_spatial_refinement",
+      "scope": "winner-only direct-Hybridized spatial discretization after the L0 search",
+      "authority_identity": "Direct Human <0.1% physical-quantity requirement plus Human acceptance that CMA uses fixed L0 and only the selected lowest-cost finite candidate receives N-to-2N refinement, 2026-08-07",
       "values": {
+        "inner_loop_level": 0,
+        "application": "selected_best_candidate_only",
         "levels": [0, 1, 2, 3],
         "joint_section_count_multiplier": 2,
         "level_zero_max_cpw_and_feedline_cell_m": 0.00005,
@@ -137,7 +139,7 @@
         "required_consecutive_passes": 2,
         "cared_outputs": ["unordered_f_r_eff_hz_f_p_eff_hz", "f_n_hz", "abs_real_J_eff_hz", "unordered_rp_kappa_sum_hz", "unordered_rp_linewidth_fraction_min"]
       },
-      "enforcement": "Refine the same exact candidate jointly N-to-2N and require the Human-specified change bound before using the finest endpoint for its Objective."
+      "enforcement": "Evaluate every CMA candidate only at fixed L0. After both restarts, select the lowest-cost finite L0 candidate and refine only that exact candidate jointly N-to-2N. Preserve its raw L0 cared output, Objective, and receipt when winner spatial validation does not pass."
     },
     {
       "id": "physical_foundation_and_data_boundary",
@@ -246,9 +248,12 @@
     "raw_best_finite_candidate": "always_reportable",
     "nonconverged_CMA_state": "report_with_raw_incumbent; not a scientific Gate failure",
     "human_target_gate_miss": "report_target_miss_and_raw_cost; do not relabel as missing or NOT_EVALUABLE",
+    "cma_inner_loop_spatial_level": 0,
+    "winner_spatial_refinement": "selected_best_candidate_only_after_both_restarts",
+    "winner_spatial_gate_miss": "preserve_raw_L0_candidate_objective_and_receipt_with_exact_failure_details",
     "category_C_runtime_action": "remove from rejection paths before the next scientific run",
-    "shared_dependency": "Circuit Model owner is implementing nonblocking extraction under request d3-rev10-root-band-objective-not-eligibility-20260807",
-    "shared_dependency_classification": "repository implementation dependency, not a missing Human decision"
+    "shared_dependency": "Integrated current nonblocking extraction authority: Workbench 4006521c26e8004bc9d8cd68dfb3d1705f3231bf, pinned by root 6494f828277a139df37854c56753679002e1a4f8 under request d3-rev10-root-band-objective-not-eligibility-20260807",
+    "shared_dependency_classification": "integrated repository authority; no pending implementation dependency or Human decision"
   },
   "superseded_or_non_result_evidence": [
     "Revision_9_four_slot_tuple_5p9_6p0_6p1_6p2_GHz",
@@ -259,5 +264,5 @@
     "independent_Hybridized_or_Stage3_optimizer"
   ],
   "human_decisions_needed": [],
-  "next_executable_step": "After the shared nonblocking extractor is integrated and the D3 consumer is aligned to it, run the accepted ascending two-start CMA-ES search and preserve every finite Objective result."
+  "next_executable_step": "Run the accepted ascending two-start CMA-ES search at fixed L0, then spatially validate only each slot's selected lowest-cost finite candidate and preserve every finite L0 Objective result."
 }

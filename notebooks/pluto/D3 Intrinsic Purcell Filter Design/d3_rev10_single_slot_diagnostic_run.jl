@@ -16,7 +16,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "7bac231e66834b3cec0b2f5f40e9d5c38efb3aa53e253d1cb0ee8f31ff80c06b"
+    "d3b78e9c839ff1e68a1236f762f438fdafe9c5a92d06d28a7d593f5e8787a586"
 const EXPECTED_CORE_ENTRY = realpath(joinpath(
     CORE_ROOT,
     "src",
@@ -76,20 +76,22 @@ function append_jsonl(path, payload)
     return nothing
 end
 
-function write_candidate_events(path, history, objective_by_candidate, receipt_by_candidate)
+function write_candidate_events(path, history, l0_by_candidate)
     ispath(path) && error("Refusing to overwrite candidate events: $(path)")
     for record in history
         record.cache_hit && continue
         candidate_sha = candidate_sha256(record.candidate)
         if record.evaluation isa ValidEvaluation
+            l0 = l0_by_candidate[candidate_sha]
             append_jsonl(path, (
                 event="VALID",
                 record_id=record.record_id,
                 stage=record.stage,
+                inner_loop_level=0,
                 candidate_sha256=candidate_sha,
                 candidate=record.candidate,
-                receipt=receipt_by_candidate[candidate_sha],
-                objective=objective_by_candidate[candidate_sha],
+                l0_objective_receipt=l0.receipt,
+                objective=l0.objective,
             ))
         else
             rejection = record.evaluation
@@ -302,100 +304,40 @@ function make_evaluator(
     inputs,
     profile,
     slot_hz,
-    authority,
     specs,
     restart_dir,
 )
-    objective_by_candidate = Dict{String,Any}()
-    receipt_by_candidate = Dict{String,Any}()
+    l0_by_candidate = Dict{String,Any}()
     metadata_lock = ReentrantLock()
 
     function evaluator(candidate)
         candidate_sha = candidate_sha256(candidate)
-        try
-            evidence = produce_d3_direct_hybridized_spatial_evidence(
-                candidate;
-                slot_hz=slot_hz,
-                objective_authority=authority,
-                level_request=(values, slot, level) -> begin
-                    plan = d3_stage2_direct_hybridized_grid_plan(
-                        values,
-                        inputs;
-                        refinement_level=level,
-                    )
-                    d3_direct_hybridized_spatial_level_request(
-                        inputs,
-                        plan,
-                        profile,
-                    )
-                end,
-                cache=Dict{String,Any}(),
-            )
-            receipt_path = joinpath(
-                restart_dir,
-                "spatial_receipts",
-                "$(candidate_sha).json",
-            )
-            receipt = write_d3_direct_hybridized_spatial_receipt(
-                receipt_path,
-                evidence,
-            )
-            authorization = authorize_d3_direct_hybridized_spatial_receipt(
-                receipt,
-                candidate;
-                slot_hz=slot_hz,
-                objective_authority=authority,
-            )
-            metrics = objective_metrics(authorization.cared_output)
-            expected_model = (
-                circuit_plan_sha256=metrics.circuit_plan_sha256,
-                capacitance_sha256=metrics.capacitance_sha256,
-                inverse_inductance_sha256=metrics.inverse_inductance_sha256,
-                selector_sha256=metrics.selector_sha256,
-            )
-            evaluation = optimizer_metrics(metrics)
-            objective = evaluate_d3_direct_hybridized_objective_with_spatial_evidence(
-                authorization,
+        l0 = try
+            plan = d3_stage2_direct_hybridized_grid_plan(
                 candidate,
-                authorization.cared_output;
-                slot_hz=slot_hz,
-                objective_authority=authority,
-                objective_evaluator=renewed -> d3_stage2_objective(
-                    metrics,
+                inputs;
+                refinement_level=0,
+            )
+            request = d3_direct_hybridized_spatial_level_request(
+                inputs,
+                plan,
+                profile,
+            )
+            cared = validate_d3_direct_hybridized_cared_output(
+                evaluate_d3_direct_hybridized_cared_output_request(
+                    candidate,
                     slot_hz,
-                    D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-                    expected_model,
+                    request.evaluation_input,
                 ),
             )
-            breakdown = cost_breakdown(specs, evaluation)
-            isapprox(objective.cost, breakdown.total; rtol=1.0e-14, atol=0.0) ||
-                error("Circuit Objective and optimizer scalarization disagree.")
-            identity = d3_direct_hybridized_spatial_receipt_identity(authorization)
-            objective_path = joinpath(
-                restart_dir,
-                "objective_receipts",
-                "$(candidate_sha).json",
+            (
+                cared_output=cared,
+                request_identity=d3_direct_hybridized_spatial_cache_key(
+                    candidate,
+                    slot_hz,
+                    request,
+                ),
             )
-            write_new_json(objective_path, (
-                schema_version="d3-rev10-direct-hybridized-objective-receipt.v1",
-                candidate_sha256=candidate_sha,
-                candidate=candidate,
-                slot_hz=slot_hz,
-                spatial_receipt_identity=identity,
-                objective=objective,
-                promotion="none",
-                publication="none",
-            ))
-            receipt_record = (
-                locator=relpath(receipt.path, restart_dir),
-                identity=identity,
-                objective_locator=relpath(objective_path, restart_dir),
-            )
-            lock(metadata_lock) do
-                objective_by_candidate[candidate_sha] = objective
-                receipt_by_candidate[candidate_sha] = receipt_record
-            end
-            return evaluation
         catch exception
             exception isa InterruptException && rethrow()
             if exception isa D3DirectHybridizedSpatialNotEvaluable
@@ -405,10 +347,69 @@ function make_evaluator(
                     exception.details,
                 )
             end
+            if exception isa ErrorException
+                return RejectedEvaluation(
+                    "direct_l0_candidate_not_evaluable",
+                    "Candidate-local direct-Hybridized L0 evaluation failed.",
+                    (
+                        candidate_sha256=candidate_sha,
+                        refinement_level=0,
+                        exception_type=string(typeof(exception)),
+                        exception=sprint(showerror, exception),
+                    ),
+                )
+            end
             rethrow()
         end
+
+        metrics = objective_metrics(l0.cared_output)
+        expected_model = (
+            circuit_plan_sha256=metrics.circuit_plan_sha256,
+            capacitance_sha256=metrics.capacitance_sha256,
+            inverse_inductance_sha256=metrics.inverse_inductance_sha256,
+            selector_sha256=metrics.selector_sha256,
+        )
+        evaluation = optimizer_metrics(metrics)
+        objective = d3_stage2_objective(
+            metrics,
+            slot_hz,
+            D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+            expected_model,
+        )
+        breakdown = cost_breakdown(specs, evaluation)
+        isapprox(objective.cost, breakdown.total; rtol=1.0e-14, atol=0.0) ||
+            error("Circuit Objective and optimizer scalarization disagree.")
+        objective_path = write_new_json(joinpath(
+            restart_dir,
+            "l0_objective_receipts",
+            "$(candidate_sha).json",
+        ), (
+            schema_version="d3-rev10-direct-hybridized-l0-objective-receipt.v1",
+            candidate_sha256=candidate_sha,
+            candidate=candidate,
+            slot_hz=slot_hz,
+            inner_loop_level=0,
+            request_identity=l0.request_identity,
+            cared_output=l0.cared_output,
+            objective=objective,
+            promotion="none",
+            publication="none",
+        ))
+        receipt_record = (
+            locator=relpath(objective_path, restart_dir),
+            sha256=file_sha256(objective_path),
+            inner_loop_level=0,
+        )
+        lock(metadata_lock) do
+            l0_by_candidate[candidate_sha] = (
+                cared_output=l0.cared_output,
+                objective=objective,
+                receipt=receipt_record,
+            )
+        end
+        return evaluation
     end
-    return evaluator, objective_by_candidate, receipt_by_candidate
+    return evaluator, l0_by_candidate
 end
 
 function best_valid(restarts)
@@ -419,13 +420,15 @@ function best_valid(restarts)
             ordinal += 1
             isnothing(record.cost) && continue
             candidate_sha = candidate_sha256(record.candidate)
+            l0 = restart.l0_by_candidate[candidate_sha]
             candidate = (
                 restart_index=restart.restart_index,
                 restart_name=restart.restart_name,
                 ordinal=ordinal,
                 record=record,
-                objective=restart.objective_by_candidate[candidate_sha],
-                receipt=restart.receipt_by_candidate[candidate_sha],
+                l0_cared_output=l0.cared_output,
+                l0_objective=l0.objective,
+                l0_receipt=l0.receipt,
                 cma_state=restart.result.cma.state,
             )
             if isnothing(best) || record.cost < best.record.cost
@@ -434,6 +437,137 @@ function best_valid(restarts)
         end
     end
     return best
+end
+
+function validate_selected_candidate_spatially(
+    candidate,
+    l0_cared_output,
+    inputs,
+    profile,
+    slot_hz,
+    authority,
+    specs,
+    destination,
+)
+    l0_plan = d3_stage2_direct_hybridized_grid_plan(
+        candidate,
+        inputs;
+        refinement_level=0,
+    )
+    l0_request = d3_direct_hybridized_spatial_level_request(
+        inputs,
+        l0_plan,
+        profile,
+    )
+    l0_key = d3_direct_hybridized_spatial_cache_key(candidate, slot_hz, l0_request)
+    spatial_cache = Dict{String,Any}(
+        l0_key => Dict(
+            "cared_output" => deepcopy(l0_cared_output),
+            "cared_output_sha256" =>
+                D3SemanticHash.semantic_value_sha256(l0_cared_output),
+        ),
+    )
+    evidence = try
+        produce_d3_direct_hybridized_spatial_evidence(
+            candidate;
+            slot_hz=slot_hz,
+            objective_authority=authority,
+            level_request=(values, slot, level) -> begin
+                plan = d3_stage2_direct_hybridized_grid_plan(
+                    values,
+                    inputs;
+                    refinement_level=level,
+                )
+                d3_direct_hybridized_spatial_level_request(
+                    inputs,
+                    plan,
+                    profile,
+                )
+            end,
+            cache=spatial_cache,
+        )
+    catch exception
+        exception isa InterruptException && rethrow()
+        if exception isa D3DirectHybridizedSpatialNotEvaluable
+            return (
+                status="NOT_VALIDATED",
+                spatial_receipt=nothing,
+                validated_finest_objective=nothing,
+                validated_finest_objective_receipt=nothing,
+                failure=(
+                    code=exception.code,
+                    reason=exception.reason,
+                    details=exception.details,
+                    cost=nothing,
+                ),
+            )
+        end
+        rethrow()
+    end
+
+    validation_dir = joinpath(destination, "winner_spatial_validation")
+    receipt = write_d3_direct_hybridized_spatial_receipt(
+        joinpath(validation_dir, "spatial_receipt.json"),
+        evidence,
+    )
+    authorization = authorize_d3_direct_hybridized_spatial_receipt(
+        receipt,
+        candidate;
+        slot_hz=slot_hz,
+        objective_authority=authority,
+    )
+    metrics = objective_metrics(authorization.cared_output)
+    expected_model = (
+        circuit_plan_sha256=metrics.circuit_plan_sha256,
+        capacitance_sha256=metrics.capacitance_sha256,
+        inverse_inductance_sha256=metrics.inverse_inductance_sha256,
+        selector_sha256=metrics.selector_sha256,
+    )
+    evaluation = optimizer_metrics(metrics)
+    objective = evaluate_d3_direct_hybridized_objective_with_spatial_evidence(
+        authorization,
+        candidate,
+        authorization.cared_output;
+        slot_hz=slot_hz,
+        objective_authority=authority,
+        objective_evaluator=renewed -> d3_stage2_objective(
+            metrics,
+            slot_hz,
+            D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+            expected_model,
+        ),
+    )
+    breakdown = cost_breakdown(specs, evaluation)
+    isapprox(objective.cost, breakdown.total; rtol=1.0e-14, atol=0.0) ||
+        error("Spatially validated Objective and optimizer scalarization disagree.")
+    identity = d3_direct_hybridized_spatial_receipt_identity(authorization)
+    objective_path = write_new_json(
+        joinpath(validation_dir, "validated_finest_objective.json"),
+        (
+            schema_version="d3-rev10-direct-hybridized-validated-finest-objective.v1",
+            candidate_sha256=candidate_sha256(candidate),
+            candidate=candidate,
+            slot_hz=slot_hz,
+            spatial_receipt_identity=identity,
+            cared_output=authorization.cared_output,
+            objective=objective,
+            promotion="none",
+            publication="none",
+        ),
+    )
+    return (
+        status="PASS",
+        spatial_receipt=(
+            locator=relpath(receipt.path, destination),
+            identity=identity,
+        ),
+        validated_finest_objective=objective,
+        validated_finest_objective_receipt=(
+            locator=relpath(objective_path, destination),
+            sha256=file_sha256(objective_path),
+        ),
+        failure=nothing,
+    )
 end
 
 function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
@@ -450,6 +584,13 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
     manifest["execution_order"] == "ascending_slots" || error(
         "Rev10 manifest execution order is not ascending_slots.",
     )
+    Int(manifest["inner_loop_level"]) == 0 || error(
+        "Rev10 CMA inner loop must use fixed refinement level zero.",
+    )
+    manifest["spatial_refinement"]["application"] ==
+        "selected_best_candidate_only" || error(
+            "Rev10 spatial refinement must apply only to the selected best candidate.",
+        )
     gate_reconciliation = manifest["human_gate_reconciliation"]
     gate_reconciliation_path = joinpath(
         @__DIR__,
@@ -529,6 +670,10 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
             julia_thread_count=Threads.nthreads(),
             cma_generation_worker_count=worker_count,
         ),
+        search_discretization=(
+            inner_loop_level=0,
+            winner_spatial_refinement="selected_best_candidate_only",
+        ),
     )
     write_new_json(joinpath(destination, "run_identity.json"), run_identity)
 
@@ -537,11 +682,10 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
         restart_dir = joinpath(destination, "restart-$(restart_index)-$(restart_name)")
         mkpath(restart_dir)
         initial = exact_namedtuple(start["candidate"], variable_names)
-        evaluator, objectives, receipts = make_evaluator(
+        evaluator, l0_records = make_evaluator(
             inputs,
             profile,
             slot_hz,
-            authority,
             specs,
             restart_dir,
         )
@@ -575,8 +719,7 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
         write_candidate_events(
             joinpath(restart_dir, "candidate_events.jsonl"),
             result.history,
-            objectives,
-            receipts,
+            l0_records,
         )
         write_new_json(joinpath(restart_dir, "optimization.json"), result)
         push!(restart_results, (
@@ -585,8 +728,7 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
             settings=settings,
             worker_count=worker_count,
             result=result,
-            objective_by_candidate=objectives,
-            receipt_by_candidate=receipts,
+            l0_by_candidate=l0_records,
         ))
         println(
             "END slot=$(slot_hz / 1e9)GHz restart=$(restart_index) " *
@@ -598,23 +740,62 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
 
     selected = best_valid(restart_results)
     outcome = if isnothing(selected)
-        (status="NO_VALID_CANDIDATE", best_valid_candidate=nothing)
-    else
-        target_pass = Bool(selected.objective.target_gates_pass)
-        winner = selected.cma_state === :converged && target_pass
         (
-            status=winner ? "SLOT_WINNER" : "BEST_VALID_CANDIDATE_ONLY",
-            best_valid_candidate=(
+            status="NO_FINITE_L0_CANDIDATE",
+            selected_best_candidate=nothing,
+            winner_spatial_validation=(
+                status="NOT_RUN_NO_FINITE_L0_CANDIDATE",
+                spatial_receipt=nothing,
+                failure=nothing,
+            ),
+            validated_finest_objective=nothing,
+            validated_finest_objective_receipt=nothing,
+        )
+    else
+        spatial = validate_selected_candidate_spatially(
+            selected.record.candidate,
+            selected.l0_cared_output,
+            inputs,
+            profile,
+            slot_hz,
+            authority,
+            specs,
+            destination,
+        )
+        validated_target_pass = spatial.status == "PASS" &&
+            Bool(spatial.validated_finest_objective.target_gates_pass)
+        status = if spatial.status != "PASS"
+            "BEST_FINITE_L0_CANDIDATE_SPATIAL_NOT_VALIDATED"
+        elseif validated_target_pass
+            "SLOT_WINNER"
+        else
+            "SPATIALLY_VALIDATED_BEST_CANDIDATE_TARGET_MISS"
+        end
+        (
+            status=status,
+            selected_best_candidate=(
                 restart_index=selected.restart_index,
                 restart_name=selected.restart_name,
                 record_id=selected.record.record_id,
                 candidate=selected.record.candidate,
                 cost=selected.record.cost,
-                objective=selected.objective,
-                spatial_receipt=selected.receipt,
+                l0_search_objective=(
+                    cared_output=selected.l0_cared_output,
+                    objective=selected.l0_objective,
+                    receipt=selected.l0_receipt,
+                ),
                 cma_state=selected.cma_state,
-                target_gates_pass=target_pass,
+                cma_convergence_required_for_reporting=false,
+                l0_target_gates_pass=Bool(selected.l0_objective.target_gates_pass),
             ),
+            winner_spatial_validation=(
+                status=spatial.status,
+                spatial_receipt=spatial.spatial_receipt,
+                failure=spatial.failure,
+            ),
+            validated_finest_objective=spatial.validated_finest_objective,
+            validated_finest_objective_receipt=
+                spatial.validated_finest_objective_receipt,
         )
     end
     summary = (
@@ -632,7 +813,11 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
                 "optimization.json",
             ),
         ) for item in restart_results],
-        best_valid_candidate=outcome.best_valid_candidate,
+        selected_best_candidate=outcome.selected_best_candidate,
+        winner_spatial_validation=outcome.winner_spatial_validation,
+        validated_finest_objective=outcome.validated_finest_objective,
+        validated_finest_objective_receipt=
+            outcome.validated_finest_objective_receipt,
         winner_closure="PENDING_ALLOWED",
         promotion="none",
         publication="none",
