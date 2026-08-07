@@ -28,6 +28,62 @@ realpath(pathof(SuperconductingCircuitsCore)) == EXPECTED_CORE_ENTRY || error(
 
 const Q2D_PATH = joinpath(D3_ROOT, "d3_continuous_ground_q2d_maxwell_lc.v4.json")
 
+function _legacy_d3_matrix_sha256(label, matrix)
+    values = Matrix{Float64}(matrix)
+    buffer = IOBuffer()
+    write(
+        buffer,
+        "d3-float64-matrix-v1|$(String(label))|rows=$(size(values, 1))|cols=$(size(values, 2))",
+    )
+    for row in axes(values, 1), column in axes(values, 2)
+        value = iszero(values[row, column]) ? 0.0 : values[row, column]
+        write(buffer, UInt8('|'))
+        write(buffer, bitstring(value))
+    end
+    return bytes2hex(SHA.sha256(take!(buffer)))
+end
+
+function _legacy_d3_complex_matrix_sha256(label, matrix)
+    values = Matrix{ComplexF64}(matrix)
+    buffer = IOBuffer()
+    write(
+        buffer,
+        "d3-complex128-matrix-v1|$(String(label))|rows=$(size(values, 1))|cols=$(size(values, 2))",
+    )
+    for row in axes(values, 1), column in axes(values, 2)
+        value = values[row, column]
+        real_value = iszero(real(value)) ? 0.0 : Float64(real(value))
+        imag_value = iszero(imag(value)) ? 0.0 : Float64(imag(value))
+        write(buffer, UInt8('|'))
+        write(buffer, bitstring(real_value))
+        write(buffer, UInt8(','))
+        write(buffer, bitstring(imag_value))
+    end
+    return bytes2hex(SHA.sha256(take!(buffer)))
+end
+
+@testset "D3 exact-N matrix hash canonical stream compatibility" begin
+    label = "readout-β"
+    real_values = [0.0 -0.0 1.5; -2.25 1 / 3 9.75]
+    complex_values = ComplexF64[
+        ComplexF64(0.0, -0.0) ComplexF64(-2.25, 1 / 3)
+        ComplexF64(-0.0, 1.5) ComplexF64(9.75, -4.125)
+    ]
+    @test _d3_exact_n_matrix_sha256(label, real_values) ==
+        _legacy_d3_matrix_sha256(label, real_values)
+    @test _d3_exact_n_matrix_sha256(label, Matrix{Float64}(undef, 0, 2)) ==
+        _legacy_d3_matrix_sha256(label, Matrix{Float64}(undef, 0, 2))
+    @test _d3_exact_n_complex_matrix_sha256(label, complex_values) ==
+        _legacy_d3_complex_matrix_sha256(label, complex_values)
+    @test _d3_exact_n_complex_matrix_sha256(
+        label,
+        Matrix{ComplexF64}(undef, 2, 0),
+    ) == _legacy_d3_complex_matrix_sha256(
+        label,
+        Matrix{ComplexF64}(undef, 2, 0),
+    )
+end
+
 @testset "D3 direct-Hybridized exact grid plan" begin
     reduction = (
         input_schema="synthetic-q3d-authority.v1",
