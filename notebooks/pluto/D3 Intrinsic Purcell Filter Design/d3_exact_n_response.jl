@@ -1576,11 +1576,15 @@ function _d3_complete_complement_rp_operator(context, angular_frequency_rad_s)
         d_re * eliminated_response_derivative
     reciprocity_error =
         _d3_rp_reciprocity_error(effective)
-    effective_machine_relative_resolution = 4096 * 2 * eps(Float64)
+    effective_machine_relative_resolution =
+        elimination_machine_relative_resolution
     reciprocity_error <=
         effective_machine_relative_resolution || error(
         "D3 complete-complement RP effective-operator reciprocity is not machine-resolved.",
     )
+    effective = (effective + transpose(effective)) / 2
+    effective_derivative =
+        (effective_derivative + transpose(effective_derivative)) / 2
     eliminated_term = d_re * eliminated_response
     diagonal_balance_scale = [
         max(
