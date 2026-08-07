@@ -86,13 +86,13 @@ const D3_RESPONSE_EQUIVALENT_VARIABLE_ORDER = (
 )
 
 const D3_SELECTED_IDC_MAPPING_ID =
-    "d3-same-die-filter-feedline-idc-q3d-tensor-fit-v1"
+    "d3-same-die-filter-feedline-idc-q3d-gap8-linear-length-v1"
 const D3_SELECTED_IDC_MAPPING_SHA256 =
     "db549a78564ab1dd25aba4cd0004304651ea3da7a1e66ce92bbb31bceb79e66c"
 const D3_SELECTED_IDC_SOURCE_SHA256 =
     "6a54fec0669c01dacf433f3cc639192e5e5202ae232aa5b1e786ac7147b172e3"
 const D3_SELECTED_IDC_SEMANTIC_SHA256 =
-    "dba6ffcfc442860151c4cad5b27bf6259a5ba1ca532637b2ce0c0c741d97d152"
+    "426e635ef28a75d40b3e33b65a2ce3d3cce35a367663b24fa6b3d704df5f3818"
 struct D3Stage2ResonatorMapping{L,S,C}
     fixed_line_input::L
     settings::S
@@ -134,9 +134,15 @@ function _d3_stage_idc_triplet(idc_mapping, u_idc)
         :idc_mutual_capacitance_f,
         :mapping_id,
         :mapping_sha256,
+        :mapping_semantic_sha256,
+        :source_mapping_id,
+        :source_length_range_um,
+        :runtime_length_domain,
+        :evaluation_extrapolated,
+        :evaluation_source,
     )
     all(name -> hasproperty(raw, name), required) || error(
-        "D3 IDC mapping must return all three capacitances plus mapping id and SHA-256.",
+        "D3 IDC mapping must return all capacitances, identities, source support, and runtime classification.",
     )
     values = (
         idc_filter_ground_capacitance_f=_d3_stage_positive(
@@ -157,9 +163,42 @@ function _d3_stage_idc_triplet(idc_mapping, u_idc)
     )
     mapping_id = strip(String(raw.mapping_id))
     mapping_sha256 = lowercase(strip(String(raw.mapping_sha256)))
+    mapping_semantic_sha256 = lowercase(strip(String(raw.mapping_semantic_sha256)))
+    source_mapping_id = strip(String(raw.source_mapping_id))
     isempty(mapping_id) && error("D3 IDC mapping id must not be empty.")
+    isempty(source_mapping_id) && error("D3 IDC source mapping id must not be empty.")
     occursin(r"^[0-9a-f]{64}$", mapping_sha256) || error(
         "D3 IDC mapping SHA-256 must contain 64 lowercase hexadecimal characters.",
+    )
+    occursin(r"^[0-9a-f]{64}$", mapping_semantic_sha256) || error(
+        "D3 IDC mapping semantic SHA-256 must contain 64 lowercase hexadecimal characters.",
+    )
+    source_length_range_um = Tuple(Float64.(collect(raw.source_length_range_um)))
+    length(source_length_range_um) == 2 &&
+        all(isfinite, source_length_range_um) &&
+        0 < source_length_range_um[1] < source_length_range_um[2] || error(
+        "D3 IDC source length support must contain two increasing positive bounds.",
+    )
+    runtime_length_domain = strip(String(raw.runtime_length_domain))
+    runtime_length_domain == "finite_positive_um" || error(
+        "D3 IDC runtime length domain must be finite-positive um.",
+    )
+    raw.evaluation_extrapolated isa Bool || error(
+        "D3 IDC extrapolation classification must be Boolean.",
+    )
+    evaluation_extrapolated = Bool(raw.evaluation_extrapolated)
+    expected_extrapolated = !(
+        source_length_range_um[1] <= Float64(u_idc) <= source_length_range_um[2]
+    )
+    evaluation_extrapolated == expected_extrapolated || error(
+        "D3 IDC extrapolation classification disagrees with its source support.",
+    )
+    evaluation_source = strip(String(raw.evaluation_source))
+    expected_source = evaluation_extrapolated ?
+        "linear_length_least_squares_extrapolation" :
+        "linear_length_least_squares_interpolation"
+    evaluation_source == expected_source || error(
+        "D3 IDC evaluation-source classification is invalid.",
     )
     return merge(
         values,
@@ -167,6 +206,12 @@ function _d3_stage_idc_triplet(idc_mapping, u_idc)
             u_IDC=Float64(u_idc),
             mapping_id=mapping_id,
             mapping_sha256=mapping_sha256,
+            mapping_semantic_sha256=mapping_semantic_sha256,
+            source_mapping_id=source_mapping_id,
+            source_length_range_um=source_length_range_um,
+            runtime_length_domain=runtime_length_domain,
+            evaluation_extrapolated=evaluation_extrapolated,
+            evaluation_source=evaluation_source,
         ),
     )
 end
@@ -187,10 +232,9 @@ function _d3_stage_require_physical_idc_mapping(idc_mapping::D3IDCMapping)
         "D3 physical IDC mapping source SHA-256 does not match the selected Q3D workbook.",
     )
     idc_mapping.valid_gap_range_um == (5.0, 10.0) &&
-        idc_mapping.valid_length_range_um == (35.0, 75.0) &&
-        idc_mapping.length_center_um == 55.0 &&
-        idc_mapping.length_half_range_um == 20.0 || error(
-        "D3 physical IDC mapping domain or normalization is not the selected v1 contract.",
+        idc_mapping.source_length_range_um == (35.0, 75.0) &&
+        idc_mapping.runtime_length_domain == "finite_positive_um" || error(
+        "D3 physical IDC mapping source support or runtime domain is not the selected contract.",
     )
     d3_idc_mapping_semantic_sha256(idc_mapping) ==
         D3_SELECTED_IDC_SEMANTIC_SHA256 || error(
@@ -419,6 +463,11 @@ function bind_d3_stage2_direct_hybridized_inputs(
         idc=(
             mapping_id=idc_mapping.mapping_id,
             mapping_sha256=idc_mapping.mapping_sha256,
+            mapping_semantic_sha256=
+                d3_idc_mapping_semantic_sha256(idc_mapping),
+            source_mapping_id=idc_mapping.source_mapping_id,
+            source_length_range_um=idc_mapping.source_length_range_um,
+            runtime_length_domain=idc_mapping.runtime_length_domain,
             source_artifact=idc_mapping.source_artifact,
         ),
         feedline=feedline,
@@ -1757,6 +1806,12 @@ function d3_stage2_candidate_metrics(
         fixed_input_identity=stage.fixed_input_identity,
         idc_mapping_id=stage.idc.mapping_id,
         idc_mapping_sha256=stage.idc.mapping_sha256,
+        idc_mapping_semantic_sha256=stage.idc.mapping_semantic_sha256,
+        idc_source_mapping_id=stage.idc.source_mapping_id,
+        idc_source_length_range_um=stage.idc.source_length_range_um,
+        idc_runtime_length_domain=stage.idc.runtime_length_domain,
+        idc_evaluation_extrapolated=stage.idc.evaluation_extrapolated,
+        idc_evaluation_source=stage.idc.evaluation_source,
         feedline_contract=stage.feedline_contract,
     )
     normalized_candidate = NamedTuple{D3_STAGE2_VARIABLE_ORDER}(Tuple(
