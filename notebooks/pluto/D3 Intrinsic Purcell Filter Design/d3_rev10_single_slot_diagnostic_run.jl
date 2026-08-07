@@ -12,6 +12,7 @@ const CORE_ROOT = joinpath(
 pushfirst!(LOAD_PATH, CORE_ROOT)
 
 using SHA
+using LinearAlgebra
 using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
@@ -642,6 +643,10 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
     specs = metric_specs(slot_hz)
     cma = manifest["cma_es"]
     worker_count = min(Int(cma["population"]), Threads.nthreads())
+    BLAS.set_num_threads(1)
+    BLAS.get_num_threads() == 1 || error(
+        "Rev10 parallel CMA requires exactly one BLAS thread per Julia process.",
+    )
     restart_results = Any[]
     starts = manifest["starts"]
     restart_indices = Int.(cma["restart_indices"])
@@ -670,6 +675,7 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
         runtime_resources=(
             julia_thread_count=Threads.nthreads(),
             cma_generation_worker_count=worker_count,
+            blas_thread_count=BLAS.get_num_threads(),
         ),
         search_discretization=(
             inner_loop_level=0,
