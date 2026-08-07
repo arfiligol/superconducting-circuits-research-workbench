@@ -16,7 +16,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "94874f091f06570630024783dad0aaa4b58cc5e5553041c2c64f08e317457a24"
+    "857e2990b9b7355c54dd8a1a9936d45259c23c54549c573e280da2b81aa801d6"
 const EXPECTED_CORE_ENTRY = realpath(joinpath(
     CORE_ROOT,
     "src",
@@ -36,7 +36,7 @@ include(joinpath(@__DIR__, "d3_direct_hybridized_spatial_receipt.jl"))
 using .D3CoupledOptimizer
 using .D3DirectHybridizedSpatialReceipt
 using .D3FloatingQubitInput: load_floating_qubit_nominal_input
-using .D3IDCInput: load_d3_idc_mapping
+using .D3IDCInput: d3_idc_mapping_semantic_sha256, load_d3_idc_mapping
 using .D3ResonatorInput:
     bind_d3_rev10_q2d_input, load_d3_continuous_ground_q2d_input
 
@@ -194,6 +194,25 @@ function bind_inputs(manifest, q2d_path, q3d_path, idc_path)
         )
     end
     fixed = manifest["fixed_physical_inputs"]
+    idc_model = manifest["idc_length_model"]
+    idc_model["model"] == "capacitance_fF=a_fF_per_um*length_um+b_fF" &&
+        idc_model["fit_method"] == "ordinary_least_squares_at_selected_gap" &&
+        idc_model["outside_source_support"] == "linear_extrapolation" || error(
+        "Rev10 IDC length model does not match the Human-directed linear-fit contract.",
+    )
+    source_support = Tuple(Float64.(idc_model["source_support_um"]))
+    evaluation_range = Tuple(Float64.(idc_model["evaluation_range_um"]))
+    Float64(idc_model["source_gap_um"]) == Float64(fixed["idc_gap_um"]) || error(
+        "Rev10 IDC fit gap and fixed physical gap disagree.",
+    )
+    idc_variable = only(filter(
+        item -> String(item["name"]) == "u_IDC",
+        manifest["variables"],
+    ))
+    evaluation_range == (
+        Float64(idc_variable["lower"]),
+        Float64(idc_variable["upper"]),
+    ) || error("Rev10 IDC evaluation range and optimizer bounds disagree.")
     q2d = bind_d3_rev10_q2d_input(
         load_d3_continuous_ground_q2d_input(q2d_path);
         section_length_m=Float64(fixed["q2d_section_length_m"]),
@@ -207,6 +226,17 @@ function bind_inputs(manifest, q2d_path, q3d_path, idc_path)
     idc = load_d3_idc_mapping(
         idc_path;
         gap_um=Float64(fixed["idc_gap_um"]),
+        evaluation_length_range_um=evaluation_range,
+    )
+    idc.source_length_range_um == source_support || error(
+        "Rev10 IDC Q3D source-support range disagrees with the manifest.",
+    )
+    idc.mapping_id == String(sources["idc_runtime_mapping_id"]) || error(
+        "Rev10 IDC runtime mapping id disagrees with the manifest.",
+    )
+    d3_idc_mapping_semantic_sha256(idc) ==
+        String(sources["idc_mapping_semantic_sha256"]) || error(
+        "Rev10 IDC linear mapping semantics disagree with the manifest.",
     )
     inputs = bind_d3_stage2_direct_hybridized_inputs(
         q2d,

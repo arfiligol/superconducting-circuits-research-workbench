@@ -12,7 +12,9 @@
     "q2d_artifact_sha256": "301d3501a30614b994cf3f28d46eb75b545620a164bbb346fa557120d643fe6c",
     "q3d_input_sha256": "b3e0c7aa403856e238f7121825f3691c7b3be13afa1a43ac6895f21191e832e2",
     "idc_mapping_sha256": "db549a78564ab1dd25aba4cd0004304651ea3da7a1e66ce92bbb31bceb79e66c",
-    "fixed_input_canonical_sha256": "46a0e0c4699eab5ffc2a4c869708ef77a669f879837a69db7dd9ed49d55bd7be"
+    "idc_runtime_mapping_id": "d3-same-die-filter-feedline-idc-q3d-gap8-linear-length-v1",
+    "idc_mapping_semantic_sha256": "4419ce9c6aa547dc5db5aed29d94bdd2937a4c0eecace09ee64fa94de1c8069e",
+    "fixed_input_canonical_sha256": "8004d1861eebc5df35d23ac4e7e706b347bfab18adbfc4b89f3d10e0a3a10c46"
   },
   "fixed_physical_inputs": {
     "q2d_section_length_m": 0.00005,
@@ -24,6 +26,14 @@
     "feedline_l_per_m_h": 4.04313e-7,
     "feedline_c_per_m_f": 1.7986e-10,
     "port_resistance_ohm": 50.0
+  },
+  "idc_length_model": {
+    "model": "capacitance_fF=a_fF_per_um*length_um+b_fF",
+    "fit_method": "ordinary_least_squares_at_selected_gap",
+    "source_gap_um": 8.0,
+    "source_support_um": [35.0, 75.0],
+    "evaluation_range_um": [20.0, 100.0],
+    "outside_source_support": "linear_extrapolation"
   },
   "slots_hz": [5600000000.0, 5700000000.0, 5800000000.0, 5900000000.0, 6000000000.0],
   "variables": [
