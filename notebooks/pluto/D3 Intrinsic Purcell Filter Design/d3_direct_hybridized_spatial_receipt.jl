@@ -63,7 +63,6 @@ const _SOURCE_FIELDS = (
     :idc_source_mapping_id,
     :idc_source_length_range_um,
     :idc_runtime_length_domain,
-    :idc_evaluation_extrapolated,
     :idc_evaluation_source,
     :feedline_contract,
 )
@@ -459,10 +458,6 @@ function _source_profile(value)
         "direct_spatial.malformed",
         "IDC source length range must be strictly increasing.",
     )
-    raw["idc_evaluation_extrapolated"] isa Bool || _fail(
-        "direct_spatial.malformed",
-        "IDC extrapolation indicator must be Boolean.",
-    )
     return Dict{String,Any}(
         "model_identity" => model,
         "q2d_artifact_id" => _text(raw["q2d_artifact_id"], "Q2D artifact id"),
@@ -487,7 +482,6 @@ function _source_profile(value)
             raw["idc_runtime_length_domain"],
             "IDC runtime length domain",
         ),
-        "idc_evaluation_extrapolated" => raw["idc_evaluation_extrapolated"],
         "idc_evaluation_source" => _text(
             raw["idc_evaluation_source"],
             "IDC evaluation source",
