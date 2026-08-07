@@ -39,6 +39,142 @@ function analytic_evaluator(candidate)
     ))
 end
 
+function run_generation_batch_optimizer(worker_count)
+    result = optimize_d3(
+        analytic_evaluator,
+        VARIABLES,
+        METRICS,
+        INITIAL_CANDIDATE,
+        CMASettings(
+            seed=20260807,
+            sigma=0.2,
+            popsize=8,
+            maxiter=5,
+            maxfevals=40,
+            ftol=1.0e-8,
+            xtol=1.0e-5,
+        ),
+        nothing;
+        condition_manifest_id="d3-deterministic-generation-batch-test",
+        condition_manifest_sha256=repeat("d", 64),
+        condition_manifest_approval_status="human_approved",
+        worker_count=worker_count,
+    )
+    return result
+end
+
+@testset "D3 deterministic CMA generation batches" begin
+    serial = run_generation_batch_optimizer(1)
+    parallel = run_generation_batch_optimizer(4)
+    repeated = run_generation_batch_optimizer(4)
+
+    @test repr(serial) == repr(parallel) == repr(repeated)
+    @test_throws ErrorException optimize_d3(
+        analytic_evaluator,
+        VARIABLES,
+        METRICS,
+        INITIAL_CANDIDATE,
+        CMASettings(
+            seed=1,
+            sigma=0.2,
+            popsize=4,
+            maxiter=1,
+            maxfevals=4,
+            ftol=1.0e-6,
+            xtol=1.0e-4,
+        ),
+        nothing;
+        condition_manifest_id="d3-invalid-worker-count-test",
+        condition_manifest_sha256=repeat("e", 64),
+        condition_manifest_approval_status="human_approved",
+        worker_count=0,
+    )
+end
+
+@testset "D3 ordered batch cache and rejection replay" begin
+    calls = Dict{Tuple,Int}()
+    completion_order = Tuple[]
+    calls_lock = ReentrantLock()
+    evaluator = candidate -> begin
+        key = Tuple(candidate)
+        lock(calls_lock) do
+            calls[key] = get(calls, key, 0) + 1
+        end
+        candidate.x == 0.75 && sleep(0.02)
+        lock(calls_lock) do
+            push!(completion_order, key)
+        end
+        candidate.x == 0.25 && return RejectedEvaluation(
+            "analytic.batch_rejection",
+            "The exact batch candidate is rejected.",
+            candidate,
+        )
+        return ValidEvaluation((
+            x=candidate.x,
+            y=candidate.y,
+            sum_guard=candidate.x + candidate.y,
+        ))
+    end
+    context = D3CoupledOptimizer.ObjectiveContext(evaluator, VARIABLES, METRICS)
+    D3CoupledOptimizer._evaluate!(context, :initial_seed, [0.5, 0.5])
+    empty!(completion_order)
+    costs = D3CoupledOptimizer._evaluate_batch!(
+        context,
+        :cma,
+        ([0.5, 0.5], [0.75, 0.25], [0.75, 0.25], [0.25, 0.75], [0.25, 0.75], [0.5, 0.5]);
+        worker_count=4,
+    )
+
+    records = context.history[2:end]
+    @test completion_order == [(0.25, 0.75), (0.75, 0.25)]
+    @test [Tuple(record.candidate) for record in records] ==
+        [(0.5, 0.5), (0.75, 0.25), (0.75, 0.25), (0.25, 0.75), (0.25, 0.75), (0.5, 0.5)]
+    @test [record.cache_hit for record in records] == [true, false, true, false, true, true]
+    @test [record.evaluation isa RejectedEvaluation for record in records] ==
+        [false, false, false, true, true, false]
+    @test isfinite.(costs) == [true, true, true, false, false, true]
+    @test calls == Dict((0.5, 0.5) => 1, (0.75, 0.25) => 1, (0.25, 0.75) => 1)
+end
+
+@testset "D3 batch exception replay uses original column order" begin
+    calls = Tuple[]
+    calls_lock = ReentrantLock()
+    evaluator = candidate -> begin
+        lock(calls_lock) do
+            push!(calls, Tuple(candidate))
+        end
+        if candidate.x == 0.2
+            sleep(0.02)
+            error("earliest-column evaluator failure")
+        elseif candidate.x == 0.3
+            error("later-column evaluator failure")
+        end
+        return ValidEvaluation((
+            x=candidate.x,
+            y=candidate.y,
+            sum_guard=candidate.x + candidate.y,
+        ))
+    end
+    context = D3CoupledOptimizer.ObjectiveContext(evaluator, VARIABLES, METRICS)
+    exception = try
+        D3CoupledOptimizer._evaluate_batch!(
+            context,
+            :cma,
+            ([0.1, 0.9], [0.2, 0.8], [0.3, 0.7], [0.4, 0.6]);
+            worker_count=4,
+        )
+        nothing
+    catch error
+        error
+    end
+
+    @test exception isa ErrorException
+    @test sprint(showerror, exception) == "earliest-column evaluator failure"
+    @test Set(calls) == Set(((0.1, 0.9), (0.2, 0.8), (0.3, 0.7), (0.4, 0.6)))
+    @test [Tuple(record.candidate) for record in context.history] == [(0.1, 0.9)]
+    @test Set(keys(context.cache)) == Set(((0.1, 0.9),))
+end
+
 function run_analytic_optimizer(approval_status)
     seed_evaluator_calls = Ref(0)
     evaluator = candidate -> begin
