@@ -654,6 +654,8 @@ function _d3_validate_targeted_schur_grid_plan(
     grid_plan.refinement_level >= 0 || error(
         "D3 targeted-Schur grid refinement level must be nonnegative.",
     )
+    refinement_factor = 1 << grid_plan.refinement_level
+    refinement_factor > 0 || error("D3 targeted-Schur refinement factor overflowed.")
     grid_plan.candidate == candidate || error(
         "D3 targeted-Schur grid plan belongs to a different reference candidate.",
     )
@@ -675,7 +677,7 @@ function _d3_validate_targeted_schur_grid_plan(
     )
     grid_plan.counts.feedline_left == grid_plan.counts.feedline_right &&
         grid_plan.counts.feedline_left + grid_plan.counts.feedline_right ==
-            inputs.feedline.feedline_n_sections || error(
+            inputs.feedline.feedline_n_sections * refinement_factor || error(
         "D3 targeted-Schur split-feedline counts disagree with the fixed input.",
     )
     boundary_names = (
@@ -2140,9 +2142,9 @@ function d3_stage2_direct_cared_outputs(
         inverse_inductance=notch_k,
     ))
     notch = try
-        _d3_intrinsic_pair_notch_from_model(
+        _d3_targeted_cofactor_notch_from_model(
             notch_model,
-            (prevfloat(notch_anchor), nextfloat(notch_anchor)),
+            notch_anchor,
         )
     catch exception
         exception isa ErrorException || rethrow()

@@ -1755,14 +1755,29 @@ function _d3_targeted_schur_outputs(
     midpoint_operator = _d3_targeted_schur_operator(context, midpoint)
     exchange_rad_s = midpoint_operator.effective_dynamic_stiffness[1, 2] / normalization
 
+    split = sqrt(
+        ((readout.root_rad_s - filter.root_rad_s) / 2)^2 + exchange_rad_s^2,
+    )
+    first_seed = midpoint - split
+    second_seed = midpoint + split
+    seed_separation = abs(first_seed - second_seed)
+    seed_resolution = 4096 * eps(Float64) * max(
+        abs(first_seed),
+        abs(second_seed),
+        1.0,
+    )
+    seed_separation > seed_resolution || error(
+        "D3 targeted-Schur local hybrid pole seeds are not machine-resolved.",
+    )
+
     first = _d3_targeted_schur_determinant_root(
         context,
-        readout.root_rad_s,
+        first_seed,
         "D3 targeted-Schur first local hybrid pole",
     )
     second = _d3_targeted_schur_determinant_root(
         context,
-        filter.root_rad_s,
+        second_seed,
         "D3 targeted-Schur second local hybrid pole",
     )
     separation = abs(first.root_rad_s - second.root_rad_s)
@@ -2452,6 +2467,147 @@ function _d3_intrinsic_pair_z21(model, frequency_hz)
         model.port_indices,
     )
     return ComplexF64(response.impedance[2, 1])
+end
+
+function _d3_targeted_cofactor_notch_from_model(model, selection_anchor_hz)
+    anchor_hz = Float64(selection_anchor_hz)
+    isfinite(anchor_hz) && anchor_hz > 0 || error(
+        "D3 targeted cofactor-zero anchor must be finite and positive.",
+    )
+    capacitance = Matrix{Float64}(model.capacitance)
+    stiffness = Matrix{Float64}(model.inverse_inductance)
+    dimension = size(capacitance, 1)
+    size(capacitance) == size(stiffness) == (dimension, dimension) || error(
+        "D3 targeted cofactor-zero C/K matrices must be square and shape-matched.",
+    )
+    all(isfinite, capacitance) && all(isfinite, stiffness) || error(
+        "D3 targeted cofactor-zero C/K matrices must be finite.",
+    )
+    port_indices = Int.(collect(model.port_indices))
+    length(port_indices) == 2 && length(unique(port_indices)) == 2 &&
+        all(index -> 1 <= index <= dimension, port_indices) || error(
+        "D3 targeted cofactor-zero requires two distinct valid port indices.",
+    )
+    input_index, output_index = port_indices
+    rows = [index for index in 1:dimension if index != input_index]
+    columns = [index for index in 1:dimension if index != output_index]
+    angular_anchor_rad_s = 2π * anchor_hz
+    scaled_zero_eigenvalues = ComplexF64.(eigvals(
+        stiffness[rows, columns] / angular_anchor_rad_s^2,
+        capacitance[rows, columns],
+    ))
+    machine_relative_resolution = 4096 * dimension * eps(Float64)
+    zero_candidate_indices = [
+        index for index in eachindex(scaled_zero_eigenvalues)
+        if isfinite(scaled_zero_eigenvalues[index]) &&
+           real(scaled_zero_eigenvalues[index]) > 0 &&
+           abs(imag(scaled_zero_eigenvalues[index])) <=
+               machine_relative_resolution *
+               max(abs(scaled_zero_eigenvalues[index]), 1.0)
+    ]
+    isempty(zero_candidate_indices) && error(
+        "D3 targeted cofactor pencil exposes no finite positive machine-real zero.",
+    )
+    zero_candidate_frequencies_hz = Float64[
+        anchor_hz * sqrt(real(scaled_zero_eigenvalues[index]))
+        for index in zero_candidate_indices
+    ]
+    selection_distances_hz =
+        abs.(zero_candidate_frequencies_hz .- anchor_hz)
+    selection_resolution_hz = machine_relative_resolution * max(
+        anchor_hz,
+        maximum(zero_candidate_frequencies_hz),
+    )
+    minimum_selection_distance_hz = minimum(selection_distances_hz)
+    nearest_positions = findall(
+        distance -> abs(distance - minimum_selection_distance_hz) <=
+            selection_resolution_hz,
+        selection_distances_hz,
+    )
+    length(nearest_positions) == 1 || error(
+        "D3 targeted cofactor zero nearest the anchor is not machine-unique.",
+    )
+    selected_position = only(nearest_positions)
+    selected_zero_index = zero_candidate_indices[selected_position]
+    finite_zero_indices = findall(isfinite, scaled_zero_eigenvalues)
+    other_finite_zero_indices = [
+        index for index in finite_zero_indices if index != selected_zero_index
+    ]
+    nearest_scaled_zero_separation = isempty(other_finite_zero_indices) ? Inf :
+        minimum(
+            abs(
+                scaled_zero_eigenvalues[index] -
+                scaled_zero_eigenvalues[selected_zero_index],
+            )
+            for index in other_finite_zero_indices
+        )
+    scaled_zero_resolution = machine_relative_resolution * max(
+        maximum(abs, scaled_zero_eigenvalues[finite_zero_indices]),
+        1.0,
+    )
+    nearest_scaled_zero_separation > scaled_zero_resolution || error(
+        "D3 targeted cofactor zero is not machine-resolved as a simple root.",
+    )
+
+    notch_hz = zero_candidate_frequencies_hz[selected_position]
+    angular_frequency_rad_s = 2π * notch_hz
+    dynamic_stiffness = stiffness - angular_frequency_rad_s^2 * capacitance
+    factorization = try
+        lu(dynamic_stiffness; check=true)
+    catch exception
+        exception isa SingularException || exception isa ZeroPivotException || rethrow()
+        error(
+            "D3 targeted cofactor-zero local denominator is singular: " *
+            sprint(showerror, exception),
+        )
+    end
+    pivot_magnitudes = abs.(diag(factorization.U))
+    all(isfinite, pivot_magnitudes) && all(value -> !iszero(value), pivot_magnitudes) || error(
+        "D3 targeted cofactor-zero local denominator is non-finite or zero.",
+    )
+    source = zeros(Float64, dimension)
+    source[input_index] = 1.0
+    response = factorization \ source
+    all(isfinite, response) || error(
+        "D3 targeted cofactor-zero local response is non-finite.",
+    )
+    solve_residual = dynamic_stiffness * response - source
+    relative_solve_residual = _d3_rp_relative_error(
+        norm(solve_residual, Inf),
+        opnorm(dynamic_stiffness, Inf) * norm(response, Inf) + 1.0,
+    )
+    isfinite(relative_solve_residual) || error(
+        "D3 targeted cofactor-zero local solve residual is non-finite.",
+    )
+    z21 = ComplexF64(-im * angular_frequency_rad_s * response[output_index])
+    isfinite(real(z21)) && isfinite(imag(z21)) || error(
+        "D3 targeted cofactor-zero Z21 evaluation is non-finite.",
+    )
+    return (
+        frequency_hz=notch_hz,
+        z21_ohm=z21,
+        selection_anchor_hz=anchor_hz,
+        zero_candidates=(
+            scaled_squared_frequency_eigenvalues=scaled_zero_eigenvalues,
+            physical_candidate_indices=zero_candidate_indices,
+            frequencies_hz=zero_candidate_frequencies_hz,
+            selected_position=selected_position,
+            selected_generalized_eigenvalue=
+                scaled_zero_eigenvalues[selected_zero_index],
+            nearest_finite_spectrum_separation=
+                nearest_scaled_zero_separation,
+            finite_spectrum_resolution=scaled_zero_resolution,
+        ),
+        local_denominator=(
+            factorization_succeeded=true,
+            minimum_pivot_magnitude=minimum(pivot_magnitudes),
+            maximum_pivot_magnitude=maximum(pivot_magnitudes),
+        ),
+        local_residual=(
+            relative_solve_residual=relative_solve_residual,
+            abs_z21_ohm=abs(z21),
+        ),
+    )
 end
 
 function _d3_intrinsic_pair_notch_from_model(

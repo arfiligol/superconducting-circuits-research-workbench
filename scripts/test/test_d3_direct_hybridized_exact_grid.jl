@@ -147,6 +147,31 @@ end
         source_identity,
         (topology_counts=topology,),
     )
+    targeted_notch = _d3_targeted_cofactor_notch_from_model(
+        notch_model,
+        5.0e9,
+    )
+    @test targeted_notch.frequency_hz ≈ 5.0e9 rtol=1.0e-12
+    @test targeted_notch.local_denominator.factorization_succeeded
+    @test isfinite(targeted_notch.local_residual.relative_solve_residual)
+
+    equal_omega = 2π * 5.5e9
+    equal_stiffness = copy(stiffness)
+    equal_stiffness[2, 2] = equal_stiffness[3, 3] = equal_omega^2
+    equal_stiffness[2, 3] = equal_stiffness[3, 2] =
+        2 * equal_omega * (2π * 5.0e6)
+    equal_outputs = _d3_targeted_schur_outputs(
+        _d3_targeted_schur_candidate_context(
+            fixed,
+            capacitance,
+            equal_stiffness,
+        );
+        readout_root_anchor_hz=5.5e9,
+        filter_root_anchor_hz=5.5e9,
+    )
+    @test equal_outputs.local_hybrid_poles.first.root_rad_s !=
+        equal_outputs.local_hybrid_poles.second.root_rad_s
+
     cared = d3_stage2_direct_cared_outputs(
         candidate,
         context;
@@ -331,6 +356,47 @@ end
         )
         for level in 0:3
     ]
+    @test plans[2].counts.feedline_left + plans[2].counts.feedline_right ==
+        2 * feedline.feedline_n_sections
+    idc_mapping = D3IDCMapping(
+        8.0,
+        (5.0, 10.0),
+        (35.0, 75.0),
+        "closed_source_support_um",
+        Dict(
+            "C_12_fF" => (0.5, 9.0),
+            "C_1G_fF" => (0.25, 22.0),
+            "C_2G_fF" => (0.24, 22.0),
+        ),
+        Dict{Tuple{Float64,Float64},NamedTuple}(),
+        D3_SELECTED_IDC_MAPPING_ID,
+        repeat("b", 64),
+        "synthetic-grid-refinement",
+        Dict{String,Any}("sha256" => repeat("c", 64)),
+        Dict{String,Any}(),
+    )
+    refined_inputs = D3DirectHybridizedInputs(
+        q2d,
+        idc_mapping,
+        (
+            c0r_f=20.0e-15,
+            c01_f=20.0e-15,
+            c02_f=20.0e-15,
+            c12_qubit_f=10.0e-15,
+            cr1_f=5.0e-15,
+            cr2_f=5.0e-15,
+            l_j_per_junction_h=20.0e-9,
+        ),
+        feedline,
+        inputs.source_identity,
+    )
+    refined_context = build_d3_stage2_targeted_schur_objective_context(
+        candidate,
+        refined_inputs;
+        grid_plan=plans[2],
+        id="d3-targeted-grid-refinement-test",
+    )
+    @test refined_context.grid_plan === plans[2]
     fixed_topology_counts = (
         readout_resonator=380,
         filter_resonator=380,

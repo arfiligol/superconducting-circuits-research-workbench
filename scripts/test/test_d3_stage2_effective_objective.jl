@@ -63,20 +63,41 @@ end
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.primary_linewidth_extraction ==
         :targeted_schur_determinant_poles
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_contract_sha256 ==
-        "5a1b35d96d25f3888c4bf6d4bc8ee2f4eceb6fd91e0a097abe9ee5490258acdf"
+        "891a50bfc4c85889b82d0f64fe03b527ac68cb870e6d5542f99c849b80a304b6"
 
-    detuned = merge(metrics, (
-        fr_eff_complete_complement_rp_hz=slot_hz - 0.6e6,
-        fp_eff_complete_complement_rp_hz=slot_hz + 0.6e6,
+    perturbed = merge(metrics, (
+        fr_eff_complete_complement_rp_hz=slot_hz * 1.01,
+        fp_eff_complete_complement_rp_hz=slot_hz * 0.98,
+        J_eff_complete_complement_rp_coherent_hz=7.5e6,
+        notch_distributed_rp_on_hz=4.5e9,
+        kappa_sum_local_hybrid_rp_hz=25.0e6,
+        linewidth_fraction_min_local_hybrid_rp=0.4,
+        linewidth_fraction_max_local_hybrid_rp=0.6,
     ))
-    detuned_objective = d3_stage2_objective(
-        detuned,
+    perturbed_objective = d3_stage2_objective(
+        perturbed,
         slot_hz,
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
         TEST_SOURCE_IDENTITY,
     )
-    @test detuned_objective.normalized_residuals.r_r ≈ -1.2
-    @test detuned_objective.normalized_residuals.r_p ≈ 1.2
+    expected_residuals = (
+        r_r=0.01,
+        r_p=-0.02,
+        r_J=0.5,
+        r_n=-0.1,
+        r_kappa=0.25,
+        r_eta=-0.2,
+    )
+    for name in keys(expected_residuals)
+        @test getproperty(perturbed_objective.normalized_residuals, name) ≈
+            getproperty(expected_residuals, name)
+    end
+    @test perturbed_objective.cost ≈ sum(abs2, values(expected_residuals))
+    @test !perturbed_objective.target_diagnostics.readout_effective_diagonal_within_tolerance
+    @test !perturbed_objective.target_diagnostics.filter_effective_diagonal_within_tolerance
+    @test perturbed_objective.target_diagnostics.linewidth_participation
+    @test perturbed_objective.promotion_gate_status == :not_evaluated
+    @test !perturbed_objective.promotion_eligible
 
     legacy = merge(metrics, (
         contract_id="d3-stage2-direct-hybridized-candidate-metrics.v1",
