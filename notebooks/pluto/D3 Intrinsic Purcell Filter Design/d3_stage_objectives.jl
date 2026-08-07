@@ -3,7 +3,7 @@
 # operand comes from the same complete distributed/lumped CircuitPlan candidate.
 
 const D3_STAGE_OBJECTIVE_CONTRACT_ID =
-    "d3-stage2-direct-hybridized-objective.v3"
+    "d3-stage2-direct-hybridized-targeted-schur-objective.v1"
 const D3_TARGET_SLOT_FREQUENCIES_HZ = (5.6e9, 5.7e9, 5.8e9, 5.9e9, 6.0e9)
 const D3_INTERFERENCE_NOTCH_TARGET_HZ = 5.0e9
 
@@ -12,14 +12,14 @@ const D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY = (
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
     target_revision=10,
     target_contract_sha256=
-        "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
+        "5a1b35d96d25f3888c4bf6d4bc8ee2f4eceb6fd91e0a097abe9ee5490258acdf",
     notch_authority=:distributed_rp_on,
     effective_diagonal_frequency_extraction=
         :complete_complement_rp_complex_operator,
     effective_exchange_extraction=
         :complete_complement_rp_complex_midpoint_residue,
-    linewidth_pole_scope=:unordered_rp_two_pole_subspace,
-    primary_linewidth_extraction=:exact_open_unordered_rp_poles,
+    linewidth_pole_scope=:complete_complement_rp_local_hybrid_two_pole,
+    primary_linewidth_extraction=:targeted_schur_determinant_poles,
 )
 
 function _d3_objective_finite(metrics, name, label)
@@ -38,29 +38,11 @@ function _d3_objective_authority(authority)
     return D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY
 end
 
-function _d3_objective_model_identity(source, label)
-    fields = (
-        :circuit_plan_sha256,
-        :capacitance_sha256,
-        :inverse_inductance_sha256,
-        :selector_sha256,
-    )
-    values = map(fields) do name
-        hasproperty(source, name) || error("$(label) must bind $(name).")
-        value = lowercase(strip(String(getproperty(source, name))))
-        occursin(r"^[0-9a-f]{64}$", value) || error(
-            "$(label) $(name) must contain 64 lowercase hexadecimal characters.",
-        )
-        value
-    end
-    return NamedTuple{fields}(Tuple(values))
-end
-
 function _d3_validate_metric_source(
     stage_id,
     model_family,
     metrics,
-    expected_model_identity,
+    expected_source_identity,
 )
     metric_stage = hasproperty(metrics, :stage_id) ?
         Symbol(metrics.stage_id) : error("D3 stage metrics must declare stage_id.")
@@ -73,15 +55,24 @@ function _d3_validate_metric_source(
     metric_family == model_family || error(
         "D3 objective received $(metric_family) metrics, expected $(model_family).",
     )
-    model_identity = _d3_objective_model_identity(metrics, "D3 stage metrics")
-    expected_identity = _d3_objective_model_identity(
-        expected_model_identity,
-        "D3 expected model identity",
+    for name in (:source_profile_identity, :grid_identity)
+        hasproperty(metrics, name) || error("D3 stage metrics must bind $(name).")
+        hasproperty(expected_source_identity, name) || error(
+            "D3 expected source identity must bind $(name).",
+        )
+        getproperty(metrics, name) == getproperty(expected_source_identity, name) || error(
+            "D3 stage metrics $(name) does not match the targeted-Schur evaluation identity.",
+        )
+    end
+    contract_id = hasproperty(metrics, :contract_id) ? String(metrics.contract_id) :
+        error("D3 stage metrics must declare contract_id.")
+    contract_id == "d3-stage2-targeted-schur-candidate-metrics.v1" || error(
+        "D3 stage metrics contract is not the targeted-Schur metrics authority.",
     )
-    model_identity == expected_identity || error(
-        "D3 stage metrics do not match the model identity bound by the Run.",
+    return (
+        source_profile_identity=metrics.source_profile_identity,
+        grid_identity=metrics.grid_identity,
     )
-    return model_identity
 end
 
 function _d3_objective_slot(slot_hz)
@@ -135,24 +126,24 @@ function _d3_objective_residuals(metrics, slot_hz, label)
     )
     total_linewidth = _d3_objective_finite(
         metrics,
-        :kappa_sum_unordered_rp_subspace_hz,
+        :kappa_sum_local_hybrid_rp_hz,
         label,
     )
     fraction_min = _d3_objective_finite(
         metrics,
-        :linewidth_fraction_min_unordered_rp_subspace,
+        :linewidth_fraction_min_local_hybrid_rp,
         label,
     )
     fraction_max = _d3_objective_finite(
         metrics,
-        :linewidth_fraction_max_unordered_rp_subspace,
+        :linewidth_fraction_max_local_hybrid_rp,
         label,
     )
     0 <= fraction_min <= fraction_max <= 1 || error(
-        "D3 unordered-RP linewidth fractions must be ordered in [0, 1].",
+        "D3 local-hybrid RP linewidth fractions must be ordered in [0, 1].",
     )
     abs((fraction_min + fraction_max) - 1.0) <= 1.0e-9 || error(
-        "D3 unordered-RP linewidth fractions must sum to one.",
+        "D3 local-hybrid RP linewidth fractions must sum to one.",
     )
 
     residuals = (
@@ -163,7 +154,7 @@ function _d3_objective_residuals(metrics, slot_hz, label)
         r_kappa=(total_linewidth - 20.0e6) / 1.0e6,
         r_eta=(fraction_min - 0.5) / 0.2,
     )
-    target_gates = (
+    target_diagnostics = (
         readout_effective_diagonal_within_tolerance=
             abs(fr - slot) <= 0.5e6,
         filter_effective_diagonal_within_tolerance=
@@ -171,7 +162,7 @@ function _d3_objective_residuals(metrics, slot_hz, label)
         linewidth_participation=
             0.3 <= fraction_min && fraction_max <= 0.7,
     )
-    return residuals, target_gates
+    return residuals, target_diagnostics
 end
 
 function _d3_objective_provenance_groups(residuals, matrix_authority, response_authority)
@@ -196,22 +187,22 @@ function _d3_objective_provenance_groups(residuals, matrix_authority, response_a
 end
 
 """
-    d3_stage2_objective(metrics, slot_hz, authority, expected_model_identity)
+    d3_stage2_objective(metrics, slot_hz, authority, expected_source_identity)
 
 Evaluate the single revision-10 direct-Hybridized Stage-2 objective. Operator and
 open-response entries are provenance groups within one residual vector, not
 separate costs or optimizer stages.
 """
-function d3_stage2_objective(metrics, slot_hz, authority, expected_model_identity)
+function d3_stage2_objective(metrics, slot_hz, authority, expected_source_identity)
     approved = _d3_objective_authority(authority)
-    model_identity = _d3_validate_metric_source(
+    source_identity = _d3_validate_metric_source(
         :stage2_direct_hybridized,
         :hybridized_distributed_lumped,
         metrics,
-        expected_model_identity,
+        expected_source_identity,
     )
     _d3_validate_response_authority(metrics, approved, "D3 Stage-2 metrics")
-    residuals, target_gates = _d3_objective_residuals(
+    residuals, target_diagnostics = _d3_objective_residuals(
         metrics,
         slot_hz,
         "D3 Stage-2 metrics",
@@ -221,16 +212,15 @@ function d3_stage2_objective(metrics, slot_hz, authority, expected_model_identit
         stage_id=:stage2_direct_hybridized,
         model_family=:hybridized_distributed_lumped,
         authority=approved,
-        model_identity=model_identity,
+        source_identity=source_identity,
         cost=sum(abs2, values(residuals)),
         provenance_groups=_d3_objective_provenance_groups(
             residuals,
             :complete_complement_rp_complex_operator,
-            :direct_hybridized_distributed_lumped_response,
+            :targeted_schur_determinant_poles,
         ),
         normalized_residuals=residuals,
-        target_gates=target_gates,
-        target_gates_pass=all(values(target_gates)),
+        target_diagnostics=target_diagnostics,
         promotion_gate_status=:not_evaluated,
         promotion_eligible=false,
     )

@@ -43,6 +43,184 @@ function _legacy_d3_matrix_sha256(label, matrix)
     return bytes2hex(SHA.sha256(take!(buffer)))
 end
 
+@testset "D3 targeted-Schur local outputs and typed failure" begin
+    candidate = (
+        lr_open_m=2.0e-3,
+        lr_short_m=2.0e-3,
+        lc_m=300.0e-6,
+        lp_open_m=2.1e-3,
+        lp_short_m=2.0e-3,
+        u_IDC=60.0,
+    )
+    feedline = (
+        feedline_length_m=1.0e-3,
+        feedline_n_sections=20,
+        feedline_l_per_m_h=D3_DEFAULT_FEEDLINE_L_PER_M_H,
+        feedline_c_per_m_f=D3_DEFAULT_FEEDLINE_C_PER_M_F,
+        port_resistance_ohm=50.0,
+    )
+    q2d = bind_d3_rev10_q2d_input(
+        load_d3_continuous_ground_q2d_input(Q2D_PATH);
+        section_length_m=50.0e-6,
+        mtl_section_length_m=10.0e-6,
+    )
+    grid_inputs = D3DirectHybridizedInputs(
+        q2d,
+        nothing,
+        nothing,
+        feedline,
+        (canonical_sha256=repeat("a", 64),),
+    )
+    grid = d3_stage2_direct_hybridized_grid_plan(
+        candidate,
+        grid_inputs;
+        refinement_level=0,
+    )
+    topology = _d3_targeted_topology(candidate, grid)
+
+    frequencies_hz = [8.0e9, 5.0e9, 6.0e9, 11.0e9, 13.0e9, 15.0e9]
+    omega = 2π .* frequencies_hz
+    capacitance = Matrix{Float64}(I, 6, 6)
+    stiffness = Matrix(Diagonal(omega .^ 2))
+    stiffness[2, 3] = stiffness[3, 2] =
+        2 * sqrt(omega[2] * omega[3]) * (2π * 5.0e6)
+    selector = zeros(Float64, 6, 2)
+    selector[2, 1] = 1.0
+    selector[3, 2] = 1.0
+    full_model = (
+        capacitance=capacitance,
+        inverse_inductance=stiffness,
+        selector=selector,
+        reference_impedance_ohm=[50.0, 50.0],
+        coordinate_order=[:q, :r, :p, :f1, :fc, :f2],
+        anchored_coordinate_indices=(q=1, r=2, p=3, f1=4, fc=5, f2=6),
+    )
+    zero_full = zeros(6, 6)
+    full_kernel = (
+        c0=capacitance,
+        k0=stiffness,
+        c_terms=NamedTuple{D3_STAGE2_VARIABLE_ORDER}(
+            ntuple(_ -> zero_full, length(D3_STAGE2_VARIABLE_ORDER)),
+        ),
+        k_terms=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(
+            ntuple(_ -> zero_full, length(_D3_TARGETED_SCHUR_LENGTH_COORDINATES)),
+        ),
+        reference_model=full_model,
+    )
+
+    notch_capacitance = [2.0 -0.5; -0.5 2.0] .* 1.0e-12
+    notch_stiffness = Matrix(Diagonal(fill(
+        (2π * 8.0e9)^2 * 2.0e-12,
+        2,
+    )))
+    notch_stiffness[1, 2] = notch_stiffness[2, 1] =
+        (2π * 5.0e9)^2 * notch_capacitance[2, 1]
+    zero_notch = zeros(2, 2)
+    notch_model = (
+        capacitance=notch_capacitance,
+        inverse_inductance=notch_stiffness,
+        port_indices=[1, 2],
+        provenance=(circuit_plan_sha256=repeat("d", 64),),
+    )
+    notch_kernel = (
+        c0=notch_capacitance,
+        k0=notch_stiffness,
+        c_terms=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(
+            ntuple(_ -> zero_notch, length(_D3_TARGETED_SCHUR_LENGTH_COORDINATES)),
+        ),
+        k_terms=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(
+            ntuple(_ -> zero_notch, length(_D3_TARGETED_SCHUR_LENGTH_COORDINATES)),
+        ),
+        reference_model=notch_model,
+    )
+    fixed = _d3_targeted_schur_fixed_context(full_model)
+    source_identity = (canonical_sha256=repeat("e", 64),)
+    context = D3TargetedSchurObjectiveContext(
+        D3_TARGETED_SCHUR_CONTEXT_CONTRACT,
+        "synthetic-targeted-context",
+        candidate,
+        nothing,
+        grid,
+        full_kernel,
+        notch_kernel,
+        fixed,
+        source_identity,
+        (topology_counts=topology,),
+    )
+    cared = d3_stage2_direct_cared_outputs(
+        candidate,
+        context;
+        slot_hz=5.6e9,
+        readout_root_anchor_hz=5.0e9,
+        filter_root_anchor_hz=6.0e9,
+        notch_zero_anchor_hz=5.0e9,
+    )
+    @test propertynames(cared) == (
+        :contract_id,
+        :stage_id,
+        :model_family,
+        :slot_hz,
+        :candidate,
+        :f_r_eff_hz,
+        :f_p_eff_hz,
+        :f_n_hz,
+        :abs_real_J_eff_hz,
+        :local_hybrid_kappa_sum_hz,
+        :local_hybrid_linewidth_fraction_min,
+        :local_hybrid_linewidth_fraction_max,
+        :source_profile_identity,
+        :grid_identity,
+        :extraction_profile,
+        :validity,
+    )
+    @test cared.f_r_eff_hz ≈ 5.0e9 rtol=1.0e-10
+    @test cared.f_p_eff_hz ≈ 6.0e9 rtol=1.0e-10
+    @test cared.f_n_hz ≈ 5.0e9 rtol=1.0e-12
+    @test cared.local_hybrid_kappa_sum_hz > 0
+    @test cared.local_hybrid_linewidth_fraction_min +
+        cared.local_hybrid_linewidth_fraction_max ≈ 1.0
+    @test cared.extraction_profile.extraction == :targeted_schur_determinant_poles
+    metrics = _d3_targeted_metric_record(cared)
+    @test metrics.contract_id == "d3-stage2-targeted-schur-candidate-metrics.v1"
+    @test metrics.kappa_sum_local_hybrid_rp_hz == cared.local_hybrid_kappa_sum_hz
+
+    failure = try
+        d3_stage2_direct_cared_outputs(
+            merge(candidate, (u_IDC=NaN,)),
+            context;
+            slot_hz=5.6e9,
+            readout_root_anchor_hz=5.0e9,
+            filter_root_anchor_hz=6.0e9,
+            notch_zero_anchor_hz=5.0e9,
+        )
+        nothing
+    catch exception
+        exception
+    end
+    @test failure isa D3TargetedSchurNotEvaluable
+    @test failure.code == "d3_targeted_schur_invalid_candidate"
+    @test_throws MethodError d3_stage2_direct_cared_outputs(
+        candidate,
+        context;
+        slot_hz="not-a-frequency",
+        readout_root_anchor_hz=5.0e9,
+        filter_root_anchor_hz=6.0e9,
+        notch_zero_anchor_hz=5.0e9,
+    )
+    @test_throws D3TargetedSchurNotEvaluable d3_stage2_direct_cared_outputs(
+        candidate,
+        context;
+        slot_hz=5.6e9,
+        readout_root_anchor_hz=NaN,
+        filter_root_anchor_hz=6.0e9,
+        notch_zero_anchor_hz=5.0e9,
+    )
+    @test length(methods(d3_stage2_direct_cared_outputs)) == 1
+    @test !isdefined(@__MODULE__, :D3DirectHybridizedCaredOutput)
+    @test !isdefined(@__MODULE__, :d3_stage2_candidate_metrics)
+    @test !isdefined(@__MODULE__, :d3_exact_open_unordered_rp_subspace_assignment)
+end
+
 function _legacy_d3_complex_matrix_sha256(label, matrix)
     values = Matrix{ComplexF64}(matrix)
     buffer = IOBuffer()
@@ -153,6 +331,58 @@ end
         )
         for level in 0:3
     ]
+    fixed_topology_counts = (
+        readout_resonator=380,
+        filter_resonator=380,
+        mtl=196,
+        feedline_left=10,
+        feedline_right=10,
+    )
+    fixed_topology_boundaries = (
+        readout_resonator_boundaries_m=_d3_targeted_line_boundaries(
+            candidate.lr_short_m,
+            candidate.lc_m,
+            candidate.lr_open_m,
+            (short=76, mtl=196, open=108),
+        ),
+        filter_resonator_boundaries_m=_d3_targeted_line_boundaries(
+            candidate.lp_short_m,
+            candidate.lc_m,
+            candidate.lp_open_m,
+            (short=76, mtl=196, open=108),
+        ),
+        feedline_left_boundaries_m=plans[1].boundaries_m.feedline_left_boundaries_m,
+        feedline_right_boundaries_m=plans[1].boundaries_m.feedline_right_boundaries_m,
+    )
+    fixed_topology_payload = (
+        contract_id="d3-rev10-direct-hybridized-grid-plan.v1",
+        refinement_level=0,
+        candidate=candidate,
+        fixed_input_canonical_sha256=inputs.source_identity.canonical_sha256,
+        counts=fixed_topology_counts,
+        boundaries_m=fixed_topology_boundaries,
+    )
+    fixed_topology_plan = D3DirectHybridizedGridPlan(
+        fixed_topology_payload.contract_id,
+        fixed_topology_payload.refinement_level,
+        fixed_topology_payload.candidate,
+        fixed_topology_payload.fixed_input_canonical_sha256,
+        fixed_topology_payload.counts,
+        fixed_topology_payload.boundaries_m,
+        bytes2hex(SHA.sha256(codeunits(
+            SuperconductingCircuitsCore.JSON3.write(fixed_topology_payload),
+        ))),
+    )
+    @test _d3_validate_targeted_schur_grid_plan(
+        candidate,
+        inputs,
+        fixed_topology_plan,
+    ) === fixed_topology_plan
+    @test_throws ErrorException _d3_validate_stage2_direct_grid_plan(
+        candidate,
+        inputs,
+        fixed_topology_plan,
+    )
     for level in 1:3
         @test all(
             getproperty(plans[level + 1].counts, name) ==
@@ -279,6 +509,64 @@ end
     end
 
     model = d3_hybridized_compiled_model(built)
+    topology = _d3_targeted_topology(candidate, grid)
+    function fixed_node_test_model(test_candidate)
+        boundaries = _d3_targeted_candidate_boundaries(
+            test_candidate,
+            topology,
+            grid,
+        )
+        test_built = build_d3_intrinsic_purcell_hybridized_circuit_plan(;
+            id="d3-fixed-node-kernel-exactness-test",
+            idc_filter_ground_capacitance_f=20.0e-15,
+            idc_feedline_ground_capacitance_f=20.0e-15,
+            idc_mutual_capacitance_f=10.0e-15,
+            readout_length_m=test_candidate.lr_short_m + test_candidate.lc_m + test_candidate.lr_open_m,
+            filter_length_m=test_candidate.lp_short_m + test_candidate.lc_m + test_candidate.lp_open_m,
+            window_start_readout_m=test_candidate.lr_short_m,
+            window_start_filter_m=test_candidate.lp_short_m,
+            window_length_m=test_candidate.lc_m,
+            mtl_section_length_m=test_candidate.lc_m / topology.readout.mtl,
+            readout_l_per_m_h=lines.readout_l_per_m_h,
+            readout_c_per_m_f=lines.readout_c_per_m_f,
+            filter_l_per_m_h=lines.filter_l_per_m_h,
+            filter_c_per_m_f=lines.filter_c_per_m_f,
+            l_matrix_per_m_h=lines.l_matrix_per_m_h,
+            c_matrix_per_m_f=lines.c_matrix_per_m_f,
+            coupling_orientation=lines.coupling_orientation,
+            c0r_f=20.0e-15,
+            c01_f=20.0e-15,
+            c02_f=20.0e-15,
+            c12_qubit_f=10.0e-15,
+            cr1_f=5.0e-15,
+            cr2_f=5.0e-15,
+            l_j_per_junction_h=20.0e-9,
+            feedline...,
+            feedline_n_sections=topology.feedline_left + topology.feedline_right,
+            readout_breakpoints_m=boundaries.readout_resonator_boundaries_m,
+            filter_breakpoints_m=boundaries.filter_resonator_boundaries_m,
+            feedline_left_breakpoints_m=boundaries.feedline_left_boundaries_m,
+            feedline_right_breakpoints_m=boundaries.feedline_right_boundaries_m,
+        )
+        return d3_hybridized_compiled_model(test_built)
+    end
+    trained_candidate = merge(candidate, (lr_open_m=1.1 * candidate.lr_open_m,))
+    validation_candidate = merge(candidate, (lr_open_m=0.95 * candidate.lr_open_m,))
+    trained_model = fixed_node_test_model(trained_candidate)
+    validation_model = fixed_node_test_model(validation_candidate)
+    c_term = (trained_model.capacitance - model.capacitance) /
+        (trained_candidate.lr_open_m - candidate.lr_open_m)
+    k_term = (trained_model.inverse_inductance - model.inverse_inductance) /
+        (inv(trained_candidate.lr_open_m) - inv(candidate.lr_open_m))
+    reconstructed_c = model.capacitance +
+        (validation_candidate.lr_open_m - candidate.lr_open_m) .* c_term
+    reconstructed_k = model.inverse_inductance +
+        (inv(validation_candidate.lr_open_m) - inv(candidate.lr_open_m)) .* k_term
+    @test maximum(abs, reconstructed_c - validation_model.capacitance) <=
+        4096 * eps(Float64) * maximum(abs, validation_model.capacitance)
+    @test maximum(abs, reconstructed_k - validation_model.inverse_inductance) <=
+        4096 * eps(Float64) * maximum(abs, validation_model.inverse_inductance)
+
     context = _d3_complete_complement_rp_context(model, (
         maximum_elimination_condition_number=1.0e10,
         maximum_relative_elimination_solve_residual=1.0e-10,
@@ -309,8 +597,8 @@ end
         :q,
     )
 
-    cared = D3DirectHybridizedCaredOutput(
-        D3_DIRECT_HYBRIDIZED_CARED_OUTPUT_CONTRACT,
+    cared = D3TargetedSchurCaredOutput(
+        D3_TARGETED_SCHUR_CARED_OUTPUT_CONTRACT,
         :stage2_direct_hybridized,
         :hybridized_distributed_lumped,
         5.6e9,
@@ -337,9 +625,9 @@ end
         :f_p_eff_hz,
         :f_n_hz,
         :abs_real_J_eff_hz,
-        :unordered_rp_kappa_sum_hz,
-        :unordered_rp_linewidth_fraction_min,
-        :unordered_rp_linewidth_fraction_max,
+        :local_hybrid_kappa_sum_hz,
+        :local_hybrid_linewidth_fraction_min,
+        :local_hybrid_linewidth_fraction_max,
         :source_profile_identity,
         :grid_identity,
         :extraction_profile,
@@ -353,9 +641,9 @@ end
             :f_p_eff_hz,
             :f_n_hz,
             :abs_real_J_eff_hz,
-            :unordered_rp_kappa_sum_hz,
-            :unordered_rp_linewidth_fraction_min,
-            :unordered_rp_linewidth_fraction_max,
+            :local_hybrid_kappa_sum_hz,
+            :local_hybrid_linewidth_fraction_min,
+            :local_hybrid_linewidth_fraction_max,
         )
     )
 end

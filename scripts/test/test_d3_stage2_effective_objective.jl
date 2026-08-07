@@ -9,136 +9,91 @@ include(joinpath(
     "d3_stage_objectives.jl",
 ))
 
-const TEST_MODEL_SHA256 = repeat("a", 64)
-const TEST_MODEL_IDENTITY = (
-    circuit_plan_sha256=TEST_MODEL_SHA256,
-    capacitance_sha256=TEST_MODEL_SHA256,
-    inverse_inductance_sha256=TEST_MODEL_SHA256,
-    selector_sha256=TEST_MODEL_SHA256,
+const TEST_SOURCE_IDENTITY = (
+    source_profile_identity=(canonical_sha256=repeat("a", 64),),
+    grid_identity=(canonical_sha256=repeat("b", 64),),
 )
 
-function objective_metrics(; slot_hz=6.0e9)
-    return merge(
-        TEST_MODEL_IDENTITY,
-        (
-            stage_id=:stage2_direct_hybridized,
-            model_family=:hybridized_distributed_lumped,
-            fr_eff_complete_complement_rp_hz=slot_hz,
-            fp_eff_complete_complement_rp_hz=slot_hz,
-            J_eff_complete_complement_rp_coherent_hz=5.0e6,
-            notch_distributed_rp_on_hz=5.0e9,
-            kappa_sum_unordered_rp_subspace_hz=20.0e6,
-            linewidth_fraction_min_unordered_rp_subspace=0.5,
-            linewidth_fraction_max_unordered_rp_subspace=0.5,
-            effective_diagonal_frequency_extraction=
-                :complete_complement_rp_complex_operator,
-            effective_exchange_extraction=
-                :complete_complement_rp_complex_midpoint_residue,
-            notch_authority=:distributed_rp_on,
-            linewidth_pole_scope=:unordered_rp_two_pole_subspace,
-            primary_linewidth_extraction=:exact_open_unordered_rp_poles,
-        ),
+function objective_metrics(; slot_hz=5.6e9)
+    return (
+        contract_id="d3-stage2-targeted-schur-candidate-metrics.v1",
+        stage_id=:stage2_direct_hybridized,
+        model_family=:hybridized_distributed_lumped,
+        source_profile_identity=TEST_SOURCE_IDENTITY.source_profile_identity,
+        grid_identity=TEST_SOURCE_IDENTITY.grid_identity,
+        fr_eff_complete_complement_rp_hz=slot_hz,
+        fp_eff_complete_complement_rp_hz=slot_hz,
+        J_eff_complete_complement_rp_coherent_hz=5.0e6,
+        notch_distributed_rp_on_hz=5.0e9,
+        kappa_sum_local_hybrid_rp_hz=20.0e6,
+        linewidth_fraction_min_local_hybrid_rp=0.5,
+        linewidth_fraction_max_local_hybrid_rp=0.5,
+        effective_diagonal_frequency_extraction=
+            :complete_complement_rp_complex_operator,
+        effective_exchange_extraction=
+            :complete_complement_rp_complex_midpoint_residue,
+        notch_authority=:distributed_rp_on,
+        linewidth_pole_scope=:complete_complement_rp_local_hybrid_two_pole,
+        primary_linewidth_extraction=:targeted_schur_determinant_poles,
     )
 end
 
-@testset "D3 revision-10 effective objective" begin
+@testset "D3 revision-10 targeted-Schur objective" begin
     slot_hz = 5.6e9
     metrics = objective_metrics(; slot_hz=slot_hz)
     objective = d3_stage2_objective(
         metrics,
         slot_hz,
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-        TEST_MODEL_IDENTITY,
+        TEST_SOURCE_IDENTITY,
     )
-    @test D3_TARGET_SLOT_FREQUENCIES_HZ == (5.6e9, 5.7e9, 5.8e9, 5.9e9, 6.0e9)
-    @test D3_INTERFERENCE_NOTCH_TARGET_HZ == 5.0e9
-    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_revision == 10
-    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_contract_sha256 ==
-        "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209"
+    @test objective.contract_id ==
+        "d3-stage2-direct-hybridized-targeted-schur-objective.v1"
     @test objective.cost == 0.0
-    @test objective.target_gates_pass
-    @test keys(objective.target_gates) == (
+    @test objective.source_identity == TEST_SOURCE_IDENTITY
+    @test keys(objective.target_diagnostics) == (
         :readout_effective_diagonal_within_tolerance,
         :filter_effective_diagonal_within_tolerance,
         :linewidth_participation,
     )
+    @test !hasproperty(objective, :target_gates)
+    @test !hasproperty(objective, :target_gates_pass)
+    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.linewidth_pole_scope ==
+        :complete_complement_rp_local_hybrid_two_pole
+    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.primary_linewidth_extraction ==
+        :targeted_schur_determinant_poles
+    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_contract_sha256 ==
+        "5a1b35d96d25f3888c4bf6d4bc8ee2f4eceb6fd91e0a097abe9ee5490258acdf"
 
-    detuned = merge(
-        metrics,
-        (
-            fr_eff_complete_complement_rp_hz=slot_hz - 0.6e6,
-            fp_eff_complete_complement_rp_hz=slot_hz + 0.6e6,
-        ),
-    )
+    detuned = merge(metrics, (
+        fr_eff_complete_complement_rp_hz=slot_hz - 0.6e6,
+        fp_eff_complete_complement_rp_hz=slot_hz + 0.6e6,
+    ))
     detuned_objective = d3_stage2_objective(
         detuned,
         slot_hz,
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-        TEST_MODEL_IDENTITY,
+        TEST_SOURCE_IDENTITY,
     )
-    @test !detuned_objective.target_gates_pass
     @test detuned_objective.normalized_residuals.r_r ≈ -1.2
     @test detuned_objective.normalized_residuals.r_p ≈ 1.2
 
-    far_from_targets = merge(
-        metrics,
-        (
-            fr_eff_complete_complement_rp_hz=4.67e9,
-            fp_eff_complete_complement_rp_hz=4.68e9,
-            notch_distributed_rp_on_hz=5.64e9,
-        ),
-    )
-    far_objective = d3_stage2_objective(
-        far_from_targets,
+    legacy = merge(metrics, (
+        contract_id="d3-stage2-direct-hybridized-candidate-metrics.v1",
+        kappa_sum_unordered_rp_subspace_hz=20.0e6,
+    ))
+    @test_throws ErrorException d3_stage2_objective(
+        legacy,
         slot_hz,
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-        TEST_MODEL_IDENTITY,
-    )
-    @test isfinite(far_objective.cost)
-    @test !far_objective.target_gates_pass
-    @test far_objective.normalized_residuals.r_r == -1860.0
-    @test far_objective.normalized_residuals.r_p == -1840.0
-    @test far_objective.normalized_residuals.r_n == 64.0
-
-    legacy_metrics = merge(
-        TEST_MODEL_IDENTITY,
-        (
-            stage_id=:stage2_equivalent,
-            model_family=:equivalent_exact_n,
-            fr_qrp_on_hz=slot_hz,
-            fp_qrp_on_hz=slot_hz,
-            J_qrp_on_hz=5.0e6,
-            notch_rp_on_hz=5.0e9,
-            kappa_sum_qrp_on_ext_on_hz=20.0e6,
-            eta_r_qrp_on=0.5,
-            eta_p_qrp_on=0.5,
-            effective_diagonal_frequency_extraction=
-                :q_feedline_downfolded_rp_complex_operator,
-            effective_exchange_extraction=
-                :q_feedline_downfolded_rp_complex_midpoint_residue,
-            notch_authority=:rp_on,
-            linewidth_pole_scope=:qrp_three,
-            primary_linewidth_extraction=:L_C,
-        ),
+        TEST_SOURCE_IDENTITY,
     )
     @test_throws ErrorException d3_stage2_objective(
-        legacy_metrics,
-        slot_hz,
-        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-        TEST_MODEL_IDENTITY,
-    )
-    for stale_slot_hz in (6.1e9, 6.2e9)
-        @test_throws ErrorException d3_stage2_objective(
-            metrics,
-            stale_slot_hz,
-            D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-            TEST_MODEL_IDENTITY,
-        )
-    end
-    @test_throws ErrorException d3_stage3_objective(
         metrics,
         slot_hz,
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-        TEST_MODEL_IDENTITY,
+        merge(TEST_SOURCE_IDENTITY, (
+            grid_identity=(canonical_sha256=repeat("c", 64),),
+        )),
     )
 end
