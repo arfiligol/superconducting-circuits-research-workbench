@@ -92,7 +92,7 @@ const D3_SELECTED_IDC_MAPPING_SHA256 =
 const D3_SELECTED_IDC_SOURCE_SHA256 =
     "6a54fec0669c01dacf433f3cc639192e5e5202ae232aa5b1e786ac7147b172e3"
 const D3_SELECTED_IDC_SEMANTIC_SHA256 =
-    "426e635ef28a75d40b3e33b65a2ce3d3cce35a367663b24fa6b3d704df5f3818"
+    "bd187b234e402b2a1dcd03009dcc07354f53721bf81b251e63a50f0aeb4435eb"
 struct D3Stage2ResonatorMapping{L,S,C}
     fixed_line_input::L
     settings::S
@@ -124,10 +124,15 @@ function _d3_stage_require_exact_fields(candidate, expected, label)
 end
 
 function _d3_stage_idc_triplet(idc_mapping, u_idc)
-    applicable(idc_mapping, u_idc) || error(
+    u_idc isa Real || error("D3 IDC u_IDC coordinate must be real.")
+    u_idc_value = Float64(u_idc)
+    isfinite(u_idc_value) && u_idc_value > 0 || error(
+        "D3 IDC u_IDC coordinate must be finite and positive.",
+    )
+    applicable(idc_mapping, u_idc_value) || error(
         "D3 IDC mapping must be callable with the scalar u_IDC coordinate.",
     )
-    raw = idc_mapping(u_idc)
+    raw = idc_mapping(u_idc_value)
     required = (
         :idc_filter_ground_capacitance_f,
         :idc_feedline_ground_capacitance_f,
@@ -138,7 +143,6 @@ function _d3_stage_idc_triplet(idc_mapping, u_idc)
         :source_mapping_id,
         :source_length_range_um,
         :runtime_length_domain,
-        :evaluation_extrapolated,
         :evaluation_source,
     )
     all(name -> hasproperty(raw, name), required) || error(
@@ -180,37 +184,27 @@ function _d3_stage_idc_triplet(idc_mapping, u_idc)
         "D3 IDC source length support must contain two increasing positive bounds.",
     )
     runtime_length_domain = strip(String(raw.runtime_length_domain))
-    runtime_length_domain == "finite_positive_um" || error(
-        "D3 IDC runtime length domain must be finite-positive um.",
+    runtime_length_domain == "closed_source_support_um" || error(
+        "D3 IDC runtime length domain must be the closed source-support interval in um.",
     )
-    raw.evaluation_extrapolated isa Bool || error(
-        "D3 IDC extrapolation classification must be Boolean.",
-    )
-    evaluation_extrapolated = Bool(raw.evaluation_extrapolated)
-    expected_extrapolated = !(
-        source_length_range_um[1] <= Float64(u_idc) <= source_length_range_um[2]
-    )
-    evaluation_extrapolated == expected_extrapolated || error(
-        "D3 IDC extrapolation classification disagrees with its source support.",
-    )
+    source_length_range_um[1] <= u_idc_value <= source_length_range_um[2] ||
+        error(
+            "D3 IDC u_IDC coordinate must be within the declared closed source support.",
+        )
     evaluation_source = strip(String(raw.evaluation_source))
-    expected_source = evaluation_extrapolated ?
-        "linear_length_least_squares_extrapolation" :
-        "linear_length_least_squares_interpolation"
-    evaluation_source == expected_source || error(
-        "D3 IDC evaluation-source classification is invalid.",
+    evaluation_source == "linear_length_least_squares_interpolation" || error(
+        "D3 IDC evaluation source must be linear-length least-squares interpolation.",
     )
     return merge(
         values,
         (
-            u_IDC=Float64(u_idc),
+            u_IDC=u_idc_value,
             mapping_id=mapping_id,
             mapping_sha256=mapping_sha256,
             mapping_semantic_sha256=mapping_semantic_sha256,
             source_mapping_id=source_mapping_id,
             source_length_range_um=source_length_range_um,
             runtime_length_domain=runtime_length_domain,
-            evaluation_extrapolated=evaluation_extrapolated,
             evaluation_source=evaluation_source,
         ),
     )
@@ -233,7 +227,7 @@ function _d3_stage_require_physical_idc_mapping(idc_mapping::D3IDCMapping)
     )
     idc_mapping.valid_gap_range_um == (5.0, 10.0) &&
         idc_mapping.source_length_range_um == (35.0, 75.0) &&
-        idc_mapping.runtime_length_domain == "finite_positive_um" || error(
+        idc_mapping.runtime_length_domain == "closed_source_support_um" || error(
         "D3 physical IDC mapping source support or runtime domain is not the selected contract.",
     )
     d3_idc_mapping_semantic_sha256(idc_mapping) ==
@@ -1810,7 +1804,6 @@ function d3_stage2_candidate_metrics(
         idc_source_mapping_id=stage.idc.source_mapping_id,
         idc_source_length_range_um=stage.idc.source_length_range_um,
         idc_runtime_length_domain=stage.idc.runtime_length_domain,
-        idc_evaluation_extrapolated=stage.idc.evaluation_extrapolated,
         idc_evaluation_source=stage.idc.evaluation_source,
         feedline_contract=stage.feedline_contract,
     )

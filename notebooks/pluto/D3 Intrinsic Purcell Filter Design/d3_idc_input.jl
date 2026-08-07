@@ -12,7 +12,7 @@ const D3_IDC_MAPPING_SCHEMA = "d3-three-branch-idc-gap-length-mapping.v1"
 const D3_IDC_COEFFICIENT_NAMES = ("C_12_fF", "C_1G_fF", "C_2G_fF")
 const D3_IDC_LINEAR_MAPPING_ID =
     "d3-same-die-filter-feedline-idc-q3d-gap8-linear-length-v1"
-const D3_IDC_RUNTIME_LENGTH_DOMAIN = "finite_positive_um"
+const D3_IDC_RUNTIME_LENGTH_DOMAIN = "closed_source_support_um"
 
 export D3IDCMapping, d3_idc_mapping_semantic_sha256, load_d3_idc_mapping
 
@@ -51,6 +51,10 @@ function (mapping::D3IDCMapping)(length_um)
     isfinite(length_value) && length_value > 0 || error(
         "D3 IDC length must be finite and positive.",
     )
+    mapping.source_length_range_um[1] <= length_value <=
+        mapping.source_length_range_um[2] || error(
+        "D3 IDC length must be within the closed Q3D source-support interval.",
+    )
     values = NamedTuple{
         (:C_12_fF, :C_1G_fF, :C_2G_fF),
     }(Tuple(
@@ -75,14 +79,7 @@ function (mapping::D3IDCMapping)(length_um)
         evaluation_length_um=length_value,
         source_length_range_um=mapping.source_length_range_um,
         runtime_length_domain=mapping.runtime_length_domain,
-        evaluation_extrapolated=!(
-            mapping.source_length_range_um[1] <= length_value <=
-            mapping.source_length_range_um[2]
-        ),
-        evaluation_source=mapping.source_length_range_um[1] <= length_value <=
-            mapping.source_length_range_um[2] ?
-            "linear_length_least_squares_interpolation" :
-            "linear_length_least_squares_extrapolation",
+        evaluation_source="linear_length_least_squares_interpolation",
     )
 end
 
@@ -113,7 +110,7 @@ function d3_idc_mapping_semantic_sha256(mapping::D3IDCMapping)
     ]
     source_sha256 = get(mapping.source_artifact, "sha256", nothing)
     identity = (
-        contract_id="d3-three-branch-idc-gap8-linear-length-positive-runtime.v1",
+        contract_id="d3-three-branch-idc-gap8-linear-length-interpolation-only.v1",
         gap_um=mapping.gap_um,
         valid_gap_range_um=mapping.valid_gap_range_um,
         source_length_range_um=mapping.source_length_range_um,
@@ -359,8 +356,11 @@ function load_d3_idc_mapping(path; gap_um=8.0)
             "D3 IDC linear fit produced invalid coefficients.",
         )
         slope, intercept = coefficients
-        slope >= 0 && intercept >= 0 && (slope > 0 || intercept > 0) || error(
-            "D3 IDC linear fit is not positive for every finite positive length.",
+        all(source_length_range) do source_length_um
+            value = slope * source_length_um + intercept
+            isfinite(value) && value > 0
+        end || error(
+            "D3 IDC linear fit is not finite and positive over its closed source-support interval.",
         )
         predicted = linear_design * coefficients
         residual = predicted - actual
