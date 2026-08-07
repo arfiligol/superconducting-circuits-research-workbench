@@ -9,8 +9,8 @@
     "sha256": "4d33f649b9579b40714ed20a34ef32256f18e317e074ef7981af236595dfa760"
   },
   "sources": {
-    "root_commit": "baa50f6a23ed93ef12549118f14d2553265920aa",
-    "workbench_commit": "3ca2fb55dcdfd3151e2464ed766faf9dae0ea1cc",
+    "root_commit": "0b2dbd9f1555c6140fb08f8206f8d19246eb49bb",
+    "workbench_commit": "15c7d9c14019ae9d7b4cc0bfebe0f0d5604c6187",
     "orpen_commit": "80576910d596dbf4720335188e66b6a520cc2e36",
     "target_contract_sha256": "c5ad1b1d3a770334fe29d15b863001a4746d60bb4a5cac9410694c1ac2d6b209",
     "q2d_artifact_sha256": "301d3501a30614b994cf3f28d46eb75b545620a164bbb346fa557120d643fe6c",

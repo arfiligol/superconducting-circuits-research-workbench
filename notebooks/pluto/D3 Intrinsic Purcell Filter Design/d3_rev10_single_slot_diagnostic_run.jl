@@ -16,7 +16,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "76551b8566f35ea046b09c56cfd664c89c58efd57e2f11bb095ec91266e52e30"
+    "7bac231e66834b3cec0b2f5f40e9d5c38efb3aa53e253d1cb0ee8f31ff80c06b"
 const EXPECTED_CORE_ENTRY = realpath(joinpath(
     CORE_ROOT,
     "src",
