@@ -2472,6 +2472,52 @@ function _d3_exact_n_reference_construction(value)
     return construction
 end
 
+function _d3_exact_open_simple_pole_diagnostics(generator, opened, raw_indices)
+    indices = Tuple(Int.(collect(raw_indices)))
+    length(unique(indices)) == length(indices) || error(
+        "D3 exact-open selected poles must have distinct raw state indices.",
+    )
+    state_count = size(generator, 1)
+    all(index -> 1 <= index <= length(opened.values), indices) || error(
+        "D3 exact-open selected pole index is out of range.",
+    )
+    machine_relative_resolution = 4096 * state_count * eps(Float64)
+    generator_scale_per_s = max(opnorm(generator, Inf), floatmin(Float64))
+    values = ComplexF64.(opened.values)
+    return map(indices) do index
+        eigenvalue = values[index]
+        separation_per_s = minimum(
+            abs(values[other] - eigenvalue)
+            for other in eachindex(values) if other != index
+        )
+        scale_per_s = max(generator_scale_per_s, abs(eigenvalue))
+        algebraic_resolution_per_s = machine_relative_resolution * scale_per_s
+        separation_per_s > algebraic_resolution_per_s || error(
+            "D3 exact-open selected pole is merged, degenerate, or not machine-resolved as a simple root.",
+        )
+
+        right_vector = ComplexF64.(opened.vectors[:, index])
+        left_nullspace = svd(adjoint(generator) - conj(eigenvalue) * I)
+        left_vector = ComplexF64.(adjoint(left_nullspace.Vt)[:, end])
+        reciprocal_condition =
+            abs(dot(left_vector, right_vector)) /
+            (norm(left_vector) * norm(right_vector))
+        isfinite(reciprocal_condition) &&
+            reciprocal_condition > machine_relative_resolution || error(
+            "D3 exact-open selected pole fails simple-root left/right conditioning.",
+        )
+        return (
+            raw_state_index=index,
+            eigenvalue_per_s=eigenvalue,
+            frequency_hz=im * eigenvalue / (2π),
+            nearest_pole_separation_per_s=separation_per_s,
+            algebraic_resolution_per_s=algebraic_resolution_per_s,
+            reciprocal_eigenvalue_condition=reciprocal_condition,
+            minimum_reciprocal_condition=machine_relative_resolution,
+        )
+    end
+end
+
 """Select one q pole and one unordered two-pole RP subspace from the exact open generator.
 
 The q reference is first projected onto the complete W-orthogonal complement
@@ -2736,6 +2782,17 @@ function d3_exact_open_unordered_rp_subspace_assignment(
         "D3 exact-open unordered q+RP-set assignment is ambiguous under the caller-declared margin.",
     )
 
+    selected_raw_indices = (
+        positive_raw_indices[best.q_index],
+        positive_raw_indices[best.rp_indices[1]],
+        positive_raw_indices[best.rp_indices[2]],
+    )
+    simple_pole_diagnostics = _d3_exact_open_simple_pole_diagnostics(
+        generator,
+        opened,
+        selected_raw_indices,
+    )
+
     pole_frequencies_hz = ComplexF64.(raw_frequency_hz[positive_raw_indices])
     pole_linewidths_hz = Float64.(max.(-2 .* imag.(pole_frequencies_hz), 0.0))
     poles = (
@@ -2755,6 +2812,7 @@ function d3_exact_open_unordered_rp_subspace_assignment(
         excluded_zero_energy_raw_state_indices=excluded_zero_energy_raw_indices,
         overlaps=(q_complement=q_overlaps, rp_subspace=rp_overlaps),
         overlap_column_raw_state_indices=positive_raw_indices,
+        selected_simple_poles=simple_pole_diagnostics,
         assignment=(
             q_pole_index=best.q_index,
             unordered_rp_pole_indices=best.rp_indices,
@@ -2792,6 +2850,7 @@ function d3_exact_open_unordered_rp_subspace_assignment(
             source_model_identity=target_identity,
             exact_open_generator_sha256=
                 cqed_handoff.hashes.exact_open_generator_sha256,
+            selected_pole_validity=:machine_resolved_algebraically_simple,
         ),
     )
 end

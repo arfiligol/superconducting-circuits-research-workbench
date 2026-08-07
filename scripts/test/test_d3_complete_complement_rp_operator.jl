@@ -92,6 +92,14 @@ end
     @test assignment.provenance.frequency_rank_assignment == :forbidden
     @test length(assignment.assignment.unordered_rp_pole_indices) == 2
     @test assignment.assignment.selected_q_overlap ≈ 1.0
+    @test length(assignment.selected_simple_poles) == 3
+    @test all(
+        pole -> pole.nearest_pole_separation_per_s >
+            pole.algebraic_resolution_per_s &&
+            pole.reciprocal_eigenvalue_condition >
+            pole.minimum_reciprocal_condition,
+        assignment.selected_simple_poles,
+    )
     @test all(isapprox.(
         assignment.assignment.selected_rp_subspace_overlaps,
         (1.0, 1.0),
@@ -140,6 +148,27 @@ end
         minimum_each_rp_subspace_overlap=0.5,
         minimum_unordered_set_assignment_margin=0.05,
         cqed_handoff=handoff,
+    )
+
+    degenerate_model = synthetic_d3_model(;
+        direct_exchange_hz=0.0,
+        open_selector=:rp,
+    )
+    degenerate_model.inverse_inductance[3, 3] =
+        degenerate_model.inverse_inductance[2, 2]
+    degenerate_handoff = d3_numerical_cqed_handoff(degenerate_model)
+    degenerate_metric = d3_exact_open_energy_metric(
+        degenerate_model;
+        cqed_handoff=degenerate_handoff,
+    )
+    @test_throws ErrorException d3_exact_open_unordered_rp_subspace_assignment(
+        degenerate_model,
+        references,
+        degenerate_metric;
+        minimum_q_reference_overlap=0.5,
+        minimum_each_rp_subspace_overlap=0.5,
+        minimum_unordered_set_assignment_margin=0.05,
+        cqed_handoff=degenerate_handoff,
     )
 end
 
