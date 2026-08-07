@@ -17,7 +17,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "b22cf18273c0e67582568aa1ab01d8236ba66251df3bf0a10f80021845b501ec"
+    "3a2f512326fe785cccb624ce5b3e4e23143c9fec3c701e3bf84b6b63c4434349"
 const EXPECTED_CORE_ENTRY = realpath(joinpath(
     CORE_ROOT,
     "src",
@@ -125,13 +125,14 @@ function exact_namedtuple(mapping, names)
     ))
 end
 
-const D3_LOG_PHYSICAL_COORDINATES = (
+const D3_COMPACT_PHYSICAL_COORDINATES = (
     :lr_open_m,
     :l_short_m,
     :lc_m,
     :lp_open_m,
     :u_IDC,
 )
+const D3_IDC_SOURCE_BOUNDS_UM = (35.0, 75.0)
 const D3_EXPANDED_PHYSICAL_COORDINATES = (
     :lr_open_m,
     :lr_short_m,
@@ -142,30 +143,40 @@ const D3_EXPANDED_PHYSICAL_COORDINATES = (
 )
 
 function d3_expand_log_physical_candidate(reference::NamedTuple, latent)
-    propertynames(reference) == D3_LOG_PHYSICAL_COORDINATES || error(
-        "D3 log-coordinate reference fields must be $(D3_LOG_PHYSICAL_COORDINATES).",
+    propertynames(reference) == D3_COMPACT_PHYSICAL_COORDINATES || error(
+        "D3 compact physical reference fields must be $(D3_COMPACT_PHYSICAL_COORDINATES).",
     )
-    length(latent) == length(D3_LOG_PHYSICAL_COORDINATES) || error(
+    length(latent) == length(D3_COMPACT_PHYSICAL_COORDINATES) || error(
         "D3 latent candidate must have exactly five coordinates.",
     )
-    z = Float64.(latent)
-    all(isfinite, z) || error("D3 latent coordinates must be finite.")
+    coordinates = Float64.(latent)
+    all(isfinite, coordinates) || error("D3 latent coordinates must be finite.")
+    0.0 <= coordinates[5] <= 1.0 || error(
+        "D3 normalized IDC coordinate must be inside [0, 1].",
+    )
     reference_values = Float64.(Tuple(reference))
-    all(value -> isfinite(value) && value > 0, reference_values) || error(
-        "D3 physical reference coordinates must be finite and strictly positive.",
+    all(value -> isfinite(value) && value > 0, reference_values[1:4]) || error(
+        "D3 physical length references must be finite and strictly positive.",
     )
-    physical = reference_values .* exp.(z)
-    all(value -> isfinite(value) && value > 0, physical) || error(
-        "D3 log-coordinate map left the finite strictly-positive Float64 domain.",
+    D3_IDC_SOURCE_BOUNDS_UM[1] <= reference_values[5] <=
+        D3_IDC_SOURCE_BOUNDS_UM[2] || error(
+        "D3 IDC reference must be inside the Q3D source-support interval.",
     )
-    l_short = physical[2]
+    physical_lengths = reference_values[1:4] .* exp.(coordinates[1:4])
+    all(value -> isfinite(value) && value > 0, physical_lengths) || error(
+        "D3 physical-length map left the finite strictly-positive Float64 domain.",
+    )
+    u_idc = D3_IDC_SOURCE_BOUNDS_UM[1] +
+        (D3_IDC_SOURCE_BOUNDS_UM[2] - D3_IDC_SOURCE_BOUNDS_UM[1]) *
+        coordinates[5]
+    l_short = physical_lengths[2]
     return (
-        lr_open_m=physical[1],
+        lr_open_m=physical_lengths[1],
         lr_short_m=l_short,
-        lc_m=physical[3],
-        lp_open_m=physical[4],
+        lc_m=physical_lengths[3],
+        lp_open_m=physical_lengths[4],
         lp_short_m=l_short,
-        u_IDC=physical[5],
+        u_IDC=u_idc,
     )
 end
 
@@ -185,13 +196,24 @@ function d3_physical_candidate_to_log(reference::NamedTuple, candidate::NamedTup
     )
     values = Float64.(Tuple(compact))
     references = Float64.(Tuple(reference))
-    all(value -> isfinite(value) && value > 0, values) || error(
-        "D3 physical candidate must be finite and strictly positive.",
+    all(value -> isfinite(value) && value > 0, values[1:4]) || error(
+        "D3 physical candidate lengths must be finite and strictly positive.",
     )
-    all(value -> isfinite(value) && value > 0, references) || error(
-        "D3 physical reference coordinates must be finite and strictly positive.",
+    all(value -> isfinite(value) && value > 0, references[1:4]) || error(
+        "D3 physical reference lengths must be finite and strictly positive.",
     )
-    latent = log.(values ./ references)
+    all(
+        value -> D3_IDC_SOURCE_BOUNDS_UM[1] <= value <=
+            D3_IDC_SOURCE_BOUNDS_UM[2],
+        (values[5], references[5]),
+    ) || error(
+        "D3 IDC candidate and reference must be inside the Q3D source-support interval.",
+    )
+    latent = vcat(
+        log.(values[1:4] ./ references[1:4]),
+        (values[5] - D3_IDC_SOURCE_BOUNDS_UM[1]) /
+            (D3_IDC_SOURCE_BOUNDS_UM[2] - D3_IDC_SOURCE_BOUNDS_UM[1]),
+    )
     all(isfinite, latent) || error("D3 inverse log-coordinate map is nonfinite.")
     return latent
 end
@@ -427,7 +449,11 @@ function optimize_d3_log_physical(
     any(spec -> spec.weight > 0, metrics) || error(
         "At least one metric must have positive weight.",
     )
-    initial_latent = zeros(length(D3_LOG_PHYSICAL_COORDINATES))
+    initial_latent = vcat(
+        zeros(4),
+        (reference.u_IDC - D3_IDC_SOURCE_BOUNDS_UM[1]) /
+            (D3_IDC_SOURCE_BOUNDS_UM[2] - D3_IDC_SOURCE_BOUNDS_UM[1]),
+    )
     initial_candidate = d3_expand_log_physical_candidate(reference, initial_latent)
     context = D3LogPhysicalObjectiveContext(
         evaluator,
@@ -459,6 +485,8 @@ function optimize_d3_log_physical(
         maxfevals=cma.maxfevals,
         ftol=nothing,
         xtol=nothing,
+        lower=vcat(fill(-Inf, 4), 0.0),
+        upper=vcat(fill(Inf, 4), 1.0),
         callback=cma_callback,
         parallel_evaluation=false,
         multi_threading=true,
@@ -493,7 +521,7 @@ function optimize_d3_log_physical(
     elseif isnothing(cma_best)
         nothing
     else
-        error("CMA-ES produced a nonfinite log-coordinate xtol observation.")
+        error("CMA-ES produced a nonfinite latent-coordinate xtol observation.")
     end
     cma_conditions = [
         D3CoupledOptimizer._condition(
@@ -508,7 +536,7 @@ function optimize_d3_log_physical(
             cma_xtol_observed,
             "<=",
             cma.xtol,
-            "log_coordinate",
+            "latent_coordinate",
         ),
     ]
     cma_state = if isnothing(cma_best)
@@ -669,12 +697,15 @@ function bind_inputs(manifest, q2d_path, q3d_path, idc_path)
     idc_model = manifest["idc_length_model"]
     idc_model["model"] == "capacitance_fF=a_fF_per_um*length_um+b_fF" &&
         idc_model["fit_method"] == "ordinary_least_squares_at_selected_gap" &&
-        idc_model["outside_source_support"] == "linear_extrapolation" || error(
-        "Rev10 IDC length model does not match the Human-directed linear-fit contract.",
+        idc_model["outside_source_support"] == "reject" || error(
+        "Rev10 IDC length model must reject values outside its source support.",
     )
     source_support = Tuple(Float64.(idc_model["source_support_um"]))
-    String(idc_model["evaluation_domain"]) == "strictly_positive" || error(
-        "Rev10 IDC OLS evaluation must use the strictly-positive unbounded domain.",
+    source_support == D3_IDC_SOURCE_BOUNDS_UM || error(
+        "Rev10 IDC source support must be exactly 35--75 um.",
+    )
+    String(idc_model["evaluation_domain"]) == "closed_source_support" || error(
+        "Rev10 IDC OLS evaluation must use only its closed source-support interval.",
     )
     Float64(idc_model["source_gap_um"]) == Float64(fixed["idc_gap_um"]) || error(
         "Rev10 IDC fit gap and fixed physical gap disagree.",
@@ -701,7 +732,7 @@ function bind_inputs(manifest, q2d_path, q3d_path, idc_path)
     )
     d3_idc_mapping_semantic_sha256(idc) ==
         String(sources["idc_mapping_semantic_sha256"]) || error(
-        "Rev10 strictly-positive IDC mapping semantic identity is not yet " *
+        "Rev10 interpolation-only IDC mapping semantic identity is not yet " *
         "integrated into the shared Stage-model authority.",
     )
     inputs = bind_d3_stage2_direct_hybridized_inputs(
@@ -1054,29 +1085,35 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
     physical_coordinate_names = Tuple(
         Symbol(item["name"]) for item in physical_search["coordinates"]
     )
-    physical_coordinate_names == D3_LOG_PHYSICAL_COORDINATES || error(
-        "Rev10 physical search must contain the exact five log-mapped coordinates.",
+    physical_coordinate_names == D3_COMPACT_PHYSICAL_COORDINATES || error(
+        "Rev10 physical search must contain the exact five compact coordinates.",
     )
-    isnothing(physical_search["scientific_upper_bounds"]) || error(
-        "Rev10 physical search may not declare scientific upper bounds.",
+    search_bounds = physical_search["human_search_bounds"]
+    String(search_bounds["length_coordinates"]) == "strictly_positive_unbounded" &&
+        Tuple(Float64.(search_bounds["u_IDC_um"])) == D3_IDC_SOURCE_BOUNDS_UM || error(
+        "Rev10 search bounds must leave lengths positive-unbounded and bind IDC to 35--75 um.",
     )
-    String(physical_search["latent_domain"]) == "R^5" &&
+    String(physical_search["latent_domain"]) == "R^4_x_[0,1]" &&
         String(physical_search["physical_map"]) ==
-            "physical_i=reference_start_i*exp(z_i)" &&
+            "length_i=reference_start_i*exp(z_i);u_IDC_um=35+40*x_IDC" &&
         String(physical_search["shared_short_rule"]) ==
             "lr_short_m=lp_short_m=l_short_m_exactly" &&
         isnothing(physical_search["equality_penalty"]) || error(
-            "Rev10 log-coordinate and shared-short search semantics are invalid.",
+            "Rev10 latent-coordinate and shared-short search semantics are invalid.",
         )
     reference_start = manifest["reference_start"]
     reference_name = String(reference_start["name"])
     reference = exact_namedtuple(
         reference_start["candidate"],
-        D3_LOG_PHYSICAL_COORDINATES,
+        D3_COMPACT_PHYSICAL_COORDINATES,
     )
     expanded_reference = d3_expand_log_physical_candidate(
         reference,
-        zeros(length(D3_LOG_PHYSICAL_COORDINATES)),
+        vcat(
+            zeros(4),
+            (reference.u_IDC - D3_IDC_SOURCE_BOUNDS_UM[1]) /
+                (D3_IDC_SOURCE_BOUNDS_UM[2] - D3_IDC_SOURCE_BOUNDS_UM[1]),
+        ),
     )
     specs = metric_specs(slot_hz)
     cma = manifest["cma_es"]
@@ -1118,11 +1155,15 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
             winner_spatial_refinement="selected_best_candidate_only",
         ),
         search_coordinates=(
-            physical_coordinates=D3_LOG_PHYSICAL_COORDINATES,
+            physical_coordinates=D3_COMPACT_PHYSICAL_COORDINATES,
             latent_coordinates=Tuple(Symbol.(physical_search["latent_coordinates"])),
-            latent_domain="R^5",
-            physical_map="physical_i=reference_start_i*exp(z_i)",
-            scientific_upper_bounds=nothing,
+            latent_domain="R^4_x_[0,1]",
+            physical_map=
+                "length_i=reference_start_i*exp(z_i);u_IDC_um=35+40*x_IDC",
+            human_search_bounds=(
+                length_coordinates="strictly_positive_unbounded",
+                u_IDC_um=D3_IDC_SOURCE_BOUNDS_UM,
+            ),
             shared_short_rule="lr_short_m=lp_short_m=l_short_m_exactly",
             persisted_candidate_fields=D3_EXPANDED_PHYSICAL_COORDINATES,
         ),
@@ -1156,12 +1197,12 @@ function run_single_slot(manifest_path, q3d_path, idc_path, output_dir, slot_hz)
         seed = round(Int, slot_hz / 1.0e6) + 10000 * restart_index
         settings = CMASettings(
             seed=seed,
-            sigma=Float64(cma["sigma_log_coordinate"]),
+            sigma=Float64(cma["sigma_latent_coordinate"]),
             popsize=Int(cma["population"]),
             maxiter=Int(cma["maximum_iterations"]),
             maxfevals=Int(cma["maximum_evaluations"]),
             ftol=Float64(cma["ftol_cost"]),
-            xtol=Float64(cma["xtol_log_coordinate"]),
+            xtol=Float64(cma["xtol_latent_coordinate"]),
         )
         println(
             "START slot=$(slot_hz / 1e9)GHz restart=$(restart_index) " *
