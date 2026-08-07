@@ -59,6 +59,12 @@ const _SOURCE_FIELDS = (
     :fixed_input_identity,
     :idc_mapping_id,
     :idc_mapping_sha256,
+    :idc_mapping_semantic_sha256,
+    :idc_source_mapping_id,
+    :idc_source_length_range_um,
+    :idc_runtime_length_domain,
+    :idc_evaluation_extrapolated,
+    :idc_evaluation_source,
     :feedline_contract,
 )
 const _EXTRACTION_FIELDS = (
@@ -439,6 +445,24 @@ function _source_profile(value)
     for name in keys(model)
         model[name] = _sha(model[name], "model_identity.$(name)")
     end
+    source_range_raw = raw["idc_source_length_range_um"]
+    source_range_raw isa Union{Tuple,AbstractVector} &&
+        length(source_range_raw) == 2 || _fail(
+            "direct_spatial.malformed",
+            "IDC source length range must contain exactly two values.",
+        )
+    source_range = [
+        _real(source_range_raw[index], "IDC source length range[$(index)]"; positive=true)
+        for index in 1:2
+    ]
+    source_range[1] < source_range[2] || _fail(
+        "direct_spatial.malformed",
+        "IDC source length range must be strictly increasing.",
+    )
+    raw["idc_evaluation_extrapolated"] isa Bool || _fail(
+        "direct_spatial.malformed",
+        "IDC extrapolation indicator must be Boolean.",
+    )
     return Dict{String,Any}(
         "model_identity" => model,
         "q2d_artifact_id" => _text(raw["q2d_artifact_id"], "Q2D artifact id"),
@@ -450,6 +474,24 @@ function _source_profile(value)
         "fixed_input_identity" => _fixed_input_identity(raw["fixed_input_identity"]),
         "idc_mapping_id" => _text(raw["idc_mapping_id"], "IDC mapping id"),
         "idc_mapping_sha256" => _sha(raw["idc_mapping_sha256"], "IDC mapping SHA-256"),
+        "idc_mapping_semantic_sha256" => _sha(
+            raw["idc_mapping_semantic_sha256"],
+            "IDC mapping semantic SHA-256",
+        ),
+        "idc_source_mapping_id" => _text(
+            raw["idc_source_mapping_id"],
+            "IDC source mapping id",
+        ),
+        "idc_source_length_range_um" => source_range,
+        "idc_runtime_length_domain" => _text(
+            raw["idc_runtime_length_domain"],
+            "IDC runtime length domain",
+        ),
+        "idc_evaluation_extrapolated" => raw["idc_evaluation_extrapolated"],
+        "idc_evaluation_source" => _text(
+            raw["idc_evaluation_source"],
+            "IDC evaluation source",
+        ),
         "feedline_contract" => _json_safe(raw["feedline_contract"], "feedline contract"),
     )
 end
