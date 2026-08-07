@@ -222,6 +222,37 @@ const Q2D_PATH = joinpath(D3_ROOT, "d3_continuous_ground_q2d_maxwell_lc.v4.json"
         @test actual == requested
     end
 
+    model = d3_hybridized_compiled_model(built)
+    context = _d3_complete_complement_rp_context(model, (
+        maximum_elimination_condition_number=1.0e10,
+        maximum_relative_elimination_solve_residual=1.0e-10,
+        maximum_relative_reciprocity_error=1.0e-12,
+        maximum_relative_passivity_violation=1.0e-12,
+        maximum_relative_root_residual=1.0e-10,
+        maximum_root_growth_rate_hz=1.0,
+        minimum_normalized_residue_slope=1.0e-3,
+        maximum_relative_coupling_spread=1.0e-2,
+        maximum_relative_determinant_closure_error=1.0e-10,
+    ))
+    @test context.retained_indices == [
+        model.anchored_coordinate_indices.r,
+        model.anchored_coordinate_indices.p,
+    ]
+    @test context.coordinate_order[context.retained_indices[1]] != :r
+    @test context.coordinate_order[context.retained_indices[2]] != :p
+    for (coordinate, retained_index) in ((:r, 1), (:p, 2))
+        principal = _d3_complete_complement_rp_principal_indices(
+            context,
+            coordinate,
+        )
+        @test first(principal) == context.retained_indices[retained_index]
+        @test principal[2:end] == context.eliminated_indices
+    end
+    @test_throws ErrorException _d3_complete_complement_rp_principal_indices(
+        context,
+        :q,
+    )
+
     cared = D3DirectHybridizedCaredOutput(
         D3_DIRECT_HYBRIDIZED_CARED_OUTPUT_CONTRACT,
         :stage2_direct_hybridized,

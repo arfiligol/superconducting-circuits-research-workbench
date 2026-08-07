@@ -1581,24 +1581,29 @@ function _d3_complete_complement_rp_operator(context, angular_frequency_rad_s)
     )
 end
 
+function _d3_complete_complement_rp_principal_indices(context, coordinate)
+    coordinate in (:r, :p) || error(
+        "D3 complete-complement RP diagonal root supports only r or p.",
+    )
+    retained_index = coordinate == :r ? 1 : 2
+    return [
+        context.retained_indices[retained_index],
+        context.eliminated_indices...,
+    ]
+end
+
 function _d3_complete_complement_rp_diagonal_root(
     model,
     context,
     coordinate,
     raw_frequency_band_hz,
 )
-    coordinate in (:r, :p) || error(
-        "D3 complete-complement RP diagonal root supports only r or p.",
+    indices = _d3_complete_complement_rp_principal_indices(
+        context,
+        coordinate,
     )
+    retained_index = coordinate == :r ? 1 : 2
     band = _d3_loaded_bare_root_band(raw_frequency_band_hz)
-    coordinate_index = Dict(
-        name => index
-        for (index, name) in enumerate(context.coordinate_order)
-    )
-    indices = [
-        coordinate_index[coordinate],
-        context.eliminated_indices...,
-    ]
     poles = matched_open_poles(
         context.capacitance[indices, indices],
         context.stiffness[indices, indices],
@@ -1620,7 +1625,6 @@ function _d3_complete_complement_rp_diagonal_root(
         context,
         2π * root_hz,
     )
-    retained_index = coordinate == :r ? 1 : 2
     relative_root_residual = _d3_rp_relative_error(
         abs(
             root_operator.effective_dynamic_stiffness[
