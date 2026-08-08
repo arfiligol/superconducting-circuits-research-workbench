@@ -1748,7 +1748,6 @@ function _d3_targeted_schur_outputs(
         "D3 targeted-Schur anchored-bare linewidths must be finite and nonnegative.",
     )
     kappa_sum_hz = sum(values(kappa_hz))
-    kappa_sum_hz > 0 || error("D3 targeted-Schur anchored-bare linewidth sum is zero.")
     return (
         readout=readout,
         filter=filter,
@@ -1760,8 +1759,6 @@ function _d3_targeted_schur_outputs(
         exchange_rad_s=exchange_rad_s,
         kappa_hz=kappa_hz,
         kappa_sum_hz=kappa_sum_hz,
-        linewidth_fraction_min=
-            minimum(values(kappa_hz)) / kappa_sum_hz,
     )
 end
 

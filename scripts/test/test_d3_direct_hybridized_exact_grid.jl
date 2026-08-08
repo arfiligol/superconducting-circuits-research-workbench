@@ -157,6 +157,19 @@ end
 
     @test !isdefined(@__MODULE__, :_d3_targeted_schur_determinant_root)
 
+    lossless = _d3_targeted_schur_outputs(
+        _d3_targeted_schur_candidate_context(
+            merge(fixed, (conductance=zeros(6, 6),)),
+            capacitance,
+            stiffness,
+        );
+        readout_root_anchor_hz=5.0e9,
+        filter_root_anchor_hz=6.0e9,
+    )
+    @test lossless.kappa_hz == (r=-0.0, p=-0.0)
+    @test lossless.kappa_sum_hz == 0.0
+    @test !hasproperty(lossless, :linewidth_fraction_min)
+
     cared = d3_stage2_direct_cared_outputs(
         candidate,
         context;
@@ -182,15 +195,18 @@ end
         -2 * imag(cared.diagonal_roots_hz.r)
     @test cared.kappa_anchored_bare_rp_hz.p ==
         -2 * imag(cared.diagonal_roots_hz.p)
+    @test !hasproperty(cared, :linewidth_fraction_min_anchored_bare_rp)
     @test cared.extraction_profile.effective_diagonal_frequency_extraction ==
         :complete_complement_rp_anchored_bare_complex_diagonal_roots
     @test cared.extraction_profile.linewidth_sum_extraction ==
         :anchored_bare_diagonal_root_trace
     metrics = _d3_targeted_metric_record(cared)
     @test metrics.contract_id ==
-        "d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1"
+        "d3-stage2-targeted-schur-candidate-metrics.v2"
     @test metrics.kappa_sum_anchored_bare_rp_hz ==
         cared.kappa_sum_anchored_bare_rp_hz
+    @test !hasproperty(metrics, :linewidth_fraction_min_anchored_bare_rp)
+    @test !hasproperty(metrics, :linewidth_participation_extraction)
 
     failure = try
         d3_stage2_direct_cared_outputs(
@@ -660,7 +676,6 @@ end
         (r=1.0 + 0.0im, p=1.0 + 0.0im),
         (r=20.0e6, p=20.0e6),
         40.0e6,
-        0.5,
         (model_identity=(circuit_plan_sha256=repeat("b", 64),),),
         (counts=grid.counts, boundaries_m=grid.boundaries_m),
         (complement=:complete_hybridized_complement,),

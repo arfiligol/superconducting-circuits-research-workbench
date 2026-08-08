@@ -16,7 +16,7 @@ const TEST_SOURCE_IDENTITY = (
 
 function objective_metrics(; slot_hz=5.6e9)
     return (
-        contract_id="d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1",
+        contract_id="d3-stage2-targeted-schur-candidate-metrics.v2",
         stage_id=:stage2_direct_hybridized,
         model_family=:hybridized_distributed_lumped,
         source_profile_identity=TEST_SOURCE_IDENTITY.source_profile_identity,
@@ -45,11 +45,16 @@ end
         TEST_SOURCE_IDENTITY,
     )
     @test objective.contract_id ==
-        "d3-stage2-direct-hybridized-targeted-schur-objective.v1"
+        "d3-stage2-direct-hybridized-targeted-schur-objective.v2"
     @test objective.cost == 0.0
     @test objective.source_identity == TEST_SOURCE_IDENTITY
     @test !hasproperty(objective, :target_gates)
     @test !hasproperty(objective, :target_gates_pass)
+    @test !hasproperty(objective, :target_diagnostics)
+    @test !hasproperty(
+        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+        :linewidth_participation_extraction,
+    )
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.linewidth_sum_extraction ==
         :anchored_bare_diagonal_root_trace
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.residual_multipliers == (
@@ -58,7 +63,6 @@ end
         r_J=10.0,
         r_n=100.0,
         r_kappa=10.0,
-        r_eta=1.0,
     )
     perturbed = merge(metrics, (
         fr_eff_complete_complement_rp_hz=slot_hz * 1.01,
@@ -79,23 +83,21 @@ end
         r_J=0.5,
         r_n=-0.1,
         r_kappa=0.25,
-        r_eta=-0.2,
     )
     for name in keys(expected_residuals)
         @test getproperty(perturbed_objective.normalized_residuals, name) ≈
             getproperty(expected_residuals, name)
     end
-    @test perturbed_objective.cost ≈ 136.29
-    @test perturbed_objective.target_diagnostics.linewidth_participation
+    @test perturbed_objective.cost ≈ 136.25
+    @test !hasproperty(perturbed_objective, :target_diagnostics)
     @test perturbed_objective.promotion_gate_status == :not_evaluated
     @test !perturbed_objective.promotion_eligible
 
-    legacy = merge(metrics, (
-        contract_id="d3-stage2-direct-hybridized-candidate-metrics.v1",
-        kappa_sum_unordered_rp_subspace_hz=20.0e6,
+    superseded = merge(metrics, (
+        contract_id="d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1",
     ))
     @test_throws ErrorException d3_stage2_objective(
-        legacy,
+        superseded,
         slot_hz,
         D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
         TEST_SOURCE_IDENTITY,

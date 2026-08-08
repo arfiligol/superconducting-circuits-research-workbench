@@ -3,7 +3,7 @@
 # operand comes from the same complete distributed/lumped CircuitPlan candidate.
 
 const D3_STAGE_OBJECTIVE_CONTRACT_ID =
-    "d3-stage2-direct-hybridized-targeted-schur-objective.v1"
+    "d3-stage2-direct-hybridized-targeted-schur-objective.v2"
 const D3_TARGET_SLOT_FREQUENCIES_HZ = (5.6e9, 5.7e9, 5.8e9, 5.9e9, 6.0e9)
 const D3_INTERFERENCE_NOTCH_TARGET_HZ = 5.0e9
 
@@ -12,22 +12,19 @@ const D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY = (
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
     target_revision=10,
     target_contract_sha256=
-        "8b46950a5d6ad673462ff8f547c830670bf3a4fb4d151d6b74f039d9b4554fbf",
+        "e7aa54af892a6a5d97f35b592e4ec13a7da2033fc6e231238517b4c52698ee82",
     notch_authority=:distributed_rp_on,
     effective_diagonal_frequency_extraction=
         :complete_complement_rp_anchored_bare_complex_diagonal_roots,
     effective_exchange_extraction=
         :complete_complement_rp_complex_midpoint_residue,
     linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
-    linewidth_participation_extraction=
-        :anchored_bare_diagonal_root_fraction,
     residual_multipliers=(
         r_r=100.0,
         r_p=100.0,
         r_J=10.0,
         r_n=100.0,
         r_kappa=10.0,
-        r_eta=1.0,
     ),
 )
 
@@ -75,7 +72,7 @@ function _d3_validate_metric_source(
     end
     contract_id = hasproperty(metrics, :contract_id) ? String(metrics.contract_id) :
         error("D3 stage metrics must declare contract_id.")
-    contract_id == "d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1" || error(
+    contract_id == "d3-stage2-targeted-schur-candidate-metrics.v2" || error(
         "D3 stage metrics contract is not the targeted-Schur metrics authority.",
     )
     return (
@@ -104,10 +101,6 @@ function _d3_validate_response_authority(metrics, authority, label)
         ),
         (:notch_authority, authority.notch_authority),
         (:linewidth_sum_extraction, authority.linewidth_sum_extraction),
-        (
-            :linewidth_participation_extraction,
-            authority.linewidth_participation_extraction,
-        ),
     )
         hasproperty(metrics, name) ||
             error("$(label) is missing $(name).")
@@ -141,28 +134,14 @@ function _d3_objective_residuals(metrics, slot_hz, label)
         :kappa_sum_anchored_bare_rp_hz,
         label,
     )
-    fraction_min = _d3_objective_finite(
-        metrics,
-        :linewidth_fraction_min_anchored_bare_rp,
-        label,
-    )
-    0 <= fraction_min <= 0.5 || error(
-        "D3 anchored-bare RP minimum linewidth fraction must be in [0, 0.5].",
-    )
-
-    residuals = (
+    return (
         r_r=(fr - slot) / slot,
         r_p=(fp - slot) / slot,
         r_J=(exchange - 5.0e6) / 5.0e6,
         r_n=(notch - D3_INTERFERENCE_NOTCH_TARGET_HZ) /
             D3_INTERFERENCE_NOTCH_TARGET_HZ,
         r_kappa=(total_linewidth - 20.0e6) / 20.0e6,
-        r_eta=(fraction_min - 0.5) / 0.5,
     )
-    target_diagnostics = (
-        linewidth_participation=fraction_min >= 0.3,
-    )
-    return residuals, target_diagnostics
 end
 
 function _d3_objective_provenance_groups(residuals, matrix_authority, response_authority)
@@ -180,7 +159,6 @@ function _d3_objective_provenance_groups(residuals, matrix_authority, response_a
             normalized_residuals=(
                 r_n=residuals.r_n,
                 r_kappa=residuals.r_kappa,
-                r_eta=residuals.r_eta,
             ),
         ),
     )
@@ -202,7 +180,7 @@ function d3_stage2_objective(metrics, slot_hz, authority, expected_source_identi
         expected_source_identity,
     )
     _d3_validate_response_authority(metrics, approved, "D3 Stage-2 metrics")
-    residuals, target_diagnostics = _d3_objective_residuals(
+    residuals = _d3_objective_residuals(
         metrics,
         slot_hz,
         "D3 Stage-2 metrics",
@@ -226,12 +204,9 @@ function d3_stage2_objective(metrics, slot_hz, authority, expected_source_identi
             (
                 notch=:distributed_rp_on,
                 linewidth_sum=:anchored_bare_diagonal_root_trace,
-                linewidth_participation=
-                    :anchored_bare_diagonal_root_fraction,
             ),
         ),
         normalized_residuals=residuals,
-        target_diagnostics=target_diagnostics,
         promotion_gate_status=:not_evaluated,
         promotion_eligible=false,
     )
