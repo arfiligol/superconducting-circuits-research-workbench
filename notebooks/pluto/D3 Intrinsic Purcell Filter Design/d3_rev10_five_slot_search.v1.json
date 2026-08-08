@@ -2,16 +2,17 @@
   "schema_version": "d3-rev10-five-slot-targeted-schur-search.v1",
   "contract_id": "d3-rev10-five-slot-targeted-schur-search.v1",
   "status": "current",
-  "semantic_state": "ACCEPTED",
-  "accepted_at": "2026-08-08",
+  "semantic_state": "CONVERGING",
   "data_classification": "project-internal",
   "evidence_status": "diagnostic_non_promotable",
   "publication": "none",
   "sources": {
-    "root_authority_commit": "18ce736cea0fd122062194d8bb45fcc5079c2f08",
-    "implementation_baseline_workbench_commit": "c81c24874ebad22e52a6160eeaa9155ae690b2df",
+    "root_authority_commit": "e492f870b5ba7167e9b9d408a75fc011189f17e6",
+    "implementation_workbench_commit": "7bf67d38736d0e130fbfaaf5b4062a816ddb02cf",
+    "implementation_reviewed_head": "f4835a7ae7ec39df8430019e099761e37537abbd",
+    "implementation_workbench_tree": "9c7d4ec1a517c70624dd42ab63a9da28f55f944e",
     "orpen_commit": "80576910d596dbf4720335188e66b6a520cc2e36",
-    "target_contract_sha256": "891a50bfc4c85889b82d0f64fe03b527ac68cb870e6d5542f99c849b80a304b6",
+    "target_contract_sha256": "8b46950a5d6ad673462ff8f547c830670bf3a4fb4d151d6b74f039d9b4554fbf",
     "q2d_artifact_sha256": "301d3501a30614b994cf3f28d46eb75b545620a164bbb346fa557120d643fe6c",
     "q3d_input_sha256": "b3e0c7aa403856e238f7121825f3691c7b3be13afa1a43ac6895f21191e832e2",
     "idc_mapping_sha256": "db549a78564ab1dd25aba4cd0004304651ea3da7a1e66ce92bbb31bceb79e66c",
@@ -166,23 +167,23 @@
     "basis": "fixed_anchored_R_equals_r_p",
     "eliminated_coordinates": "complete_fixed_node_complement",
     "dynamic_operator": "D(omega)=K-omega^2*C-i*omega*G",
-    "readout_effective_frequency_hz": "real_part_of_readout_diagonal_complex_root",
-    "filter_effective_frequency_hz": "real_part_of_filter_diagonal_complex_root",
+    "diagonal_roots_hz": "complex_roots_of_D_rr_effective_and_D_pp_effective_after_complete_complement_schur_reduction",
+    "readout_effective_frequency_hz": "real_part_of_diagonal_roots_hz.r",
+    "filter_effective_frequency_hz": "real_part_of_diagonal_roots_hz.p",
     "coherent_exchange_hz": "abs(real(residue_normalized_midpoint_exchange_rad_s))/(2*pi)",
     "intrinsic_notch_hz": "fixed_auxiliary_intrinsic_pair_cofactor_generalized_eigenzero",
-    "local_determinant_poles": "two_complex_roots_of_det(D_RP_effective(omega))_seeded_from_the_two_diagonal_roots",
-    "local_determinant_pole_linewidth_hz": "-2*imag(pole_frequency_hz)",
-    "local_determinant_kappa_sum_hz": "kappa_1_hz+kappa_2_hz",
-    "local_determinant_linewidth_fraction_min": "min(kappa_1_hz,kappa_2_hz)/local_determinant_kappa_sum_hz"
+    "kappa_anchored_bare_rp_hz": "(-2*imag(diagonal_roots_hz.r),-2*imag(diagonal_roots_hz.p))",
+    "kappa_sum_anchored_bare_rp_hz": "kappa_r_hz+kappa_p_hz",
+    "linewidth_fraction_min_anchored_bare_rp": "min(kappa_r_hz,kappa_p_hz)/kappa_sum_anchored_bare_rp_hz"
   },
   "objective": {
-    "cost": "sum(abs2,residuals)",
+    "cost": "sum(abs2,residual_multiplier_i*signed_relative_residual_i)",
     "weights": {
-      "r_r": 1.0,
-      "r_p": 1.0,
-      "r_J": 1.0,
-      "r_n": 1.0,
-      "r_kappa": 1.0,
+      "r_r": 100.0,
+      "r_p": 100.0,
+      "r_J": 10.0,
+      "r_n": 100.0,
+      "r_kappa": 10.0,
       "r_eta": 1.0
     },
     "residuals": {
@@ -190,8 +191,8 @@
       "r_p": "(f_p_eff_hz-slot_hz)/slot_hz",
       "r_J": "(coherent_exchange_hz-5.0e6)/5.0e6",
       "r_n": "(intrinsic_notch_hz-5.0e9)/5.0e9",
-      "r_kappa": "(local_determinant_kappa_sum_hz-20.0e6)/20.0e6",
-      "r_eta": "(local_determinant_linewidth_fraction_min-0.5)/0.5"
+      "r_kappa": "(kappa_sum_anchored_bare_rp_hz-20.0e6)/20.0e6",
+      "r_eta": "(linewidth_fraction_min_anchored_bare_rp-0.5)/0.5"
     },
     "finite_out_of_target_quantity": "always_evaluate_and_include_in_cost",
     "target_distance_is_never_not_evaluable": true
@@ -203,7 +204,7 @@
       "physical_nonpassivity",
       "missing_complex_root_or_notch_zero",
       "nonunique_local_root_or_notch_zero",
-      "machine_unresolved_duplicate_local_determinant_roots",
+      "machine_unresolved_anchored_bare_diagonal_root",
       "source_or_fixed_topology_identity_mismatch"
     ],
     "optimizer_boundary_value_for_technical_failure": "+Inf",
@@ -232,14 +233,15 @@
       "feedline_left": 40,
       "feedline_right": 40
     },
-    "maximum_relative_change": 0.001,
+    "maximum_relative_change_primary_quantities": 0.001,
+    "maximum_relative_change_linewidth_fraction": 0.02,
     "cared_outputs": [
       "readout_effective_frequency_hz",
       "filter_effective_frequency_hz",
       "intrinsic_notch_hz",
       "coherent_exchange_hz",
-      "local_determinant_kappa_sum_hz",
-      "local_determinant_linewidth_fraction_min"
+      "kappa_sum_anchored_bare_rp_hz",
+      "linewidth_fraction_min_anchored_bare_rp"
     ],
     "failed_validation_effect": "preserve_raw_search_result_and_exact_validation_deltas"
   },

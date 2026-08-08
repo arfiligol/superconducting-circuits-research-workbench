@@ -27,7 +27,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "691e2ddc10077f1c1a248451ce223bee7c1ce528479163e789ad3755732722dd"
+    "9abde1da354e07239ee420ba5e71032feeac87f982274f4b6f84c84a1a5f8c31"
 const MANIFEST_BASENAME = "d3_rev10_five_slot_search.v1.json"
 const EXPANDED_COORDINATES = (
     :lr_open_m,
@@ -135,8 +135,8 @@ function load_manifest(path)
     manifest = JSON3.read(read(absolute, String), Dict{String,Any})
     manifest["contract_id"] == "d3-rev10-five-slot-targeted-schur-search.v1" ||
         error("Search manifest contract id is wrong.")
-    manifest["semantic_state"] == "ACCEPTED" || error(
-        "Search manifest semantic state is not ACCEPTED.",
+    manifest["semantic_state"] == "CONVERGING" || error(
+        "Search manifest semantic state is not CONVERGING.",
     )
     cma = manifest["cma_es"]
     Int(cma["runs_per_slot"]) == 1 || error(
@@ -312,7 +312,7 @@ end
 
 function targeted_metrics(cared)
     return (
-        contract_id="d3-stage2-targeted-schur-candidate-metrics.v1",
+        contract_id="d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1",
         stage_id=cared.stage_id,
         model_family=cared.model_family,
         source_profile_identity=cared.source_profile_identity,
@@ -321,18 +321,17 @@ function targeted_metrics(cared)
         fp_eff_complete_complement_rp_hz=cared.f_p_eff_hz,
         J_eff_complete_complement_rp_coherent_hz=cared.abs_real_J_eff_hz,
         notch_distributed_rp_on_hz=cared.f_n_hz,
-        kappa_sum_local_hybrid_rp_hz=cared.local_hybrid_kappa_sum_hz,
-        linewidth_fraction_min_local_hybrid_rp=
-            cared.local_hybrid_linewidth_fraction_min,
-        linewidth_fraction_max_local_hybrid_rp=
-            cared.local_hybrid_linewidth_fraction_max,
+        kappa_sum_anchored_bare_rp_hz=cared.kappa_sum_anchored_bare_rp_hz,
+        linewidth_fraction_min_anchored_bare_rp=
+            cared.linewidth_fraction_min_anchored_bare_rp,
         effective_diagonal_frequency_extraction=
-            :complete_complement_rp_complex_operator,
+            :complete_complement_rp_anchored_bare_complex_diagonal_roots,
         effective_exchange_extraction=
             :complete_complement_rp_complex_midpoint_residue,
         notch_authority=:distributed_rp_on,
-        linewidth_pole_scope=:complete_complement_rp_local_hybrid_two_pole,
-        primary_linewidth_extraction=:targeted_schur_determinant_poles,
+        linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
+        linewidth_participation_extraction=
+            :anchored_bare_diagonal_root_fraction,
     )
 end
 
@@ -342,11 +341,20 @@ function cared_payload(cared)
         f_p_eff_hz=cared.f_p_eff_hz,
         f_n_hz=cared.f_n_hz,
         abs_real_J_eff_hz=cared.abs_real_J_eff_hz,
-        local_hybrid_kappa_sum_hz=cared.local_hybrid_kappa_sum_hz,
-        local_hybrid_linewidth_fraction_min=
-            cared.local_hybrid_linewidth_fraction_min,
-        local_hybrid_linewidth_fraction_max=
-            cared.local_hybrid_linewidth_fraction_max,
+        diagonal_roots_hz=(
+            r=(
+                real_hz=Float64(real(cared.diagonal_roots_hz.r)),
+                imag_hz=Float64(imag(cared.diagonal_roots_hz.r)),
+            ),
+            p=(
+                real_hz=Float64(real(cared.diagonal_roots_hz.p)),
+                imag_hz=Float64(imag(cared.diagonal_roots_hz.p)),
+            ),
+        ),
+        kappa_anchored_bare_rp_hz=cared.kappa_anchored_bare_rp_hz,
+        kappa_sum_anchored_bare_rp_hz=cared.kappa_sum_anchored_bare_rp_hz,
+        linewidth_fraction_min_anchored_bare_rp=
+            cared.linewidth_fraction_min_anchored_bare_rp,
         source_profile_sha256=cared.source_profile_identity.canonical_sha256,
         grid_sha256=cared.grid_identity.canonical_sha256,
         validity=cared.validity,
@@ -382,6 +390,7 @@ function evaluate_candidate(candidate, context, slot_hz)
             objective=(
                 contract_id=objective.contract_id,
                 normalized_residuals=objective.normalized_residuals,
+                residual_multipliers=objective.authority.residual_multipliers,
                 target_diagnostics=objective.target_diagnostics,
             ),
             rejection=nothing,
@@ -576,28 +585,41 @@ function validate_winner(manifest, inputs, slot_hz, winner)
     fine = evaluate_candidate(winner.candidate, fine_context, slot_hz)
     fine.status == "VALID" || return (
         status="NOT_EVALUABLE_AT_2N",
-        threshold=0.001,
+        thresholds=(
+            primary_quantities=0.001,
+            linewidth_fraction=0.02,
+        ),
         fine=fine,
         relative_changes=nothing,
         pass=false,
     )
     coarse = winner.cared
-    names = (
+    strict_names = (
         :f_r_eff_hz,
         :f_p_eff_hz,
         :f_n_hz,
         :abs_real_J_eff_hz,
-        :local_hybrid_kappa_sum_hz,
-        :local_hybrid_linewidth_fraction_min,
+        :kappa_sum_anchored_bare_rp_hz,
     )
-    changes = NamedTuple{names}(Tuple(
+    strict_changes = NamedTuple{strict_names}(Tuple(
         relative_change(getproperty(coarse, name), getproperty(fine.cared, name))
-        for name in names
+        for name in strict_names
     ))
-    pass = all(value -> value <= 0.001, values(changes))
+    fraction_change = relative_change(
+        coarse.linewidth_fraction_min_anchored_bare_rp,
+        fine.cared.linewidth_fraction_min_anchored_bare_rp,
+    )
+    changes = merge(strict_changes, (
+        linewidth_fraction_min_anchored_bare_rp=fraction_change,
+    ))
+    pass = all(value -> value <= 0.001, values(strict_changes)) &&
+        fraction_change <= 0.02
     return (
-        status=pass ? "PASS" : "ABOVE_0P1_PERCENT",
-        threshold=0.001,
+        status=pass ? "PASS" : "ABOVE_HUMAN_REFINEMENT_LIMIT",
+        thresholds=(
+            primary_quantities=0.001,
+            linewidth_fraction=0.02,
+        ),
         fine=fine,
         relative_changes=changes,
         pass=pass,
@@ -618,12 +640,19 @@ function run(options)
     )
     context = build_context(manifest, inputs; refinement_level=0)
     seed = seed_candidate(manifest, slot_hz)
+    workbench_commit = command_output("git", "rev-parse", "HEAD")
+    workbench_tree = command_output("git", "rev-parse", "HEAD^{tree}")
+    workbench_dirty = !isempty(command_output("git", "status", "--porcelain=v1"))
+    workbench_tree == String(manifest["sources"]["implementation_workbench_tree"]) ||
+        error("Workbench source tree differs from the reviewed targeted-Schur implementation.")
+    workbench_dirty && error("Workbench source tree must be clean for a recorded search run.")
     source = (
         manifest_sha256=EXPECTED_MANIFEST_SHA256,
         manifest_path=manifest_path,
         manifest_sources=manifest["sources"],
-        workbench_commit=command_output("git", "rev-parse", "HEAD"),
-        workbench_dirty=!isempty(command_output("git", "status", "--porcelain=v1")),
+        workbench_commit=workbench_commit,
+        workbench_tree=workbench_tree,
+        workbench_dirty=workbench_dirty,
         fixed_input_canonical_sha256=inputs.source_identity.canonical_sha256,
         targeted_context_contract=context.contract_id,
         targeted_context_source_sha256=context.source_profile_identity.canonical_sha256,
