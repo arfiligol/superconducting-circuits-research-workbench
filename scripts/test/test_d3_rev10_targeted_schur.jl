@@ -10,7 +10,7 @@ const D3_ROOT = joinpath(
 
 include(joinpath(D3_ROOT, "d3_circuit_plans.jl"))
 include(joinpath(D3_ROOT, "d3_exact_n_response.jl"))
-include(joinpath(D3_ROOT, "d3_stage_models.jl"))
+include(joinpath(D3_ROOT, "d3_rev10_models.jl"))
 using .D3ResonatorInput:
     bind_d3_rev10_q2d_input, load_d3_continuous_ground_q2d_input
 
@@ -46,10 +46,9 @@ end
 @testset "D3 targeted-Schur local outputs and typed failure" begin
     candidate = (
         lr_open_m=2.0e-3,
-        lr_short_m=2.0e-3,
+        l_short_m=2.0e-3,
         lc_m=300.0e-6,
         lp_open_m=2.1e-3,
-        lp_short_m=2.0e-3,
         u_IDC=60.0,
     )
     feedline = (
@@ -71,12 +70,12 @@ end
         feedline,
         (canonical_sha256=repeat("a", 64),),
     )
-    grid = d3_stage2_direct_hybridized_grid_plan(
+    grid = d3_direct_hybridized_grid_plan(
         candidate,
         grid_inputs;
         refinement_level=0,
     )
-    topology = _d3_targeted_topology(candidate, grid)
+    topology = _d3_targeted_topology(_d3_compiled_candidate(candidate), grid)
 
     frequencies_hz = [8.0e9, 5.0e9, 6.0e9, 11.0e9, 13.0e9, 15.0e9]
     omega = 2π .* frequencies_hz
@@ -99,8 +98,8 @@ end
     full_kernel = (
         c0=capacitance,
         k0=stiffness,
-        c_terms=NamedTuple{D3_STAGE2_VARIABLE_ORDER}(
-            ntuple(_ -> zero_full, length(D3_STAGE2_VARIABLE_ORDER)),
+        c_terms=NamedTuple{_D3_COMPILED_VARIABLE_ORDER}(
+            ntuple(_ -> zero_full, length(_D3_COMPILED_VARIABLE_ORDER)),
         ),
         k_terms=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(
             ntuple(_ -> zero_full, length(_D3_TARGETED_SCHUR_LENGTH_COORDINATES)),
@@ -170,7 +169,7 @@ end
     @test lossless.kappa_sum_hz == 0.0
     @test !hasproperty(lossless, :linewidth_fraction_min)
 
-    cared = d3_stage2_direct_cared_outputs(
+    cared = d3_direct_cared_outputs(
         candidate,
         context;
         slot_hz=5.6e9,
@@ -181,6 +180,8 @@ end
     @test cared.f_r_eff_hz ≈ 5.0e9 rtol=1.0e-10
     @test cared.f_p_eff_hz ≈ 6.0e9 rtol=1.0e-10
     @test cared.f_n_hz ≈ 5.0e9 rtol=1.0e-12
+    @test propertynames(cared.candidate) == D3_REV10_SEARCH_VARIABLE_ORDER
+    @test cared.candidate.l_short_m == candidate.l_short_m
     @test real(cared.diagonal_roots_hz.r) ≈ cared.f_r_eff_hz rtol=1.0e-10
     @test real(cared.diagonal_roots_hz.p) ≈ cared.f_p_eff_hz rtol=1.0e-10
     @test imag(cared.diagonal_roots_hz.r) <= 0
@@ -200,16 +201,16 @@ end
         :complete_complement_rp_anchored_bare_complex_diagonal_roots
     @test cared.extraction_profile.linewidth_sum_extraction ==
         :anchored_bare_diagonal_root_trace
-    metrics = _d3_targeted_metric_record(cared)
+    metrics = d3_rev10_targeted_schur_metrics(cared)
     @test metrics.contract_id ==
-        "d3-stage2-targeted-schur-candidate-metrics.v2"
+        "d3-rev10-targeted-schur-candidate-metrics.v2"
     @test metrics.kappa_sum_anchored_bare_rp_hz ==
         cared.kappa_sum_anchored_bare_rp_hz
     @test !hasproperty(metrics, :linewidth_fraction_min_anchored_bare_rp)
     @test !hasproperty(metrics, :linewidth_participation_extraction)
 
     failure = try
-        d3_stage2_direct_cared_outputs(
+        d3_direct_cared_outputs(
             merge(candidate, (u_IDC=NaN,)),
             context;
             slot_hz=5.6e9,
@@ -223,7 +224,22 @@ end
     end
     @test failure isa D3TargetedSchurNotEvaluable
     @test failure.code == "d3_targeted_schur_invalid_candidate"
-    @test_throws MethodError d3_stage2_direct_cared_outputs(
+    @test_throws D3TargetedSchurNotEvaluable d3_direct_cared_outputs(
+        (
+            lr_open_m=candidate.lr_open_m,
+            lr_short_m=candidate.l_short_m,
+            lc_m=candidate.lc_m,
+            lp_open_m=candidate.lp_open_m,
+            lp_short_m=candidate.l_short_m,
+            u_IDC=candidate.u_IDC,
+        ),
+        context;
+        slot_hz=5.6e9,
+        readout_root_anchor_hz=5.0e9,
+        filter_root_anchor_hz=6.0e9,
+        notch_zero_anchor_hz=5.0e9,
+    )
+    @test_throws MethodError d3_direct_cared_outputs(
         candidate,
         context;
         slot_hz="not-a-frequency",
@@ -231,7 +247,7 @@ end
         filter_root_anchor_hz=6.0e9,
         notch_zero_anchor_hz=5.0e9,
     )
-    @test_throws D3TargetedSchurNotEvaluable d3_stage2_direct_cared_outputs(
+    @test_throws D3TargetedSchurNotEvaluable d3_direct_cared_outputs(
         candidate,
         context;
         slot_hz=5.6e9,
@@ -239,7 +255,7 @@ end
         filter_root_anchor_hz=6.0e9,
         notch_zero_anchor_hz=5.0e9,
     )
-    @test length(methods(d3_stage2_direct_cared_outputs)) == 1
+    @test length(methods(d3_direct_cared_outputs)) == 1
     @test !isdefined(@__MODULE__, :D3DirectHybridizedCaredOutput)
     @test !isdefined(@__MODULE__, :d3_stage2_candidate_metrics)
     @test !isdefined(@__MODULE__, :d3_exact_open_unordered_rp_subspace_assignment)
@@ -341,14 +357,13 @@ end
     )
     candidate = (
         lr_open_m=2.000123e-3,
-        lr_short_m=2.000057e-3,
+        l_short_m=2.000057e-3,
         lc_m=300.017e-6,
         lp_open_m=2.000211e-3,
-        lp_short_m=2.000091e-3,
         u_IDC=60.0,
     )
     plans = [
-        d3_stage2_direct_hybridized_grid_plan(
+        d3_direct_hybridized_grid_plan(
             candidate,
             inputs;
             refinement_level=level,
@@ -389,7 +404,7 @@ end
         feedline,
         inputs.source_identity,
     )
-    refined_context = build_d3_stage2_targeted_schur_objective_context(
+    refined_context = build_d3_targeted_schur_objective_context(
         candidate,
         refined_inputs;
         grid_plan=plans[2],
@@ -405,13 +420,13 @@ end
     )
     fixed_topology_boundaries = (
         readout_resonator_boundaries_m=_d3_targeted_line_boundaries(
-            candidate.lr_short_m,
+            candidate.l_short_m,
             candidate.lc_m,
             candidate.lr_open_m,
             (short=76, mtl=196, open=108),
         ),
         filter_resonator_boundaries_m=_d3_targeted_line_boundaries(
-            candidate.lp_short_m,
+            candidate.l_short_m,
             candidate.lc_m,
             candidate.lp_open_m,
             (short=76, mtl=196, open=108),
@@ -443,7 +458,7 @@ end
         inputs,
         fixed_topology_plan,
     ) === fixed_topology_plan
-    @test_throws ErrorException _d3_validate_stage2_direct_grid_plan(
+    @test_throws ErrorException _d3_validate_direct_grid_plan(
         candidate,
         inputs,
         fixed_topology_plan,
@@ -490,7 +505,7 @@ end
         plans[1].boundaries_m,
         plans[1].canonical_sha256,
     )
-    @test_throws ErrorException _d3_validate_stage2_direct_grid_plan(
+    @test_throws ErrorException _d3_validate_direct_grid_plan(
         candidate,
         inputs,
         tampered,
@@ -511,7 +526,7 @@ end
         tampered_boundaries,
         plans[1].canonical_sha256,
     )
-    @test_throws ErrorException _d3_validate_stage2_direct_grid_plan(
+    @test_throws ErrorException _d3_validate_direct_grid_plan(
         candidate,
         inputs,
         tampered_array,
@@ -526,11 +541,11 @@ end
         idc_feedline_ground_capacitance_f=20.0e-15,
         idc_mutual_capacitance_f=10.0e-15,
         readout_length_m=
-            candidate.lr_short_m + candidate.lc_m + candidate.lr_open_m,
+            candidate.l_short_m + candidate.lc_m + candidate.lr_open_m,
         filter_length_m=
-            candidate.lp_short_m + candidate.lc_m + candidate.lp_open_m,
-        window_start_readout_m=candidate.lr_short_m,
-        window_start_filter_m=candidate.lp_short_m,
+            candidate.l_short_m + candidate.lc_m + candidate.lp_open_m,
+        window_start_readout_m=candidate.l_short_m,
+        window_start_filter_m=candidate.l_short_m,
         window_length_m=candidate.lc_m,
         mtl_section_length_m=candidate.lc_m / grid.counts.mtl,
         readout_l_per_m_h=lines.readout_l_per_m_h,
@@ -574,10 +589,11 @@ end
     end
 
     model = d3_hybridized_compiled_model(built)
-    topology = _d3_targeted_topology(candidate, grid)
+    topology = _d3_targeted_topology(_d3_compiled_candidate(candidate), grid)
     function fixed_node_test_model(test_candidate)
+        compiled = _d3_compiled_candidate(test_candidate)
         boundaries = _d3_targeted_candidate_boundaries(
-            test_candidate,
+            compiled,
             topology,
             grid,
         )
@@ -586,10 +602,10 @@ end
             idc_filter_ground_capacitance_f=20.0e-15,
             idc_feedline_ground_capacitance_f=20.0e-15,
             idc_mutual_capacitance_f=10.0e-15,
-            readout_length_m=test_candidate.lr_short_m + test_candidate.lc_m + test_candidate.lr_open_m,
-            filter_length_m=test_candidate.lp_short_m + test_candidate.lc_m + test_candidate.lp_open_m,
-            window_start_readout_m=test_candidate.lr_short_m,
-            window_start_filter_m=test_candidate.lp_short_m,
+            readout_length_m=compiled.lr_short_m + compiled.lc_m + compiled.lr_open_m,
+            filter_length_m=compiled.lp_short_m + compiled.lc_m + compiled.lp_open_m,
+            window_start_readout_m=compiled.lr_short_m,
+            window_start_filter_m=compiled.lp_short_m,
             window_length_m=test_candidate.lc_m,
             mtl_section_length_m=test_candidate.lc_m / topology.readout.mtl,
             readout_l_per_m_h=lines.readout_l_per_m_h,
@@ -664,7 +680,6 @@ end
 
     cared = D3TargetedSchurCaredOutput(
         D3_TARGETED_SCHUR_CARED_OUTPUT_CONTRACT,
-        :stage2_direct_hybridized,
         :hybridized_distributed_lumped,
         5.6e9,
         candidate,

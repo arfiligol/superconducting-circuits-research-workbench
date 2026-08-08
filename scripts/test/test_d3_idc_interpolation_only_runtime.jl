@@ -8,7 +8,7 @@ const D3_ROOT = joinpath(
     "D3 Intrinsic Purcell Filter Design",
 )
 
-include(joinpath(D3_ROOT, "d3_stage_models.jl"))
+include(joinpath(D3_ROOT, "d3_rev10_models.jl"))
 
 const EXPECTED_CORE_ENTRY = realpath(joinpath(
     WORKBENCH_ROOT,
@@ -73,26 +73,26 @@ realpath(pathof(SuperconductingCircuitsCore)) == EXPECTED_CORE_ENTRY || error(
         @test_throws ErrorException mapping(invalid)
     end
 
-    stage = _d3_stage_idc_triplet(mapping, 60.0)
-    @test stage.source_length_range_um == (35.0, 75.0)
-    @test stage.runtime_length_domain == "closed_source_support_um"
-    @test stage.evaluation_source ==
+    mapped = _d3_rev10_idc_triplet(mapping, 60.0)
+    @test mapped.source_length_range_um == (35.0, 75.0)
+    @test mapped.runtime_length_domain == "closed_source_support_um"
+    @test mapped.evaluation_source ==
         "linear_length_least_squares_interpolation"
-    @test !hasproperty(stage, :evaluation_extrapolated)
-    @test stage.mapping_semantic_sha256 ==
+    @test !hasproperty(mapped, :evaluation_extrapolated)
+    @test mapped.mapping_semantic_sha256 ==
         d3_idc_mapping_semantic_sha256(mapping)
-    @test_throws ErrorException _d3_stage_idc_triplet(
+    @test_throws ErrorException _d3_rev10_idc_triplet(
         _ -> mapping(60.0),
         100.0,
     )
-    @test_throws ErrorException _d3_stage_idc_triplet(
+    @test_throws ErrorException _d3_rev10_idc_triplet(
         _ -> merge(
             mapping(60.0),
             (runtime_length_domain="finite_positive_um",),
         ),
         60.0,
     )
-    @test_throws ErrorException _d3_stage_idc_triplet(
+    @test_throws ErrorException _d3_rev10_idc_triplet(
         _ -> merge(
             mapping(60.0),
             (evaluation_source="linear_length_least_squares_extrapolation",),

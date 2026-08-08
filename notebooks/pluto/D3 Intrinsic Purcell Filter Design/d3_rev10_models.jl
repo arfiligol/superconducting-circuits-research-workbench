@@ -1,7 +1,6 @@
-# D3 revision-10 direct-Hybridized candidate construction. The sole search
-# authority consumes all six physical coordinates in the distributed/lumped
-# Circuit Plan. Equivalent construction remains a winner-only closure tool.
-# Cost semantics and optimizer orchestration remain outside this file.
+# D3 revision-10 direct-Hybridized candidate construction. The sole current
+# search authority consumes five public optimizer coordinates in the fixed-node
+# distributed/lumped CircuitPlan. Cost semantics live in d3_rev10_objective.jl.
 
 using LinearAlgebra
 using SHA
@@ -11,12 +10,6 @@ isdefined(@__MODULE__, :D3IDCInput) ||
     include(joinpath(@__DIR__, "d3_idc_input.jl"))
 using .D3IDCInput: D3IDCMapping, d3_idc_mapping_semantic_sha256
 
-isdefined(@__MODULE__, :D3LCQualificationReceipt) ||
-    include(joinpath(@__DIR__, "d3_lc_qualification_receipt.jl"))
-using .D3LCQualificationReceipt: D3AuthorizedStage2LC,
-    D3_LC_QUALIFICATION_CONTRACT,
-    D3_LC_QUALIFICATION_POLICY_SHA256
-
 isdefined(@__MODULE__, :D3ResonatorInput) ||
     include(joinpath(@__DIR__, "d3_resonator_input.jl"))
 using .D3ResonatorInput: D3Rev10Q2DInput, validate_d3_rev10_q2d_input
@@ -25,7 +18,18 @@ isdefined(@__MODULE__, :D3FloatingQubitInput) ||
     include(joinpath(@__DIR__, "d3_floating_qubit_input.jl"))
 using .D3FloatingQubitInput: load_floating_qubit_nominal_input
 
-const D3_PHYSICAL_VARIABLE_ORDER = (
+const D3_REV10_SEARCH_VARIABLE_ORDER = (
+    :lr_open_m,
+    :l_short_m,
+    :lc_m,
+    :lp_open_m,
+    :u_IDC,
+)
+
+# The compiler expands the one public shared-short coordinate into the two
+# physical branch fields required by the fixed topology. This six-field form
+# is private and is never an independently variable optimizer surface.
+const _D3_COMPILED_VARIABLE_ORDER = (
     :lr_open_m,
     :lr_short_m,
     :lc_m,
@@ -34,7 +38,6 @@ const D3_PHYSICAL_VARIABLE_ORDER = (
     :u_IDC,
 )
 
-const D3_STAGE2_VARIABLE_ORDER = D3_PHYSICAL_VARIABLE_ORDER
 const D3_TARGETED_SCHUR_CONTEXT_CONTRACT =
     "d3-rev10-fixed-node-targeted-schur-objective-context.v1"
 const D3_TARGETED_SCHUR_CARED_OUTPUT_CONTRACT =
@@ -86,7 +89,6 @@ end
 
 struct D3TargetedSchurCaredOutput{C,S,G,E,V}
     contract_id::String
-    stage_id::Symbol
     model_family::Symbol
     slot_hz::Float64
     candidate::C
@@ -104,16 +106,6 @@ struct D3TargetedSchurCaredOutput{C,S,G,E,V}
     validity::V
 end
 
-const D3_RESPONSE_EQUIVALENT_VARIABLE_ORDER = (
-    :Cr_f,
-    :Lr_h,
-    :Cp_f,
-    :Lp_h,
-    :Cn_f,
-    :Ln_h,
-    :u_IDC,
-)
-
 const D3_SELECTED_IDC_MAPPING_ID =
     "d3-same-die-filter-feedline-idc-q3d-gap8-linear-length-v1"
 const D3_SELECTED_IDC_MAPPING_SHA256 =
@@ -122,18 +114,7 @@ const D3_SELECTED_IDC_SOURCE_SHA256 =
     "6a54fec0669c01dacf433f3cc639192e5e5202ae232aa5b1e786ac7147b172e3"
 const D3_SELECTED_IDC_SEMANTIC_SHA256 =
     "bd187b234e402b2a1dcd03009dcc07354f53721bf81b251e63a50f0aeb4435eb"
-struct D3Stage2ResonatorMapping{L,S,C}
-    fixed_line_input::L
-    settings::S
-    contract::C
-    mapping_sha256::String
-end
-
-function (mapping::D3Stage2ResonatorMapping)(lengths)
-    return _d3_stage2_evaluate_response_match(mapping, lengths)
-end
-
-function _d3_stage_positive(candidate, name, label)
+function _d3_rev10_positive(candidate, name, label)
     hasproperty(candidate, name) || error("$(label) is missing $(name).")
     raw = getproperty(candidate, name)
     raw isa Real || error("$(label) $(name) must be real.")
@@ -144,7 +125,7 @@ function _d3_stage_positive(candidate, name, label)
     return value
 end
 
-function _d3_stage_require_exact_fields(candidate, expected, label)
+function _d3_rev10_require_exact_fields(candidate, expected, label)
     actual = Tuple(propertynames(candidate))
     Set(actual) == Set(expected) || error(
         "$(label) fields must be exactly $(collect(expected)); received $(collect(actual)).",
@@ -152,7 +133,7 @@ function _d3_stage_require_exact_fields(candidate, expected, label)
     return nothing
 end
 
-function _d3_stage_idc_triplet(idc_mapping, u_idc)
+function _d3_rev10_idc_triplet(idc_mapping, u_idc)
     u_idc isa Real || error("D3 IDC u_IDC coordinate must be real.")
     u_idc_value = Float64(u_idc)
     isfinite(u_idc_value) && u_idc_value > 0 || error(
@@ -178,17 +159,17 @@ function _d3_stage_idc_triplet(idc_mapping, u_idc)
         "D3 IDC mapping must return all capacitances, identities, source support, and runtime classification.",
     )
     values = (
-        idc_filter_ground_capacitance_f=_d3_stage_positive(
+        idc_filter_ground_capacitance_f=_d3_rev10_positive(
             raw,
             :idc_filter_ground_capacitance_f,
             "D3 IDC mapping result",
         ),
-        idc_feedline_ground_capacitance_f=_d3_stage_positive(
+        idc_feedline_ground_capacitance_f=_d3_rev10_positive(
             raw,
             :idc_feedline_ground_capacitance_f,
             "D3 IDC mapping result",
         ),
-        idc_mutual_capacitance_f=_d3_stage_positive(
+        idc_mutual_capacitance_f=_d3_rev10_positive(
             raw,
             :idc_mutual_capacitance_f,
             "D3 IDC mapping result",
@@ -239,12 +220,12 @@ function _d3_stage_idc_triplet(idc_mapping, u_idc)
     )
 end
 
-function _d3_stage_require_physical_idc_mapping(idc_mapping::D3IDCMapping)
+function _d3_rev10_require_physical_idc_mapping(idc_mapping::D3IDCMapping)
     idc_mapping.gap_um == 8.0 || error(
-        "D3 physical stages require the Q3D IDC mapping evaluated at the accepted 8 um gap.",
+        "D3 physical model requires the Q3D IDC mapping evaluated at the accepted 8 um gap.",
     )
     idc_mapping.mapping_id == D3_SELECTED_IDC_MAPPING_ID || error(
-        "D3 physical stages require the selected three-branch IDC mapping id.",
+        "D3 physical model requires the selected three-branch IDC mapping id.",
     )
     lowercase(strip(idc_mapping.mapping_sha256)) ==
         D3_SELECTED_IDC_MAPPING_SHA256 || error(
@@ -266,14 +247,14 @@ function _d3_stage_require_physical_idc_mapping(idc_mapping::D3IDCMapping)
     return idc_mapping
 end
 
-function _d3_stage_require_physical_idc_mapping(idc_mapping)
+function _d3_rev10_require_physical_idc_mapping(idc_mapping)
     error(
-        "D3 Stage-2/3 physical candidates require D3IDCInput.D3IDCMapping " *
+        "D3 physical candidates require D3IDCInput.D3IDCMapping " *
         "loaded from the validated three-branch Q3D artifact; raw callables are diagnostic-only.",
     )
 end
 
-function _d3_stage_fixed_qubit_keywords(fixed)
+function _d3_rev10_fixed_qubit_keywords(fixed)
     required = (
         :c0r_f,
         :c01_f,
@@ -285,10 +266,10 @@ function _d3_stage_fixed_qubit_keywords(fixed)
     )
     return NamedTuple{
         required,
-    }(Tuple(_d3_stage_positive(fixed, name, "D3 fixed qubit input") for name in required))
+    }(Tuple(_d3_rev10_positive(fixed, name, "D3 fixed qubit input") for name in required))
 end
 
-function _d3_stage_sha256(value, label)
+function _d3_rev10_sha256(value, label)
     text = lowercase(strip(String(value)))
     occursin(r"^[0-9a-f]{64}$", text) || error(
         "$(label) must contain 64 lowercase hexadecimal characters.",
@@ -367,7 +348,7 @@ function _d3_bind_q3d_authority(raw_authority)
     isfile(input_path) || error(
         "D3 Q3D authority source file does not exist: $(input_path)",
     )
-    declared_sha256 = _d3_stage_sha256(
+    declared_sha256 = _d3_rev10_sha256(
         raw_authority.input_sha256,
         "D3 Q3D floating-qubit input SHA-256",
     )
@@ -382,7 +363,7 @@ function _d3_bind_q3d_authority(raw_authority)
         (; kwargs...) -> (; kwargs...);
         gap_um=gap_um,
     )
-    reloaded_sha256 = _d3_stage_sha256(
+    reloaded_sha256 = _d3_rev10_sha256(
         reloaded.input_sha256,
         "D3 reloaded Q3D floating-qubit input SHA-256",
     )
@@ -399,13 +380,13 @@ function _d3_bind_q3d_authority(raw_authority)
     )
 end
 
-"""Bind the complete fixed input authority for direct-Hybridized Stage 2.
+"""Bind the complete fixed-input authority for the direct-Hybridized model.
 
 The sealed Rev10 Q2D input, reduced Q3D floating-qubit model, fixed feedline
 discretization, and validated IDC mapping enter one typed bundle. The Task does
 not construct an internal merged tuple.
 """
-function bind_d3_stage2_direct_hybridized_inputs(
+function bind_d3_direct_hybridized_inputs(
     q2d_input::D3Rev10Q2DInput,
     q3d_authority,
     idc_mapping::D3IDCMapping;
@@ -416,7 +397,7 @@ function bind_d3_stage2_direct_hybridized_inputs(
     port_resistance_ohm,
 )
     q2d = validate_d3_rev10_q2d_input(q2d_input)
-    _d3_stage_require_physical_idc_mapping(idc_mapping)
+    _d3_rev10_require_physical_idc_mapping(idc_mapping)
     q3d = _d3_bind_q3d_authority(q3d_authority)
     q3d_qubit_model = q3d.model
     qubit_fields_fF = (
@@ -508,30 +489,42 @@ function bind_d3_stage2_direct_hybridized_inputs(
     )
 end
 
-function _d3_stage_physical_lengths(candidate, label)
+function _d3_rev10_physical_lengths(candidate, label)
     return (
-        lr_open_m=_d3_stage_positive(candidate, :lr_open_m, label),
-        lr_short_m=_d3_stage_positive(candidate, :lr_short_m, label),
-        lc_m=_d3_stage_positive(candidate, :lc_m, label),
-        lp_open_m=_d3_stage_positive(candidate, :lp_open_m, label),
-        lp_short_m=_d3_stage_positive(candidate, :lp_short_m, label),
+        lr_open_m=_d3_rev10_positive(candidate, :lr_open_m, label),
+        lr_short_m=_d3_rev10_positive(candidate, :lr_short_m, label),
+        lc_m=_d3_rev10_positive(candidate, :lc_m, label),
+        lp_open_m=_d3_rev10_positive(candidate, :lp_open_m, label),
+        lp_short_m=_d3_rev10_positive(candidate, :lp_short_m, label),
     )
 end
 
-function _d3_stage2_direct_candidate(candidate)
-    _d3_stage_require_exact_fields(
+function _d3_direct_candidate(candidate)
+    _d3_rev10_require_exact_fields(
         candidate,
-        D3_STAGE2_VARIABLE_ORDER,
-        "D3 direct-Hybridized Stage-2 candidate",
+        D3_REV10_SEARCH_VARIABLE_ORDER,
+        "D3 direct-Hybridized candidate",
     )
-    return NamedTuple{D3_STAGE2_VARIABLE_ORDER}(Tuple(
-        _d3_stage_positive(
+    return NamedTuple{D3_REV10_SEARCH_VARIABLE_ORDER}(Tuple(
+        _d3_rev10_positive(
             candidate,
             name,
-            "D3 direct-Hybridized Stage-2 candidate",
+            "D3 direct-Hybridized candidate",
         )
-        for name in D3_STAGE2_VARIABLE_ORDER
+        for name in D3_REV10_SEARCH_VARIABLE_ORDER
     ))
+end
+
+function _d3_compiled_candidate(candidate)
+    normalized = _d3_direct_candidate(candidate)
+    return (
+        lr_open_m=normalized.lr_open_m,
+        lr_short_m=normalized.l_short_m,
+        lc_m=normalized.lc_m,
+        lp_open_m=normalized.lp_open_m,
+        lp_short_m=normalized.l_short_m,
+        u_IDC=normalized.u_IDC,
+    )
 end
 
 """Construct the exact Circuit-owned grid plan for one candidate and level.
@@ -541,7 +534,7 @@ fixed input. Each subsequent level bisects every existing section, so all five
 actual section counts are exactly doubled without reconstructing a grid from
 halved maximum-cell lengths.
 """
-function d3_stage2_direct_hybridized_grid_plan(
+function d3_direct_hybridized_grid_plan(
     candidate,
     inputs::D3DirectHybridizedInputs;
     refinement_level,
@@ -549,10 +542,11 @@ function d3_stage2_direct_hybridized_grid_plan(
     refinement_level isa Integer && refinement_level >= 0 || error(
         "D3 direct-Hybridized refinement_level must be a nonnegative integer.",
     )
-    normalized_candidate = _d3_stage2_direct_candidate(candidate)
-    lengths = _d3_stage_physical_lengths(
-        normalized_candidate,
-        "D3 direct-Hybridized Stage-2 candidate",
+    normalized_candidate = _d3_direct_candidate(candidate)
+    compiled_candidate = _d3_compiled_candidate(normalized_candidate)
+    lengths = _d3_rev10_physical_lengths(
+        compiled_candidate,
+        "D3 direct-Hybridized candidate",
     )
     selected_lines = _d3_selected_q2d_line_input(inputs.q2d_input)
     lines = _d3_hybridized_fixed_line_keywords(selected_lines)
@@ -626,12 +620,12 @@ function d3_stage2_direct_hybridized_grid_plan(
     )
 end
 
-function _d3_validate_stage2_direct_grid_plan(
+function _d3_validate_direct_grid_plan(
     candidate,
     inputs::D3DirectHybridizedInputs,
     grid_plan::D3DirectHybridizedGridPlan,
 )
-    expected = d3_stage2_direct_hybridized_grid_plan(
+    expected = d3_direct_hybridized_grid_plan(
         candidate,
         inputs;
         refinement_level=grid_plan.refinement_level,
@@ -705,16 +699,17 @@ function _d3_validate_targeted_schur_grid_plan(
         all(isfinite, values) && first(values) == 0.0 && all(diff(values) .> 0) ||
             error("D3 targeted-Schur $(name) must be finite and strictly increasing from zero.")
     end
+    compiled = _d3_compiled_candidate(candidate)
     readout = grid_plan.boundaries_m.readout_resonator_boundaries_m
     filter = grid_plan.boundaries_m.filter_resonator_boundaries_m
-    last(readout) == candidate.lr_short_m + candidate.lc_m + candidate.lr_open_m &&
-        count(==(candidate.lr_short_m), readout) == 1 &&
-        count(==(candidate.lr_short_m + candidate.lc_m), readout) == 1 || error(
+    last(readout) == compiled.lr_short_m + compiled.lc_m + compiled.lr_open_m &&
+        count(==(compiled.lr_short_m), readout) == 1 &&
+        count(==(compiled.lr_short_m + compiled.lc_m), readout) == 1 || error(
         "D3 targeted-Schur readout boundaries do not contain the exact candidate endpoints.",
     )
-    last(filter) == candidate.lp_short_m + candidate.lc_m + candidate.lp_open_m &&
-        count(==(candidate.lp_short_m), filter) == 1 &&
-        count(==(candidate.lp_short_m + candidate.lc_m), filter) == 1 || error(
+    last(filter) == compiled.lp_short_m + compiled.lc_m + compiled.lp_open_m &&
+        count(==(compiled.lp_short_m), filter) == 1 &&
+        count(==(compiled.lp_short_m + compiled.lc_m), filter) == 1 || error(
         "D3 targeted-Schur filter boundaries do not contain the exact candidate endpoints.",
     )
     feedline_endpoint = inputs.feedline.feedline_length_m / 2
@@ -743,7 +738,7 @@ function _d3_validate_targeted_schur_grid_plan(
     return grid_plan
 end
 
-const _D3_TARGETED_SCHUR_LENGTH_COORDINATES = D3_STAGE2_VARIABLE_ORDER[1:5]
+const _D3_TARGETED_SCHUR_LENGTH_COORDINATES = _D3_COMPILED_VARIABLE_ORDER[1:5]
 
 function _d3_targeted_segment(start_m, length_m, count)
     return collect(range(start_m; stop=start_m + length_m, length=count + 1))
@@ -828,10 +823,10 @@ function _d3_targeted_candidate_boundaries(candidate, topology, grid_plan)
 end
 
 function _d3_targeted_real_models(candidate, inputs, topology, grid_plan; id)
-    normalized = _d3_stage2_direct_candidate(candidate)
+    normalized = NamedTuple{_D3_COMPILED_VARIABLE_ORDER}(candidate)
     boundaries = _d3_targeted_candidate_boundaries(normalized, topology, grid_plan)
-    idc = _d3_stage_idc_triplet(inputs.idc_mapping, normalized.u_IDC)
-    qubit = _d3_stage_fixed_qubit_keywords(inputs.qubit)
+    idc = _d3_rev10_idc_triplet(inputs.idc_mapping, normalized.u_IDC)
+    qubit = _d3_rev10_fixed_qubit_keywords(inputs.qubit)
     lines = _d3_hybridized_fixed_line_keywords(
         _d3_selected_q2d_line_input(inputs.q2d_input),
     )
@@ -920,7 +915,7 @@ function _d3_targeted_train_kernels(reference_candidate, inputs, topology, grid_
     full_k_terms = Matrix{Float64}[]
     notch_c_terms = Matrix{Float64}[]
     notch_k_terms = Matrix{Float64}[]
-    for name in D3_STAGE2_VARIABLE_ORDER
+    for name in _D3_COMPILED_VARIABLE_ORDER
         perturbed_candidate = _d3_targeted_training_candidate(reference_candidate, name, inputs)
         perturbed = _d3_targeted_real_models(
             perturbed_candidate,
@@ -947,7 +942,7 @@ function _d3_targeted_train_kernels(reference_candidate, inputs, topology, grid_
     full_k0 = copy(reference.full.inverse_inductance)
     notch_c0 = copy(reference.notch.capacitance)
     notch_k0 = copy(reference.notch.inverse_inductance)
-    for (index, name) in enumerate(D3_STAGE2_VARIABLE_ORDER)
+    for (index, name) in enumerate(_D3_COMPILED_VARIABLE_ORDER)
         value = getproperty(reference_candidate, name)
         full_c0 .-= value .* full_c_terms[index]
     end
@@ -960,7 +955,7 @@ function _d3_targeted_train_kernels(reference_candidate, inputs, topology, grid_
     full_kernel = (
         c0=full_c0,
         k0=full_k0,
-        c_terms=NamedTuple{D3_STAGE2_VARIABLE_ORDER}(Tuple(full_c_terms)),
+        c_terms=NamedTuple{_D3_COMPILED_VARIABLE_ORDER}(Tuple(full_c_terms)),
         k_terms=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(Tuple(full_k_terms)),
         reference_model=reference.full,
     )
@@ -989,17 +984,18 @@ function _d3_targeted_kernel_matrices(kernel, candidate, coordinates)
 end
 
 """Build one immutable, shareable fixed-node targeted-Schur Objective context."""
-function build_d3_stage2_targeted_schur_objective_context(
+function build_d3_targeted_schur_objective_context(
     reference_candidate,
     inputs::D3DirectHybridizedInputs;
     grid_plan::D3DirectHybridizedGridPlan,
-    id="d3-stage2-targeted-schur-context",
+    id="d3-rev10-targeted-schur-context",
 )::D3TargetedSchurObjectiveContext
-    candidate = _d3_stage2_direct_candidate(reference_candidate)
+    candidate = _d3_direct_candidate(reference_candidate)
     grid = _d3_validate_targeted_schur_grid_plan(candidate, inputs, grid_plan)
-    topology = _d3_targeted_topology(candidate, grid)
+    compiled_candidate = _d3_compiled_candidate(candidate)
+    topology = _d3_targeted_topology(compiled_candidate, grid)
     full_kernel, notch_kernel = _d3_targeted_train_kernels(
-        candidate,
+        compiled_candidate,
         inputs,
         topology,
         grid,
@@ -1011,9 +1007,9 @@ function build_d3_stage2_targeted_schur_objective_context(
     full_kernel_identity = (
         c0_sha256=_d3_exact_n_matrix_sha256("d3-targeted-full-c0", full_kernel.c0),
         k0_sha256=_d3_exact_n_matrix_sha256("d3-targeted-full-k0", full_kernel.k0),
-        c_term_sha256=NamedTuple{D3_STAGE2_VARIABLE_ORDER}(Tuple(
+        c_term_sha256=NamedTuple{_D3_COMPILED_VARIABLE_ORDER}(Tuple(
             _d3_exact_n_matrix_sha256("d3-targeted-full-c-$(name)", getproperty(full_kernel.c_terms, name))
-            for name in D3_STAGE2_VARIABLE_ORDER
+            for name in _D3_COMPILED_VARIABLE_ORDER
         )),
         k_term_sha256=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(Tuple(
             _d3_exact_n_matrix_sha256("d3-targeted-full-k-$(name)", getproperty(full_kernel.k_terms, name))
@@ -1070,550 +1066,6 @@ function build_d3_stage2_targeted_schur_objective_context(
     )
 end
 
-function _d3_stage2_response_matched_resonators(
-    resonator_mapping::D3Stage2ResonatorMapping,
-    lengths,
-)
-    applicable(resonator_mapping, lengths) || error(
-        "D3 Stage-2 resonator mapping must be callable with the five physical lengths.",
-    )
-    raw = resonator_mapping(lengths)
-    required = (
-        :Cr_f,
-        :Lr_h,
-        :Cp_f,
-        :Lp_h,
-        :Cn_f,
-        :Ln_h,
-        :mapping_id,
-        :mapping_sha256,
-        :q2d_artifact_id,
-        :q2d_artifact_sha256,
-        :topology_id,
-        :match_contract_id,
-        :fixed_line_input_sha256,
-        :fixed_line_input_identity,
-        :fixed_line_input_identity_canonical_json,
-        :match_evidence,
-    )
-    all(name -> hasproperty(raw, name), required) || error(
-        "D3 Stage-2 resonator mapping must return six response-matched LC values, " *
-        "Q2D/topology provenance, its match contract, and fixed-line identity.",
-    )
-    contract = resonator_mapping.contract
-    for (name, expected) in (
-        (:mapping_id, "d3-continuous-ground-response-match"),
-        (:q2d_artifact_id, contract.q2d_artifact_id),
-        (:q2d_artifact_sha256, contract.q2d_artifact_sha256),
-        (:topology_id, contract.topology_id),
-        (:match_contract_id, contract.match_contract_id),
-        (:fixed_line_input_sha256, contract.fixed_line_input_sha256),
-    )
-        String(getproperty(raw, name)) == String(expected) || error(
-            "D3 Stage-2 response match $(name) disagrees with its attested mapping contract.",
-        )
-    end
-    values = NamedTuple{
-        (:Cr_f, :Lr_h, :Cp_f, :Lp_h, :Cn_f, :Ln_h),
-    }(Tuple(
-        _d3_stage_positive(raw, name, "D3 Stage-2 response match")
-        for name in (:Cr_f, :Lr_h, :Cp_f, :Lp_h, :Cn_f, :Ln_h)
-    ))
-    strings = NamedTuple{
-        (:mapping_id, :q2d_artifact_id, :topology_id, :match_contract_id),
-    }(Tuple(
-        begin
-            value = strip(String(getproperty(raw, name)))
-            isempty(value) && error("D3 Stage-2 $(name) must not be empty.")
-            value
-        end
-        for name in (
-            :mapping_id,
-            :q2d_artifact_id,
-            :topology_id,
-            :match_contract_id,
-        )
-    ))
-    hashes = NamedTuple{
-        (
-            :mapping_sha256,
-            :q2d_artifact_sha256,
-            :fixed_line_input_sha256,
-        ),
-    }(Tuple(
-        begin
-            value = lowercase(strip(String(getproperty(raw, name))))
-            occursin(r"^[0-9a-f]{64}$", value) || error(
-                "D3 Stage-2 $(name) must contain 64 lowercase hexadecimal characters.",
-            )
-            value
-        end
-        for name in (
-            :mapping_sha256,
-            :q2d_artifact_sha256,
-            :fixed_line_input_sha256,
-        )
-    ))
-    canonical_identity = String(raw.fixed_line_input_identity_canonical_json)
-    canonical_identity == SuperconductingCircuitsCore.JSON3.write(
-        raw.fixed_line_input_identity,
-    ) || error(
-        "D3 Stage-2 fixed-line canonical JSON disagrees with its normalized identity.",
-    )
-    bytes2hex(SHA.sha256(codeunits(canonical_identity))) ==
-        hashes.fixed_line_input_sha256 || error(
-        "D3 Stage-2 fixed-line identity SHA-256 disagrees with its canonical JSON.",
-    )
-    return merge(
-        values,
-        strings,
-        hashes,
-        (
-            physical_lengths=lengths,
-            fixed_line_input_identity=raw.fixed_line_input_identity,
-            fixed_line_input_identity_canonical_json=canonical_identity,
-            match_evidence=raw.match_evidence,
-        ),
-    )
-end
-
-function _d3_stage2_response_matched_resonators(resonator_mapping, lengths)
-    error(
-        "D3 Stage-2 requires D3Stage2ResonatorMapping from the selected Q2D " *
-        "response-match constructor; raw callables cannot enter the physical evaluator.",
-    )
-end
-
-function _d3_stage2_validate_resonator_mapping(
-    resonator_mapping::D3Stage2ResonatorMapping,
-    fixed,
-)
-    selected = _d3_selected_q2d_line_input(fixed)
-    mapping_selected = _d3_selected_q2d_line_input(
-        resonator_mapping.fixed_line_input,
-    )
-    selected.fixed_line_input_sha256 ==
-        mapping_selected.fixed_line_input_sha256 || error(
-        "D3 Stage-2 resonator mapping does not use the supplied selected fixed input.",
-    )
-    contract = resonator_mapping.contract
-    expected = (
-        match_contract_id="d3-cpw-mtl-response-match.v1",
-        q2d_artifact_id=selected.q2d_artifact_id,
-        q2d_artifact_sha256=selected.q2d_artifact_sha256,
-        topology_id=String(selected.q2d_topology_id),
-        fixed_line_input_sha256=selected.fixed_line_input_sha256,
-        settings=resonator_mapping.settings,
-    )
-    contract == expected || error(
-        "D3 Stage-2 resonator mapping contract is not bound to the selected fixed input and settings.",
-    )
-    expected_sha256 = bytes2hex(SHA.sha256(codeunits(
-        SuperconductingCircuitsCore.JSON3.write(expected),
-    )))
-    resonator_mapping.mapping_sha256 == expected_sha256 || error(
-        "D3 Stage-2 resonator mapping SHA-256 disagrees with its declared contract.",
-    )
-    return resonator_mapping
-end
-
-function _d3_stage2_receipt_qualified_resonators(
-    authorization::D3AuthorizedStage2LC,
-    resonator_mapping::D3Stage2ResonatorMapping,
-    lengths,
-)
-    selected = _d3_selected_q2d_line_input(resonator_mapping.fixed_line_input)
-    receipt = authorization.receipt
-    lc = authorization.lc_readback
-    return merge(
-        lc,
-        (
-            mapping_id="d3-frequency-priority-lc-qualification-receipt",
-            mapping_sha256=receipt.sha256,
-            q2d_artifact_id=selected.q2d_artifact_id,
-            q2d_artifact_sha256=selected.q2d_artifact_sha256,
-            topology_id=String(selected.q2d_topology_id),
-            fixed_line_input_sha256=selected.fixed_line_input_sha256,
-            fixed_line_input_identity=selected.fixed_line_input_identity,
-            fixed_line_input_identity_canonical_json=
-                selected.fixed_line_input_identity_canonical_json,
-            match_contract_id=D3_LC_QUALIFICATION_CONTRACT,
-            physical_lengths=lengths,
-            match_evidence=(
-                reference_model=(
-                    role=:receipt_qualified_physical_length_to_equivalent_lc,
-                    final_stage2_hb_model=:resolved_lumped_equivalent_circuit,
-                    topology=:two_grounded_head_open_tail_quarter_wave_resonators_with_mtl_window,
-                    terminal_coordinates=(:readout_open_tail, :filter_open_tail),
-                    diagonal_match_state=:mtl_mutual_terms_disabled_diagonal_loading_preserved,
-                    bridge_match_state=:full_mtl_mutual_terms_preserved,
-                    internal_coordinate_elimination=:frequency_dependent_dynamic_schur_complement,
-                    section_length_m=selected.section_length_m,
-                    mtl_section_length_m=selected.mtl_section_length_m,
-                ),
-                qualification_receipt=(
-                    schema_version=receipt.normalized.schema_version,
-                    evidence_id=receipt.normalized.evidence_id,
-                    receipt_sha256=receipt.sha256,
-                    policy_sha256=D3_LC_QUALIFICATION_POLICY_SHA256,
-                    candidate_id=receipt.normalized.candidate.id,
-                    source=receipt.normalized.source,
-                    frequency_deltas=receipt.normalized.frequency_deltas,
-                ),
-            ),
-        ),
-    )
-end
-
-function _d3_stage2_resonator_response_model(lengths, lines; diagonal)
-    l_matrix = diagonal ?
-        Matrix(Diagonal(LinearAlgebra.diag(lines.l_matrix_per_m_h))) :
-        lines.l_matrix_per_m_h
-    c_matrix = diagonal ?
-        Matrix(Diagonal(LinearAlgebra.diag(lines.c_matrix_per_m_f))) :
-        lines.c_matrix_per_m_f
-    plan = CircuitPlan(
-        diagonal ?
-            "d3-stage2-diagonal-response-reference" :
-            "d3-stage2-physical-response-reference",
-    )
-    readout_grounded_head = external_node("d3_stage2_readout_grounded_head")
-    readout_open_tail = external_node("d3_stage2_readout_open_tail")
-    filter_grounded_head = external_node("d3_stage2_filter_grounded_head")
-    filter_open_tail = external_node("d3_stage2_filter_open_tail")
-    mtl_model = MTLCoupledRLGCSpec(
-        start1_m=lengths.lr_short_m,
-        start2_m=lengths.lp_short_m,
-        length_m=lengths.lc_m,
-        section_length_m=lines.mtl_section_length_m,
-        l_matrix_per_m_h=l_matrix,
-        c_matrix_per_m_f=c_matrix,
-    )
-    readout = add_quarter_wave_resonator!(
-        plan;
-        id=:d3_stage2_readout_resonator,
-        grounded_head=readout_grounded_head,
-        open_tail=readout_open_tail,
-        spec=_d3_line_spec(
-            length_m=
-                lengths.lr_short_m + lengths.lc_m + lengths.lr_open_m,
-            section_length_m=lines.section_length_m,
-            l_per_m_h=lines.readout_l_per_m_h,
-            c_per_m_f=lines.readout_c_per_m_f,
-        ),
-        breakpoints_m=_d3_mtl_window_breakpoints(
-            lengths.lr_short_m,
-            lengths.lc_m,
-            lines.mtl_section_length_m,
-        ),
-        section_overrides=[coupled_line_section_override(mtl_model, 1)],
-    )
-    filter = add_quarter_wave_resonator!(
-        plan;
-        id=:d3_stage2_filter_resonator,
-        grounded_head=filter_grounded_head,
-        open_tail=filter_open_tail,
-        spec=_d3_line_spec(
-            length_m=
-                lengths.lp_short_m + lengths.lc_m + lengths.lp_open_m,
-            section_length_m=lines.section_length_m,
-            l_per_m_h=lines.filter_l_per_m_h,
-            c_per_m_f=lines.filter_c_per_m_f,
-        ),
-        breakpoints_m=_d3_mtl_window_breakpoints(
-            lengths.lp_short_m,
-            lengths.lc_m,
-            lines.mtl_section_length_m,
-        ),
-        section_overrides=[coupled_line_section_override(mtl_model, 2)],
-    )
-    couple_transmission_window!(
-        plan;
-        id=:d3_stage2_mtl_window,
-        line1=readout.line,
-        line2=filter.line,
-        start1=lengths.lr_short_m,
-        start2=lengths.lp_short_m,
-        length=lengths.lc_m,
-        model=mtl_model,
-        coupling_orientation=lines.coupling_orientation,
-    )
-    compiled = compile_to_josephson(plan)
-    model = extract_linear_nodal_model(compiled)
-    endpoints = (
-        readout_open_tail,
-        filter_open_tail,
-    )
-    terminal_indices = [
-        begin
-        node_name = compiled.node_map[endpoint]
-        matches = findall(==(node_name), model.node_names)
-        length(matches) == 1 || error(
-            "D3 Stage-2 response-match terminal $(node_name) must resolve exactly once.",
-        )
-        only(matches)
-        end
-        for endpoint in endpoints
-    ]
-    return (
-        plan=plan,
-        compiled=compiled,
-        model=model,
-        terminal_indices=terminal_indices,
-    )
-end
-
-function _d3_stage2_terminal_admittance(
-    reference,
-    terminal_position,
-    angular_frequency,
-)
-    reduced = schur_dynamic_stiffness(
-        reference.model.capacitance,
-        reference.model.inverse_inductance,
-        angular_frequency,
-        reference.terminal_indices,
-    )
-    return reduced.dynamic_stiffness[terminal_position, terminal_position] /
-        (-im * angular_frequency)
-end
-
-"""
-    d3_stage2_response_matched_resonator_mapping(fixed; ...)
-
-Create the physical-length-to-LC map shared by the Stage-2 optimizer. The map
-keeps the declared Q2D diagonal loading when mutual terms are disabled,
-matches `Cr/Lr` and `Cp/Lp` from terminal-admittance roots/slopes, and matches
-`Cn/Ln` from the physical-pair `Z21` notch and slope.
-"""
-function d3_stage2_response_matched_resonator_mapping(
-    fixed;
-    readout_root_bracket_hz,
-    filter_root_bracket_hz,
-    notch_root_bracket_hz,
-    parallel_derivative_step_rad_s,
-    bridge_derivative_step_rad_s,
-    bisection_absolute_tolerance_rad_s=2π * 10.0,
-    bisection_relative_tolerance=1.0e-13,
-    bisection_max_iterations=128,
-    match_root_relative_tolerance=2.0e-3,
-    derivative_relative_tolerance=1.0e-7,
-)
-    selected_lines = _d3_selected_q2d_line_input(fixed)
-    settings = (
-        readout_root_bracket_hz=Tuple(Float64.(collect(readout_root_bracket_hz))),
-        filter_root_bracket_hz=Tuple(Float64.(collect(filter_root_bracket_hz))),
-        notch_root_bracket_hz=Tuple(Float64.(collect(notch_root_bracket_hz))),
-        parallel_derivative_step_rad_s=Float64(parallel_derivative_step_rad_s),
-        bridge_derivative_step_rad_s=Float64(bridge_derivative_step_rad_s),
-        bisection_absolute_tolerance_rad_s=
-            Float64(bisection_absolute_tolerance_rad_s),
-        bisection_relative_tolerance=Float64(bisection_relative_tolerance),
-        bisection_max_iterations=Int(bisection_max_iterations),
-        match_root_relative_tolerance=Float64(match_root_relative_tolerance),
-        derivative_relative_tolerance=Float64(derivative_relative_tolerance),
-    )
-    all(bracket -> length(bracket) == 2 && 0 < bracket[1] < bracket[2], (
-        settings.readout_root_bracket_hz,
-        settings.filter_root_bracket_hz,
-        settings.notch_root_bracket_hz,
-    )) || error("D3 Stage-2 response-match root brackets must be positive and increasing.")
-    mapping_contract = (
-        match_contract_id="d3-cpw-mtl-response-match.v1",
-        q2d_artifact_id=selected_lines.q2d_artifact_id,
-        q2d_artifact_sha256=selected_lines.q2d_artifact_sha256,
-        topology_id=String(selected_lines.q2d_topology_id),
-        fixed_line_input_sha256=selected_lines.fixed_line_input_sha256,
-        settings=settings,
-    )
-    mapping_sha256 = bytes2hex(SHA.sha256(codeunits(
-        SuperconductingCircuitsCore.JSON3.write(mapping_contract),
-    )))
-    return D3Stage2ResonatorMapping(
-        selected_lines,
-        settings,
-        mapping_contract,
-        mapping_sha256,
-    )
-end
-
-function _d3_stage2_evaluate_response_match(
-    mapping::D3Stage2ResonatorMapping,
-    lengths,
-)
-    selected_lines = _d3_selected_q2d_line_input(mapping.fixed_line_input)
-    lines = _d3_hybridized_fixed_line_keywords(selected_lines)
-    settings = mapping.settings
-    diagonal = _d3_stage2_resonator_response_model(
-        lengths,
-        lines;
-        diagonal=true,
-    )
-    physical = _d3_stage2_resonator_response_model(
-        lengths,
-        lines;
-        diagonal=false,
-    )
-    yr = angular_frequency -> _d3_stage2_terminal_admittance(
-        diagonal,
-        1,
-        angular_frequency,
-    )
-    yp = angular_frequency -> _d3_stage2_terminal_admittance(
-        diagonal,
-        2,
-        angular_frequency,
-    )
-    z21 = angular_frequency -> linear_terminal_response(
-        physical.model.capacitance,
-        physical.model.inverse_inductance,
-        angular_frequency,
-        physical.terminal_indices,
-    ).impedance[2, 1]
-    bisection = (
-        absolute_tolerance=settings.bisection_absolute_tolerance_rad_s,
-        relative_tolerance=settings.bisection_relative_tolerance,
-        max_iterations=settings.bisection_max_iterations,
-    )
-    root(response, bracket_hz) = bracketed_bisection(
-        angular_frequency -> imag(response(angular_frequency)),
-        2π .* collect(bracket_hz);
-        bisection...,
-    )
-    readout_root = root(yr, settings.readout_root_bracket_hz)
-    filter_root = root(yp, settings.filter_root_bracket_hz)
-    notch_root = root(z21, settings.notch_root_bracket_hz)
-    readout = match_parallel_lc(
-        yr,
-        readout_root;
-        derivative_step_rad_s=settings.parallel_derivative_step_rad_s,
-        root_relative_tolerance=settings.match_root_relative_tolerance,
-        imaginary_derivative_relative_tolerance=
-            settings.derivative_relative_tolerance,
-    )
-    filter = match_parallel_lc(
-        yp,
-        filter_root;
-        derivative_step_rad_s=settings.parallel_derivative_step_rad_s,
-        root_relative_tolerance=settings.match_root_relative_tolerance,
-        imaginary_derivative_relative_tolerance=
-            settings.derivative_relative_tolerance,
-    )
-    bridge = match_bridge_lc(
-        z21,
-        yr,
-        yp,
-        notch_root;
-        derivative_step_rad_s=settings.bridge_derivative_step_rad_s,
-        root_relative_tolerance=settings.match_root_relative_tolerance,
-        imaginary_capacitance_relative_tolerance=
-            settings.derivative_relative_tolerance,
-    )
-    return (
-        Cr_f=readout.capacitance_f,
-        Lr_h=readout.inductance_h,
-        Cp_f=filter.capacitance_f,
-        Lp_h=filter.inductance_h,
-        Cn_f=bridge.capacitance_f,
-        Ln_h=bridge.inductance_h,
-        mapping_id="d3-continuous-ground-response-match",
-        mapping_sha256=mapping.mapping_sha256,
-        q2d_artifact_id=selected_lines.q2d_artifact_id,
-        q2d_artifact_sha256=selected_lines.q2d_artifact_sha256,
-        topology_id=String(selected_lines.q2d_topology_id),
-        fixed_line_input_sha256=selected_lines.fixed_line_input_sha256,
-        fixed_line_input_identity=selected_lines.fixed_line_input_identity,
-        fixed_line_input_identity_canonical_json=
-            selected_lines.fixed_line_input_identity_canonical_json,
-        match_contract_id=mapping.contract.match_contract_id,
-        match_evidence=(
-            reference_model=(
-                role=:physical_length_to_equivalent_lc_extraction_only,
-                final_stage2_hb_model=:resolved_lumped_equivalent_circuit,
-                topology=:two_grounded_head_open_tail_quarter_wave_resonators_with_mtl_window,
-                terminal_coordinates=(:readout_open_tail, :filter_open_tail),
-                diagonal_match_state=:mtl_mutual_terms_disabled_diagonal_loading_preserved,
-                bridge_match_state=:full_mtl_mutual_terms_preserved,
-                internal_coordinate_elimination=:frequency_dependent_dynamic_schur_complement,
-                section_length_m=lines.section_length_m,
-                mtl_section_length_m=lines.mtl_section_length_m,
-            ),
-            readout=readout,
-            filter=filter,
-            bridge=bridge,
-            settings=settings,
-        ),
-    )
-end
-
-function _d3_stage2_fixed_feedline_keywords(fixed)
-    obsolete = (
-        :separator_inductance_h,
-        :separator_model,
-        :separator_characteristic_impedance_ohm,
-        :separator_phase_velocity_m_per_s,
-        :feedline_length_m,
-        :feedline_l_per_m_h,
-        :feedline_c_per_m_f,
-        :feedline_n_sections,
-    )
-    stale = filter(name -> hasproperty(fixed, name), obsolete)
-    isempty(stale) || error(
-        "D3 Stage-2 fixed input contains obsolete feedline fields $(collect(stale)); " *
-        "the matched two-section port regularizer is fixed by its CircuitPlan.",
-    )
-    port_resistance_ohm = _d3_stage_positive(
-        fixed,
-        :port_resistance_ohm,
-        "D3 fixed feedline input",
-    )
-    port_resistance_ohm == 50.0 || error(
-        "D3 Stage-2 matched ports are fixed at exactly 50 ohm.",
-    )
-    return (port_resistance_ohm=port_resistance_ohm,)
-end
-
-function d3_stage2_matched_port_regularizer_contract(port_resistance_ohm=50.0)
-    resistance = Float64(port_resistance_ohm)
-    isfinite(resistance) && resistance == 50.0 || error(
-        "D3 Stage-2 matched ports are fixed at exactly 50 ohm.",
-    )
-    return (
-        feedline_model=:matched_port_regularizer_two_pi,
-        regularizer_series_inductance_h=
-            D3_PORT_REGULARIZER_SERIES_INDUCTANCE_H,
-        regularizer_section_capacitance_f=
-            D3_PORT_REGULARIZER_SECTION_CAPACITANCE_F,
-        regularizer_characteristic_impedance_ohm=
-            D3_PORT_REGULARIZER_CHARACTERISTIC_IMPEDANCE_OHM,
-        regularizer_phase_velocity_m_per_s=
-            D3_PORT_REGULARIZER_PHASE_VELOCITY_M_PER_S,
-        regularizer_section_length_m=
-            D3_PORT_REGULARIZER_SECTION_LENGTH_M,
-        regularizer_section_count=2,
-        port_resistance_ohm=resistance,
-    )
-end
-
-function d3_stage2_validate_matched_port_regularizer_contract(raw)
-    expected = d3_stage2_matched_port_regularizer_contract()
-    names = propertynames(expected)
-    Set(Symbol.(keys(raw))) == Set(names) || error(
-        "D3 Stage-2 fixed-feedline fields must be exactly $(collect(names)).",
-    )
-    Symbol(raw["feedline_model"]) == expected.feedline_model || error(
-        "D3 Stage-2 fixed feedline must use the matched two-pi port regularizer.",
-    )
-    for name in names
-        name === :feedline_model && continue
-        value = Float64(raw[String(name)])
-        value == Float64(getproperty(expected, name)) || error(
-            "D3 Stage-2 fixed-feedline $(name) disagrees with its CircuitPlan constant.",
-        )
-    end
-    return expected
-end
-
 function _d3_distributed_feedline_keywords(fixed)
     required = (
         :feedline_length_m,
@@ -1623,7 +1075,7 @@ function _d3_distributed_feedline_keywords(fixed)
     )
     values = NamedTuple{
         required,
-    }(Tuple(_d3_stage_positive(fixed, name, "D3 distributed feedline input") for name in required))
+    }(Tuple(_d3_rev10_positive(fixed, name, "D3 distributed feedline input") for name in required))
     values.port_resistance_ohm == 50.0 || error(
         "D3 distributed matched ports are fixed at exactly 50 ohm.",
     )
@@ -1636,100 +1088,6 @@ function _d3_distributed_feedline_keywords(fixed)
         "D3 distributed feedline_n_sections must be an even integer-valued count of at least two.",
     )
     return merge(values, (feedline_n_sections=Int(round(raw)),))
-end
-
-"""
-    d3_response_equivalent_model_from_lc(candidate, fixed, idc_mapping; id=...)
-
-Build a finite response-equivalent diagnostic from six explicit LC values.
-This is the topology-constrained fitter realization; it is not a fabrication
-witness and must not be passed to the Stage-2 optimizer.
-"""
-function d3_response_equivalent_model_from_lc(
-    candidate,
-    fixed,
-    idc_mapping;
-    id="d3-response-equivalent-diagnostic",
-)
-    _d3_stage_require_exact_fields(
-        candidate,
-        D3_RESPONSE_EQUIVALENT_VARIABLE_ORDER,
-        "D3 response-equivalent diagnostic",
-    )
-    u_idc = _d3_stage_positive(
-        candidate,
-        :u_IDC,
-        "D3 response-equivalent diagnostic",
-    )
-    idc = _d3_stage_idc_triplet(idc_mapping, u_idc)
-    qubit = _d3_stage_fixed_qubit_keywords(fixed)
-    feedline = _d3_stage2_fixed_feedline_keywords(fixed)
-    built = build_d3_intrinsic_purcell_equivalent_circuit_plan(;
-        id=String(id),
-        idc_filter_ground_capacitance_f=
-            idc.idc_filter_ground_capacitance_f,
-        idc_feedline_ground_capacitance_f=
-            idc.idc_feedline_ground_capacitance_f,
-        idc_mutual_capacitance_f=idc.idc_mutual_capacitance_f,
-        readout_capacitance_f=
-            _d3_stage_positive(candidate, :Cr_f, "D3 response-equivalent diagnostic"),
-        readout_inductance_h=
-            _d3_stage_positive(candidate, :Lr_h, "D3 response-equivalent diagnostic"),
-        filter_capacitance_f=
-            _d3_stage_positive(candidate, :Cp_f, "D3 response-equivalent diagnostic"),
-        filter_inductance_h=
-            _d3_stage_positive(candidate, :Lp_h, "D3 response-equivalent diagnostic"),
-        bridge_capacitance_f=
-            _d3_stage_positive(candidate, :Cn_f, "D3 response-equivalent diagnostic"),
-        bridge_inductance_h=
-            _d3_stage_positive(candidate, :Ln_h, "D3 response-equivalent diagnostic"),
-        qubit...,
-        feedline...,
-    )
-    auxiliary = (
-        linewidth_la=build_d3_linewidth_la_equivalent_circuit_plan(;
-            id="$(id)-linewidth-la",
-            idc_filter_ground_capacitance_f=
-                idc.idc_filter_ground_capacitance_f,
-            idc_feedline_ground_capacitance_f=
-                idc.idc_feedline_ground_capacitance_f,
-            idc_mutual_capacitance_f=idc.idc_mutual_capacitance_f,
-            filter_capacitance_f=
-                _d3_stage_positive(candidate, :Cp_f, "D3 response-equivalent diagnostic"),
-            filter_inductance_h=
-                _d3_stage_positive(candidate, :Lp_h, "D3 response-equivalent diagnostic"),
-            bridge_capacitance_f=
-                _d3_stage_positive(candidate, :Cn_f, "D3 response-equivalent diagnostic"),
-            bridge_inductance_h=
-                _d3_stage_positive(candidate, :Ln_h, "D3 response-equivalent diagnostic"),
-            feedline...,
-        ),
-        notch=build_d3_intrinsic_pair_notch_equivalent_circuit_plan(;
-            id="$(id)-intrinsic-pair-notch",
-            readout_capacitance_f=
-                _d3_stage_positive(candidate, :Cr_f, "D3 response-equivalent diagnostic"),
-            readout_inductance_h=
-                _d3_stage_positive(candidate, :Lr_h, "D3 response-equivalent diagnostic"),
-            filter_capacitance_f=
-                _d3_stage_positive(candidate, :Cp_f, "D3 response-equivalent diagnostic"),
-            filter_inductance_h=
-                _d3_stage_positive(candidate, :Lp_h, "D3 response-equivalent diagnostic"),
-            bridge_capacitance_f=
-                _d3_stage_positive(candidate, :Cn_f, "D3 response-equivalent diagnostic"),
-            bridge_inductance_h=
-                _d3_stage_positive(candidate, :Ln_h, "D3 response-equivalent diagnostic"),
-            port_resistance_ohm=feedline.port_resistance_ohm,
-        ),
-    )
-    return (
-        stage_id=:response_equivalent_diagnostic,
-        model_family=:finite_order_response_equivalent,
-        variable_order=D3_RESPONSE_EQUIVALENT_VARIABLE_ORDER,
-        candidate=candidate,
-        idc=idc,
-        built=built,
-        auxiliary=auxiliary,
-    )
 end
 
 function _d3_hybridized_fixed_line_keywords(fixed)
@@ -1746,13 +1104,13 @@ function _d3_hybridized_fixed_line_keywords(fixed)
     all(name -> hasproperty(fixed, name), required) || error(
         "D3 Hybridized fixed input is missing one or more CPW/MTL fields.",
     )
-    section_length_m = _d3_stage_positive(
+    section_length_m = _d3_rev10_positive(
         fixed,
         :section_length_m,
         "D3 Hybridized fixed input",
     )
     mtl_section_length_m = hasproperty(fixed, :mtl_section_length_m) ?
-        _d3_stage_positive(fixed, :mtl_section_length_m, "D3 Hybridized fixed input") :
+        _d3_rev10_positive(fixed, :mtl_section_length_m, "D3 Hybridized fixed input") :
         section_length_m
     for name in (
         :readout_l_per_m_h,
@@ -1760,7 +1118,7 @@ function _d3_hybridized_fixed_line_keywords(fixed)
         :filter_l_per_m_h,
         :filter_c_per_m_f,
     )
-        _d3_stage_positive(fixed, name, "D3 Hybridized fixed input")
+        _d3_rev10_positive(fixed, name, "D3 Hybridized fixed input")
     end
     for (name, matrix) in (
         (:l_matrix_per_m_h, fixed.l_matrix_per_m_h),
@@ -1844,58 +1202,30 @@ function _d3_selected_q2d_line_input(fixed)
 end
 
 """
-    d3_stage2_direct_hybridized_model(candidate, inputs; grid_plan, id=...)
+    d3_direct_hybridized_model(candidate, inputs; grid_plan, id=...)
 
-Build one revision-10 direct-Hybridized Stage-2 candidate. The six physical
-coordinates are consumed together; no LC/Equivalent candidate is constructed.
+Build one revision-10 direct-Hybridized candidate. The five public optimizer
+coordinates are consumed together; `l_short_m` is expanded to the two equal
+physical short-side fields required by the compiled topology.
 """
-function d3_stage2_direct_hybridized_model(
+function d3_direct_hybridized_model(
     candidate,
     inputs::D3DirectHybridizedInputs;
     grid_plan::D3DirectHybridizedGridPlan,
-    id="d3-stage2-direct-hybridized-candidate",
+    id="d3-direct-hybridized-candidate",
 )
-    _d3_stage_require_exact_fields(
-        candidate,
-        D3_STAGE2_VARIABLE_ORDER,
-        "D3 direct-Hybridized Stage-2 candidate",
-    )
-    _d3_stage_require_physical_idc_mapping(inputs.idc_mapping)
-    grid = _d3_validate_stage2_direct_grid_plan(candidate, inputs, grid_plan)
-    lengths = (
-        lr_open_m=_d3_stage_positive(
-            candidate,
-            :lr_open_m,
-            "D3 direct-Hybridized Stage-2 candidate",
-        ),
-        lr_short_m=_d3_stage_positive(
-            candidate,
-            :lr_short_m,
-            "D3 direct-Hybridized Stage-2 candidate",
-        ),
-        lc_m=_d3_stage_positive(
-            candidate,
-            :lc_m,
-            "D3 direct-Hybridized Stage-2 candidate",
-        ),
-        lp_open_m=_d3_stage_positive(
-            candidate,
-            :lp_open_m,
-            "D3 direct-Hybridized Stage-2 candidate",
-        ),
-        lp_short_m=_d3_stage_positive(
-            candidate,
-            :lp_short_m,
-            "D3 direct-Hybridized Stage-2 candidate",
-        ),
-    )
-    u_idc = _d3_stage_positive(
-        candidate,
+    normalized = _d3_direct_candidate(candidate)
+    compiled = _d3_compiled_candidate(normalized)
+    _d3_rev10_require_physical_idc_mapping(inputs.idc_mapping)
+    grid = _d3_validate_direct_grid_plan(normalized, inputs, grid_plan)
+    lengths = _d3_rev10_physical_lengths(compiled, "D3 compiled candidate")
+    u_idc = _d3_rev10_positive(
+        normalized,
         :u_IDC,
-        "D3 direct-Hybridized Stage-2 candidate",
+        "D3 direct-Hybridized candidate",
     )
-    idc = _d3_stage_idc_triplet(inputs.idc_mapping, u_idc)
-    qubit = _d3_stage_fixed_qubit_keywords(inputs.qubit)
+    idc = _d3_rev10_idc_triplet(inputs.idc_mapping, u_idc)
+    qubit = _d3_rev10_fixed_qubit_keywords(inputs.qubit)
     base_feedline = _d3_distributed_feedline_keywords(inputs.feedline)
     feedline = merge(base_feedline, (
         feedline_n_sections=
@@ -1959,10 +1289,10 @@ function d3_stage2_direct_hybridized_model(
         ),
     )
     return (
-        stage_id=:stage2_direct_hybridized,
+        model_role=:direct_hybridized_candidate,
         model_family=:hybridized_distributed_lumped,
-        variable_order=D3_STAGE2_VARIABLE_ORDER,
-        candidate=candidate,
+        variable_order=D3_REV10_SEARCH_VARIABLE_ORDER,
+        candidate=normalized,
         lengths=lengths,
         idc=idc,
         feedline_contract=(
@@ -1988,50 +1318,17 @@ function d3_stage2_direct_hybridized_model(
     )
 end
 
-function d3_stage2_direct_hybridized_model(candidate, args...; kwargs...)
+function d3_direct_hybridized_model(candidate, args...; kwargs...)
     error(
-        "D3 direct-Hybridized Stage-2 evaluation requires D3DirectHybridizedInputs " *
-        "from bind_d3_stage2_direct_hybridized_inputs.",
-    )
-end
-
-function d3_stage3_hybridized_model(args...; kwargs...)
-    error(
-        "The independent Stage-3 Hybridized optimizer authority is superseded; " *
-        "revision-10 search uses d3_stage2_direct_hybridized_model, and Stage 3 is Layout/EM only.",
-    )
-end
-
-function _d3_stage_response_closure(model, cqed_handoff, frequency_hz)
-    analytical = d3_cqed_port_trace(cqed_handoff, frequency_hz)
-    direct = d3_compiled_port_trace(model, analytical.frequency_hz)
-    exact_scattering_residual = [
-        analytical.exact.scattering[index] - direct.scattering[index]
-        for index in eachindex(direct.scattering)
-    ]
-    return (
-        frequency_hz=analytical.frequency_hz,
-        direct=direct,
-        analytical=analytical,
-        residuals=(
-            exact_scattering=exact_scattering_residual,
-            exact_s21=analytical.exact.s21 - direct.s21,
-            max_abs_exact_scattering=maximum(
-                maximum(abs, residual)
-                for residual in exact_scattering_residual
-            ),
-            max_abs_exact_s21=maximum(
-                abs,
-                analytical.exact.s21 - direct.s21,
-            ),
-        ),
-        exact_closure_status=:candidate_gate__tolerance_not_human_frozen,
+        "D3 direct-Hybridized evaluation requires D3DirectHybridizedInputs " *
+        "from bind_d3_direct_hybridized_inputs.",
     )
 end
 
 function _d3_targeted_grid_identity(candidate, context)
+    compiled = _d3_compiled_candidate(candidate)
     boundaries = _d3_targeted_candidate_boundaries(
-        candidate,
+        compiled,
         context.provenance.topology_counts,
         context.grid_plan,
     )
@@ -2046,10 +1343,9 @@ function _d3_targeted_grid_identity(candidate, context)
     ))
 end
 
-function _d3_targeted_metric_record(cared::D3TargetedSchurCaredOutput)
+function d3_rev10_targeted_schur_metrics(cared::D3TargetedSchurCaredOutput)
     return (
-        contract_id="d3-stage2-targeted-schur-candidate-metrics.v2",
-        stage_id=cared.stage_id,
+        contract_id="d3-rev10-targeted-schur-candidate-metrics.v2",
         model_family=cared.model_family,
         slot_hz=cared.slot_hz,
         source_profile_identity=cared.source_profile_identity,
@@ -2069,7 +1365,7 @@ function _d3_targeted_metric_record(cared::D3TargetedSchurCaredOutput)
 end
 
 """Evaluate one candidate from local scratch against a fixed targeted-Schur context."""
-function d3_stage2_direct_cared_outputs(
+function d3_direct_cared_outputs(
     candidate,
     context::D3TargetedSchurObjectiveContext;
     slot_hz,
@@ -2078,7 +1374,7 @@ function d3_stage2_direct_cared_outputs(
     notch_zero_anchor_hz,
 )::D3TargetedSchurCaredOutput
     normalized = try
-        _d3_stage2_direct_candidate(candidate)
+        _d3_direct_candidate(candidate)
     catch exception
         exception isa ErrorException || rethrow()
         _d3_targeted_fail(
@@ -2092,14 +1388,15 @@ function d3_stage2_direct_cared_outputs(
         "d3_targeted_schur_invalid_slot",
         "D3 targeted-Schur slot frequency must be finite and positive.",
     )
+    compiled = _d3_compiled_candidate(normalized)
     full_c, full_k = _d3_targeted_kernel_matrices(
         context.full_kernel,
-        normalized,
-        D3_STAGE2_VARIABLE_ORDER,
+        compiled,
+        _D3_COMPILED_VARIABLE_ORDER,
     )
     notch_c, notch_k = _d3_targeted_kernel_matrices(
         context.notch_kernel,
-        normalized,
+        compiled,
         _D3_TARGETED_SCHUR_LENGTH_COORDINATES,
     )
     schur_context = try
@@ -2153,7 +1450,6 @@ function d3_stage2_direct_cared_outputs(
     source_profile_identity = context.source_profile_identity
     return D3TargetedSchurCaredOutput(
             D3_TARGETED_SCHUR_CARED_OUTPUT_CONTRACT,
-            :stage2_direct_hybridized,
             :hybridized_distributed_lumped,
             slot,
             normalized,

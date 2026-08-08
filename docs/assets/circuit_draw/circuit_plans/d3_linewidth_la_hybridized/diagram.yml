@@ -9,7 +9,7 @@ outputs:
   dark:
     svg: docs/assets/circuit_draw/circuit_plans/d3_linewidth_la_hybridized/diagram.dark.svg
 owning_docs:
-  - docs/concepts/equivalent-circuit-modeling/d3-readout-filter-s21-fit-api.md
+  - docs/reference/research-contracts/equivalent-circuit-model-contract.md
 julia_core_semantics:
   docs:
     - docs/reference/julia-core/components-and-composition.mdx

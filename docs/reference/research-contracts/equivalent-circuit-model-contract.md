@@ -62,10 +62,12 @@ basis that produced the value. Initializer labels map as follows:
 | `System B` / `system_b` | $\mathcal T_{\mathrm{RP}}$ initializer |
 | coupling off | explicitly qualified `off-ref` initializer |
 
-The final D3 route is the topology-constrained
-[Finite-Order Port-Response scalar fit](../../concepts/equivalent-circuit-modeling/d3-readout-filter-s21-fit-api.md).
-It fits the declared exact response-space matrices and port boundary in the
-same basis; no reduced three-mode compatibility runtime is a final authority.
+The current D3 Same-Die route is owned by its host Design Target. It optimizes
+physical coordinates with the direct fixed-node Hybridized Circuit and derives
+its cared quantities from the complete-complement open-EOM reduction.
+Equivalent-circuit records may be produced only as downstream mapped
+representations that close back to that physical winner. No independent
+Equivalent optimizer or structured response fit is a current D3 authority.
 
 ## Required Content
 

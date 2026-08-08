@@ -313,7 +313,7 @@ end
     )
     @test receipt.coherent_exchange_hz > 0
     @test iszero(
-        d3_stage2_matrix_metrics(mediated_model).
+        d3_anchored_hamiltonian_metrics(mediated_model).
         J_circuit_h_rp_pre_downfold_report_only_hz,
     )
 

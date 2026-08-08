@@ -6,7 +6,7 @@ include(joinpath(
     "notebooks",
     "pluto",
     "D3 Intrinsic Purcell Filter Design",
-    "d3_stage_objectives.jl",
+    "d3_rev10_objective.jl",
 ))
 
 const TEST_SOURCE_IDENTITY = (
@@ -16,8 +16,7 @@ const TEST_SOURCE_IDENTITY = (
 
 function objective_metrics(; slot_hz=5.6e9)
     return (
-        contract_id="d3-stage2-targeted-schur-candidate-metrics.v2",
-        stage_id=:stage2_direct_hybridized,
+        contract_id="d3-rev10-targeted-schur-candidate-metrics.v2",
         model_family=:hybridized_distributed_lumped,
         source_profile_identity=TEST_SOURCE_IDENTITY.source_profile_identity,
         grid_identity=TEST_SOURCE_IDENTITY.grid_identity,
@@ -35,35 +34,36 @@ function objective_metrics(; slot_hz=5.6e9)
     )
 end
 
-@testset "D3 revision-10 targeted-Schur objective" begin
+@testset "D3 revision-10 five-term Objective" begin
+    @test D3_REV10_TARGET_SLOT_FREQUENCIES_HZ ==
+        (5.6e9, 5.7e9, 5.8e9, 5.9e9, 6.0e9, 6.1e9)
+    @test D3_REV10_OBJECTIVE_AUTHORITY.target_contract_sha256 ==
+        "d68606de00484311bac45ce3e0f78b0e14b2a31cbbbbf9bfa086e1aa1acc5519"
+    @test D3_REV10_OBJECTIVE_AUTHORITY.residual_multipliers == (
+        r_r=100.0,
+        r_p=100.0,
+        r_n=100.0,
+        r_J=10.0,
+        r_kappa=10.0,
+    )
+
     slot_hz = 5.6e9
     metrics = objective_metrics(; slot_hz=slot_hz)
-    objective = d3_stage2_objective(
+    objective = d3_rev10_five_term_objective(
         metrics,
         slot_hz,
-        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+        D3_REV10_OBJECTIVE_AUTHORITY,
         TEST_SOURCE_IDENTITY,
     )
     @test objective.contract_id ==
-        "d3-stage2-direct-hybridized-targeted-schur-objective.v2"
+        "d3-rev10-anchored-bare-five-term-cma-objective.v1"
     @test objective.cost == 0.0
     @test objective.source_identity == TEST_SOURCE_IDENTITY
+    @test !hasproperty(objective, :stage_id)
     @test !hasproperty(objective, :target_gates)
-    @test !hasproperty(objective, :target_gates_pass)
     @test !hasproperty(objective, :target_diagnostics)
-    @test !hasproperty(
-        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-        :linewidth_participation_extraction,
-    )
-    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.linewidth_sum_extraction ==
-        :anchored_bare_diagonal_root_trace
-    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.residual_multipliers == (
-        r_r=100.0,
-        r_p=100.0,
-        r_J=10.0,
-        r_n=100.0,
-        r_kappa=10.0,
-    )
+    @test !hasproperty(objective.normalized_residuals, :r_eta)
+
     perturbed = merge(metrics, (
         fr_eff_complete_complement_rp_hz=slot_hz * 1.01,
         fp_eff_complete_complement_rp_hz=slot_hz * 0.98,
@@ -71,17 +71,17 @@ end
         notch_distributed_rp_on_hz=4.5e9,
         kappa_sum_anchored_bare_rp_hz=25.0e6,
     ))
-    perturbed_objective = d3_stage2_objective(
+    perturbed_objective = d3_rev10_five_term_objective(
         perturbed,
         slot_hz,
-        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+        D3_REV10_OBJECTIVE_AUTHORITY,
         TEST_SOURCE_IDENTITY,
     )
     expected_residuals = (
         r_r=0.01,
         r_p=-0.02,
-        r_J=0.5,
         r_n=-0.1,
+        r_J=0.5,
         r_kappa=0.25,
     )
     for name in keys(expected_residuals)
@@ -89,23 +89,28 @@ end
             getproperty(expected_residuals, name)
     end
     @test perturbed_objective.cost ≈ 136.25
-    @test !hasproperty(perturbed_objective, :target_diagnostics)
-    @test perturbed_objective.promotion_gate_status == :not_evaluated
-    @test !perturbed_objective.promotion_eligible
+
+    lossless = merge(metrics, (kappa_sum_anchored_bare_rp_hz=0.0,))
+    @test isfinite(d3_rev10_five_term_objective(
+        lossless,
+        slot_hz,
+        D3_REV10_OBJECTIVE_AUTHORITY,
+        TEST_SOURCE_IDENTITY,
+    ).cost)
 
     superseded = merge(metrics, (
-        contract_id="d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1",
+        contract_id="d3-rev10-targeted-schur-candidate-metrics.v1",
     ))
-    @test_throws ErrorException d3_stage2_objective(
+    @test_throws ErrorException d3_rev10_five_term_objective(
         superseded,
         slot_hz,
-        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+        D3_REV10_OBJECTIVE_AUTHORITY,
         TEST_SOURCE_IDENTITY,
     )
-    @test_throws ErrorException d3_stage2_objective(
+    @test_throws ErrorException d3_rev10_five_term_objective(
         metrics,
         slot_hz,
-        D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
+        D3_REV10_OBJECTIVE_AUTHORITY,
         merge(TEST_SOURCE_IDENTITY, (
             grid_identity=(canonical_sha256=repeat("c", 64),),
         )),

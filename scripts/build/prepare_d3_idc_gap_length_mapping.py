@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fit the D3 Q3D three-branch IDC gap/length sweep for Stage 2 and Stage 3."""
+"""Fit the D3 Q3D three-branch IDC gap/length mapping."""
 
 from __future__ import annotations
 
