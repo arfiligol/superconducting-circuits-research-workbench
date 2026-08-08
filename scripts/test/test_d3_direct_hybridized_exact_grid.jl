@@ -169,8 +169,11 @@ end
         readout_root_anchor_hz=5.5e9,
         filter_root_anchor_hz=5.5e9,
     )
-    @test equal_outputs.local_hybrid_poles.first.root_rad_s !=
-        equal_outputs.local_hybrid_poles.second.root_rad_s
+    @test equal_outputs.local_2x2.eigenvalues_rad_s[1] !=
+        equal_outputs.local_2x2.eigenvalues_rad_s[2]
+    @test sum(equal_outputs.local_2x2.kappa_hz) ≈
+        equal_outputs.kappa_sum_hz rtol=4096 * eps(Float64) atol=0
+    @test !isdefined(@__MODULE__, :_d3_targeted_schur_determinant_root)
 
     cared = d3_stage2_direct_cared_outputs(
         candidate,
@@ -190,9 +193,11 @@ end
         :f_p_eff_hz,
         :f_n_hz,
         :abs_real_J_eff_hz,
-        :local_hybrid_kappa_sum_hz,
-        :local_hybrid_linewidth_fraction_min,
-        :local_hybrid_linewidth_fraction_max,
+        :diagonal_roots_hz,
+        :diagonal_residue_slopes,
+        :kappa_anchored_bare_rp_hz,
+        :kappa_sum_anchored_bare_rp_hz,
+        :linewidth_fraction_min_local_2x2_rp,
         :source_profile_identity,
         :grid_identity,
         :extraction_profile,
@@ -201,13 +206,32 @@ end
     @test cared.f_r_eff_hz ≈ 5.0e9 rtol=1.0e-10
     @test cared.f_p_eff_hz ≈ 6.0e9 rtol=1.0e-10
     @test cared.f_n_hz ≈ 5.0e9 rtol=1.0e-12
-    @test cared.local_hybrid_kappa_sum_hz > 0
-    @test cared.local_hybrid_linewidth_fraction_min +
-        cared.local_hybrid_linewidth_fraction_max ≈ 1.0
-    @test cared.extraction_profile.extraction == :targeted_schur_determinant_poles
+    @test real(cared.diagonal_roots_hz.r) ≈ cared.f_r_eff_hz rtol=1.0e-10
+    @test real(cared.diagonal_roots_hz.p) ≈ cared.f_p_eff_hz rtol=1.0e-10
+    @test imag(cared.diagonal_roots_hz.r) <= 0
+    @test imag(cared.diagonal_roots_hz.p) <= 0
+    @test all(
+        value -> isfinite(real(value)) && isfinite(imag(value)),
+        values(cared.diagonal_residue_slopes),
+    )
+    @test cared.kappa_sum_anchored_bare_rp_hz ==
+        sum(values(cared.kappa_anchored_bare_rp_hz))
+    @test cared.kappa_anchored_bare_rp_hz.r ==
+        -2 * imag(cared.diagonal_roots_hz.r)
+    @test cared.kappa_anchored_bare_rp_hz.p ==
+        -2 * imag(cared.diagonal_roots_hz.p)
+    @test 0 <= cared.linewidth_fraction_min_local_2x2_rp <= 0.5
+    @test cared.extraction_profile.effective_diagonal_frequency_extraction ==
+        :complete_complement_rp_anchored_bare_complex_diagonal_roots
+    @test cared.extraction_profile.linewidth_sum_extraction ==
+        :anchored_bare_diagonal_root_trace
+    @test cared.extraction_profile.linewidth_participation_extraction ==
+        :residue_normalized_local_2x2_eigendiagonalization
     metrics = _d3_targeted_metric_record(cared)
-    @test metrics.contract_id == "d3-stage2-targeted-schur-candidate-metrics.v1"
-    @test metrics.kappa_sum_local_hybrid_rp_hz == cared.local_hybrid_kappa_sum_hz
+    @test metrics.contract_id ==
+        "d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1"
+    @test metrics.kappa_sum_anchored_bare_rp_hz ==
+        cared.kappa_sum_anchored_bare_rp_hz
 
     failure = try
         d3_stage2_direct_cared_outputs(
@@ -673,8 +697,10 @@ end
         5.6e9,
         5.0e9,
         5.0e6,
-        20.0e6,
-        0.5,
+        (r=5.6e9 - 10.0e6im, p=5.6e9 - 10.0e6im),
+        (r=1.0 + 0.0im, p=1.0 + 0.0im),
+        (r=20.0e6, p=20.0e6),
+        40.0e6,
         0.5,
         (model_identity=(circuit_plan_sha256=repeat("b", 64),),),
         (counts=grid.counts, boundaries_m=grid.boundaries_m),
@@ -691,9 +717,11 @@ end
         :f_p_eff_hz,
         :f_n_hz,
         :abs_real_J_eff_hz,
-        :local_hybrid_kappa_sum_hz,
-        :local_hybrid_linewidth_fraction_min,
-        :local_hybrid_linewidth_fraction_max,
+        :diagonal_roots_hz,
+        :diagonal_residue_slopes,
+        :kappa_anchored_bare_rp_hz,
+        :kappa_sum_anchored_bare_rp_hz,
+        :linewidth_fraction_min_local_2x2_rp,
         :source_profile_identity,
         :grid_identity,
         :extraction_profile,
@@ -707,9 +735,8 @@ end
             :f_p_eff_hz,
             :f_n_hz,
             :abs_real_J_eff_hz,
-            :local_hybrid_kappa_sum_hz,
-            :local_hybrid_linewidth_fraction_min,
-            :local_hybrid_linewidth_fraction_max,
+            :kappa_sum_anchored_bare_rp_hz,
+            :linewidth_fraction_min_local_2x2_rp,
         )
     )
 end
