@@ -98,7 +98,7 @@ struct D3TargetedSchurCaredOutput{C,S,G,E,V}
     diagonal_residue_slopes::NamedTuple{(:r, :p),Tuple{ComplexF64,ComplexF64}}
     kappa_anchored_bare_rp_hz::NamedTuple{(:r, :p),Tuple{Float64,Float64}}
     kappa_sum_anchored_bare_rp_hz::Float64
-    linewidth_fraction_min_local_2x2_rp::Float64
+    linewidth_fraction_min_anchored_bare_rp::Float64
     source_profile_identity::S
     grid_identity::G
     extraction_profile::E
@@ -2060,8 +2060,8 @@ function _d3_targeted_metric_record(cared::D3TargetedSchurCaredOutput)
         J_eff_complete_complement_rp_coherent_hz=cared.abs_real_J_eff_hz,
         notch_distributed_rp_on_hz=cared.f_n_hz,
         kappa_sum_anchored_bare_rp_hz=cared.kappa_sum_anchored_bare_rp_hz,
-        linewidth_fraction_min_local_2x2_rp=
-            cared.linewidth_fraction_min_local_2x2_rp,
+        linewidth_fraction_min_anchored_bare_rp=
+            cared.linewidth_fraction_min_anchored_bare_rp,
         effective_diagonal_frequency_extraction=
             :complete_complement_rp_anchored_bare_complex_diagonal_roots,
         effective_exchange_extraction=
@@ -2069,7 +2069,7 @@ function _d3_targeted_metric_record(cared::D3TargetedSchurCaredOutput)
         notch_authority=:distributed_rp_on,
         linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
         linewidth_participation_extraction=
-            :residue_normalized_local_2x2_eigendiagonalization,
+            :anchored_bare_diagonal_root_fraction,
     )
 end
 
@@ -2170,7 +2170,7 @@ function d3_stage2_direct_cared_outputs(
             targeted.residue_slopes,
             targeted.kappa_hz,
             Float64(targeted.kappa_sum_hz),
-            Float64(targeted.local_2x2_linewidth_fraction_min),
+            Float64(targeted.linewidth_fraction_min),
             source_profile_identity,
             grid_identity,
             (
@@ -2180,7 +2180,7 @@ function d3_stage2_direct_cared_outputs(
                     :complete_complement_rp_complex_midpoint_residue,
                 linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
                 linewidth_participation_extraction=
-                    :residue_normalized_local_2x2_eigendiagonalization,
+                    :anchored_bare_diagonal_root_fraction,
                 notch_authority=:distributed_rp_on,
                 retained_coordinates=(:r, :p),
                 complement=:complete_hybridized_complement,

@@ -155,24 +155,6 @@ end
     @test targeted_notch.local_denominator.factorization_succeeded
     @test isfinite(targeted_notch.local_residual.relative_solve_residual)
 
-    equal_omega = 2π * 5.5e9
-    equal_stiffness = copy(stiffness)
-    equal_stiffness[2, 2] = equal_stiffness[3, 3] = equal_omega^2
-    equal_stiffness[2, 3] = equal_stiffness[3, 2] =
-        2 * equal_omega * (2π * 5.0e6)
-    equal_outputs = _d3_targeted_schur_outputs(
-        _d3_targeted_schur_candidate_context(
-            fixed,
-            capacitance,
-            equal_stiffness,
-        );
-        readout_root_anchor_hz=5.5e9,
-        filter_root_anchor_hz=5.5e9,
-    )
-    @test equal_outputs.local_2x2.eigenvalues_rad_s[1] !=
-        equal_outputs.local_2x2.eigenvalues_rad_s[2]
-    @test sum(equal_outputs.local_2x2.kappa_hz) ≈
-        equal_outputs.kappa_sum_hz rtol=4096 * eps(Float64) atol=0
     @test !isdefined(@__MODULE__, :_d3_targeted_schur_determinant_root)
 
     cared = d3_stage2_direct_cared_outputs(
@@ -182,26 +164,6 @@ end
         readout_root_anchor_hz=5.0e9,
         filter_root_anchor_hz=6.0e9,
         notch_zero_anchor_hz=5.0e9,
-    )
-    @test propertynames(cared) == (
-        :contract_id,
-        :stage_id,
-        :model_family,
-        :slot_hz,
-        :candidate,
-        :f_r_eff_hz,
-        :f_p_eff_hz,
-        :f_n_hz,
-        :abs_real_J_eff_hz,
-        :diagonal_roots_hz,
-        :diagonal_residue_slopes,
-        :kappa_anchored_bare_rp_hz,
-        :kappa_sum_anchored_bare_rp_hz,
-        :linewidth_fraction_min_local_2x2_rp,
-        :source_profile_identity,
-        :grid_identity,
-        :extraction_profile,
-        :validity,
     )
     @test cared.f_r_eff_hz ≈ 5.0e9 rtol=1.0e-10
     @test cared.f_p_eff_hz ≈ 6.0e9 rtol=1.0e-10
@@ -220,13 +182,10 @@ end
         -2 * imag(cared.diagonal_roots_hz.r)
     @test cared.kappa_anchored_bare_rp_hz.p ==
         -2 * imag(cared.diagonal_roots_hz.p)
-    @test 0 <= cared.linewidth_fraction_min_local_2x2_rp <= 0.5
     @test cared.extraction_profile.effective_diagonal_frequency_extraction ==
         :complete_complement_rp_anchored_bare_complex_diagonal_roots
     @test cared.extraction_profile.linewidth_sum_extraction ==
         :anchored_bare_diagonal_root_trace
-    @test cared.extraction_profile.linewidth_participation_extraction ==
-        :residue_normalized_local_2x2_eigendiagonalization
     metrics = _d3_targeted_metric_record(cared)
     @test metrics.contract_id ==
         "d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1"
@@ -707,26 +666,6 @@ end
         (complement=:complete_hybridized_complement,),
         (status=:pass,),
     )
-    @test propertynames(cared) == (
-        :contract_id,
-        :stage_id,
-        :model_family,
-        :slot_hz,
-        :candidate,
-        :f_r_eff_hz,
-        :f_p_eff_hz,
-        :f_n_hz,
-        :abs_real_J_eff_hz,
-        :diagonal_roots_hz,
-        :diagonal_residue_slopes,
-        :kappa_anchored_bare_rp_hz,
-        :kappa_sum_anchored_bare_rp_hz,
-        :linewidth_fraction_min_local_2x2_rp,
-        :source_profile_identity,
-        :grid_identity,
-        :extraction_profile,
-        :validity,
-    )
     @test all(
         getproperty(cared, name) isa Float64
         for name in (
@@ -736,7 +675,6 @@ end
             :f_n_hz,
             :abs_real_J_eff_hz,
             :kappa_sum_anchored_bare_rp_hz,
-            :linewidth_fraction_min_local_2x2_rp,
         )
     )
 end

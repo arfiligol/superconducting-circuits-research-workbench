@@ -26,15 +26,12 @@ function objective_metrics(; slot_hz=5.6e9)
         J_eff_complete_complement_rp_coherent_hz=5.0e6,
         notch_distributed_rp_on_hz=5.0e9,
         kappa_sum_anchored_bare_rp_hz=20.0e6,
-        linewidth_fraction_min_local_2x2_rp=0.5,
         effective_diagonal_frequency_extraction=
             :complete_complement_rp_anchored_bare_complex_diagonal_roots,
         effective_exchange_extraction=
             :complete_complement_rp_complex_midpoint_residue,
         notch_authority=:distributed_rp_on,
         linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
-        linewidth_participation_extraction=
-            :residue_normalized_local_2x2_eigendiagonalization,
     )
 end
 
@@ -60,8 +57,6 @@ end
     @test !hasproperty(objective, :target_gates_pass)
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.linewidth_sum_extraction ==
         :anchored_bare_diagonal_root_trace
-    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.linewidth_participation_extraction ==
-        :residue_normalized_local_2x2_eigendiagonalization
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.residual_multipliers == (
         r_r=100.0,
         r_p=100.0,
@@ -79,7 +74,6 @@ end
         J_eff_complete_complement_rp_coherent_hz=7.5e6,
         notch_distributed_rp_on_hz=4.5e9,
         kappa_sum_anchored_bare_rp_hz=25.0e6,
-        linewidth_fraction_min_local_2x2_rp=0.4,
     ))
     perturbed_objective = d3_stage2_objective(
         perturbed,

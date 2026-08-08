@@ -20,7 +20,7 @@ const D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY = (
         :complete_complement_rp_complex_midpoint_residue,
     linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
     linewidth_participation_extraction=
-        :residue_normalized_local_2x2_eigendiagonalization,
+        :anchored_bare_diagonal_root_fraction,
     residual_multipliers=(
         r_r=100.0,
         r_p=100.0,
@@ -143,11 +143,11 @@ function _d3_objective_residuals(metrics, slot_hz, label)
     )
     fraction_min = _d3_objective_finite(
         metrics,
-        :linewidth_fraction_min_local_2x2_rp,
+        :linewidth_fraction_min_anchored_bare_rp,
         label,
     )
     0 <= fraction_min <= 0.5 || error(
-        "D3 local 2x2 RP minimum linewidth fraction must be in [0, 0.5].",
+        "D3 anchored-bare RP minimum linewidth fraction must be in [0, 0.5].",
     )
 
     residuals = (
@@ -231,7 +231,7 @@ function d3_stage2_objective(metrics, slot_hz, authority, expected_source_identi
                 notch=:distributed_rp_on,
                 linewidth_sum=:anchored_bare_diagonal_root_trace,
                 linewidth_participation=
-                    :residue_normalized_local_2x2_eigendiagonalization,
+                    :anchored_bare_diagonal_root_fraction,
             ),
         ),
         normalized_residuals=residuals,

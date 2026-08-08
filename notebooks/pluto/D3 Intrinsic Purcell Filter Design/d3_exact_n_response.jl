@@ -1749,33 +1749,6 @@ function _d3_targeted_schur_outputs(
     )
     kappa_sum_hz = sum(values(kappa_hz))
     kappa_sum_hz > 0 || error("D3 targeted-Schur anchored-bare linewidth sum is zero.")
-
-    local_2x2_model = ComplexF64[
-        readout.root_rad_s exchange_rad_s
-        exchange_rad_s filter.root_rad_s
-    ]
-    local_2x2_eigenvalues_rad_s = try
-        ComplexF64.(eigvals(local_2x2_model))
-    catch exception
-        exception isa LinearAlgebra.LAPACKException || rethrow()
-        error(
-            "D3 targeted-Schur local 2x2 eigendiagonalization failed: " *
-            sprint(showerror, exception),
-        )
-    end
-    local_2x2_eigenfrequencies_hz = Tuple(
-        value / (2π) for value in local_2x2_eigenvalues_rad_s
-    )
-    local_2x2_kappa_hz = Tuple(
-        Float64(-2 * imag(value)) for value in local_2x2_eigenfrequencies_hz
-    )
-    all(value -> isfinite(value) && value >= 0, local_2x2_kappa_hz) || error(
-        "D3 targeted-Schur local 2x2 linewidths must be finite and nonnegative.",
-    )
-    local_2x2_kappa_sum_hz = sum(local_2x2_kappa_hz)
-    local_2x2_kappa_sum_hz > 0 || error(
-        "D3 targeted-Schur local 2x2 linewidth sum is zero.",
-    )
     return (
         readout=readout,
         filter=filter,
@@ -1787,14 +1760,8 @@ function _d3_targeted_schur_outputs(
         exchange_rad_s=exchange_rad_s,
         kappa_hz=kappa_hz,
         kappa_sum_hz=kappa_sum_hz,
-        local_2x2=(
-            model_rad_s=local_2x2_model,
-            eigenvalues_rad_s=local_2x2_eigenvalues_rad_s,
-            eigenfrequencies_hz=local_2x2_eigenfrequencies_hz,
-            kappa_hz=local_2x2_kappa_hz,
-        ),
-        local_2x2_linewidth_fraction_min=
-            minimum(local_2x2_kappa_hz) / local_2x2_kappa_sum_hz,
+        linewidth_fraction_min=
+            minimum(values(kappa_hz)) / kappa_sum_hz,
     )
 end
 
