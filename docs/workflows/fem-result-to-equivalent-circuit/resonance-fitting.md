@@ -128,35 +128,18 @@ identified. In the current lossless D3 filter,
 $\kappa_{p,\mathrm{LB},\mathrm{tot}}=\kappa_{p,\mathrm{LB},\mathrm{ext}}$;
 the zero-probe readout reference has $\kappa_{r,\mathrm{LB}}=0$.
 
-## D3 full-$\mathcal T_{\mathrm{QRP}}$ route
+## D3 winner-only response comparison
 
-The final workflow keeps the complete qubit--readout--filter topology and
-evaluates one pointwise circuit map at every $L_J$ and every fit trial:
+The current D3 Same-Die search does not fit an Equivalent Circuit. It evaluates
+physical candidates with the direct fixed-node Hybridized Circuit and obtains
+the target quantities from the complete-complement open-EOM reduction.
 
-```text
-theta_circ
--> C_bare(L_J), K_bare(L_J)
--> h(L_J), Delta(L_J), K_port(L_J), D_port(L_J)
--> complex S21(L_J, omega).
-```
-
-The $\mathcal T_{\mathrm{QR}}$ and $\mathcal T_{\mathrm{RP}}$ fits and all
-coupling-off fixtures provide initial values, bounds, windows, and separately
-qualified comparisons only. Eligible Vector Fitting poles independently
-cross-check the visible hybridized open-system frequencies and total
-linewidths. They do not provide the bare decomposition or $g$, $G$, and $J$.
-
-The former reduced three-mode compatibility runtime has been removed. The
-[D3 Finite-Order Port-Response Scalar Fit API](../../concepts/equivalent-circuit-modeling/d3-readout-filter-s21-fit-api.md)
-defines the fail-closed replacement based on the declared Exact response,
-matrix sparsity, basis, and transformed port maps.
-
-After that migration, promotion still requires response quality and resolution,
-multi-start and bound evidence, parameter identifiability, matrix/response/pole
-closure, distributed-versus-equivalent closure, and agreement with every
-eligible bright Vector-Fit pole. The full physical
-$\mathcal T_{\mathrm{QRP}}$ PTC complex-$Z_{21}$ zero independently owns the
-intrinsic notch.
+After the search fixes one winner, pump-off harmonic balance and a constrained
+C11 fit may compare the calibrated complex response. Those calculations are
+diagnostic response comparisons. They do not create candidate coordinates,
+change the winner, or replace the direct quantity authority. Any downstream
+Equivalent representation must retain an explicit coordinate and response map
+back to the same physical winner.
 
 ## Result Shape
 

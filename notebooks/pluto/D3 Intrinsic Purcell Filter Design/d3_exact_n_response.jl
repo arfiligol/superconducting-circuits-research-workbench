@@ -439,7 +439,7 @@ response and are sorted only for display.
 function d3_linear_quantity_views(
     model;
     cqed_handoff=d3_numerical_cqed_handoff(model),
-    matrix_metrics=d3_stage2_matrix_metrics(
+    matrix_metrics=d3_anchored_hamiltonian_metrics(
         model;
         cqed_handoff=cqed_handoff,
     ),
@@ -626,7 +626,7 @@ end
 Compile a canonical D3 Hybridized Circuit Plan, retain every CPW/MTL and
 feedline coordinate, and eliminate only the neutral floating-qubit common
 charge coordinate. This supplies the unreduced physical model required for
-direct-Hybridized Stage-2 response and pole evaluation.
+direct-Hybridized response and pole evaluation.
 """
 function d3_hybridized_compiled_model(built)
     hasproperty(built, :plan) && hasproperty(built, :component) &&
@@ -1136,7 +1136,7 @@ function d3_numerical_cqed_handoff(model)
     )
 end
 
-"""Extract Stage-2 anchored-bare oscillator quantities from `h` and `Delta`.
+"""Extract optional downstream anchored-bare oscillator quantities from `h` and `Delta`.
 
 The reported `h` and `Delta` entries use the physically anchored
 bare-coordinate oscillator basis and its declared diagonal-impedance
@@ -1146,17 +1146,17 @@ coordinate independently and performs no rotation, `h_qq`, `h_rr`, and
 the number-conserving exchange coefficient in the same representation;
 `Delta_rp` is reported separately for the exact non-RWA model.
 """
-function d3_stage2_matrix_metrics(
+function d3_anchored_hamiltonian_metrics(
     model;
     cqed_handoff=d3_numerical_cqed_handoff(model),
 )
     _d3_exact_n_require_handoff_source(
         model,
         cqed_handoff,
-        "D3 Stage-2 matrix-metrics cQED handoff",
+        "D3 anchored-Hamiltonian metrics cQED handoff",
     )
     cqed_handoff.coordinate_order == model.coordinate_order || error(
-        "D3 Stage-2 matrix-metrics cQED handoff coordinate order disagrees with its model.",
+        "D3 anchored-Hamiltonian metrics cQED handoff coordinate order disagrees with its model.",
     )
     hasproperty(model, :anchored_coordinate_indices) || error(
         "D3 direct-Hybridized matrix extraction requires explicit q/r/p anchor indices.",
@@ -1172,7 +1172,7 @@ function d3_stage2_matrix_metrics(
     p = Int(anchors.p)
     provenance = model.provenance
     return (
-        stage_id=:stage2_direct_hybridized,
+        model_role=:optional_downstream_anchored_hamiltonian_diagnostic,
         model_family=:hybridized_distributed_lumped,
         circuit_plan_sha256=provenance.circuit_plan_sha256,
         capacitance_sha256=provenance.capacitance_sha256,
@@ -1748,7 +1748,6 @@ function _d3_targeted_schur_outputs(
         "D3 targeted-Schur anchored-bare linewidths must be finite and nonnegative.",
     )
     kappa_sum_hz = sum(values(kappa_hz))
-    kappa_sum_hz > 0 || error("D3 targeted-Schur anchored-bare linewidth sum is zero.")
     return (
         readout=readout,
         filter=filter,
@@ -1760,8 +1759,6 @@ function _d3_targeted_schur_outputs(
         exchange_rad_s=exchange_rad_s,
         kappa_hz=kappa_hz,
         kappa_sum_hz=kappa_sum_hz,
-        linewidth_fraction_min=
-            minimum(values(kappa_hz)) / kappa_sum_hz,
     )
 end
 
@@ -1890,7 +1887,7 @@ Evaluate the exact coupling-on matched-open dynamic operator on the retained
 physically anchored `R=(r,p)` coordinates after Schur-downfolding exactly
 the complete Hybridized complement `E=all coordinates except R`. The two
 diagonal complex roots and the complex-midpoint
-residue-normalized exchange are one inseparable Stage-2 authority.  This is
+residue-normalized exchange form one anchored-bare response extraction. This is
 not a normal-mode basis and it is not the raw anchored `h` block: the basis is
 anchored `r/p`, while the named operation is exact frequency-dependent
 complete-complement downfolding. Each supplied root band contributes only its
@@ -2170,11 +2167,10 @@ end
 
 Extract the readout and filter diagonal complex roots after eliminating the
 matched finite-feedline coordinates from the coupling-on source model. The
-real and imaginary parts are legacy response-equivalent fitter diagnostics;
-they do not own the revision-9 Stage-2 objective. Stage 2 instead retains
-`(r,p)` together and Schur-eliminates exactly `(q,f1,fc,f2)` through
-`d3_complete_complement_rp_metrics`. These roots are not Full-QRP
-hybridized poles.
+real and imaginary parts are response-equivalent fitter diagnostics and are
+not Objective operands. The current physical calculation retains `(r,p)` and
+Schur-eliminates the complete fixed-node complement. These roots are not
+fully hybridized normal-mode poles.
 """
 function d3_feedline_downfolded_loaded_bare_roots(
     model,

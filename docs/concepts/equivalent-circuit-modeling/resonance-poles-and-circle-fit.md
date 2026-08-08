@@ -87,12 +87,11 @@ source-grid-refinement gate.
 
 [Pluto Notebook 02](https://github.com/arfiligol/superconducting-circuits-research-workbench/blob/main/notebooks/pluto/D3%20Intrinsic%20Purcell%20Filter%20Design/02_filter_frequency_loading_calibration.jl)
 publishes broad filter-only traces for loading and impedance-mismatch
-inspection. It does not own final Full-QRP diagonal frequencies,
-$C_{\mathrm{probe}}$ regression, linewidth, length correction, coupling, or
-design promotion. The canonical full-$\mathcal T_{\mathrm{QRP}}$ pointwise
-circuit-to-Hamiltonian/port map with complex-response closure owns the intended
-final quantities. The topology-constrained exact scalar-formula fit provides
-the independent response-recovery check.
+inspection. It does not own the current D3 direct quantities or design
+promotion. The host D3 Design Target obtains its cared quantities from the
+direct fixed-node Hybridized Circuit after complete-complement open-EOM
+reduction. Pump-off harmonic balance and constrained C11 fitting are
+winner-only response comparisons; neither is a candidate authority.
 
 Do not duplicate the reusable fitting theory here; update the canonical page
 and keep only repository-specific contracts at these entry points.

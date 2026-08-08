@@ -1,5 +1,6 @@
 # D3 project-specific Q3D IDC mapping. It preserves the complete three-branch
-# component and binds the Human-declared terminal orientation to Stage 2/3.
+# component and binds the Human-declared terminal orientation used by the
+# current direct fixed-node Hybridized Circuit model.
 
 module D3IDCInput
 

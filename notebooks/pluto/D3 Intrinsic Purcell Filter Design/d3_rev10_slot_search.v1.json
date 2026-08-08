@@ -1,0 +1,256 @@
+{
+  "schema_version": "d3-rev10-slot-search.v1",
+  "contract_id": "d3-rev10-slot-search.v1",
+  "status": "current",
+  "semantic_state": "ACCEPTED",
+  "data_classification": "project-internal",
+  "evidence_status": "diagnostic_non_promotable",
+  "publication": "none",
+  "sources": {
+    "target_contract_sha256": "d68606de00484311bac45ce3e0f78b0e14b2a31cbbbbf9bfa086e1aa1acc5519",
+    "q2d_artifact_sha256": "301d3501a30614b994cf3f28d46eb75b545620a164bbb346fa557120d643fe6c",
+    "q3d_input_sha256": "b3e0c7aa403856e238f7121825f3691c7b3be13afa1a43ac6895f21191e832e2",
+    "idc_mapping_sha256": "db549a78564ab1dd25aba4cd0004304651ea3da7a1e66ce92bbb31bceb79e66c",
+    "idc_runtime_mapping_id": "d3-same-die-filter-feedline-idc-q3d-gap8-linear-length-v1",
+    "idc_mapping_semantic_sha256": "bd187b234e402b2a1dcd03009dcc07354f53721bf81b251e63a50f0aeb4435eb",
+    "fixed_input_canonical_sha256": "411755346c223306207e1d4e54d88eeb593e6a28be00034e5c6b32416de5f73f"
+  },
+  "fixed_physical_inputs": {
+    "geometry": "W7/S6/D3/H8_continuous_upper_ground",
+    "silicon_epsilon_r": 11.9,
+    "silicon_mu_r": 1,
+    "q3d_gap_um": 8,
+    "idc_gap_um": 8,
+    "q2d_section_length_um": 28,
+    "q2d_mtl_section_length_um": 3.3,
+    "feedline_length_m": 0.001,
+    "feedline_n_sections": 40,
+    "feedline_l_per_m_h": 4.04313e-7,
+    "feedline_c_per_m_f": 1.7986e-10,
+    "port_resistance_ohm": 50
+  },
+  "slots": {
+    "ordered_hz": [
+      5600000000,
+      5700000000,
+      5800000000,
+      5900000000,
+      6000000000,
+      6100000000
+    ],
+    "execution_order": "ascending",
+    "adjacent_spacing_hz": 100000000
+  },
+  "fixed_node_topology": {
+    "reference_slot_hz": 5600000000,
+    "reference_grid_plan_sha256": "8a264ae6c68c993f47c06fc224b183418c41926a38429cd56a41fb13e1df217b",
+    "matrix_dimension": 802,
+    "section_counts": {
+      "readout_short": 76,
+      "readout_open": 108,
+      "coupled_mtl": 196,
+      "filter_short": 76,
+      "filter_open": 108,
+      "feedline_left": 20,
+      "feedline_right": 20
+    },
+    "readout_aggregate_count": 380,
+    "filter_aggregate_count": 380,
+    "candidate_update": "fixed_coordinates_and_connectivity_with_numeric_C_K_G_reinjection",
+    "port_conductance": "G=selector*diag(1/reference_impedance_ohm)*transpose(selector)",
+    "blas_threads": 1
+  },
+  "search_coordinates": {
+    "compact_order": [
+      "lr_open_m",
+      "l_short_m",
+      "lc_m",
+      "lp_open_m",
+      "u_IDC"
+    ],
+    "expanded_candidate_order": [
+      "lr_open_m",
+      "lr_short_m",
+      "lc_m",
+      "lp_open_m",
+      "lp_short_m",
+      "u_IDC"
+    ],
+    "length_domain": "strictly_positive_unbounded",
+    "shared_short_expansion": "lr_short_m=lp_short_m=l_short_m_exactly",
+    "length_latent_map": "length_i=slot_seed_i*exp(z_i)",
+    "idc_domain_um": [
+      35,
+      75
+    ],
+    "idc_domain_inclusive": true,
+    "idc_latent_map": "u_IDC_um=35+40*x_IDC",
+    "latent_domain": "R^4_x_[0,1]"
+  },
+  "slot_seeds": [
+    {
+      "slot_hz": 5600000000,
+      "source": "Human_Spring2025_table",
+      "candidate": {
+        "lr_open_m": 0.00301487,
+        "l_short_m": 0.00210074,
+        "lc_m": 0.0006453,
+        "lp_open_m": 0.00301487,
+        "u_IDC": 62.68
+      }
+    },
+    {
+      "slot_hz": 5700000000,
+      "source": "Human_Spring2025_table",
+      "candidate": {
+        "lr_open_m": 0.00296757,
+        "l_short_m": 0.00215668,
+        "lc_m": 0.00053559,
+        "lp_open_m": 0.00296757,
+        "u_IDC": 61.04
+      }
+    },
+    {
+      "slot_hz": 5800000000,
+      "source": "Human_Spring2025_table",
+      "candidate": {
+        "lr_open_m": 0.00291012,
+        "l_short_m": 0.00219817,
+        "lc_m": 0.00045397,
+        "lp_open_m": 0.00291012,
+        "u_IDC": 59.47
+      }
+    },
+    {
+      "slot_hz": 5900000000,
+      "source": "Human_Spring2025_table",
+      "candidate": {
+        "lr_open_m": 0.0028469,
+        "l_short_m": 0.0022301,
+        "lc_m": 0.00039098,
+        "lp_open_m": 0.0028469,
+        "u_IDC": 57.96
+      }
+    },
+    {
+      "slot_hz": 6000000000,
+      "source": "Human_Spring2025_table",
+      "candidate": {
+        "lr_open_m": 0.00278045,
+        "l_short_m": 0.0022554,
+        "lc_m": 0.000341,
+        "lp_open_m": 0.00278045,
+        "u_IDC": 56.52
+      }
+    },
+    {
+      "slot_hz": 6100000000,
+      "source": "Human_6p1_extension_reusing_6p0_initial_seed",
+      "candidate": {
+        "lr_open_m": 0.00278045,
+        "l_short_m": 0.0022554,
+        "lc_m": 0.000341,
+        "lp_open_m": 0.00278045,
+        "u_IDC": 56.52
+      }
+    }
+  ],
+  "cma_es": {
+    "runs_per_slot": 1,
+    "restart": false,
+    "seed_formula": "round(Int,slot_hz/1e6)",
+    "population": 16,
+    "sigma_latent_coordinate": 0.5,
+    "maximum_iterations": 100,
+    "maximum_evaluations": 1600,
+    "native_multi_threading": true,
+    "parallel_evaluation": false,
+    "julia_thread_count": 16,
+    "blas_thread_count": 1,
+    "maximum_concurrent_candidate_evaluations": 16,
+    "cross_slot_state_reuse": false
+  },
+  "targeted_schur_quantities": {
+    "basis": "fixed_anchored_R_equals_r_p",
+    "eliminated_coordinates": "complete_fixed_node_complement",
+    "dynamic_operator": "D(omega)=K-omega^2*C-i*omega*G",
+    "diagonal_roots_hz": "complex_roots_of_D_rr_effective_and_D_pp_effective_after_complete_complement_schur_reduction",
+    "readout_effective_frequency_hz": "real_part_of_diagonal_roots_hz.r",
+    "filter_effective_frequency_hz": "real_part_of_diagonal_roots_hz.p",
+    "coherent_exchange_hz": "abs(real(residue_normalized_midpoint_exchange_rad_s))/(2*pi)",
+    "intrinsic_notch_hz": "fixed_auxiliary_intrinsic_pair_cofactor_generalized_eigenzero",
+    "kappa_anchored_bare_rp_hz": "(-2*imag(diagonal_roots_hz.r),-2*imag(diagonal_roots_hz.p))",
+    "kappa_sum_anchored_bare_rp_hz": "kappa_r_hz+kappa_p_hz"
+  },
+  "objective": {
+    "cost": "sum(abs2,residual_multiplier_i*signed_relative_residual_i)",
+    "weights": {
+      "r_r": 100,
+      "r_p": 100,
+      "r_J": 10,
+      "r_n": 100,
+      "r_kappa": 10
+    },
+    "residuals": {
+      "r_r": "(f_r_eff_hz-slot_hz)/slot_hz",
+      "r_p": "(f_p_eff_hz-slot_hz)/slot_hz",
+      "r_J": "(coherent_exchange_hz-5.0e6)/5.0e6",
+      "r_n": "(intrinsic_notch_hz-5.0e9)/5.0e9",
+      "r_kappa": "(kappa_sum_anchored_bare_rp_hz-20.0e6)/20.0e6"
+    },
+    "finite_out_of_target_quantity": "always_evaluate_and_include_in_cost",
+    "target_distance_is_never_not_evaluable": true
+  },
+  "failure_policy": {
+    "candidate_not_evaluable_only_for": [
+      "nonfinite_numeric_result",
+      "actual_singular_eliminated_solve",
+      "physical_nonpassivity",
+      "missing_complex_root_or_notch_zero",
+      "nonunique_local_root_or_notch_zero",
+      "machine_unresolved_anchored_bare_diagonal_root",
+      "source_or_fixed_topology_identity_mismatch"
+    ],
+    "optimizer_boundary_value_for_technical_failure": "+Inf",
+    "persisted_scientific_cost_on_failure": null,
+    "stale_reference_or_substituted_value_allowed": false,
+    "raw_finite_candidate_always_reportable": true
+  },
+  "winner_validation": {
+    "application": "selected_lowest_cost_finite_candidate_only",
+    "comparison": "fixed_N_to_exact_2N_once",
+    "base_section_counts": {
+      "readout_short": 76,
+      "readout_open": 108,
+      "coupled_mtl": 196,
+      "filter_short": 76,
+      "filter_open": 108,
+      "feedline_left": 20,
+      "feedline_right": 20
+    },
+    "doubled_section_counts": {
+      "readout_short": 152,
+      "readout_open": 216,
+      "coupled_mtl": 392,
+      "filter_short": 152,
+      "filter_open": 216,
+      "feedline_left": 40,
+      "feedline_right": 40
+    },
+    "maximum_relative_change_primary_quantities": 0.001,
+    "cared_outputs": [
+      "readout_effective_frequency_hz",
+      "filter_effective_frequency_hz",
+      "intrinsic_notch_hz",
+      "coherent_exchange_hz",
+      "kappa_sum_anchored_bare_rp_hz"
+    ],
+    "failed_validation_effect": "preserve_raw_search_result_and_exact_validation_deltas"
+  },
+  "result_policy": {
+    "raw_search_result_requires_winner_closure": false,
+    "winner_closure": "not_required_before_raw_result",
+    "promotion": "none",
+    "publication": "none"
+  }
+}
