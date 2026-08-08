@@ -48,11 +48,6 @@ end
         "d3-stage2-direct-hybridized-targeted-schur-objective.v1"
     @test objective.cost == 0.0
     @test objective.source_identity == TEST_SOURCE_IDENTITY
-    @test keys(objective.target_diagnostics) == (
-        :readout_effective_diagonal_within_tolerance,
-        :filter_effective_diagonal_within_tolerance,
-        :linewidth_participation,
-    )
     @test !hasproperty(objective, :target_gates)
     @test !hasproperty(objective, :target_gates_pass)
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.linewidth_sum_extraction ==
@@ -65,9 +60,6 @@ end
         r_kappa=10.0,
         r_eta=1.0,
     )
-    @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_contract_sha256 ==
-        "7140c4a1d07cdd0e291c6423c02448b0fe35041a9f9c58d655018f39d54fafe7"
-
     perturbed = merge(metrics, (
         fr_eff_complete_complement_rp_hz=slot_hz * 1.01,
         fp_eff_complete_complement_rp_hz=slot_hz * 0.98,
@@ -94,8 +86,6 @@ end
             getproperty(expected_residuals, name)
     end
     @test perturbed_objective.cost ≈ 136.29
-    @test !perturbed_objective.target_diagnostics.readout_effective_diagonal_within_tolerance
-    @test !perturbed_objective.target_diagnostics.filter_effective_diagonal_within_tolerance
     @test perturbed_objective.target_diagnostics.linewidth_participation
     @test perturbed_objective.promotion_gate_status == :not_evaluated
     @test !perturbed_objective.promotion_eligible

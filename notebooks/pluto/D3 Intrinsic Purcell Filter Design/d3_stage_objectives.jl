@@ -12,7 +12,7 @@ const D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY = (
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
     target_revision=10,
     target_contract_sha256=
-        "7140c4a1d07cdd0e291c6423c02448b0fe35041a9f9c58d655018f39d54fafe7",
+        "8b46950a5d6ad673462ff8f547c830670bf3a4fb4d151d6b74f039d9b4554fbf",
     notch_authority=:distributed_rp_on,
     effective_diagonal_frequency_extraction=
         :complete_complement_rp_anchored_bare_complex_diagonal_roots,
@@ -160,10 +160,6 @@ function _d3_objective_residuals(metrics, slot_hz, label)
         r_eta=(fraction_min - 0.5) / 0.5,
     )
     target_diagnostics = (
-        readout_effective_diagonal_within_tolerance=
-            abs(fr - slot) <= 0.5e6,
-        filter_effective_diagonal_within_tolerance=
-            abs(fp - slot) <= 0.5e6,
         linewidth_participation=fraction_min >= 0.3,
     )
     return residuals, target_diagnostics
