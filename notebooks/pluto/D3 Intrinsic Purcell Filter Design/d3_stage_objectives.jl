@@ -12,14 +12,23 @@ const D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY = (
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
     target_revision=10,
     target_contract_sha256=
-        "891a50bfc4c85889b82d0f64fe03b527ac68cb870e6d5542f99c849b80a304b6",
+        "8b46950a5d6ad673462ff8f547c830670bf3a4fb4d151d6b74f039d9b4554fbf",
     notch_authority=:distributed_rp_on,
     effective_diagonal_frequency_extraction=
-        :complete_complement_rp_complex_operator,
+        :complete_complement_rp_anchored_bare_complex_diagonal_roots,
     effective_exchange_extraction=
         :complete_complement_rp_complex_midpoint_residue,
-    linewidth_pole_scope=:complete_complement_rp_local_hybrid_two_pole,
-    primary_linewidth_extraction=:targeted_schur_determinant_poles,
+    linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
+    linewidth_participation_extraction=
+        :anchored_bare_diagonal_root_fraction,
+    residual_multipliers=(
+        r_r=100.0,
+        r_p=100.0,
+        r_J=10.0,
+        r_n=100.0,
+        r_kappa=10.0,
+        r_eta=1.0,
+    ),
 )
 
 function _d3_objective_finite(metrics, name, label)
@@ -66,7 +75,7 @@ function _d3_validate_metric_source(
     end
     contract_id = hasproperty(metrics, :contract_id) ? String(metrics.contract_id) :
         error("D3 stage metrics must declare contract_id.")
-    contract_id == "d3-stage2-targeted-schur-candidate-metrics.v1" || error(
+    contract_id == "d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1" || error(
         "D3 stage metrics contract is not the targeted-Schur metrics authority.",
     )
     return (
@@ -94,8 +103,11 @@ function _d3_validate_response_authority(metrics, authority, label)
             authority.effective_exchange_extraction,
         ),
         (:notch_authority, authority.notch_authority),
-        (:linewidth_pole_scope, authority.linewidth_pole_scope),
-        (:primary_linewidth_extraction, authority.primary_linewidth_extraction),
+        (:linewidth_sum_extraction, authority.linewidth_sum_extraction),
+        (
+            :linewidth_participation_extraction,
+            authority.linewidth_participation_extraction,
+        ),
     )
         hasproperty(metrics, name) ||
             error("$(label) is missing $(name).")
@@ -126,24 +138,16 @@ function _d3_objective_residuals(metrics, slot_hz, label)
     )
     total_linewidth = _d3_objective_finite(
         metrics,
-        :kappa_sum_local_hybrid_rp_hz,
+        :kappa_sum_anchored_bare_rp_hz,
         label,
     )
     fraction_min = _d3_objective_finite(
         metrics,
-        :linewidth_fraction_min_local_hybrid_rp,
+        :linewidth_fraction_min_anchored_bare_rp,
         label,
     )
-    fraction_max = _d3_objective_finite(
-        metrics,
-        :linewidth_fraction_max_local_hybrid_rp,
-        label,
-    )
-    0 <= fraction_min <= fraction_max <= 1 || error(
-        "D3 local-hybrid RP linewidth fractions must be ordered in [0, 1].",
-    )
-    abs((fraction_min + fraction_max) - 1.0) <= 1.0e-9 || error(
-        "D3 local-hybrid RP linewidth fractions must sum to one.",
+    0 <= fraction_min <= 0.5 || error(
+        "D3 anchored-bare RP minimum linewidth fraction must be in [0, 0.5].",
     )
 
     residuals = (
@@ -156,12 +160,7 @@ function _d3_objective_residuals(metrics, slot_hz, label)
         r_eta=(fraction_min - 0.5) / 0.5,
     )
     target_diagnostics = (
-        readout_effective_diagonal_within_tolerance=
-            abs(fr - slot) <= 0.5e6,
-        filter_effective_diagonal_within_tolerance=
-            abs(fp - slot) <= 0.5e6,
-        linewidth_participation=
-            0.3 <= fraction_min && fraction_max <= 0.7,
+        linewidth_participation=fraction_min >= 0.3,
     )
     return residuals, target_diagnostics
 end
@@ -214,11 +213,22 @@ function d3_stage2_objective(metrics, slot_hz, authority, expected_source_identi
         model_family=:hybridized_distributed_lumped,
         authority=approved,
         source_identity=source_identity,
-        cost=sum(abs2, values(residuals)),
+        cost=sum(
+            name -> abs2(
+                getproperty(residuals, name) *
+                getproperty(approved.residual_multipliers, name),
+            ),
+            keys(residuals),
+        ),
         provenance_groups=_d3_objective_provenance_groups(
             residuals,
-            :complete_complement_rp_complex_operator,
-            :targeted_schur_determinant_poles,
+            :complete_complement_rp_anchored_bare_complex_diagonal_roots,
+            (
+                notch=:distributed_rp_on,
+                linewidth_sum=:anchored_bare_diagonal_root_trace,
+                linewidth_participation=
+                    :anchored_bare_diagonal_root_fraction,
+            ),
         ),
         normalized_residuals=residuals,
         target_diagnostics=target_diagnostics,

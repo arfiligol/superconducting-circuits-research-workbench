@@ -1710,22 +1710,7 @@ function _d3_targeted_schur_diagonal_root(context, index, anchor_hz, label)
     end
 end
 
-function _d3_targeted_schur_determinant_root(context, seed, label)
-    return _d3_targeted_schur_newton(seed, label) do omega
-        operator = _d3_targeted_schur_operator(context, omega)
-        matrix = operator.effective_dynamic_stiffness
-        derivative = operator.effective_dynamic_stiffness_derivative
-        value = det(matrix)
-        value_derivative =
-            derivative[1, 1] * matrix[2, 2] +
-            matrix[1, 1] * derivative[2, 2] -
-            derivative[1, 2] * matrix[2, 1] -
-            matrix[1, 2] * derivative[2, 1]
-        return value, value_derivative
-    end
-end
-
-"""Extract the fixed-node complete-complement RP roots, exchange, and two local poles."""
+"""Extract the fixed-node complete-complement RP anchored-bare quantities."""
 function _d3_targeted_schur_outputs(
     context;
     readout_root_anchor_hz,
@@ -1743,70 +1728,40 @@ function _d3_targeted_schur_outputs(
         filter_root_anchor_hz,
         "D3 targeted-Schur filter diagonal root",
     )
-    readout_operator = _d3_targeted_schur_operator(context, readout.root_rad_s)
-    filter_operator = _d3_targeted_schur_operator(context, filter.root_rad_s)
-    normalization = sqrt(
-        -readout_operator.effective_dynamic_stiffness_derivative[1, 1] *
-        -filter_operator.effective_dynamic_stiffness_derivative[2, 2],
-    )
+    residue_slopes = (r=-readout.derivative, p=-filter.derivative)
+    normalization = sqrt(residue_slopes.r * residue_slopes.p)
     isfinite(real(normalization)) && isfinite(imag(normalization)) && !iszero(normalization) ||
         error("D3 targeted-Schur residue normalization is singular or non-finite.")
     midpoint = (readout.root_rad_s + filter.root_rad_s) / 2
     midpoint_operator = _d3_targeted_schur_operator(context, midpoint)
     exchange_rad_s = midpoint_operator.effective_dynamic_stiffness[1, 2] / normalization
 
-    split = sqrt(
-        ((readout.root_rad_s - filter.root_rad_s) / 2)^2 + exchange_rad_s^2,
+    diagonal_roots_hz = (
+        r=ComplexF64(readout.root_rad_s / (2π)),
+        p=ComplexF64(filter.root_rad_s / (2π)),
     )
-    first_seed = midpoint - split
-    second_seed = midpoint + split
-    seed_separation = abs(first_seed - second_seed)
-    seed_resolution = 4096 * eps(Float64) * max(
-        abs(first_seed),
-        abs(second_seed),
-        1.0,
+    kappa_hz = (
+        r=Float64(-2 * imag(diagonal_roots_hz.r)),
+        p=Float64(-2 * imag(diagonal_roots_hz.p)),
     )
-    seed_separation > seed_resolution || error(
-        "D3 targeted-Schur local hybrid pole seeds are not machine-resolved.",
+    all(value -> isfinite(value) && value >= 0, values(kappa_hz)) || error(
+        "D3 targeted-Schur anchored-bare linewidths must be finite and nonnegative.",
     )
-
-    first = _d3_targeted_schur_determinant_root(
-        context,
-        first_seed,
-        "D3 targeted-Schur first local hybrid pole",
-    )
-    second = _d3_targeted_schur_determinant_root(
-        context,
-        second_seed,
-        "D3 targeted-Schur second local hybrid pole",
-    )
-    separation = abs(first.root_rad_s - second.root_rad_s)
-    resolution = 4096 * eps(Float64) * max(
-        abs(first.root_rad_s),
-        abs(second.root_rad_s),
-        1.0,
-    )
-    separation > resolution || error(
-        "D3 targeted-Schur local hybrid poles are not machine-resolved.",
-    )
-    pole_frequencies_hz = (first.root_rad_s / (2π), second.root_rad_s / (2π))
-    linewidths_hz = Tuple(-2 * imag(value) for value in pole_frequencies_hz)
-    all(value -> isfinite(value) && value >= 0, linewidths_hz) || error(
-        "D3 targeted-Schur local hybrid linewidths must be finite and nonnegative.",
-    )
-    linewidth_sum_hz = sum(linewidths_hz)
-    linewidth_sum_hz > 0 || error("D3 targeted-Schur local hybrid linewidth sum is zero.")
-    fractions = Tuple(value / linewidth_sum_hz for value in linewidths_hz)
+    kappa_sum_hz = sum(values(kappa_hz))
+    kappa_sum_hz > 0 || error("D3 targeted-Schur anchored-bare linewidth sum is zero.")
     return (
         readout=readout,
         filter=filter,
+        diagonal_roots_hz=diagonal_roots_hz,
+        residue_slopes=(
+            r=ComplexF64(residue_slopes.r),
+            p=ComplexF64(residue_slopes.p),
+        ),
         exchange_rad_s=exchange_rad_s,
-        local_hybrid_poles=(first=first, second=second),
-        local_hybrid_pole_frequencies_hz=pole_frequencies_hz,
-        local_hybrid_kappa_hz=linewidths_hz,
-        local_hybrid_kappa_sum_hz=linewidth_sum_hz,
-        local_hybrid_linewidth_fraction_min=minimum(fractions),
-        local_hybrid_linewidth_fraction_max=maximum(fractions),
+        kappa_hz=kappa_hz,
+        kappa_sum_hz=kappa_sum_hz,
+        linewidth_fraction_min=
+            minimum(values(kappa_hz)) / kappa_sum_hz,
     )
 end
 

@@ -38,7 +38,7 @@ const D3_STAGE2_VARIABLE_ORDER = D3_PHYSICAL_VARIABLE_ORDER
 const D3_TARGETED_SCHUR_CONTEXT_CONTRACT =
     "d3-rev10-fixed-node-targeted-schur-objective-context.v1"
 const D3_TARGETED_SCHUR_CARED_OUTPUT_CONTRACT =
-    "d3-rev10-targeted-schur-cared-output.v1"
+    "d3-rev10-targeted-schur-anchored-bare-cared-output.v1"
 
 struct D3DirectHybridizedInputs{Q,I,U,F,S}
     q2d_input::Q
@@ -94,9 +94,11 @@ struct D3TargetedSchurCaredOutput{C,S,G,E,V}
     f_p_eff_hz::Float64
     f_n_hz::Float64
     abs_real_J_eff_hz::Float64
-    local_hybrid_kappa_sum_hz::Float64
-    local_hybrid_linewidth_fraction_min::Float64
-    local_hybrid_linewidth_fraction_max::Float64
+    diagonal_roots_hz::NamedTuple{(:r, :p),Tuple{ComplexF64,ComplexF64}}
+    diagonal_residue_slopes::NamedTuple{(:r, :p),Tuple{ComplexF64,ComplexF64}}
+    kappa_anchored_bare_rp_hz::NamedTuple{(:r, :p),Tuple{Float64,Float64}}
+    kappa_sum_anchored_bare_rp_hz::Float64
+    linewidth_fraction_min_anchored_bare_rp::Float64
     source_profile_identity::S
     grid_identity::G
     extraction_profile::E
@@ -2047,7 +2049,7 @@ end
 
 function _d3_targeted_metric_record(cared::D3TargetedSchurCaredOutput)
     return (
-        contract_id="d3-stage2-targeted-schur-candidate-metrics.v1",
+        contract_id="d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1",
         stage_id=cared.stage_id,
         model_family=cared.model_family,
         slot_hz=cared.slot_hz,
@@ -2057,18 +2059,17 @@ function _d3_targeted_metric_record(cared::D3TargetedSchurCaredOutput)
         fp_eff_complete_complement_rp_hz=cared.f_p_eff_hz,
         J_eff_complete_complement_rp_coherent_hz=cared.abs_real_J_eff_hz,
         notch_distributed_rp_on_hz=cared.f_n_hz,
-        kappa_sum_local_hybrid_rp_hz=cared.local_hybrid_kappa_sum_hz,
-        linewidth_fraction_min_local_hybrid_rp=
-            cared.local_hybrid_linewidth_fraction_min,
-        linewidth_fraction_max_local_hybrid_rp=
-            cared.local_hybrid_linewidth_fraction_max,
+        kappa_sum_anchored_bare_rp_hz=cared.kappa_sum_anchored_bare_rp_hz,
+        linewidth_fraction_min_anchored_bare_rp=
+            cared.linewidth_fraction_min_anchored_bare_rp,
         effective_diagonal_frequency_extraction=
-            :complete_complement_rp_complex_operator,
+            :complete_complement_rp_anchored_bare_complex_diagonal_roots,
         effective_exchange_extraction=
             :complete_complement_rp_complex_midpoint_residue,
         notch_authority=:distributed_rp_on,
-        linewidth_pole_scope=:complete_complement_rp_local_hybrid_two_pole,
-        primary_linewidth_extraction=:targeted_schur_determinant_poles,
+        linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
+        linewidth_participation_extraction=
+            :anchored_bare_diagonal_root_fraction,
     )
 end
 
@@ -2165,29 +2166,33 @@ function d3_stage2_direct_cared_outputs(
             Float64(real(targeted.filter.root_rad_s / (2π))),
             Float64(notch.frequency_hz),
             Float64(abs(real(targeted.exchange_rad_s)) / (2π)),
-            Float64(targeted.local_hybrid_kappa_sum_hz),
-            Float64(targeted.local_hybrid_linewidth_fraction_min),
-            Float64(targeted.local_hybrid_linewidth_fraction_max),
+            targeted.diagonal_roots_hz,
+            targeted.residue_slopes,
+            targeted.kappa_hz,
+            Float64(targeted.kappa_sum_hz),
+            Float64(targeted.linewidth_fraction_min),
             source_profile_identity,
             grid_identity,
             (
-                extraction=:targeted_schur_determinant_poles,
+                effective_diagonal_frequency_extraction=
+                    :complete_complement_rp_anchored_bare_complex_diagonal_roots,
+                effective_exchange_extraction=
+                    :complete_complement_rp_complex_midpoint_residue,
+                linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
+                linewidth_participation_extraction=
+                    :anchored_bare_diagonal_root_fraction,
+                notch_authority=:distributed_rp_on,
                 retained_coordinates=(:r, :p),
                 complement=:complete_hybridized_complement,
                 readout_root_anchor_hz=Float64(readout_root_anchor_hz),
                 filter_root_anchor_hz=Float64(filter_root_anchor_hz),
                 notch_zero_anchor_hz=notch_anchor,
-                linewidth_scope=:complete_complement_rp_local_hybrid_two_pole,
             ),
             (
                 status=:pass,
                 diagonal_root_iterations=(
                     readout=targeted.readout.iterations,
                     filter=targeted.filter.iterations,
-                ),
-                local_hybrid_root_iterations=(
-                    first=targeted.local_hybrid_poles.first.iterations,
-                    second=targeted.local_hybrid_poles.second.iterations,
                 ),
                 machine_validation=context.fixed_schur_context.validation,
             ),
