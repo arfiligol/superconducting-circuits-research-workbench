@@ -71,7 +71,7 @@ end
         r_eta=1.0,
     )
     @test D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY.target_contract_sha256 ==
-        "501645c18e9348546edd749bc566f6313906eec662cacad8577ac83a6034e77a"
+        "7140c4a1d07cdd0e291c6423c02448b0fe35041a9f9c58d655018f39d54fafe7"
 
     perturbed = merge(metrics, (
         fr_eff_complete_complement_rp_hz=slot_hz * 1.01,

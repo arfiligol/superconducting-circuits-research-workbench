@@ -12,7 +12,7 @@ const D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY = (
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
     target_revision=10,
     target_contract_sha256=
-        "501645c18e9348546edd749bc566f6313906eec662cacad8577ac83a6034e77a",
+        "7140c4a1d07cdd0e291c6423c02448b0fe35041a9f9c58d655018f39d54fafe7",
     notch_authority=:distributed_rp_on,
     effective_diagonal_frequency_extraction=
         :complete_complement_rp_anchored_bare_complex_diagonal_roots,
