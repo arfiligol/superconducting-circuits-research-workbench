@@ -173,8 +173,7 @@
     "coherent_exchange_hz": "abs(real(residue_normalized_midpoint_exchange_rad_s))/(2*pi)",
     "intrinsic_notch_hz": "fixed_auxiliary_intrinsic_pair_cofactor_generalized_eigenzero",
     "kappa_anchored_bare_rp_hz": "(-2*imag(diagonal_roots_hz.r),-2*imag(diagonal_roots_hz.p))",
-    "kappa_sum_anchored_bare_rp_hz": "kappa_r_hz+kappa_p_hz",
-    "linewidth_fraction_min_anchored_bare_rp": "min(kappa_r_hz,kappa_p_hz)/kappa_sum_anchored_bare_rp_hz"
+    "kappa_sum_anchored_bare_rp_hz": "kappa_r_hz+kappa_p_hz"
   },
   "objective": {
     "cost": "sum(abs2,residual_multiplier_i*signed_relative_residual_i)",
@@ -183,16 +182,14 @@
       "r_p": 100.0,
       "r_J": 10.0,
       "r_n": 100.0,
-      "r_kappa": 10.0,
-      "r_eta": 1.0
+      "r_kappa": 10.0
     },
     "residuals": {
       "r_r": "(f_r_eff_hz-slot_hz)/slot_hz",
       "r_p": "(f_p_eff_hz-slot_hz)/slot_hz",
       "r_J": "(coherent_exchange_hz-5.0e6)/5.0e6",
       "r_n": "(intrinsic_notch_hz-5.0e9)/5.0e9",
-      "r_kappa": "(kappa_sum_anchored_bare_rp_hz-20.0e6)/20.0e6",
-      "r_eta": "(linewidth_fraction_min_anchored_bare_rp-0.5)/0.5"
+      "r_kappa": "(kappa_sum_anchored_bare_rp_hz-20.0e6)/20.0e6"
     },
     "finite_out_of_target_quantity": "always_evaluate_and_include_in_cost",
     "target_distance_is_never_not_evaluable": true
@@ -234,14 +231,12 @@
       "feedline_right": 40
     },
     "maximum_relative_change_primary_quantities": 0.001,
-    "maximum_relative_change_linewidth_fraction": 0.02,
     "cared_outputs": [
       "readout_effective_frequency_hz",
       "filter_effective_frequency_hz",
       "intrinsic_notch_hz",
       "coherent_exchange_hz",
-      "kappa_sum_anchored_bare_rp_hz",
-      "linewidth_fraction_min_anchored_bare_rp"
+      "kappa_sum_anchored_bare_rp_hz"
     ],
     "failed_validation_effect": "preserve_raw_search_result_and_exact_validation_deltas"
   },

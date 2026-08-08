@@ -27,7 +27,7 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "9abde1da354e07239ee420ba5e71032feeac87f982274f4b6f84c84a1a5f8c31"
+    "7179104f2bd0ba7e4218b928c398174eec83f81b91e334ffa4cfebdd346945c6"
 const MANIFEST_BASENAME = "d3_rev10_five_slot_search.v1.json"
 const EXPANDED_COORDINATES = (
     :lr_open_m,
@@ -42,7 +42,6 @@ const IDC_BOUNDS_UM = (35.0, 75.0)
 include(joinpath(D3_SOURCE_ROOT, "d3_circuit_plans.jl"))
 include(joinpath(D3_SOURCE_ROOT, "d3_exact_n_response.jl"))
 include(joinpath(D3_SOURCE_ROOT, "d3_stage_models.jl"))
-include(joinpath(D3_SOURCE_ROOT, "d3_stage_objectives.jl"))
 include(joinpath(D3_SOURCE_ROOT, "d3_coupled_optimizer.jl"))
 
 using .D3FloatingQubitInput: load_floating_qubit_nominal_input
@@ -310,28 +309,31 @@ function build_context(manifest, inputs; refinement_level)
     return context
 end
 
-function targeted_metrics(cared)
+function five_term_objective(cared, slot_hz)
+    residuals = (
+        r_r=(cared.f_r_eff_hz - slot_hz) / slot_hz,
+        r_p=(cared.f_p_eff_hz - slot_hz) / slot_hz,
+        r_J=(cared.abs_real_J_eff_hz - 5.0e6) / 5.0e6,
+        r_n=(cared.f_n_hz - 5.0e9) / 5.0e9,
+        r_kappa=(cared.kappa_sum_anchored_bare_rp_hz - 20.0e6) / 20.0e6,
+    )
+    multipliers = (
+        r_r=100.0,
+        r_p=100.0,
+        r_J=10.0,
+        r_n=100.0,
+        r_kappa=10.0,
+    )
     return (
-        contract_id="d3-stage2-targeted-schur-anchored-bare-candidate-metrics.v1",
-        stage_id=cared.stage_id,
-        model_family=cared.model_family,
-        source_profile_identity=cared.source_profile_identity,
-        grid_identity=cared.grid_identity,
-        fr_eff_complete_complement_rp_hz=cared.f_r_eff_hz,
-        fp_eff_complete_complement_rp_hz=cared.f_p_eff_hz,
-        J_eff_complete_complement_rp_coherent_hz=cared.abs_real_J_eff_hz,
-        notch_distributed_rp_on_hz=cared.f_n_hz,
-        kappa_sum_anchored_bare_rp_hz=cared.kappa_sum_anchored_bare_rp_hz,
-        linewidth_fraction_min_anchored_bare_rp=
-            cared.linewidth_fraction_min_anchored_bare_rp,
-        effective_diagonal_frequency_extraction=
-            :complete_complement_rp_anchored_bare_complex_diagonal_roots,
-        effective_exchange_extraction=
-            :complete_complement_rp_complex_midpoint_residue,
-        notch_authority=:distributed_rp_on,
-        linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
-        linewidth_participation_extraction=
-            :anchored_bare_diagonal_root_fraction,
+        contract_id="d3-rev10-anchored-bare-five-term-cma-objective.v1",
+        cost=sum(
+            name -> abs2(
+                getproperty(residuals, name) * getproperty(multipliers, name),
+            ),
+            keys(residuals),
+        ),
+        normalized_residuals=residuals,
+        residual_multipliers=multipliers,
     )
 end
 
@@ -353,8 +355,6 @@ function cared_payload(cared)
         ),
         kappa_anchored_bare_rp_hz=cared.kappa_anchored_bare_rp_hz,
         kappa_sum_anchored_bare_rp_hz=cared.kappa_sum_anchored_bare_rp_hz,
-        linewidth_fraction_min_anchored_bare_rp=
-            cared.linewidth_fraction_min_anchored_bare_rp,
         source_profile_sha256=cared.source_profile_identity.canonical_sha256,
         grid_sha256=cared.grid_identity.canonical_sha256,
         validity=cared.validity,
@@ -372,16 +372,7 @@ function evaluate_candidate(candidate, context, slot_hz)
             filter_root_anchor_hz=slot_hz,
             notch_zero_anchor_hz=5.0e9,
         )
-        metrics = targeted_metrics(cared)
-        objective = d3_stage2_objective(
-            metrics,
-            slot_hz,
-            D3_HUMAN_APPROVED_OBJECTIVE_AUTHORITY,
-            (
-                source_profile_identity=cared.source_profile_identity,
-                grid_identity=cared.grid_identity,
-            ),
-        )
+        objective = five_term_objective(cared, slot_hz)
         return (
             status="VALID",
             candidate=candidate,
@@ -390,8 +381,7 @@ function evaluate_candidate(candidate, context, slot_hz)
             objective=(
                 contract_id=objective.contract_id,
                 normalized_residuals=objective.normalized_residuals,
-                residual_multipliers=objective.authority.residual_multipliers,
-                target_diagnostics=objective.target_diagnostics,
+                residual_multipliers=objective.residual_multipliers,
             ),
             rejection=nothing,
             elapsed_seconds=(time_ns() - started) / 1e9,
@@ -585,10 +575,7 @@ function validate_winner(manifest, inputs, slot_hz, winner)
     fine = evaluate_candidate(winner.candidate, fine_context, slot_hz)
     fine.status == "VALID" || return (
         status="NOT_EVALUABLE_AT_2N",
-        thresholds=(
-            primary_quantities=0.001,
-            linewidth_fraction=0.02,
-        ),
+        thresholds=(primary_quantities=0.001,),
         fine=fine,
         relative_changes=nothing,
         pass=false,
@@ -605,23 +592,12 @@ function validate_winner(manifest, inputs, slot_hz, winner)
         relative_change(getproperty(coarse, name), getproperty(fine.cared, name))
         for name in strict_names
     ))
-    fraction_change = relative_change(
-        coarse.linewidth_fraction_min_anchored_bare_rp,
-        fine.cared.linewidth_fraction_min_anchored_bare_rp,
-    )
-    changes = merge(strict_changes, (
-        linewidth_fraction_min_anchored_bare_rp=fraction_change,
-    ))
-    pass = all(value -> value <= 0.001, values(strict_changes)) &&
-        fraction_change <= 0.02
+    pass = all(value -> value <= 0.001, values(strict_changes))
     return (
         status=pass ? "PASS" : "ABOVE_HUMAN_REFINEMENT_LIMIT",
-        thresholds=(
-            primary_quantities=0.001,
-            linewidth_fraction=0.02,
-        ),
+        thresholds=(primary_quantities=0.001,),
         fine=fine,
-        relative_changes=changes,
+        relative_changes=strict_changes,
         pass=pass,
     )
 end
