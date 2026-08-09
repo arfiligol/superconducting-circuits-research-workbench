@@ -27,8 +27,8 @@ using SuperconductingCircuitsCore
 
 const JSON3 = SuperconductingCircuitsCore.JSON3
 const EXPECTED_MANIFEST_SHA256 =
-    "57bfb72c16d33e5f5b00377652ed0e03407f82d69b07c73c7f02f4a1911986ad"
-const MANIFEST_BASENAME = "d3_rev10_slot_search.v1.json"
+    "01219e97d2b7cb5dfb8237bcfe9120d30fcaf38e374912ea66c2e3f15b835f07"
+const MANIFEST_BASENAME = "d3_rev10_slot_search.v2.json"
 const SEARCH_COORDINATES = (
     :lr_open_m,
     :l_short_m,
@@ -132,7 +132,7 @@ function load_manifest(path)
         "Search manifest bytes differ from the accepted task manifest.",
     )
     manifest = JSON3.read(read(absolute, String), Dict{String,Any})
-    manifest["contract_id"] == "d3-rev10-slot-search.v1" ||
+    manifest["contract_id"] == "d3-rev10-slot-search.v2" ||
         error("Search manifest contract id is wrong.")
     manifest["semantic_state"] == "ACCEPTED" || error(
         "Search manifest semantic state is not ACCEPTED.",
@@ -342,7 +342,7 @@ function evaluate_candidate(candidate, context, slot_hz)
             slot_hz=slot_hz,
             readout_root_anchor_hz=slot_hz,
             filter_root_anchor_hz=slot_hz,
-            notch_zero_anchor_hz=5.0e9,
+            transfer_zero_anchor_hz=5.0e9,
         )
         metrics = d3_rev10_targeted_schur_metrics(cared)
         expected_source_identity = (
@@ -530,7 +530,7 @@ end
 
 function raw_result_payload(source, slot_hz, mode, initial, cma, winner, progress)
     return (
-        schema_version="d3-rev10-slot-search-result.v1",
+        schema_version="d3-rev10-slot-search-result.v2",
         status=isnothing(winner) ? "NO_FINITE_CANDIDATE" : "RAW_CMA_COMPLETE",
         mode=mode,
         slot_hz=slot_hz,
@@ -653,7 +653,7 @@ function run(options)
     initial_outcome = record_initial!(state, initial)
     if mode == "single_point"
         result = (
-            schema_version="d3-rev10-slot-search-result.v1",
+            schema_version="d3-rev10-slot-search-result.v2",
             status=initial_outcome.status,
             mode=mode,
             slot_hz=slot_hz,

@@ -35,7 +35,8 @@ bind_d3_direct_hybridized_inputs
 
 The cared output contains the anchored-bare complex diagonal roots and their
 per-member linewidths, the linewidth sum, residue-normalized midpoint exchange,
-and the intrinsic-pair cofactor notch. It does not run a global Full-QRP pole
+and the anchored r-to-p transfer-cofactor complex zero of that same full open
+operator. It does not run a global Full-QRP pole
 assignment, build an Equivalent candidate, fit a response, or evaluate the
 Objective. Expected candidate/numerical failures throw
 `D3TargetedSchurNotEvaluable`; programming/API errors propagate.
@@ -53,7 +54,7 @@ Participation is absent and deferred to a future fully hybridized-pole
 analysis.
 
 `d3_coupled_optimizer.jl` provides the deterministic CMA-ES mechanics.
-`d3_rev10_slot_search.v1.json` binds the current six-slot diagnostic search,
+`d3_rev10_slot_search.v2.json` binds the current six-slot diagnostic search,
 and `d3_rev10_slot_search.jl` runs one selected slot using the shared metrics
 and Objective. Search candidates use the fixed N context; only the selected
 winner receives the Human-accepted N to 2N adjacent-change check over the same

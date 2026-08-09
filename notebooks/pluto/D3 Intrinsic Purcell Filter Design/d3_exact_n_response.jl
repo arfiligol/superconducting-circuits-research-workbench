@@ -1673,7 +1673,16 @@ function _d3_targeted_schur_operator(context, angular_frequency_rad_s)
     )
 end
 
-function _d3_targeted_schur_newton(value_and_derivative, initial_omega, label)
+function _d3_targeted_schur_newton(
+    value_and_derivative,
+    initial_omega,
+    label;
+    relative_step_tolerance=1.0e-10,
+)
+    tolerance = Float64(relative_step_tolerance)
+    isfinite(tolerance) && tolerance > 0 || error(
+        "$(label) relative step tolerance must be finite and positive.",
+    )
     omega = ComplexF64(initial_omega)
     for iteration in 1:32
         value, derivative = value_and_derivative(omega)
@@ -1685,7 +1694,7 @@ function _d3_targeted_schur_newton(value_and_derivative, initial_omega, label)
         all(isfinite, (real(next_omega), imag(next_omega))) && real(next_omega) > 0 ||
             error("$(label) selected an invalid root.")
         omega = next_omega
-        if abs(delta) <= 1.0e-10 * max(abs(omega), 1.0)
+        if abs(delta) <= tolerance * max(abs(omega), 1.0)
             residual, derivative_at_root = value_and_derivative(omega)
             return (
                 root_rad_s=omega,
@@ -1708,6 +1717,40 @@ function _d3_targeted_schur_diagonal_root(context, index, anchor_hz, label)
             operator.effective_dynamic_stiffness_derivative[index, index],
         )
     end
+end
+
+function _d3_targeted_schur_transfer_zero(context, anchor_hz)
+    anchor = Float64(anchor_hz)
+    isfinite(anchor) && anchor > 0 || error(
+        "D3 targeted-Schur transfer-zero anchor must be finite and positive.",
+    )
+    zero = _d3_targeted_schur_newton(
+        2π * anchor,
+        "D3 targeted-Schur anchored r-to-p transfer zero";
+        relative_step_tolerance=sqrt(eps(Float64)),
+    ) do omega
+        operator = _d3_targeted_schur_operator(context, omega)
+        return (
+            operator.effective_dynamic_stiffness[2, 1],
+            operator.effective_dynamic_stiffness_derivative[2, 1],
+        )
+    end
+    operator = _d3_targeted_schur_operator(context, zero.root_rad_s)
+    effective = operator.effective_dynamic_stiffness
+    derivative = operator.effective_dynamic_stiffness_derivative[2, 1]
+    scale = max(opnorm(effective, Inf), floatmin(Float64))
+    relative_resolution = context.machine_relative_resolution
+    abs(derivative) * max(abs(zero.root_rad_s), 1.0) > relative_resolution * scale ||
+        error("D3 targeted-Schur transfer zero is not machine-resolved as a simple root.")
+    denominator = det(effective)
+    isfinite(real(denominator)) && isfinite(imag(denominator)) &&
+        abs(denominator) > relative_resolution * scale^2 || error(
+            "D3 targeted-Schur transfer zero coincides with an unresolved response pole.",
+        )
+    return merge(zero, (
+        denominator=ComplexF64(denominator),
+        transfer_cofactor=ComplexF64(effective[2, 1]),
+    ))
 end
 
 """Extract the fixed-node complete-complement RP anchored-bare quantities."""

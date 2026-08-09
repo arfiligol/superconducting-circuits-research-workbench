@@ -39,9 +39,9 @@ const _D3_COMPILED_VARIABLE_ORDER = (
 )
 
 const D3_TARGETED_SCHUR_CONTEXT_CONTRACT =
-    "d3-rev10-fixed-node-targeted-schur-objective-context.v1"
+    "d3-rev10-fixed-node-targeted-schur-objective-context.v2"
 const D3_TARGETED_SCHUR_CARED_OUTPUT_CONTRACT =
-    "d3-rev10-targeted-schur-cared-output.v2"
+    "d3-rev10-targeted-schur-cared-output.v3"
 
 struct D3DirectHybridizedInputs{Q,I,U,F,S}
     q2d_input::Q
@@ -74,14 +74,13 @@ function _d3_targeted_fail(code, reason, details=nothing)
     throw(D3TargetedSchurNotEvaluable(String(code), String(reason), details))
 end
 
-struct D3TargetedSchurObjectiveContext{R,I,G,F,N,X,S,P}
+struct D3TargetedSchurObjectiveContext{R,I,G,F,X,S,P}
     contract_id::String
     id::String
     reference_candidate::R
     fixed_inputs::I
     grid_plan::G
     full_kernel::F
-    notch_kernel::N
     fixed_schur_context::X
     source_profile_identity::S
     provenance::P
@@ -858,32 +857,8 @@ function _d3_targeted_real_models(candidate, inputs, topology, grid_plan; id)
         feedline_left_breakpoints_m=boundaries.feedline_left_boundaries_m,
         feedline_right_breakpoints_m=boundaries.feedline_right_boundaries_m,
     )
-    notch = build_d3_intrinsic_pair_notch_hybridized_circuit_plan(;
-        id="$(id)-intrinsic-pair-notch",
-        readout_length_m=normalized.lr_short_m + normalized.lc_m + normalized.lr_open_m,
-        filter_length_m=normalized.lp_short_m + normalized.lc_m + normalized.lp_open_m,
-        section_length_m=lines.section_length_m,
-        mtl_section_length_m=normalized.lc_m / topology.readout.mtl,
-        readout_l_per_m_h=lines.readout_l_per_m_h,
-        readout_c_per_m_f=lines.readout_c_per_m_f,
-        filter_l_per_m_h=lines.filter_l_per_m_h,
-        filter_c_per_m_f=lines.filter_c_per_m_f,
-        window_start_readout_m=normalized.lr_short_m,
-        window_start_filter_m=normalized.lp_short_m,
-        window_length_m=normalized.lc_m,
-        l_matrix_per_m_h=lines.l_matrix_per_m_h,
-        c_matrix_per_m_f=lines.c_matrix_per_m_f,
-        coupling_orientation=lines.coupling_orientation,
-        port_resistance_ohm=feedline.port_resistance_ohm,
-        readout_breakpoints_m=boundaries.readout_resonator_boundaries_m,
-        filter_breakpoints_m=boundaries.filter_resonator_boundaries_m,
-    )
     return (
         full=d3_hybridized_compiled_model(full),
-        notch=d3_auxiliary_compiled_port_model(
-            notch;
-            contract_id="d3-intrinsic-pair-rp-on-z21-zero.v1",
-        ),
         boundaries_m=boundaries,
     )
 end
@@ -913,8 +888,6 @@ function _d3_targeted_train_kernels(reference_candidate, inputs, topology, grid_
     )
     full_c_terms = Matrix{Float64}[]
     full_k_terms = Matrix{Float64}[]
-    notch_c_terms = Matrix{Float64}[]
-    notch_k_terms = Matrix{Float64}[]
     for name in _D3_COMPILED_VARIABLE_ORDER
         perturbed_candidate = _d3_targeted_training_candidate(reference_candidate, name, inputs)
         perturbed = _d3_targeted_real_models(
@@ -931,8 +904,6 @@ function _d3_targeted_train_kernels(reference_candidate, inputs, topology, grid_
         push!(full_c_terms, (perturbed.full.capacitance - reference.full.capacitance) / (x1 - x0))
         if name in _D3_TARGETED_SCHUR_LENGTH_COORDINATES
             push!(full_k_terms, (perturbed.full.inverse_inductance - reference.full.inverse_inductance) / (inv(x1) - inv(x0)))
-            push!(notch_c_terms, (perturbed.notch.capacitance - reference.notch.capacitance) / (x1 - x0))
-            push!(notch_k_terms, (perturbed.notch.inverse_inductance - reference.notch.inverse_inductance) / (inv(x1) - inv(x0)))
         else
             perturbed.full.inverse_inductance == reference.full.inverse_inductance ||
                 error("D3 targeted-Schur IDC coordinate changed inverse inductance.")
@@ -940,8 +911,6 @@ function _d3_targeted_train_kernels(reference_candidate, inputs, topology, grid_
     end
     full_c0 = copy(reference.full.capacitance)
     full_k0 = copy(reference.full.inverse_inductance)
-    notch_c0 = copy(reference.notch.capacitance)
-    notch_k0 = copy(reference.notch.inverse_inductance)
     for (index, name) in enumerate(_D3_COMPILED_VARIABLE_ORDER)
         value = getproperty(reference_candidate, name)
         full_c0 .-= value .* full_c_terms[index]
@@ -949,8 +918,6 @@ function _d3_targeted_train_kernels(reference_candidate, inputs, topology, grid_
     for (index, name) in enumerate(_D3_TARGETED_SCHUR_LENGTH_COORDINATES)
         value = getproperty(reference_candidate, name)
         full_k0 .-= inv(value) .* full_k_terms[index]
-        notch_c0 .-= value .* notch_c_terms[index]
-        notch_k0 .-= inv(value) .* notch_k_terms[index]
     end
     full_kernel = (
         c0=full_c0,
@@ -959,14 +926,7 @@ function _d3_targeted_train_kernels(reference_candidate, inputs, topology, grid_
         k_terms=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(Tuple(full_k_terms)),
         reference_model=reference.full,
     )
-    notch_kernel = (
-        c0=notch_c0,
-        k0=notch_k0,
-        c_terms=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(Tuple(notch_c_terms)),
-        k_terms=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(Tuple(notch_k_terms)),
-        reference_model=reference.notch,
-    )
-    return full_kernel, notch_kernel
+    return full_kernel
 end
 
 function _d3_targeted_kernel_matrices(kernel, candidate, coordinates)
@@ -994,7 +954,7 @@ function build_d3_targeted_schur_objective_context(
     grid = _d3_validate_targeted_schur_grid_plan(candidate, inputs, grid_plan)
     compiled_candidate = _d3_compiled_candidate(candidate)
     topology = _d3_targeted_topology(compiled_candidate, grid)
-    full_kernel, notch_kernel = _d3_targeted_train_kernels(
+    full_kernel = _d3_targeted_train_kernels(
         compiled_candidate,
         inputs,
         topology,
@@ -1016,24 +976,11 @@ function build_d3_targeted_schur_objective_context(
             for name in _D3_TARGETED_SCHUR_LENGTH_COORDINATES
         )),
     )
-    notch_kernel_identity = (
-        c0_sha256=_d3_exact_n_matrix_sha256("d3-targeted-notch-c0", notch_kernel.c0),
-        k0_sha256=_d3_exact_n_matrix_sha256("d3-targeted-notch-k0", notch_kernel.k0),
-        c_term_sha256=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(Tuple(
-            _d3_exact_n_matrix_sha256("d3-targeted-notch-c-$(name)", getproperty(notch_kernel.c_terms, name))
-            for name in _D3_TARGETED_SCHUR_LENGTH_COORDINATES
-        )),
-        k_term_sha256=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(Tuple(
-            _d3_exact_n_matrix_sha256("d3-targeted-notch-k-$(name)", getproperty(notch_kernel.k_terms, name))
-            for name in _D3_TARGETED_SCHUR_LENGTH_COORDINATES
-        )),
-    )
     source_payload = (
         fixed_input_identity=inputs.source_identity,
         reference_grid_plan_sha256=grid.canonical_sha256,
         topology_counts=topology,
         full_kernel_identity=full_kernel_identity,
-        notch_kernel_identity=notch_kernel_identity,
         full_selector_sha256=full_kernel.reference_model.provenance.selector_sha256,
         fixed_conductance_sha256=_d3_exact_n_matrix_sha256(
             "d3-targeted-fixed-port-conductance",
@@ -1041,7 +988,7 @@ function build_d3_targeted_schur_objective_context(
         ),
         full_coordinate_order=Tuple(full_kernel.reference_model.coordinate_order),
         anchored_coordinate_indices=full_kernel.reference_model.anchored_coordinate_indices,
-        notch_port_indices=Tuple(notch_kernel.reference_model.port_indices),
+        transfer_zero_authority=:full_open_eom_anchored_r_to_p_cofactor_zero,
     )
     source_profile_identity = merge(source_payload, (
         canonical_sha256=bytes2hex(SHA.sha256(codeunits(
@@ -1055,7 +1002,6 @@ function build_d3_targeted_schur_objective_context(
         inputs,
         grid,
         full_kernel,
-        notch_kernel,
         fixed_schur_context,
         source_profile_identity,
         (
@@ -1262,32 +1208,6 @@ function d3_direct_hybridized_model(
         feedline_right_breakpoints_m=
             grid.boundaries_m.feedline_right_boundaries_m,
     )
-    auxiliary = (
-        notch=build_d3_intrinsic_pair_notch_hybridized_circuit_plan(;
-            id="$(id)-intrinsic-pair-notch",
-            readout_length_m=
-                lengths.lr_short_m + lengths.lc_m + lengths.lr_open_m,
-            filter_length_m=
-                lengths.lp_short_m + lengths.lc_m + lengths.lp_open_m,
-            section_length_m=lines.section_length_m,
-            mtl_section_length_m=lines.mtl_section_length_m,
-            readout_l_per_m_h=lines.readout_l_per_m_h,
-            readout_c_per_m_f=lines.readout_c_per_m_f,
-            filter_l_per_m_h=lines.filter_l_per_m_h,
-            filter_c_per_m_f=lines.filter_c_per_m_f,
-            window_start_readout_m=lengths.lr_short_m,
-            window_start_filter_m=lengths.lp_short_m,
-            window_length_m=lengths.lc_m,
-            l_matrix_per_m_h=lines.l_matrix_per_m_h,
-            c_matrix_per_m_f=lines.c_matrix_per_m_f,
-            coupling_orientation=lines.coupling_orientation,
-            port_resistance_ohm=feedline.port_resistance_ohm,
-            readout_breakpoints_m=
-                grid.boundaries_m.readout_resonator_boundaries_m,
-            filter_breakpoints_m=
-                grid.boundaries_m.filter_resonator_boundaries_m,
-        ),
-    )
     return (
         model_role=:direct_hybridized_candidate,
         model_family=:hybridized_distributed_lumped,
@@ -1314,7 +1234,6 @@ function d3_direct_hybridized_model(
         fixed_input_identity=inputs.source_identity,
         grid_plan=grid,
         built=built,
-        auxiliary=auxiliary,
     )
 end
 
@@ -1345,7 +1264,7 @@ end
 
 function d3_rev10_targeted_schur_metrics(cared::D3TargetedSchurCaredOutput)
     return (
-        contract_id="d3-rev10-targeted-schur-candidate-metrics.v2",
+        contract_id="d3-rev10-targeted-schur-candidate-metrics.v3",
         model_family=cared.model_family,
         slot_hz=cared.slot_hz,
         source_profile_identity=cared.source_profile_identity,
@@ -1353,13 +1272,13 @@ function d3_rev10_targeted_schur_metrics(cared::D3TargetedSchurCaredOutput)
         fr_eff_complete_complement_rp_hz=cared.f_r_eff_hz,
         fp_eff_complete_complement_rp_hz=cared.f_p_eff_hz,
         J_eff_complete_complement_rp_coherent_hz=cared.abs_real_J_eff_hz,
-        notch_distributed_rp_on_hz=cared.f_n_hz,
+        f_n_anchored_rp_transfer_zero_hz=cared.f_n_hz,
         kappa_sum_anchored_bare_rp_hz=cared.kappa_sum_anchored_bare_rp_hz,
         effective_diagonal_frequency_extraction=
             :complete_complement_rp_anchored_bare_complex_diagonal_roots,
         effective_exchange_extraction=
             :complete_complement_rp_complex_midpoint_residue,
-        notch_authority=:distributed_rp_on,
+        notch_authority=:full_open_eom_anchored_r_to_p_transfer_cofactor_zero,
         linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
     )
 end
@@ -1371,7 +1290,7 @@ function d3_direct_cared_outputs(
     slot_hz,
     readout_root_anchor_hz,
     filter_root_anchor_hz,
-    notch_zero_anchor_hz,
+    transfer_zero_anchor_hz,
 )::D3TargetedSchurCaredOutput
     normalized = try
         _d3_direct_candidate(candidate)
@@ -1393,11 +1312,6 @@ function d3_direct_cared_outputs(
         context.full_kernel,
         compiled,
         _D3_COMPILED_VARIABLE_ORDER,
-    )
-    notch_c, notch_k = _d3_targeted_kernel_matrices(
-        context.notch_kernel,
-        compiled,
-        _D3_TARGETED_SCHUR_LENGTH_COORDINATES,
     )
     schur_context = try
         _d3_targeted_schur_candidate_context(
@@ -1425,24 +1339,17 @@ function d3_direct_cared_outputs(
             sprint(showerror, exception),
         )
     end
-    notch_anchor = Float64(notch_zero_anchor_hz)
-    isfinite(notch_anchor) && notch_anchor > 0 || _d3_targeted_fail(
-        "d3_targeted_schur_invalid_notch_anchor",
-        "D3 targeted-Schur notch-zero anchor must be finite and positive.",
+    transfer_anchor = Float64(transfer_zero_anchor_hz)
+    isfinite(transfer_anchor) && transfer_anchor > 0 || _d3_targeted_fail(
+        "d3_targeted_schur_invalid_transfer_zero_anchor",
+        "D3 targeted-Schur transfer-zero anchor must be finite and positive.",
     )
-    notch_model = merge(context.notch_kernel.reference_model, (
-        capacitance=notch_c,
-        inverse_inductance=notch_k,
-    ))
-    notch = try
-        _d3_targeted_cofactor_notch_from_model(
-            notch_model,
-            notch_anchor,
-        )
+    transfer_zero = try
+        _d3_targeted_schur_transfer_zero(schur_context, transfer_anchor)
     catch exception
         exception isa ErrorException || rethrow()
         _d3_targeted_fail(
-            "d3_targeted_schur_notch_failure",
+            "d3_targeted_schur_transfer_zero_failure",
             sprint(showerror, exception),
         )
     end
@@ -1455,7 +1362,7 @@ function d3_direct_cared_outputs(
             normalized,
             Float64(real(targeted.readout.root_rad_s / (2π))),
             Float64(real(targeted.filter.root_rad_s / (2π))),
-            Float64(notch.frequency_hz),
+            Float64(real(transfer_zero.root_rad_s) / (2π)),
             Float64(abs(real(targeted.exchange_rad_s)) / (2π)),
             targeted.diagonal_roots_hz,
             targeted.residue_slopes,
@@ -1469,18 +1376,34 @@ function d3_direct_cared_outputs(
                 effective_exchange_extraction=
                     :complete_complement_rp_complex_midpoint_residue,
                 linewidth_sum_extraction=:anchored_bare_diagonal_root_trace,
-                notch_authority=:distributed_rp_on,
+                notch_authority=
+                    :full_open_eom_anchored_r_to_p_transfer_cofactor_zero,
                 retained_coordinates=(:r, :p),
                 complement=:complete_hybridized_complement,
                 readout_root_anchor_hz=Float64(readout_root_anchor_hz),
                 filter_root_anchor_hz=Float64(filter_root_anchor_hz),
-                notch_zero_anchor_hz=notch_anchor,
+                transfer_zero_anchor_hz=transfer_anchor,
             ),
             (
                 status=:pass,
                 diagonal_root_iterations=(
                     readout=targeted.readout.iterations,
                     filter=targeted.filter.iterations,
+                ),
+                transfer_zero=(
+                    root_hz=(
+                        real=Float64(real(transfer_zero.root_rad_s) / (2π)),
+                        imag=Float64(imag(transfer_zero.root_rad_s) / (2π)),
+                    ),
+                    iterations=transfer_zero.iterations,
+                    residual=(
+                        real=Float64(real(transfer_zero.residual)),
+                        imag=Float64(imag(transfer_zero.residual)),
+                    ),
+                    denominator=(
+                        real=Float64(real(transfer_zero.denominator)),
+                        imag=Float64(imag(transfer_zero.denominator)),
+                    ),
                 ),
                 machine_validation=context.fixed_schur_context.validation,
             ),

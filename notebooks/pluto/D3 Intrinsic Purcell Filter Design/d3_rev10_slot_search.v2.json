@@ -1,13 +1,13 @@
 {
-  "schema_version": "d3-rev10-slot-search.v1",
-  "contract_id": "d3-rev10-slot-search.v1",
+  "schema_version": "d3-rev10-slot-search.v2",
+  "contract_id": "d3-rev10-slot-search.v2",
   "status": "current",
   "semantic_state": "ACCEPTED",
   "data_classification": "project-internal",
   "evidence_status": "diagnostic_non_promotable",
   "publication": "none",
   "sources": {
-    "target_contract_sha256": "d68606de00484311bac45ce3e0f78b0e14b2a31cbbbbf9bfa086e1aa1acc5519",
+    "target_contract_sha256": "b0a5bd3dcf721481171f3db88a83e23f5582cd184c3f598d7ecc91d45c56bac6",
     "q2d_artifact_sha256": "301d3501a30614b994cf3f28d46eb75b545620a164bbb346fa557120d643fe6c",
     "q3d_input_sha256": "b3e0c7aa403856e238f7121825f3691c7b3be13afa1a43ac6895f21191e832e2",
     "idc_mapping_sha256": "db549a78564ab1dd25aba4cd0004304651ea3da7a1e66ce92bbb31bceb79e66c",
@@ -178,7 +178,7 @@
     "readout_effective_frequency_hz": "real_part_of_diagonal_roots_hz.r",
     "filter_effective_frequency_hz": "real_part_of_diagonal_roots_hz.p",
     "coherent_exchange_hz": "abs(real(residue_normalized_midpoint_exchange_rad_s))/(2*pi)",
-    "intrinsic_notch_hz": "fixed_auxiliary_intrinsic_pair_cofactor_generalized_eigenzero",
+    "intrinsic_notch_hz": "real_part_of_full_open_eom_anchored_r_to_p_transfer_cofactor_complex_zero",
     "kappa_anchored_bare_rp_hz": "(-2*imag(diagonal_roots_hz.r),-2*imag(diagonal_roots_hz.p))",
     "kappa_sum_anchored_bare_rp_hz": "kappa_r_hz+kappa_p_hz"
   },
@@ -206,8 +206,8 @@
       "nonfinite_numeric_result",
       "actual_singular_eliminated_solve",
       "physical_nonpassivity",
-      "missing_complex_root_or_notch_zero",
-      "nonunique_local_root_or_notch_zero",
+      "missing_complex_diagonal_root_or_transfer_zero",
+      "nonunique_local_root_or_transfer_zero",
       "machine_unresolved_anchored_bare_diagonal_root",
       "source_or_fixed_topology_identity_mismatch"
     ],

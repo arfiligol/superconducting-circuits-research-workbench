@@ -3,7 +3,7 @@
 # candidate. Participation, Equivalent, HB, and fit quantities are absent.
 
 const D3_REV10_OBJECTIVE_CONTRACT_ID =
-    "d3-rev10-anchored-bare-five-term-cma-objective.v1"
+    "d3-rev10-anchored-bare-five-term-cma-objective.v2"
 const D3_REV10_TARGET_SLOT_FREQUENCIES_HZ =
     (5.6e9, 5.7e9, 5.8e9, 5.9e9, 6.0e9, 6.1e9)
 const D3_REV10_INTERFERENCE_NOTCH_TARGET_HZ = 5.0e9
@@ -13,8 +13,8 @@ const D3_REV10_OBJECTIVE_AUTHORITY = (
     target_id="d3-same-face-resonators-opposite-face-qubit-j5-k20-gap8",
     target_revision=10,
     target_contract_sha256=
-        "d68606de00484311bac45ce3e0f78b0e14b2a31cbbbbf9bfa086e1aa1acc5519",
-    notch_authority=:distributed_rp_on,
+        "b0a5bd3dcf721481171f3db88a83e23f5582cd184c3f598d7ecc91d45c56bac6",
+    notch_authority=:full_open_eom_anchored_r_to_p_transfer_cofactor_zero,
     effective_diagonal_frequency_extraction=
         :complete_complement_rp_anchored_bare_complex_diagonal_roots,
     effective_exchange_extraction=
@@ -62,7 +62,7 @@ function _d3_validate_metric_source(metrics, expected_source_identity)
     end
     hasproperty(metrics, :contract_id) ||
         error("D3 objective metrics must declare contract_id.")
-    String(metrics.contract_id) == "d3-rev10-targeted-schur-candidate-metrics.v2" ||
+    String(metrics.contract_id) == "d3-rev10-targeted-schur-candidate-metrics.v3" ||
         error("D3 objective metrics contract is not the current targeted-Schur authority.")
     return (
         source_profile_identity=metrics.source_profile_identity,
@@ -104,7 +104,7 @@ function _d3_objective_residuals(metrics, slot_hz)
     slot = _d3_objective_slot(slot_hz)
     fr = _d3_objective_finite(metrics, :fr_eff_complete_complement_rp_hz)
     fp = _d3_objective_finite(metrics, :fp_eff_complete_complement_rp_hz)
-    notch = _d3_objective_finite(metrics, :notch_distributed_rp_on_hz)
+    notch = _d3_objective_finite(metrics, :f_n_anchored_rp_transfer_zero_hz)
     exchange = _d3_objective_finite(
         metrics,
         :J_eff_complete_complement_rp_coherent_hz,
