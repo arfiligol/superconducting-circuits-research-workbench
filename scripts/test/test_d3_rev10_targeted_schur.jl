@@ -77,12 +77,14 @@ end
     )
     topology = _d3_targeted_topology(_d3_compiled_candidate(candidate), grid)
 
-    frequencies_hz = [8.0e9, 5.0e9, 6.0e9, 11.0e9, 13.0e9, 15.0e9]
+    frequencies_hz = [8.0e9, 5.4e9, 6.0e9, 11.0e9, 13.0e9, 15.0e9]
     omega = 2π .* frequencies_hz
     capacitance = Matrix{Float64}(I, 6, 6)
     stiffness = Matrix(Diagonal(omega .^ 2))
     stiffness[2, 3] = stiffness[3, 2] =
         2 * sqrt(omega[2] * omega[3]) * (2π * 5.0e6)
+    capacitance[2, 3] = capacitance[3, 2] =
+        stiffness[2, 3] / (2π * 5.0e9)^2
     selector = zeros(Float64, 6, 2)
     selector[2, 1] = 1.0
     selector[3, 2] = 1.0
@@ -107,31 +109,6 @@ end
         reference_model=full_model,
     )
 
-    notch_capacitance = [2.0 -0.5; -0.5 2.0] .* 1.0e-12
-    notch_stiffness = Matrix(Diagonal(fill(
-        (2π * 8.0e9)^2 * 2.0e-12,
-        2,
-    )))
-    notch_stiffness[1, 2] = notch_stiffness[2, 1] =
-        (2π * 5.0e9)^2 * notch_capacitance[2, 1]
-    zero_notch = zeros(2, 2)
-    notch_model = (
-        capacitance=notch_capacitance,
-        inverse_inductance=notch_stiffness,
-        port_indices=[1, 2],
-        provenance=(circuit_plan_sha256=repeat("d", 64),),
-    )
-    notch_kernel = (
-        c0=notch_capacitance,
-        k0=notch_stiffness,
-        c_terms=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(
-            ntuple(_ -> zero_notch, length(_D3_TARGETED_SCHUR_LENGTH_COORDINATES)),
-        ),
-        k_terms=NamedTuple{_D3_TARGETED_SCHUR_LENGTH_COORDINATES}(
-            ntuple(_ -> zero_notch, length(_D3_TARGETED_SCHUR_LENGTH_COORDINATES)),
-        ),
-        reference_model=notch_model,
-    )
     fixed = _d3_targeted_schur_fixed_context(full_model)
     source_identity = (canonical_sha256=repeat("e", 64),)
     context = D3TargetedSchurObjectiveContext(
@@ -141,18 +118,11 @@ end
         nothing,
         grid,
         full_kernel,
-        notch_kernel,
         fixed,
         source_identity,
         (topology_counts=topology,),
     )
-    targeted_notch = _d3_targeted_cofactor_notch_from_model(
-        notch_model,
-        5.0e9,
-    )
-    @test targeted_notch.frequency_hz ≈ 5.0e9 rtol=1.0e-12
-    @test targeted_notch.local_denominator.factorization_succeeded
-    @test isfinite(targeted_notch.local_residual.relative_solve_residual)
+    @test !hasproperty(context, :notch_kernel)
 
     @test !isdefined(@__MODULE__, :_d3_targeted_schur_determinant_root)
 
@@ -162,7 +132,7 @@ end
             capacitance,
             stiffness,
         );
-        readout_root_anchor_hz=5.0e9,
+        readout_root_anchor_hz=5.4e9,
         filter_root_anchor_hz=6.0e9,
     )
     @test lossless.kappa_hz == (r=-0.0, p=-0.0)
@@ -173,13 +143,15 @@ end
         candidate,
         context;
         slot_hz=5.6e9,
-        readout_root_anchor_hz=5.0e9,
+        readout_root_anchor_hz=5.4e9,
         filter_root_anchor_hz=6.0e9,
-        notch_zero_anchor_hz=5.0e9,
+        transfer_zero_anchor_hz=5.0e9,
     )
-    @test cared.f_r_eff_hz ≈ 5.0e9 rtol=1.0e-10
+    @test cared.f_r_eff_hz ≈ 5.4e9 rtol=1.0e-10
     @test cared.f_p_eff_hz ≈ 6.0e9 rtol=1.0e-10
     @test cared.f_n_hz ≈ 5.0e9 rtol=1.0e-12
+    @test cared.validity.transfer_zero.root_hz.real ≈ cared.f_n_hz rtol=1.0e-12
+    @test isfinite(cared.validity.transfer_zero.denominator.real)
     @test propertynames(cared.candidate) == D3_REV10_SEARCH_VARIABLE_ORDER
     @test cared.candidate.l_short_m == candidate.l_short_m
     @test real(cared.diagonal_roots_hz.r) ≈ cared.f_r_eff_hz rtol=1.0e-10
@@ -201,9 +173,25 @@ end
         :complete_complement_rp_anchored_bare_complex_diagonal_roots
     @test cared.extraction_profile.linewidth_sum_extraction ==
         :anchored_bare_diagonal_root_trace
+
+    coincident_capacitance = Matrix{Float64}(I, 6, 6)
+    coincident_capacitance[2, 3] = coincident_capacitance[3, 2] = 0.25
+    coincident_stiffness = Matrix(Diagonal(omega .^ 2))
+    coincident_stiffness[2:3, 2:3] .=
+        (2π * 5.0e9)^2 .* coincident_capacitance[2:3, 2:3]
+    coincident_context = _d3_targeted_schur_candidate_context(
+        merge(fixed, (conductance=zeros(6, 6),)),
+        coincident_capacitance,
+        coincident_stiffness,
+    )
+    @test_throws ErrorException _d3_targeted_schur_transfer_zero(
+        coincident_context,
+        4.8e9,
+    )
+
     metrics = d3_rev10_targeted_schur_metrics(cared)
     @test metrics.contract_id ==
-        "d3-rev10-targeted-schur-candidate-metrics.v2"
+        "d3-rev10-targeted-schur-candidate-metrics.v3"
     @test metrics.kappa_sum_anchored_bare_rp_hz ==
         cared.kappa_sum_anchored_bare_rp_hz
     @test !hasproperty(metrics, :linewidth_fraction_min_anchored_bare_rp)
@@ -214,9 +202,9 @@ end
             merge(candidate, (u_IDC=NaN,)),
             context;
             slot_hz=5.6e9,
-            readout_root_anchor_hz=5.0e9,
+            readout_root_anchor_hz=5.4e9,
             filter_root_anchor_hz=6.0e9,
-            notch_zero_anchor_hz=5.0e9,
+            transfer_zero_anchor_hz=5.0e9,
         )
         nothing
     catch exception
@@ -235,17 +223,17 @@ end
         ),
         context;
         slot_hz=5.6e9,
-        readout_root_anchor_hz=5.0e9,
+        readout_root_anchor_hz=5.4e9,
         filter_root_anchor_hz=6.0e9,
-        notch_zero_anchor_hz=5.0e9,
+        transfer_zero_anchor_hz=5.0e9,
     )
     @test_throws MethodError d3_direct_cared_outputs(
         candidate,
         context;
         slot_hz="not-a-frequency",
-        readout_root_anchor_hz=5.0e9,
+        readout_root_anchor_hz=5.4e9,
         filter_root_anchor_hz=6.0e9,
-        notch_zero_anchor_hz=5.0e9,
+        transfer_zero_anchor_hz=5.0e9,
     )
     @test_throws D3TargetedSchurNotEvaluable d3_direct_cared_outputs(
         candidate,
@@ -253,7 +241,7 @@ end
         slot_hz=5.6e9,
         readout_root_anchor_hz=NaN,
         filter_root_anchor_hz=6.0e9,
-        notch_zero_anchor_hz=5.0e9,
+        transfer_zero_anchor_hz=5.0e9,
     )
     @test length(methods(d3_direct_cared_outputs)) == 1
     @test !isdefined(@__MODULE__, :D3DirectHybridizedCaredOutput)

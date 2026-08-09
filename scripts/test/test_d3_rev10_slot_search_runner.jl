@@ -35,5 +35,5 @@ end
     @test file_sha256(loaded_path) == EXPECTED_MANIFEST_SHA256
     @test String(manifest["sources"]["target_contract_sha256"]) ==
         D3_REV10_OBJECTIVE_AUTHORITY.target_contract_sha256 ==
-        "d68606de00484311bac45ce3e0f78b0e14b2a31cbbbbf9bfa086e1aa1acc5519"
+        "b0a5bd3dcf721481171f3db88a83e23f5582cd184c3f598d7ecc91d45c56bac6"
 end
