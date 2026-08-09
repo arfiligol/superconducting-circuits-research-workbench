@@ -1737,10 +1737,20 @@ function _d3_targeted_schur_transfer_zero(context, anchor_hz)
     end
     operator = _d3_targeted_schur_operator(context, zero.root_rad_s)
     effective = operator.effective_dynamic_stiffness
-    derivative = operator.effective_dynamic_stiffness_derivative[2, 1]
-    scale = max(opnorm(effective, Inf), floatmin(Float64))
+    effective_derivative = operator.effective_dynamic_stiffness_derivative
+    derivative = effective_derivative[2, 1]
+    frequency_scale = max(abs(zero.root_rad_s), 1.0)
+    scale = max(
+        opnorm(effective, Inf),
+        frequency_scale * opnorm(effective_derivative, Inf),
+        floatmin(Float64),
+    )
     relative_resolution = context.machine_relative_resolution
-    abs(derivative) * max(abs(zero.root_rad_s), 1.0) > relative_resolution * scale ||
+    transfer_cofactor = effective[2, 1]
+    abs(transfer_cofactor) <= sqrt(eps(Float64)) * scale || error(
+        "D3 targeted-Schur transfer-zero residual is not numerically resolved.",
+    )
+    abs(derivative) * frequency_scale > relative_resolution * scale ||
         error("D3 targeted-Schur transfer zero is not machine-resolved as a simple root.")
     denominator = det(effective)
     isfinite(real(denominator)) && isfinite(imag(denominator)) &&
@@ -1749,7 +1759,7 @@ function _d3_targeted_schur_transfer_zero(context, anchor_hz)
         )
     return merge(zero, (
         denominator=ComplexF64(denominator),
-        transfer_cofactor=ComplexF64(effective[2, 1]),
+        transfer_cofactor=ComplexF64(transfer_cofactor),
     ))
 end
 

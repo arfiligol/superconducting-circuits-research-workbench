@@ -173,6 +173,22 @@ end
         :complete_complement_rp_anchored_bare_complex_diagonal_roots
     @test cared.extraction_profile.linewidth_sum_extraction ==
         :anchored_bare_diagonal_root_trace
+
+    coincident_capacitance = Matrix{Float64}(I, 6, 6)
+    coincident_capacitance[2, 3] = coincident_capacitance[3, 2] = 0.25
+    coincident_stiffness = Matrix(Diagonal(omega .^ 2))
+    coincident_stiffness[2:3, 2:3] .=
+        (2π * 5.0e9)^2 .* coincident_capacitance[2:3, 2:3]
+    coincident_context = _d3_targeted_schur_candidate_context(
+        merge(fixed, (conductance=zeros(6, 6),)),
+        coincident_capacitance,
+        coincident_stiffness,
+    )
+    @test_throws ErrorException _d3_targeted_schur_transfer_zero(
+        coincident_context,
+        4.8e9,
+    )
+
     metrics = d3_rev10_targeted_schur_metrics(cared)
     @test metrics.contract_id ==
         "d3-rev10-targeted-schur-candidate-metrics.v3"
