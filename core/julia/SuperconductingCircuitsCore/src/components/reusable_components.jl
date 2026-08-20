@@ -26,7 +26,9 @@ struct LinearizedFloatingQubit
     cr1::CapacitiveCoupling
     cr2::CapacitiveCoupling
     lj1::SeriesInductor
-    lj2::SeriesInductor
+    lj2::Union{Nothing,SeriesInductor}
+    junction_topology::Symbol
+    josephson_branch_count::Int
 end
 
 # Canonical localized-capacitor region ownership and positive branch view:
@@ -316,12 +318,13 @@ end
 """
     add_linearized_floating_qubit!(plan; id, island_1, island_2,
         readout_attachment, c01_f, c02_f, c12_f, cr1_f, cr2_f,
-        l_j_per_junction_h)
+        l_j_per_junction_h, junction_topology=:symmetric_squid)
 
-Insert the passive small-signal circuit for a symmetric floating qubit. The
-component owns five capacitance branches and two identical parallel linearized
-Josephson-inductance branches; parameter extraction and nonlinear junction
-physics remain outside this component.
+Insert the passive small-signal circuit for a floating qubit. The default
+`:symmetric_squid` topology preserves the two identical parallel linearized
+Josephson-inductance branches; `:single_junction` emits exactly one branch.
+Parameter extraction and nonlinear junction physics remain outside this
+component.
 """
 function add_linearized_floating_qubit!(
     plan::CircuitPlan;
@@ -335,6 +338,7 @@ function add_linearized_floating_qubit!(
     cr1_f,
     cr2_f,
     l_j_per_junction_h,
+    junction_topology=:symmetric_squid,
 )
     component_id = strip(string(id))
     isempty(component_id) && _validation_error("LinearizedFloatingQubit id must be nonempty.")
@@ -348,6 +352,10 @@ function add_linearized_floating_qubit!(
     all(value -> isfinite(value) && value > 0, numeric) ||
         _validation_error("LinearizedFloatingQubit capacitances and per-junction inductance must be finite and positive.")
     c01_value, c02_value, c12_value, cr1_value, cr2_value, lj_value = numeric
+    topology = Symbol(junction_topology)
+    topology in (:symmetric_squid, :single_junction) ||
+        _validation_error("LinearizedFloatingQubit junction_topology must be :symmetric_squid or :single_junction.")
+    branch_count = topology == :symmetric_squid ? 2 : 1
 
     c01 = shunt_capacitor!(
         plan;
@@ -401,7 +409,7 @@ function add_linearized_floating_qubit!(
         role=:floating_qubit_linearized_josephson_inductance,
         label=raw"$L_{J1}$",
     )
-    lj2 = series_inductor!(
+    lj2 = topology == :symmetric_squid ? series_inductor!(
         plan;
         id="$(component_id)_lj2",
         from=island_1,
@@ -409,7 +417,7 @@ function add_linearized_floating_qubit!(
         inductance=lj_value,
         role=:floating_qubit_linearized_josephson_inductance,
         label=raw"$L_{J2}$",
-    )
+    ) : nothing
     record_engineering_component!(
         plan;
         id=component_id,
@@ -423,6 +431,8 @@ function add_linearized_floating_qubit!(
             :cr1_f => cr1_value,
             :cr2_f => cr2_value,
             :l_j_per_junction_h => lj_value,
+            :junction_topology => topology,
+            :josephson_branch_count => branch_count,
             :inductive_branch_kind => :linearized_josephson,
         ),
         pins=[:island_1, :island_2, :readout_attachment],
@@ -439,6 +449,8 @@ function add_linearized_floating_qubit!(
         cr2,
         lj1,
         lj2,
+        topology,
+        branch_count,
     )
 end
 

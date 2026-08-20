@@ -11,6 +11,11 @@ struct _CWCandidateNotEvaluable <: Exception
 end
 Base.showerror(io::IO, error::_CWCandidateNotEvaluable) = print(io, error.message)
 
+struct _CWTargetedSchurNumericalError <: Exception
+    message::String
+end
+Base.showerror(io::IO, error::_CWTargetedSchurNumericalError) = print(io, error.message)
+
 function _cw_dict(value, label)::Dict{String,Any}
     value isa AbstractDict || error("$(label) must be an object.")
     return Dict{String,Any}(string(key) => item for (key, item) in pairs(value))
@@ -159,6 +164,158 @@ function _cw_parallel_lc!(plan, component, overrides)
     )
 end
 
+function _cw_parameter(params, overrides, id, name)
+    return _cw_number(get(overrides, "$(id).$(name)", get(params, name, nothing)), "$(id).$(name)")
+end
+
+function _cw_positive_integer(params, overrides, id, name)
+    value = _cw_integer(get(overrides, "$(id).$(name)", get(params, name, nothing)), "$(id).$(name)")
+    value > 0 || throw(_CWCandidateNotEvaluable("$(id).$(name) must be positive."))
+    return value
+end
+
+_cw_node(id, name) = SuperconductingCircuitsCore.external_node("cw_$(id)_$(name)")
+
+function _cw_transmission_line!(plan, component, overrides)
+    id = _cw_string(get(component, "id", nothing), "component.id")
+    params = _cw_dict(get(component, "parameters", nothing), "component.parameters")
+    length_m = _cw_parameter(params, overrides, id, "length_m")
+    n_sections = _cw_positive_integer(params, overrides, id, "n_sections")
+    l_per_m_h = _cw_parameter(params, overrides, id, "l_per_m_h")
+    c_per_m_f = _cw_parameter(params, overrides, id, "c_per_m_f")
+    r_per_m_ohm = _cw_parameter(params, overrides, id, "r_per_m_ohm")
+    g_per_m_s = _cw_parameter(params, overrides, id, "g_per_m_s")
+    length_m > 0 && l_per_m_h > 0 && c_per_m_f > 0 && r_per_m_ohm >= 0 && g_per_m_s >= 0 ||
+        throw(_CWCandidateNotEvaluable("$(id) RLGC values are outside the physical domain."))
+    spec = SuperconductingCircuitsCore.RLGCSpec(
+        length_m=length_m,
+        n_sections=n_sections,
+        l_per_m_h=l_per_m_h,
+        c_per_m_f=c_per_m_f,
+        r_per_m_ohm=r_per_m_ohm,
+        g_per_m_s=g_per_m_s,
+    )
+    SuperconductingCircuitsCore.build_lc_ladder_line!(
+        plan;
+        id=id,
+        head=_cw_node(id, "head"),
+        tail=_cw_node(id, "tail"),
+        spec=spec,
+        head_termination=:external,
+        tail_termination=:external,
+    )
+    return nothing
+end
+
+function _cw_linearized_floating_qubit!(plan, component, overrides)
+    id = _cw_string(get(component, "id", nothing), "component.id")
+    params = _cw_dict(get(component, "parameters", nothing), "component.parameters")
+    branch_count = _cw_positive_integer(params, overrides, id, "josephson_branch_count")
+    topology = branch_count == 2 ? :symmetric_squid : branch_count == 1 ? :single_junction :
+        throw(_CWCandidateNotEvaluable("$(id).josephson_branch_count must be 1 or 2."))
+    SuperconductingCircuitsCore.add_linearized_floating_qubit!(
+        plan;
+        id=id,
+        readout_attachment=_cw_node(id, "readout_attachment"),
+        island_1=_cw_node(id, "island_1"),
+        island_2=_cw_node(id, "island_2"),
+        c01_f=_cw_parameter(params, overrides, id, "c01_f"),
+        c02_f=_cw_parameter(params, overrides, id, "c02_f"),
+        c12_f=_cw_parameter(params, overrides, id, "c12_f"),
+        cr1_f=_cw_parameter(params, overrides, id, "cr1_f"),
+        cr2_f=_cw_parameter(params, overrides, id, "cr2_f"),
+        l_j_per_junction_h=_cw_parameter(params, overrides, id, "l_j_per_junction_h"),
+        junction_topology=topology,
+    )
+    return nothing
+end
+
+function _cw_segment_breakpoints(lengths, counts, label)
+    length(lengths) == length(counts) || error("$(label) segment lengths/counts mismatch.")
+    points = Float64[0.0]
+    for (length_m, count) in zip(lengths, counts)
+        length_m > 0 || throw(_CWCandidateNotEvaluable("$(label) segment lengths must be positive."))
+        count > 0 || throw(_CWCandidateNotEvaluable("$(label) segment counts must be positive."))
+        dx = length_m / count
+        for _ in 1:count
+            push!(points, points[end] + dx)
+        end
+    end
+    return points
+end
+
+function _cw_intrinsic_interferometric_purcell_filter!(plan, component, overrides)
+    id = _cw_string(get(component, "id", nothing), "component.id")
+    params = _cw_dict(get(component, "parameters", nothing), "component.parameters")
+    value(name) = _cw_parameter(params, overrides, id, name)
+    count(name) = _cw_positive_integer(params, overrides, id, name)
+    shared_short = value("shared_short_length_m")
+    coupled = value("coupled_length_m")
+    readout_open = value("readout_open_length_m")
+    filter_open = value("filter_open_length_m")
+    all(>(0), (shared_short, coupled, readout_open, filter_open)) ||
+        throw(_CWCandidateNotEvaluable("$(id) resonator segment lengths must be positive."))
+    readout_counts = (count("readout_short_sections"), count("coupled_sections"), count("readout_open_sections"))
+    filter_counts = (count("filter_short_sections"), count("coupled_sections"), count("filter_open_sections"))
+    readout_lengths = (shared_short, coupled, readout_open)
+    filter_lengths = (shared_short, coupled, filter_open)
+    readout_breakpoints = _cw_segment_breakpoints(readout_lengths, readout_counts, "$(id) readout")
+    filter_breakpoints = _cw_segment_breakpoints(filter_lengths, filter_counts, "$(id) filter")
+    readout_spec = SuperconductingCircuitsCore.RLGCSpec(
+        length_m=readout_breakpoints[end],
+        section_length_m=maximum(diff(readout_breakpoints)),
+        n_sections=sum(readout_counts),
+        l_per_m_h=value("readout_l_per_m_h"),
+        c_per_m_f=value("readout_c_per_m_f"),
+    )
+    filter_spec = SuperconductingCircuitsCore.RLGCSpec(
+        length_m=filter_breakpoints[end],
+        section_length_m=maximum(diff(filter_breakpoints)),
+        n_sections=sum(filter_counts),
+        l_per_m_h=value("filter_l_per_m_h"),
+        c_per_m_f=value("filter_c_per_m_f"),
+    )
+    l_matrix = [value("mtl_l11_per_m_h") value("mtl_l12_per_m_h"); value("mtl_l21_per_m_h") value("mtl_l22_per_m_h")]
+    c_matrix = [value("mtl_c11_per_m_f") value("mtl_c12_per_m_f"); value("mtl_c21_per_m_f") value("mtl_c22_per_m_f")]
+    mtl = SuperconductingCircuitsCore.MTLCoupledRLGCSpec(
+        start1_m=shared_short,
+        start2_m=shared_short,
+        length_m=coupled,
+        section_length_m=coupled / readout_counts[2],
+        l_matrix_per_m_h=l_matrix,
+        c_matrix_per_m_f=c_matrix,
+    )
+    finger_length = value("idc_finger_length_um")
+    source_min = value("idc_source_min_um")
+    source_max = value("idc_source_max_um")
+    source_min <= source_max || throw(_CWCandidateNotEvaluable("$(id) IDC source support is inverted."))
+    source_min <= finger_length <= source_max ||
+        throw(_CWCandidateNotEvaluable("$(id).idc_finger_length_um lies outside its closed source support."))
+    c1g = value("idc_filter_ground_slope_f_per_um") * finger_length + value("idc_filter_ground_intercept_f")
+    c2g = value("idc_feedline_ground_slope_f_per_um") * finger_length + value("idc_feedline_ground_intercept_f")
+    c12 = value("idc_mutual_slope_f_per_um") * finger_length + value("idc_mutual_intercept_f")
+    all(>(0), (c1g, c2g, c12)) ||
+        throw(_CWCandidateNotEvaluable("$(id) IDC OLS branches must evaluate positive."))
+    c0r = value("c0r_f")
+    c0r >= 0 || throw(_CWCandidateNotEvaluable("$(id).c0r_f must be nonnegative."))
+    SuperconductingCircuitsCore.add_intrinsic_interferometric_purcell_filter!(
+        plan;
+        id=id,
+        readout_attachment=_cw_node(id, "readout_attachment"),
+        feedline_attachment=_cw_node(id, "feedline_attachment"),
+        readout_spec=readout_spec,
+        filter_spec=filter_spec,
+        mtl_model=mtl,
+        c1g_f=c1g,
+        c2g_f=c2g,
+        c12_f=c12,
+        c0r_f=c0r,
+        readout_breakpoints_m=readout_breakpoints,
+        filter_breakpoints_m=filter_breakpoints,
+    )
+    return nothing
+end
+
 function _cw_build_plan(payload; overrides=Dict{String,Float64}())
     plan_payload = _cw_dict(payload, "request.plan")
     get(plan_payload, "schema", nothing) == _CW_PLAN_SCHEMA || error("Plan schema is not $(_CW_PLAN_SCHEMA).")
@@ -172,11 +329,19 @@ function _cw_build_plan(payload; overrides=Dict{String,Float64}())
         id in component_ids && error("Duplicate component id $(id).")
         push!(component_ids, id)
         type_id = _cw_string(get(component, "type_id", nothing), "component.type_id")
-        type_id == "workbench.parallel_lc_resonator.v1" || error(
+        type_id in (
+            "workbench.parallel_lc_resonator.v1",
+            "workbench.transmission_line.v1",
+            "workbench.intrinsic_interferometric_purcell_filter.v1",
+            "workbench.linearized_floating_qubit.v1",
+        ) || error(
             "Unsupported Circuit Workbench Julia lowerer for component type $(type_id). " *
             "Register a reviewed Core lowerer before using it in a sealed run.",
         )
-        _cw_parallel_lc!(plan, component, overrides)
+        type_id == "workbench.parallel_lc_resonator.v1" && _cw_parallel_lc!(plan, component, overrides)
+        type_id == "workbench.transmission_line.v1" && _cw_transmission_line!(plan, component, overrides)
+        type_id == "workbench.intrinsic_interferometric_purcell_filter.v1" && _cw_intrinsic_interferometric_purcell_filter!(plan, component, overrides)
+        type_id == "workbench.linearized_floating_qubit.v1" && _cw_linearized_floating_qubit!(plan, component, overrides)
     end
     for (index, raw) in enumerate(_cw_array(get(plan_payload, "connections", Any[]), "plan.connections"))
         connection = _cw_dict(raw, "plan.connections[$index]")
@@ -224,7 +389,15 @@ function _cw_variable_baseline(plan, variables)
         transform = string(get(variable, "transform", "identity"))
         transform == "identity" && push!(result, value)
         transform == "log" && value > 0 && push!(result, log(value))
-        transform in ("identity", "log") || error("Unsupported variable transform $(transform).")
+        if transform == "unit_interval"
+            lower = _cw_number(get(variable, "lower", nothing), "variable.lower")
+            upper = _cw_number(get(variable, "upper", nothing), "variable.upper")
+            isfinite(lower) && isfinite(upper) && lower < upper ||
+                error("unit_interval variables require finite lower < upper.")
+            lower <= value <= upper || error("unit_interval variable baseline must lie within [lower, upper].")
+            push!(result, (value - lower) / (upper - lower))
+        end
+        transform in ("identity", "log", "unit_interval") || error("Unsupported variable transform $(transform).")
     end
     return result
 end
@@ -248,6 +421,10 @@ function _cw_variable_bounds(variables)
             push!(upper, isfinite(hi_value) ? log(hi_value) : Inf)
         elseif transform == "identity"
             push!(lower, lo_value); push!(upper, hi_value)
+        elseif transform == "unit_interval"
+            isfinite(lo_value) && isfinite(hi_value) && lo_value < hi_value ||
+                error("unit_interval variables require finite lower < upper.")
+            push!(lower, 0.0); push!(upper, 1.0)
         else
             error("Unsupported variable transform $(transform).")
         end
@@ -265,7 +442,19 @@ function _cw_candidate_overrides(variables, latent)
         key = _cw_string(get(ref, "component_id", nothing), "variable.ref.component_id") * "." *
             _cw_string(get(ref, "parameter_name", nothing), "variable.ref.parameter_name")
         transform = string(get(variable, "transform", "identity"))
-        value = transform == "identity" ? Float64(latent[index]) : transform == "log" ? exp(Float64(latent[index])) : error("Unsupported variable transform $(transform).")
+        value = if transform == "identity"
+            Float64(latent[index])
+        elseif transform == "log"
+            exp(Float64(latent[index]))
+        elseif transform == "unit_interval"
+            lower = _cw_number(get(variable, "lower", nothing), "variable.lower")
+            upper = _cw_number(get(variable, "upper", nothing), "variable.upper")
+            isfinite(lower) && isfinite(upper) && lower < upper ||
+                error("unit_interval variables require finite lower < upper.")
+            lower + (upper - lower) * Float64(latent[index])
+        else
+            error("Unsupported variable transform $(transform).")
+        end
         isfinite(value) || error("CMA candidate produced a non-finite physical parameter.")
         result[key] = value
     end
@@ -281,7 +470,19 @@ function _cw_requested_candidate_parameters(variables, latent)
         key = _cw_string(get(ref, "component_id", nothing), "variable.requested_ref.component_id") * "." *
             _cw_string(get(ref, "parameter_name", nothing), "variable.requested_ref.parameter_name")
         transform = string(get(variable, "transform", "identity"))
-        value = transform == "identity" ? Float64(latent[index]) : transform == "log" ? exp(Float64(latent[index])) : error("Unsupported variable transform $(transform).")
+        value = if transform == "identity"
+            Float64(latent[index])
+        elseif transform == "log"
+            exp(Float64(latent[index]))
+        elseif transform == "unit_interval"
+            lower = _cw_number(get(variable, "lower", nothing), "variable.lower")
+            upper = _cw_number(get(variable, "upper", nothing), "variable.upper")
+            isfinite(lower) && isfinite(upper) && lower < upper ||
+                error("unit_interval variables require finite lower < upper.")
+            lower + (upper - lower) * Float64(latent[index])
+        else
+            error("Unsupported variable transform $(transform).")
+        end
         isfinite(value) || error("CMA candidate produced a non-finite physical parameter.")
         result[key] = value
     end
@@ -332,13 +533,18 @@ function _cw_coordinate_index(model, raw, label)
     ref = _cw_dict(raw, label)
     component_id = _cw_string(get(ref, "component_id", nothing), "$(label).component_id")
     coordinate = _cw_string(get(ref, "coordinate_name", nothing), "$(label).coordinate_name")
-    coordinate == "signal" || error("Builtin parallel-LC reduction exposes only the signal coordinate.")
-    # Core's external-node lowering prefixes the authored endpoint in its
-    # closed-nodal ordering; this is the explicit public builtin coordinate map.
-    node_name = "ext_cw_$(component_id)_signal"
-    index = findfirst(==(node_name), model.node_names)
-    isnothing(index) && error("Reduction coordinate $(component_id).$(coordinate) is absent from compiled C/K model.")
-    return index
+    # Runtime lowerers expose authored pins as `cw_<component>_<coordinate>`.
+    # Composite Core builders may own an internal coordinate directly under the
+    # component id (the intrinsic filter's filter_open_tail is one example).
+    candidates = (
+        "ext_cw_$(component_id)_$(coordinate)",
+        "ext_$(component_id)_$(coordinate)",
+    )
+    indices = unique(Int[index for name in candidates for index in findall(==(name), model.node_names)])
+    length(indices) == 1 || error(
+        "Reduction coordinate $(component_id).$(coordinate) must resolve to exactly one compiled C/K coordinate.",
+    )
+    return only(indices)
 end
 
 function _cw_reduction_model(model, reduction)
@@ -384,10 +590,328 @@ function _cw_reduction_model(model, reduction)
     )
 end
 
-function _cw_direct_cared_outputs(compiled, objective, reduction)
-    model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(compiled)
+const _CW_TARGETED_SCHUR_QUANTITIES = Set([
+    "readout_diagonal_root_hz",
+    "filter_diagonal_root_hz",
+    "transfer_cofactor_zero_hz",
+    "residue_normalized_midpoint_exchange_abs_real_hz",
+    "diagonal_root_linewidth_sum_hz",
+])
+
+function _cw_targeted_schur_specs(objective)
+    outputs = _cw_dict(get(objective, "cared_outputs", nothing), "objective.cared_outputs")
+    length(outputs) == length(_CW_TARGETED_SCHUR_QUANTITIES) ||
+        error("targeted_schur requires exactly its five cared outputs.")
+    quantities = Dict{String,String}()
+    anchors = nothing
+    required_keys = Set([
+        "kind",
+        "quantity",
+        "readout_root_anchor_hz",
+        "filter_root_anchor_hz",
+        "transfer_zero_anchor_hz",
+    ])
+    for (name, raw) in outputs
+        spec = _cw_dict(raw, "cared output $(name)")
+        Set(keys(spec)) == required_keys || error("targeted_schur cared-output $(name) has an invalid key set.")
+        _cw_string(get(spec, "kind", nothing), "cared output $(name).kind") == "targeted_schur" ||
+            error("targeted_schur requests cannot mix cared-output kinds.")
+        quantity = _cw_string(get(spec, "quantity", nothing), "cared output $(name).quantity")
+        quantity in _CW_TARGETED_SCHUR_QUANTITIES || error("Unsupported targeted_schur quantity $(quantity).")
+        haskey(quantities, quantity) && error("targeted_schur quantity $(quantity) is declared more than once.")
+        current_anchors = (
+            readout=_cw_number(get(spec, "readout_root_anchor_hz", nothing), "targeted_schur readout_root_anchor_hz"),
+            filter=_cw_number(get(spec, "filter_root_anchor_hz", nothing), "targeted_schur filter_root_anchor_hz"),
+            transfer=_cw_number(get(spec, "transfer_zero_anchor_hz", nothing), "targeted_schur transfer_zero_anchor_hz"),
+        )
+        all(>(0), values(current_anchors)) || error("targeted_schur anchors must be positive.")
+        isnothing(anchors) && (anchors = current_anchors)
+        current_anchors == anchors || error("All targeted_schur cared outputs must share identical anchors.")
+        quantities[quantity] = String(name)
+    end
+    Set(keys(quantities)) == _CW_TARGETED_SCHUR_QUANTITIES ||
+        error("targeted_schur must declare each required quantity exactly once.")
+    return quantities, anchors
+end
+
+function _cw_targeted_variable_key(variable)
+    ref = _cw_dict(get(variable, "ref", nothing), "variable.ref")
+    return _cw_string(get(ref, "component_id", nothing), "variable.ref.component_id") * "." *
+        _cw_string(get(ref, "parameter_name", nothing), "variable.ref.parameter_name")
+end
+
+function _cw_targeted_perturbation(variable, value)
+    current = Float64(value)
+    isfinite(current) || error("targeted_schur training baseline must be finite.")
+    parameter = _cw_dict(variable, "variable")
+    lower = get(parameter, "lower", nothing)
+    upper = get(parameter, "upper", nothing)
+    lo = isnothing(lower) ? -Inf : _cw_number(lower, "variable.lower")
+    hi = isnothing(upper) ? Inf : _cw_number(upper, "variable.upper")
+    lo <= current <= hi || error("targeted_schur training baseline lies outside its variable bounds.")
+    preferred = max(min(abs(current), floatmax(Float64) / 1.0e3) * 1.0e-3, 1.0e-15)
+    for (direction, boundary) in ((1.0, hi), (-1.0, lo))
+        available = isfinite(boundary) ? abs(boundary - current) : preferred
+        available > 0 || continue
+        step = min(preferred, available / 2)
+        candidate = current + direction * step
+        # At floating-point resolution a valid interval can contain only its
+        # endpoint beside `current`; that endpoint is still a legal training
+        # perturbation.
+        candidate == current && isfinite(boundary) && (candidate = boundary)
+        isfinite(candidate) && candidate != current && lo <= candidate <= hi && return candidate
+    end
+    error("Cannot train a targeted_schur affine term at a fixed variable bound.")
+end
+
+function _cw_targeted_portless_compiled(compiled)
+    # Core deliberately reserves linear C/K/G extraction for a closed netlist.
+    # A compiled port contributes its explicit R_port shunt (the target open
+    # conductance); only the solver P row is removed for this extraction.
+    netlist = Any[
+        row for row in compiled.netlist
+        if !(row isa Tuple && !isempty(row) && startswith(string(first(row)), "P"))
+    ]
+    return SuperconductingCircuitsCore.JosephsonCompiledCircuit(
+        netlist=netlist,
+        component_values=compiled.component_values,
+        node_map=compiled.node_map,
+        component_map=compiled.component_map,
+        line_tap_map=compiled.line_tap_map,
+        hb_intent_summary=compiled.hb_intent_summary,
+        source_slot_map=compiled.source_slot_map,
+        observable_request_map=compiled.observable_request_map,
+        hb_validation_summary=compiled.hb_validation_summary,
+        warnings=compiled.warnings,
+        provenance=compiled.provenance,
+        metadata=compiled.metadata,
+    )
+end
+
+function _cw_targeted_schur_context(request, variables)
+    objective = _cw_dict(get(request, "objective", nothing), "request.objective")
+    _cw_targeted_schur_specs(objective)
+    baseline_latent = isempty(variables) ? Float64[] : _cw_variable_baseline(get(request, "plan", nothing), variables)
+    baseline_overrides = isempty(variables) ? Dict{String,Float64}() : _cw_candidate_overrides(variables, baseline_latent)
+    reference_compiled = _cw_build_plan(get(request, "plan", nothing); overrides=baseline_overrides)
+    reference_model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
+        _cw_targeted_portless_compiled(reference_compiled),
+    )
+    c_ref, k_ref, g_ref, retained = _cw_reduction_model(reference_model, get(request, "reduction", nothing))
+    length(retained) == 2 || error("targeted_schur requires exactly two retained complete-complement coordinates.")
+    all(isfinite, c_ref) && all(isfinite, k_ref) && all(isfinite, g_ref) ||
+        error("targeted_schur reference C/K/G matrices must be finite.")
+    keys = String[]
+    supported_parameters = Set([
+        "readout_open_length_m",
+        "shared_short_length_m",
+        "coupled_length_m",
+        "filter_open_length_m",
+        "idc_finger_length_um",
+    ])
+    c_terms = Matrix{Float64}[]
+    k_terms = Vector{Union{Nothing,Matrix{Float64}}}()
+    for raw in variables
+        variable = _cw_dict(raw, "variable")
+        key = _cw_targeted_variable_key(variable)
+        last(split(key, ".")) in supported_parameters || error(
+            "targeted_schur supports only the four IPF segment lengths and IDC finger length.",
+        )
+        key in keys && error("targeted_schur variables must reference unique component parameters.")
+        value = baseline_overrides[key]
+        perturbed = _cw_targeted_perturbation(variable, value)
+        perturbed_overrides = copy(baseline_overrides)
+        perturbed_overrides[key] = perturbed
+        candidate = _cw_build_plan(get(request, "plan", nothing); overrides=perturbed_overrides)
+        candidate_model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
+            _cw_targeted_portless_compiled(candidate),
+        )
+        candidate_model.node_names == reference_model.node_names ||
+            error("targeted_schur variable $(key) changes compiled coordinate topology.")
+        c1, k1, g1, retained1 = _cw_reduction_model(candidate_model, get(request, "reduction", nothing))
+        retained1 == retained || error("targeted_schur variable $(key) changes retained coordinates.")
+        isapprox(g1, g_ref; rtol=1.0e-12, atol=1.0e-18) ||
+            error("targeted_schur variables must not change the fixed open conductance matrix.")
+        push!(keys, key)
+        push!(c_terms, (c1 - c_ref) / (perturbed - value))
+        parameter_name = last(split(key, "."))
+        if endswith(parameter_name, "_length_m") || parameter_name == "length_m"
+            denominator = inv(perturbed) - inv(value)
+            iszero(denominator) && error("targeted_schur length perturbation is singular.")
+            push!(k_terms, (k1 - k_ref) / denominator)
+        else
+            isapprox(k1, k_ref; rtol=1.0e-10, atol=1.0e-18) ||
+                error("targeted_schur non-length variable $(key) changes inverse inductance.")
+            push!(k_terms, nothing)
+        end
+    end
+    c0 = copy(c_ref)
+    k0 = copy(k_ref)
+    for index in eachindex(keys)
+        c0 .-= baseline_overrides[keys[index]] .* c_terms[index]
+        !isnothing(k_terms[index]) && (k0 .-= inv(baseline_overrides[keys[index]]) .* k_terms[index])
+    end
+    return (
+        capacitance_zero=c0,
+        stiffness_zero=k0,
+        capacitance_terms=c_terms,
+        stiffness_terms=k_terms,
+        variable_keys=keys,
+        baseline_parameters=baseline_overrides,
+        conductance=Matrix{Float64}(g_ref),
+        retained_indices=retained,
+        eliminated_indices=[index for index in axes(c_ref, 1) if !(index in retained)],
+        dimension=size(c_ref, 1),
+        compiled_netlist_rows=length(reference_compiled.netlist),
+    )
+end
+
+function _cw_targeted_candidate_context(context, overrides)
+    capacitance = copy(context.capacitance_zero)
+    stiffness = copy(context.stiffness_zero)
+    for index in eachindex(context.variable_keys)
+        value = get(overrides, context.variable_keys[index], context.baseline_parameters[context.variable_keys[index]])
+        isfinite(value) || throw(_CWCandidateNotEvaluable("targeted_schur candidate parameter is non-finite."))
+        capacitance .+= value .* context.capacitance_terms[index]
+        if !isnothing(context.stiffness_terms[index])
+            value > 0 || throw(_CWCandidateNotEvaluable("targeted_schur length parameter must be positive."))
+            stiffness .+= inv(value) .* context.stiffness_terms[index]
+        end
+    end
+    return (
+        capacitance=Matrix{Float64}((capacitance + transpose(capacitance)) / 2),
+        stiffness=Matrix{Float64}((stiffness + transpose(stiffness)) / 2),
+        conductance=context.conductance,
+        retained_indices=context.retained_indices,
+        eliminated_indices=context.eliminated_indices,
+        dimension=context.dimension,
+    )
+end
+
+function _cw_targeted_schur_operator(context, omega)
+    frequency = ComplexF64(omega)
+    isfinite(real(frequency)) && isfinite(imag(frequency)) && real(frequency) > 0 ||
+        throw(_CWTargetedSchurNumericalError("targeted_schur selected an invalid angular frequency."))
+    dynamic = ComplexF64.(context.stiffness) .- frequency^2 .* context.capacitance .-
+        im * frequency .* context.conductance
+    derivative = -2 * frequency .* context.capacitance .- im .* context.conductance
+    retained, eliminated = context.retained_indices, context.eliminated_indices
+    if isempty(eliminated)
+        return (dynamic=dynamic[retained, retained], derivative=derivative[retained, retained])
+    end
+    dee, der = dynamic[eliminated, eliminated], dynamic[eliminated, retained]
+    dpe, dpr = derivative[eliminated, eliminated], derivative[eliminated, retained]
+    factor = try
+        lu(dee; check=true)
+    catch exception
+        exception isa SingularException || exception isa ZeroPivotException || rethrow()
+        throw(_CWTargetedSchurNumericalError("targeted_schur eliminated block is singular."))
+    end
+    response = try
+        factor \ der
+    catch exception
+        exception isa SingularException || exception isa ZeroPivotException || rethrow()
+        throw(_CWTargetedSchurNumericalError("targeted_schur eliminated solve failed."))
+    end
+    response_derivative = factor \ (dpr - dpe * response)
+    all(value -> isfinite(real(value)) && isfinite(imag(value)), response) ||
+        throw(_CWTargetedSchurNumericalError("targeted_schur eliminated solve became non-finite."))
+    effective = dynamic[retained, retained] - dynamic[retained, eliminated] * response
+    effective_derivative = derivative[retained, retained] - derivative[retained, eliminated] * response -
+        dynamic[retained, eliminated] * response_derivative
+    return (
+        dynamic=Matrix{ComplexF64}((effective + transpose(effective)) / 2),
+        derivative=Matrix{ComplexF64}((effective_derivative + transpose(effective_derivative)) / 2),
+    )
+end
+
+function _cw_targeted_schur_newton(value_and_derivative, initial, label; tolerance=1.0e-10)
+    omega = ComplexF64(initial)
+    for iteration in 1:32
+        value, derivative = value_and_derivative(omega)
+        all(isfinite, (real(value), imag(value), real(derivative), imag(derivative))) ||
+            throw(_CWTargetedSchurNumericalError("$(label) evaluation became non-finite."))
+        iszero(derivative) && throw(_CWTargetedSchurNumericalError("$(label) derivative is zero."))
+        delta = value / derivative
+        omega -= delta
+        isfinite(real(omega)) && isfinite(imag(omega)) && real(omega) > 0 ||
+            throw(_CWTargetedSchurNumericalError("$(label) selected an invalid root."))
+        abs(delta) <= tolerance * max(abs(omega), 1.0) && return (root=omega, iterations=iteration, derivative=value_and_derivative(omega)[2])
+    end
+    throw(_CWTargetedSchurNumericalError("$(label) did not settle within 32 iterations."))
+end
+
+function _cw_targeted_simple_root!(context, root, row, column, label; require_nonpole=false)
+    operator = _cw_targeted_schur_operator(context, root)
+    value = operator.dynamic[row, column]
+    derivative = operator.derivative[row, column]
+    frequency_scale = max(abs(root), 1.0)
+    scale = max(
+        opnorm(operator.dynamic, Inf),
+        frequency_scale * opnorm(operator.derivative, Inf),
+        floatmin(Float64),
+    )
+    abs(value) <= sqrt(eps(Float64)) * scale ||
+        throw(_CWTargetedSchurNumericalError("$(label) residual is not numerically resolved."))
+    abs(derivative) * frequency_scale > 4096 * context.dimension * eps(Float64) * scale ||
+        throw(_CWTargetedSchurNumericalError("$(label) is not machine-resolved as a simple root."))
+    if require_nonpole
+        denominator = det(operator.dynamic)
+        isfinite(real(denominator)) && isfinite(imag(denominator)) &&
+            abs(denominator) > 4096 * context.dimension * eps(Float64) * scale^2 ||
+            throw(_CWTargetedSchurNumericalError("$(label) coincides with an unresolved response pole."))
+    end
+    return nothing
+end
+
+function _cw_targeted_schur_outputs(context, anchors)
+    readout = _cw_targeted_schur_newton(2pi * anchors.readout, "targeted_schur readout diagonal root") do omega
+        operator = _cw_targeted_schur_operator(context, omega)
+        operator.dynamic[1, 1], operator.derivative[1, 1]
+    end
+    filter = _cw_targeted_schur_newton(2pi * anchors.filter, "targeted_schur filter diagonal root") do omega
+        operator = _cw_targeted_schur_operator(context, omega)
+        operator.dynamic[2, 2], operator.derivative[2, 2]
+    end
+    zero = _cw_targeted_schur_newton(2pi * anchors.transfer, "targeted_schur transfer cofactor zero"; tolerance=sqrt(eps(Float64))) do omega
+        operator = _cw_targeted_schur_operator(context, omega)
+        operator.dynamic[2, 1], operator.derivative[2, 1]
+    end
+    _cw_targeted_simple_root!(context, readout.root, 1, 1, "targeted_schur readout diagonal root")
+    _cw_targeted_simple_root!(context, filter.root, 2, 2, "targeted_schur filter diagonal root")
+    _cw_targeted_simple_root!(context, zero.root, 2, 1, "targeted_schur transfer cofactor zero"; require_nonpole=true)
+    slopes = (-readout.derivative, -filter.derivative)
+    normalization = sqrt(slopes[1] * slopes[2])
+    isfinite(real(normalization)) && isfinite(imag(normalization)) && !iszero(normalization) ||
+        throw(_CWTargetedSchurNumericalError("targeted_schur residue normalization is singular."))
+    midpoint = (readout.root + filter.root) / 2
+    exchange = _cw_targeted_schur_operator(context, midpoint).dynamic[1, 2] / normalization
+    roots_hz = (readout.root / (2pi), filter.root / (2pi))
+    linewidths = (-2 * imag(roots_hz[1]), -2 * imag(roots_hz[2]))
+    all(value -> isfinite(value) && value >= 0, linewidths) ||
+        throw(_CWTargetedSchurNumericalError("targeted_schur diagonal-root linewidths are invalid."))
+    return Dict(
+        "readout_diagonal_root_hz" => Float64(real(roots_hz[1])),
+        "filter_diagonal_root_hz" => Float64(real(roots_hz[2])),
+        "transfer_cofactor_zero_hz" => Float64(real(zero.root / (2pi))),
+        "residue_normalized_midpoint_exchange_abs_real_hz" => Float64(abs(real(exchange)) / (2pi)),
+        "diagonal_root_linewidth_sum_hz" => Float64(sum(linewidths)),
+    )
+end
+
+function _cw_direct_cared_outputs(compiled, objective, reduction; targeted_context=nothing, overrides=Dict{String,Float64}())
     outputs = _cw_dict(get(objective, "cared_outputs", nothing), "objective.cared_outputs")
     kinds = [_cw_string(get(_cw_dict(spec, "cared output"), "kind", nothing), "cared output kind") for spec in values(outputs)]
+    if any(==("targeted_schur"), kinds)
+        all(==("targeted_schur"), kinds) || error("A direct request cannot mix targeted_schur with other cared-output kinds.")
+        isnothing(compiled) || error("targeted_schur must use its fixed affine C/K context.")
+        isnothing(targeted_context) && error("targeted_schur fixed context is absent.")
+        quantities, anchors = _cw_targeted_schur_specs(objective)
+        bundle = _cw_targeted_schur_outputs(_cw_targeted_candidate_context(targeted_context, overrides), anchors)
+        return Dict{String,Float64}(name => bundle[quantity] for (quantity, name) in quantities)
+    end
+    isnothing(compiled) && error("Direct cared outputs require a compiled circuit.")
+    model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(compiled)
     uses_schur = any(==("schur_dynamic_stiffness_abs"), kinds)
     uses_closed = any(==("closed_mode_frequency_hz"), kinds)
     uses_schur && uses_closed && error("A direct request cannot mix closed-mode and explicit Schur cared-output kinds.")
@@ -502,16 +1026,38 @@ function _cw_candidate_status(gates)
     return isempty(rejected) ? "PASS" : "REJECTED_BY_GATE", rejected
 end
 
-function _cw_evaluate(request; overrides=Dict{String,Float64}(), candidate_parameters=Dict{String,Float64}())
+function _cw_uses_targeted_schur(objective)
+    outputs = _cw_dict(get(objective, "cared_outputs", nothing), "objective.cared_outputs")
+    return any(
+        _cw_string(get(_cw_dict(spec, "cared output"), "kind", nothing), "cared output kind") == "targeted_schur"
+        for spec in values(outputs)
+    )
+end
+
+function _cw_evaluate(request; overrides=Dict{String,Float64}(), candidate_parameters=Dict{String,Float64}(), targeted_context=nothing)
     artifacts = _cw_validate_artifacts(request)
-    compiled = _cw_build_plan(get(request, "plan", nothing); overrides=overrides)
     objective = _cw_dict(get(request, "objective", nothing), "request.objective")
     backend = _cw_string(get(request, "backend", nothing), "request.backend")
+    targeted = _cw_uses_targeted_schur(objective)
+    backend == "direct" || !targeted || error("targeted_schur is available only on the direct backend.")
+    if targeted && isnothing(targeted_context)
+        targeted_context = _cw_targeted_schur_context(
+            request,
+            _cw_array(get(request, "variables", Any[]), "request.variables"),
+        )
+    end
+    compiled = targeted ? nothing : _cw_build_plan(get(request, "plan", nothing); overrides=overrides)
     backend == "hb" && !isnothing(get(request, "reduction", nothing)) && error(
         "HB V1 has no registered ReductionSpec executor; refusing to ignore a declared reduction."
     )
     outputs = backend == "hb" ? _cw_cared_outputs(compiled, objective) :
-        backend == "direct" ? _cw_direct_cared_outputs(compiled, objective, get(request, "reduction", nothing)) : error("Unsupported backend $(backend).")
+        backend == "direct" ? _cw_direct_cared_outputs(
+            compiled,
+            objective,
+            get(request, "reduction", nothing);
+            targeted_context=targeted_context,
+            overrides=overrides,
+        ) : error("Unsupported backend $(backend).")
     residuals, cost = _cw_objective(objective, outputs)
     gates = _cw_gate_values(request, outputs)
     status, rejecting_gates = _cw_candidate_status(gates)
@@ -525,12 +1071,12 @@ function _cw_evaluate(request; overrides=Dict{String,Float64}(), candidate_param
         "gates" => gates,
         "candidate_parameters" => candidate_parameters,
         "applied_parameter_bindings" => overrides,
-        "compiled_netlist_rows" => length(compiled.netlist),
+        "compiled_netlist_rows" => targeted ? targeted_context.compiled_netlist_rows : length(compiled.netlist),
     )
 end
 
 function _cw_expected_candidate_error(exception)
-    return exception isa _CWCandidateNotEvaluable || exception isa SuperconductingCircuitsCore.HBSolverNumericalError ||
+    return exception isa _CWCandidateNotEvaluable || exception isa _CWTargetedSchurNumericalError || exception isa SuperconductingCircuitsCore.HBSolverNumericalError ||
         exception isa SingularException || exception isa PosDefException ||
         exception isa ZeroPivotException || exception isa RankDeficientException ||
         exception isa LAPACKException
@@ -646,6 +1192,9 @@ function _cw_optimize(request, ledger_path)
     initial = _cw_variable_baseline(get(request, "plan", nothing), variables)
     lower, upper = _cw_variable_bounds(variables)
     fingerprint = _cw_string(get(request, "fingerprint_sha256", nothing), "request.fingerprint_sha256")
+    objective_spec = _cw_dict(get(request, "objective", nothing), "request.objective")
+    targeted_context = _cw_uses_targeted_schur(objective_spec) ?
+        _cw_targeted_schur_context(request, variables) : nothing
     ledger = _cw_load_ledger(ledger_path, fingerprint)
     entries = _cw_array(get(ledger, "entries", nothing), "optimization ledger entries")
     cache = Dict{String,Dict{String,Any}}()
@@ -657,7 +1206,12 @@ function _cw_optimize(request, ledger_path)
     end
     evaluate_candidate = latent -> try
         overrides = _cw_candidate_overrides(variables, latent)
-        _cw_evaluate(request; overrides=overrides, candidate_parameters=_cw_requested_candidate_parameters(variables, latent))
+        _cw_evaluate(
+            request;
+            overrides=overrides,
+            candidate_parameters=_cw_requested_candidate_parameters(variables, latent),
+            targeted_context=targeted_context,
+        )
     catch exception
         _cw_expected_candidate_error(exception) || rethrow()
         Dict{String,Any}("status" => "NOT_EVALUABLE", "failure" => sprint(showerror, exception))
