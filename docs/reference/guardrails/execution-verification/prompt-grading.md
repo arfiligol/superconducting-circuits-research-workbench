@@ -55,7 +55,9 @@ When a task needs explicit scoping, use these fields in the conversation or PR b
 - Verification
 - Risks / open decisions
 
-Dedicated branch/worktree, `Allowed Area`, `Do Not Touch`, and subagent work lane assignments are optional tools. They are not required fields for ordinary work.
+Branch and worktree selection comes only from the active host delivery profile;
+do not infer either from prompt scaffolding. `Allowed Area`, `Do Not Touch`,
+and internal worker assignments remain optional scoping tools.
 
 ## Review Rule
 
@@ -82,7 +84,8 @@ Do not judge success by whether an internal prompt structure was followed exactl
 - Choose the smallest level that completes a meaningful delivery.
 - Direct implementation is allowed when the request is clear and SoT is known.
 - Write a short plan only when it reduces risk or the user asks for one.
-- Dedicated branches/worktrees, `Allowed Area`, `Do Not Touch`, and subagent work lane assignments are optional tools.
+- Branch and worktree selection comes only from the active host delivery profile; do not infer either from prompt scaffolding.
+- `Allowed Area`, `Do Not Touch`, and internal worker assignments are optional scoping tools.
 - Review outcomes against SoT, actual behavior, and validation results rather than prompt literalism.
 - For user-visible frontend changes, include browser-based verification with screenshot or equivalent visual evidence when practical.
 ```

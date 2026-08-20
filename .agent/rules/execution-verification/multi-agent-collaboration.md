@@ -1,22 +1,9 @@
-## Codex Subagent Coordination
-- The Sol Main Agent owns Human communication, product semantics, architecture and ownership boundaries, contract design, work decomposition, acceptance criteria, integration, validation, and final decisions.
-- Sol does not perform the main feature implementation by default. Sol may write contract documents and scaffolds, and may implement feature logic directly only when the Human explicitly requests it or implementation cannot yet be separated safely from unsettled semantics.
-- Terra is the default repo-aware implementer for established contracts and non-trivial repository work.
-- Luna executes narrow, explicit, contract-bounded, mechanically verifiable work packages.
-- Sol, Terra, and Luna are reusable archetypes; each spawned instance is a temporary lane worker. Use the smallest pool that covers separable work.
-- Recommended lanes are:
-  - Julia Core + Pluto Research
-  - Product Async Contracts
-  - Backend + Runner Integration
-  - Application Workbench
-  - Python Notebook / Data Inspection
-  - Docs / SoT Consistency
-- Assign one primary owner per modified path and give every instance explicit owned, allowed, and forbidden paths.
-- Subagents must stay inside assigned folder structure and owner-boundary rules, avoid redefining architecture, and must not coordinate directly with other subagents.
-- Luna escalates expanded scope, new dependencies or public APIs, and implementation uncertainty to Terra. Terra escalates undefined semantics, contracts, ownership, or architecture to Sol and the Human.
-- Each subagent reports `inspected_files`, `changed_files`, `produced_artifacts`, `validation`, and `blockers` to Sol.
-- Cross-lane conflicts are resolved by Sol against the relevant SoT.
-- Do not create new active `Plans/` coordination artifacts or committed lane handoffs.
-- Direct `develop` updates are allowed when the working tree stays coherent and touched-area checks are run.
-- Long-term decisions belong in `docs/reference/**`, not temporary planning files.
-- Final reports should summarize inspected and changed files, produced artifacts, validation, blockers, risks, and any skipped checks.
+## Codex Internal-Worker Coordination
+- Resolve host semantic authority, repository ownership, data boundary, delivery profile, and exact paths before delegation.
+- Under SCQ_Design, load `$scq-collaboration-roles`; load `$model-routing` only after ownership is resolved.
+- The resolved repository owner holds path leases and assigns one primary writer per path.
+- Internal workers receive bounded implementation packages; they do not gain repository, semantic, Human-acceptance, publication, merge, synchronization, or cleanup authority.
+- Workers must not negotiate cross-owner changes or redefine public contracts, data ownership, or goal semantics.
+- Sequence overlapping paths; do not allow concurrent writers on the same path.
+- Workers return changed paths or artifact identity, validation, blockers, and residual risks to the repository owner.
+- This rule does not define GitFlow; use the host-selected delivery profile.
