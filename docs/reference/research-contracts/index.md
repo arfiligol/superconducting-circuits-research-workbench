@@ -10,12 +10,12 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Stable research-core contracts for external FEM result ingestion, equivalent circuit models, quantum model boundaries, and notebook roles.
-version: v1.0.0
-last_updated: 2026-06-14
+scope: Stable research-core contracts for circuit runtime consumption, external FEM result ingestion, equivalent circuit models, quantum model boundaries, and notebook roles.
+version: v1.1.0
+last_updated: 2026-08-20
 updated_by: codex
 title: Research Contracts
-description: Contract index for the four circuit research routes.
+description: Contract index for the circuit runtime boundary and four circuit research routes.
 sidebar:
  label: Overview
  order: 10
@@ -32,6 +32,7 @@ These contracts keep the four research routes connected without mixing implement
 | [External FEM Result Contract](external-fem-result-contract.md) | accepted input artifact families and normalized trace semantics |
 | [Equivalent Circuit Model Contract](equivalent-circuit-model-contract.md) | fitted model fields, metrics, provenance, and handoff expectations |
 | [Quantum Model Boundary](quantum-model-boundary.md) | scqubits, QuTiP, qutip-qip, and isolated Julia dynamics placement rules |
+| [Circuit Runtime / Python Consumer](circuit-runtime-python-consumer.md) | accepted Python authoring surface, Julia action boundary, sealed schemas, and pure-Python analysis |
 | [Notebook Roles](notebook-roles.md) | Pluto and Python notebook responsibilities |
 
 ## Route Fit

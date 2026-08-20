@@ -116,7 +116,8 @@ one-off notebooks.
 | Layer | Role |
 | --- | --- |
 | Pluto notebooks | First research cockpit for rapid prototyping, simulation experiments, sweep design, and physics learning. |
-| Python notebooks | Programmable data inspection, local TraceStore investigation, and Backend API inspection when platform state matters. |
+| Python notebooks | Routine circuit-runtime consumers with visible `CircuitPlan` assembly, plus Python-native analysis, reporting, and data inspection. |
+| Python circuit runtime | Public installable consumer surface; seals an action request, starts one Julia process for `evaluate` or the complete `optimize`, and analyzes sealed evidence in pure Python. |
 | Julia Core | Circuit-semantic authoring, reusable components, Circuit Plans, compilation, simulation helpers, and analysis helpers. |
 | Electron application | Stable workbench for dataset management, simulation requests, analysis requests, task history, result views, and trace browsing. |
 | Python Backend | Task lifecycle, metadata, publication, provenance, TraceStore registration, and platform data APIs. |
@@ -134,10 +135,11 @@ one-off notebooks.
 
 ## Architecture Snapshot
 
-The current source-of-truth architecture is:
+The current source-of-truth architecture has two notebook execution paths and
+one separate product-app path:
 
 ```text
-Notebook Interface + Electron Application Interface + Julia Runner Compute Plane
+Notebook Interface + Python Circuit Runtime + Electron Application Interface + Julia Compute Plane
 ```
 
 The main execution and inspection tracks are:
@@ -148,6 +150,22 @@ The main execution and inspection tracks are:
     | direct Julia Core research execution
     v
 [Julia Core]
+```
+
+```text
+[Python Notebook]
+    |
+    | visible CircuitPlan + declarative CircuitSim action
+    v
+[superconducting_circuits_runtime]
+    |
+    | one Julia process per evaluate or complete optimize action
+    v
+[Julia Core compiler / Direct C-K-G / Schur / HB / optimizer]
+    |
+    | sealed request, result, and receipt
+    v
+[pure-Python analyze]
 ```
 
 ```text
@@ -173,21 +191,24 @@ The main execution and inspection tracks are:
 ```text
 [Python Notebook]
     |
-    | read-only local/exported/canonical data inspection
+    | local/exported/canonical data inspection and Python-native analysis
     v
 [Ad hoc analysis]
 
 [Python Notebook]
     |
-    | platform state changes and task submission
+    | product-platform state changes and task submission
     v
 [Python Backend APIs]
 ```
 
 Pluto is the direct research cockpit. It is not a backend task submitter in the
-platform architecture. Python notebooks may inspect local data directly, but any
-platform state change, task creation, publication, metadata update, or result
-registration must use Backend contracts.
+platform architecture. Python notebooks may use the public circuit runtime for
+circuit evaluation and optimization, and may inspect local data directly. They
+must not import `juliacall`, call Julia Core directly, or execute Python callbacks
+inside Julia optimization. Product-platform state changes, publication, metadata
+updates, and result registration still use Backend contracts. The Electron /
+Backend / Julia Runner flow remains the distinct product-app execution surface.
 
 ## Repository Layout
 
@@ -346,6 +367,9 @@ Current boundaries:
 - Technical documentation lives in Starlight docs under `docs/` and is mounted at
   `/docs/` in the public artifact.
 - Research execution lives in Pluto notebooks and Julia Core.
+- Routine Python circuit consumers use the accepted installable runtime contract;
+  Julia remains the compiler and circuit-compute authority, while `analyze()` is
+  pure Python over sealed evidence.
 - Productized simulation and analysis tasks go through the Application, Python
   Backend, and Julia Runner.
 - Python Backend owns task lifecycle, metadata, publication, provenance, and
@@ -354,8 +378,8 @@ Current boundaries:
   generation.
 - Large numeric arrays move through local filesystem Zarr, not HTTP JSON.
 - User-facing command workflows, retired Python UI runtimes, separate local
-  queue workers, and Python-in-process Julia execution are not active product
-  surfaces.
+  queue workers, direct `juliacall` notebook execution, and Python-in-process
+  Julia execution are not active product surfaces.
 
 ## Contributing
 
