@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "1b7528e0559d8161504d611b1bc93c2ab7ed5956"
+project_hash = "3b6b7aa7d8db873b3bdfe260fb3649563974a278"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "bbc22a9a08a0ef6460041086d8a7b27940ed4ffd"
@@ -200,6 +200,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Lz4_jll", "Zlib_jll", "Zstd_jll"]
 git-tree-sha1 = "535c80f1c0847a4c967ea945fca21becc9de1522"
 uuid = "0b7ba130-8d10-5ba8-a3d6-c5182647fed9"
 version = "1.21.7+0"
+
+[[deps.CMAEvolutionStrategy]]
+deps = ["Dates", "LinearAlgebra", "Printf", "Random", "Statistics"]
+git-tree-sha1 = "6bf0985be2c5ea58305d2d04e336684f64fdc12a"
+uuid = "8d3b24bd-414e-49e0-94fb-163cc3a3e411"
+version = "0.2.6"
 
 [[deps.CRC32c]]
 uuid = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
@@ -1059,7 +1065,7 @@ uuid = "b25d36e2-7598-4d7b-9e68-62f725d58ebd"
 version = "0.1.0"
 
 [[deps.SuperconductingCircuitsRunner]]
-deps = ["Dates", "HTTP", "JSON3", "SHA", "SuperconductingCircuitsCore", "Zarr"]
+deps = ["CMAEvolutionStrategy", "Dates", "HTTP", "JSON3", "LinearAlgebra", "SHA", "SuperconductingCircuitsCore", "Zarr"]
 path = "."
 uuid = "4c7c5b9a-4e91-4bc5-a3fb-9573d29c3f0c"
 version = "0.1.0"

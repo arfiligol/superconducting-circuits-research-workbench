@@ -15,6 +15,19 @@ struct LinearNodalModel
     provenance
 end
 
+struct LinearNodalCKGModel
+    node_names::Vector{String}
+    capacitance::Matrix{Float64}
+    inverse_inductance::Matrix{Float64}
+    conductance::Matrix{Float64}
+    source_sha256::String
+    node_order_sha256::String
+    capacitance_sha256::String
+    inverse_inductance_sha256::String
+    conductance_sha256::String
+    provenance
+end
+
 struct ReducedLinearModel
     source::LinearNodalModel
     retained_basis::Matrix{Float64}
@@ -174,13 +187,13 @@ function _require_positive_semidefinite(matrix, label)
     return values, spectrum, tolerance
 end
 
-"""Extract one finite conservative nodal C/K model from a compiled closed plan.
+"""Extract one finite passive nodal C/K/G model from a compiled closed plan.
 
 The JosephsonCircuits parser owns netlist-to-matrix lowering. This boundary
 adds Workbench node ordering, provenance, semantic hashes, and strict rejection
-of ports, loss, sources, nonlinear junction rows, and unresolved values.
+of ports, sources, nonlinear junction rows, and unresolved values.
 """
-function extract_linear_nodal_model(compiled::JosephsonCompiledCircuit)
+function extract_linear_nodal_ckg_model(compiled::JosephsonCompiledCircuit)
     isempty(compiled.port_map) || _validation_error(
         "Closed linear extraction does not accept external ports.",
     )
@@ -195,17 +208,17 @@ function extract_linear_nodal_model(compiled::JosephsonCompiledCircuit)
             "JosephsonCircuits could not parse the closed linear netlist: $(sprint(showerror, exception))",
         )
     end
-    forbidden = Set([:P, :I, :R, :Lj, :NL])
+    forbidden = Set([:P, :I, :Lj, :NL])
     forbidden_rows = [
         parsed.componentnames[index]
         for index in eachindex(parsed.componenttypes)
         if parsed.componenttypes[index] in forbidden
     ]
     isempty(forbidden_rows) || _validation_error(
-        "Closed linear extraction rejects ports, sources, resistors, and nonlinear rows: $(join(forbidden_rows, ", ")).",
+        "Direct linear extraction rejects ports, sources, and nonlinear rows: $(join(forbidden_rows, ", ")).",
     )
-    all(type -> type in (:C, :L, :K), parsed.componenttypes) || _validation_error(
-        "Closed linear extraction supports only C, L, and mutual-K rows.",
+    all(type -> type in (:C, :L, :K, :R), parsed.componenttypes) || _validation_error(
+        "Direct linear extraction supports only C, L, mutual-K, and R rows.",
     )
 
     graph = JosephsonCircuits.calccircuitgraph(parsed)
@@ -228,14 +241,8 @@ function extract_linear_nodal_model(compiled::JosephsonCompiledCircuit)
     isempty(matrices.portindices) && isempty(matrices.portnumbers) || _validation_error(
         "Closed linear extraction found undeclared port rows.",
     )
-    isempty(matrices.portimpedanceindices) && isempty(matrices.noiseportimpedanceindices) || _validation_error(
-        "Closed linear extraction found resistive port or noise elements.",
-    )
     isempty(matrices.Ljb.nzval) || _validation_error(
         "Closed linear extraction v1 does not linearize Josephson junction rows; use ordinary L rows or provide a reviewed operating-point Hessian.",
-    )
-    all(iszero, matrices.Gnm.nzval) || _validation_error(
-        "Closed linear extraction requires an exactly lossless zero-conductance model.",
     )
 
     parsed.nodenames[1] == "0" || _validation_error(
@@ -244,35 +251,66 @@ function extract_linear_nodal_model(compiled::JosephsonCompiledCircuit)
     node_names = String.(parsed.nodenames[2:end])
     capacitance = Matrix{Float64}(matrices.Cnm)
     inverse_inductance = Matrix{Float64}(matrices.invLnm)
-    size(capacitance) == size(inverse_inductance) == (length(node_names), length(node_names)) ||
-        _validation_error("Closed linear C/K matrices and ordered node names disagree in size.")
-    all(isfinite, capacitance) && all(isfinite, inverse_inductance) || _validation_error(
-        "Closed linear C/K matrices must contain only finite values.",
+    conductance = zeros(Float64, size(capacitance))
+    for column in axes(conductance, 2)
+        for index in matrices.Gnm.colptr[column]:(matrices.Gnm.colptr[column + 1] - 1)
+            conductance[matrices.Gnm.rowval[index], column] = Float64(matrices.Gnm.nzval[index])
+        end
+    end
+    size(capacitance) == size(inverse_inductance) == size(conductance) ==
+        (length(node_names), length(node_names)) ||
+        _validation_error("Direct linear C/K/G matrices and ordered node names disagree in size.")
+    all(isfinite, capacitance) && all(isfinite, inverse_inductance) && all(isfinite, conductance) || _validation_error(
+        "Direct linear C/K/G matrices must contain only finite values.",
     )
     capacitance = _require_positive_definite(capacitance, "Closed linear capacitance matrix")
     inverse_inductance, _, _ = _require_positive_semidefinite(
         inverse_inductance,
         "Closed linear inverse-inductance matrix",
     )
+    conductance, _, _ = _require_positive_semidefinite(
+        conductance,
+        "Direct linear conductance matrix",
+    )
 
     plan_id = String(get(compiled.provenance, :plan_id, "unknown"))
     topology_digest = String(get(compiled.provenance, :topology_key, "unknown"))
-    return LinearNodalModel(
+    return LinearNodalCKGModel(
         node_names,
         capacitance,
         inverse_inductance,
+        conductance,
         _compiled_linear_source_sha256(compiled, parsed, resolved_values),
         _linear_string_vector_sha256("ordered-nodes", node_names),
         _linear_matrix_sha256("capacitance-f", capacitance),
         _linear_matrix_sha256("inverse-inductance-h^-1", inverse_inductance),
+        _linear_matrix_sha256("conductance-s", conductance),
         (
-            contract_id="closed-linear-nodal-model-v1",
+            contract_id="direct-linear-nodal-ckg-model-v1",
             plan_id=plan_id,
             topology_key=topology_digest,
             compiler=get(compiled.provenance, :compiler, :unknown),
             node_count=length(node_names),
             netlist_row_count=length(compiled.netlist),
         ),
+    )
+end
+
+"""Extract the conservative zero-G view used by existing closed-mode solvers."""
+function extract_linear_nodal_model(compiled::JosephsonCompiledCircuit)
+    model = extract_linear_nodal_ckg_model(compiled)
+    all(iszero, model.conductance) || _validation_error(
+        "Closed linear extraction requires an exactly lossless zero-conductance model.",
+    )
+    return LinearNodalModel(
+        model.node_names,
+        model.capacitance,
+        model.inverse_inductance,
+        model.source_sha256,
+        model.node_order_sha256,
+        model.capacitance_sha256,
+        model.inverse_inductance_sha256,
+        merge(model.provenance, (contract_id="closed-linear-nodal-model-v1",)),
     )
 end
 
