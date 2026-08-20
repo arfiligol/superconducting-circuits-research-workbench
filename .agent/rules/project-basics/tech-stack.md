@@ -28,7 +28,6 @@
   - Alembic
   - NumPy
   - Zarr
-  - fsspec
 - **Julia Core**:
   - `core/julia/SuperconductingCircuitsCore/`
   - docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers
@@ -39,9 +38,7 @@
   - Runner adapters must not create a separate circuit construction path or preserve outdated Core APIs as fallback paths
   - HTTP.jl
   - JSON3.jl
-  - StructTypes.jl
   - Zarr.jl
-  - DataFrames.jl
 - **Local runtime backbone**:
   - frontend
   - Python Backend
@@ -52,8 +49,9 @@
   - Docs expose four route-first research workflows: Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
   - Pluto Notebook is the direct Julia Core research interface.
   - Backend task submission is outside the Pluto Notebook role.
-  - Python Notebook is a Python-native research and inspection surface for external FEM result normalization, trace/Touchstone/Zarr ingestion, equivalent-circuit fitting, scqubits modeling, QuTiP/qutip-qip dynamics or pulse experiments, and platform inspection.
-  - Python Notebook must not directly call Julia Core or use JuliaCall as normal simulation compute.
+  - Python Notebook is the routine client for the accepted `superconducting-circuits-runtime` surface and also owns Python-native external-result analysis, quantum modeling, dynamics/pulse experiments, and platform inspection.
+  - The runtime starts one Julia process per complete `evaluate` or `optimize` action; `analyze` is pure Python over sealed evidence.
+  - Python Notebook must not directly call Julia Core, import `juliacall`, build C/K/G, call Schur helpers, or run per-candidate Python callbacks.
   - Python Notebook may directly read data files, but platform state changes must go through Backend contracts.
   - GDSFactory ecosystem compatibility means artifact compatibility, not running gdsfactory/gsim/gplugins/qpdk layout or FEM jobs from this repo.
   - Future quantum modeling belongs in Python notebooks or a future separate Python quantum package, not Backend and not Julia Core.
@@ -68,7 +66,8 @@
   - no active command-line product surface
 - **Topology**:
   - canonical architecture boundaries are `site/`, `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/analysis/`, `core/python/circuit_libraries/`, `notebooks/`, `scripts/`, and `docs/`
-  - `core/python/circuit_libraries/` is the Schemdraw circuit library project root; `core/python/circuit_libraries/schemdraw_circuit_library/` owns Python Schemdraw visual components that consume renderer-neutral schematic data and must not define solver semantics or become an App/Backend runtime dependency
+  - the accepted `superconducting-circuits-runtime` implementation path is bound by the implementation package; notebooks remain consumers, not the runtime implementation
+  - `core/python/circuit_libraries/schemdraw_circuit_library/` owns Python Schemdraw visual components that consume renderer-neutral schematic data; it must not define solver semantics or become an App/Backend runtime dependency
   - `app/backend/app_backend/domain/runtime_contracts/` owns App Backend tasking, execution, and storage runtime contracts; it must stay framework-agnostic and not import FastAPI, SQLAlchemy, repositories, file I/O, or runner process code
   - `site/` is the Astro public introduction site and Starlight docs host
   - `docs/` is the Astro + Starlight technical documentation source mounted at `/docs/`
