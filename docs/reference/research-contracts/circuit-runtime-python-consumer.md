@@ -11,8 +11,8 @@ status: accepted
 owner: docs-team
 audience: team
 scope: Accepted public Circuit Workbench runtime and Python-consumer boundary.
-version: v1.0.0
-last_updated: 2026-08-20
+version: v1.0.1
+last_updated: 2026-08-21
 updated_by: codex
 title: Circuit Runtime / Python Consumer
 description: Accepted V1 contract for visible Python circuit plans, Julia action execution, sealed evidence, and pure-Python analysis.
@@ -31,6 +31,21 @@ Contract artifact SHA-256:
 `e1c2fc83c91a2fff94c4fd59f8bf919e69c2e3bf7ef8a2489874068f971e52ef`.
 The accepted source baseline is Workbench
 `f78b04f35f974c0f4fdaf4e60895df2c289c04f6`.
+
+## Bound Implementation Candidate
+
+Delivery remains `NOT_INTEGRATED`. The current implementation binding is
+[Workbench PR #32](https://github.com/arfiligol/superconducting-circuits-research-workbench/pull/32):
+
+| Identity | SHA |
+| --- | --- |
+| Base | `f78b04f35f974c0f4fdaf4e60895df2c289c04f6` |
+| Head | `182a1f1781b69a14cdc84fbeac07e98cd4eb59ae` |
+| Tree | `32d9e332bbcca3d0ddba34f6ed8147545aa87558` |
+| Base-to-head full-index binary diff SHA-256 | `5754aa010ecfbfa8d08cb889fd20222591bbeafb5c1e854a99c7ecf0e309b315` |
+
+This binding records delivery provenance only. It does not change the accepted
+public semantics below and does not claim integration, release, or deployment.
 
 ## Ownership Boundary
 
