@@ -137,7 +137,10 @@ function _cw_parallel_lc!(plan, component, overrides)
     params = _cw_dict(get(component, "parameters", nothing), "component.parameters")
     capacitance = _cw_number(get(overrides, "$(id).capacitance_f", get(params, "capacitance_f", nothing)), "$(id).capacitance_f")
     inductance = _cw_number(get(overrides, "$(id).inductance_h", get(params, "inductance_h", nothing)), "$(id).inductance_h")
-    capacitance > 0 && inductance > 0 || throw(_CWCandidateNotEvaluable("$(id) LC values must be positive."))
+    conductance = _cw_number(get(overrides, "$(id).conductance_s", get(params, "conductance_s", 0.0)), "$(id).conductance_s")
+    capacitance > 0 && inductance > 0 && conductance >= 0 || throw(
+        _CWCandidateNotEvaluable("$(id) C/L values must be positive and G must be nonnegative."),
+    )
     signal = SuperconductingCircuitsCore.external_node("cw_$(id)_signal")
     SuperconductingCircuitsCore.add_parallel_lc_resonator!(
         plan;
@@ -145,6 +148,14 @@ function _cw_parallel_lc!(plan, component, overrides)
         node=signal,
         capacitance=capacitance,
         inductance=inductance,
+    )
+    conductance > 0 && SuperconductingCircuitsCore.series_resistor!(
+        plan;
+        id="$(id)_conductance",
+        from=signal,
+        to=SuperconductingCircuitsCore.ground(),
+        resistance=1 / conductance,
+        role=:shunt_conductance,
     )
 end
 
@@ -365,11 +376,16 @@ function _cw_reduction_model(model, reduction)
         index in indices && error("Reduction retained coordinates must be ordered and unique.")
         push!(indices, index)
     end
-    return transpose(basis) * model.capacitance * basis, transpose(basis) * model.inverse_inductance * basis, indices
+    return (
+        transpose(basis) * model.capacitance * basis,
+        transpose(basis) * model.inverse_inductance * basis,
+        transpose(basis) * model.conductance * basis,
+        indices,
+    )
 end
 
 function _cw_direct_cared_outputs(compiled, objective, reduction)
-    model = SuperconductingCircuitsCore.extract_linear_nodal_model(compiled)
+    model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(compiled)
     outputs = _cw_dict(get(objective, "cared_outputs", nothing), "objective.cared_outputs")
     kinds = [_cw_string(get(_cw_dict(spec, "cared output"), "kind", nothing), "cared output kind") for spec in values(outputs)]
     uses_schur = any(==("schur_dynamic_stiffness_abs"), kinds)
@@ -377,14 +393,14 @@ function _cw_direct_cared_outputs(compiled, objective, reduction)
     uses_schur && uses_closed && error("A direct request cannot mix closed-mode and explicit Schur cared-output kinds.")
     if uses_schur
         all(==("schur_dynamic_stiffness_abs"), kinds) || error("Unsupported direct cared-output kind.")
-        capacitance, inverse_inductance, terminals = _cw_reduction_model(model, reduction)
+        capacitance, inverse_inductance, conductance, terminals = _cw_reduction_model(model, reduction)
         result = Dict{String,Float64}()
         for name in sort!(collect(keys(outputs)))
             spec = _cw_dict(outputs[name], "cared output $(name)")
             frequency = _cw_number(get(spec, "frequency_hz", nothing), "Schur cared output frequency_hz")
             frequency > 0 || error("Schur cared output frequency_hz must be positive.")
             schur = SuperconductingCircuitsCore.schur_dynamic_stiffness(
-                capacitance, inverse_inductance, 2pi * frequency, terminals,
+                capacitance, inverse_inductance, conductance, 2pi * frequency, terminals,
             )
             row = _cw_integer(get(spec, "row", nothing), "Schur cared output row")
             column = _cw_integer(get(spec, "column", nothing), "Schur cared output column")
@@ -394,7 +410,12 @@ function _cw_direct_cared_outputs(compiled, objective, reduction)
         return result
     end
     isnothing(reduction) || error("Closed-mode direct cared outputs do not accept an ignored ReductionSpec.")
-    reduced = SuperconductingCircuitsCore.reduce_free_charge_coordinates(model)
+    all(iszero, model.conductance) || error(
+        "closed_mode_frequency_hz requires zero conductance; use explicit C/K/G Schur cared outputs for a lossy Plan.",
+    )
+    reduced = SuperconductingCircuitsCore.reduce_free_charge_coordinates(
+        SuperconductingCircuitsCore.extract_linear_nodal_model(compiled),
+    )
     modes = SuperconductingCircuitsCore.solve_generalized_modes(reduced)
     result = Dict{String,Float64}()
     for name in sort!(collect(keys(outputs)))
@@ -519,15 +540,81 @@ function _cw_candidate_key(latent)
     return _cw_fingerprint([Float64(value) for value in latent])
 end
 
+function _cw_ledger_seed()
+    return _cw_fingerprint(Dict("schema" => "circuit-workbench-optimization-ledger.v1"))
+end
+
+function _cw_validate_ledger_entries!(ledger, fingerprint)
+    entries = _cw_array(get(ledger, "entries", nothing), "optimization ledger entries")
+    previous = _cw_ledger_seed()
+    for (index, raw) in enumerate(entries)
+        entry = _cw_dict(raw, "optimization ledger entry")
+        _cw_integer(get(entry, "candidate_index", nothing), "ledger candidate_index") == index ||
+            error("Optimization ledger candidate indices must be contiguous and ordered.")
+        latent = [_cw_number(value, "ledger latent value") for value in _cw_array(get(entry, "latent", nothing), "ledger latent")]
+        candidate_key = _cw_string(get(entry, "candidate_key", nothing), "ledger candidate_key")
+        candidate_key == _cw_candidate_key(latent) || error(
+            "Optimization ledger candidate key does not match its latent vector.",
+        )
+        get(entry, "previous_entry_sha256", nothing) == previous || error(
+            "Optimization ledger hash chain is broken.",
+        )
+        expected = get(entry, "entry_sha256", nothing)
+        body = copy(entry)
+        delete!(body, "entry_sha256")
+        actual = _cw_fingerprint(body)
+        expected == actual || error("Optimization ledger entry hash mismatch.")
+        previous = actual
+    end
+    get(ledger, "history_sha256", nothing) == previous || error(
+        "Optimization ledger history hash mismatch.",
+    )
+    ledger["entries"] = entries
+    return ledger
+end
+
 function _cw_load_ledger(path, fingerprint)
     if !isfile(path)
-        return Dict{String,Any}("schema" => "circuit-workbench-optimization-ledger.v1", "request_fingerprint_sha256" => fingerprint, "entries" => Any[])
+        return Dict{String,Any}(
+            "schema" => "circuit-workbench-optimization-ledger.v1",
+            "request_fingerprint_sha256" => fingerprint,
+            "history_sha256" => _cw_ledger_seed(),
+            "entries" => Any[],
+        )
     end
     ledger = _cw_dict(JSON3.read(read(path, String)), "optimization ledger")
     get(ledger, "schema", nothing) == "circuit-workbench-optimization-ledger.v1" || error("Optimization ledger schema mismatch.")
     get(ledger, "request_fingerprint_sha256", nothing) == fingerprint || error("Optimization ledger belongs to a different sealed request fingerprint.")
-    ledger["entries"] = _cw_array(get(ledger, "entries", nothing), "optimization ledger entries")
-    return ledger
+    return _cw_validate_ledger_entries!(ledger, fingerprint)
+end
+
+function _cw_validate_existing_optimization_receipt!(receipt_path, request)
+    isfile(receipt_path) || return nothing
+    receipt = _cw_dict(JSON3.read(read(receipt_path, String)), "existing optimization receipt")
+    get(receipt, "schema", nothing) == _CW_RECEIPT_SCHEMA || error("Existing optimization receipt schema mismatch.")
+    canonical = get(receipt, "canonical_sha256", nothing)
+    receipt_body = copy(receipt)
+    delete!(receipt_body, "canonical_sha256")
+    canonical == _cw_fingerprint(receipt_body) || error("Existing optimization receipt canonical hash mismatch.")
+    fingerprint = _cw_string(get(request, "fingerprint_sha256", nothing), "request.fingerprint_sha256")
+    get(receipt, "request_fingerprint_sha256", nothing) == fingerprint || error(
+        "Existing optimization receipt belongs to a different sealed request.",
+    )
+    expected_ledger_path = joinpath(dirname(abspath(receipt_path)), "circuit-workbench-optimization-ledger.v1.json")
+    result = get(receipt, "result", nothing)
+    if result isa AbstractDict
+        ledger_path = _cw_string(get(result, "ledger_path", nothing), "existing optimization receipt ledger_path")
+        abspath(ledger_path) == expected_ledger_path || error("Existing optimization receipt ledger path is not standard.")
+    end
+    if isfile(expected_ledger_path)
+        get(receipt, "ledger_sha256", nothing) == _cw_sha256(expected_ledger_path) || error(
+            "Existing optimization receipt ledger hash mismatches current ledger bytes.",
+        )
+        _cw_load_ledger(expected_ledger_path, fingerprint)
+    elseif !isnothing(get(receipt, "ledger_sha256", nothing))
+        error("Existing optimization receipt ledger is absent.")
+    end
+    return nothing
 end
 
 function _cw_ledger_entry_cost(entry)
@@ -609,9 +696,12 @@ function _cw_optimize(request, ledger_path)
                     "candidate_key" => key,
                     "latent" => latents[column],
                     "outcome" => outcomes[column],
+                    "previous_entry_sha256" => ledger["history_sha256"],
                 )
+                entry["entry_sha256"] = _cw_fingerprint(entry)
                 push!(entries, entry)
                 cache[key] = entry
+                ledger["history_sha256"] = entry["entry_sha256"]
             end
         end
         ledger["entries"] = entries
@@ -655,11 +745,11 @@ function _cw_optimize(request, ledger_path)
     )
 end
 
-function _cw_receipt(request, status, request_path; result=nothing, failure=nothing)
+function _cw_receipt(request, status, request_path; result=nothing, failure=nothing, ledger_sha=nothing)
     plan = _cw_dict(get(request, "plan", nothing), "request.plan")
     runtime = _cw_dict(get(request, "runtime", nothing), "request.runtime")
     output_sha = isnothing(result) ? nothing : _cw_fingerprint(result)
-    ledger_sha = isnothing(result) ? nothing : get(result, "ledger_sha256", nothing)
+    ledger_sha = isnothing(result) ? ledger_sha : get(result, "ledger_sha256", nothing)
     receipt = Dict{String,Any}(
         "schema" => _CW_RECEIPT_SCHEMA,
         "run_id" => _cw_string(get(request, "run_id", nothing), "request.run_id"),
@@ -673,15 +763,14 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
         "core_tree_sha256" => _cw_string(get(runtime, "core_tree_sha256", nothing), "runtime.core_tree_sha256"),
         "julia_executable_sha256" => _cw_string(get(runtime, "julia_executable_sha256", nothing), "runtime.julia_executable_sha256"),
         "status" => status,
-        "lifecycle_state" => "CONVERGING",
-        "data_classification" => "project-internal",
+        "lifecycle_state" => _cw_string(get(request, "lifecycle_state", nothing), "request.lifecycle_state"),
+        "data_classification" => _cw_string(get(request, "data_classification", nothing), "request.data_classification"),
         "promotion_eligible" => false,
         "artifact_bindings" => get(request, "artifacts", Dict{String,Any}()),
         "output_sha256" => output_sha,
         "ledger_sha256" => ledger_sha,
         "nonclaims" => [
             "no artifact bytes are copied into this receipt",
-            "project-internal runtime evidence only",
             "no promotion or publication claim",
         ],
         "result" => result,
@@ -691,39 +780,74 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
     return receipt
 end
 
+"""Execute one sealed Circuit Workbench request and atomically write its receipt."""
 function execute_circuit_workbench_action(request_path::AbstractString, receipt_path::AbstractString)
     basename(request_path) == "circuit-workbench-run-request.v1.json" || error("Request must use the standard durable request filename.")
     basename(receipt_path) == "circuit-workbench-run-receipt.v1.json" || error("Receipt must use the standard durable receipt filename.")
     dirname(abspath(request_path)) == dirname(abspath(receipt_path)) || error("Request and receipt must share one run directory.")
     request = _cw_dict(JSON3.read(read(request_path, String)), "request")
-    get(request, "schema", nothing) == _CW_REQUEST_SCHEMA || error("Request schema is not $(_CW_REQUEST_SCHEMA).")
-    action = _cw_string(get(request, "action", nothing), "request.action")
-    action in ("evaluate", "optimize") || error("Unsupported Circuit Workbench action $(action).")
-    expected = get(request, "fingerprint_sha256", nothing)
-    request_without_fingerprint = Dict{String,Any}(request)
-    delete!(request_without_fingerprint, "fingerprint_sha256")
-    actual = _cw_fingerprint(request_without_fingerprint)
-    expected == actual || error("Request fingerprint_sha256 mismatches canonical request bytes: expected=$(expected) actual=$(actual).")
-    basename(dirname(abspath(request_path))) == _cw_string(get(request, "run_id", nothing), "request.run_id") || error("Request run_id does not match its standard durable path.")
-    _cw_validate_runtime_identity(request)
-    plan = _cw_dict(get(request, "plan", nothing), "request.plan")
-    plan_hash = get(plan, "canonical_sha256", nothing)
-    plan_body = Dict{String,Any}(plan)
-    delete!(plan_body, "canonical_sha256")
-    plan_hash == _cw_fingerprint(plan_body) || error("Plan canonical_sha256 mismatches canonical Plan bytes.")
-    result = action == "evaluate" ? _cw_evaluate(request) : _cw_optimize(
-        request, joinpath(dirname(receipt_path), "circuit-workbench-optimization-ledger.v1.json"),
-    )
-    status = if action == "evaluate"
-        result["status"]
-    elseif !isnothing(result["best"])
-        "PASS"
-    else
-        ledger = _cw_load_ledger(result["ledger_path"], _cw_string(get(request, "fingerprint_sha256", nothing), "request.fingerprint_sha256"))
-        outcomes = [_cw_dict(get(_cw_dict(entry, "ledger entry"), "outcome", nothing), "ledger outcome") for entry in _cw_array(ledger["entries"], "ledger entries")]
-        !isempty(outcomes) && all(get(outcome, "status", nothing) == "REJECTED_BY_GATE" for outcome in outcomes) ? "REJECTED_BY_GATE" : "NOT_EVALUABLE"
+    try
+        get(request, "schema", nothing) == _CW_REQUEST_SCHEMA || error("Request schema is not $(_CW_REQUEST_SCHEMA).")
+        action = _cw_string(get(request, "action", nothing), "request.action")
+        action in ("evaluate", "optimize") || error("Unsupported Circuit Workbench action $(action).")
+        lifecycle_state = _cw_string(get(request, "lifecycle_state", nothing), "request.lifecycle_state")
+        lifecycle_state in ("CONVERGING", "ACCEPTED", "STABILIZED") || error(
+            "Request lifecycle_state must be CONVERGING, ACCEPTED, or STABILIZED.",
+        )
+        _cw_string(get(request, "data_classification", nothing), "request.data_classification")
+        expected = get(request, "fingerprint_sha256", nothing)
+        request_without_fingerprint = Dict{String,Any}(request)
+        delete!(request_without_fingerprint, "fingerprint_sha256")
+        actual = _cw_fingerprint(request_without_fingerprint)
+        expected == actual || error("Request fingerprint_sha256 mismatches canonical request bytes: expected=$(expected) actual=$(actual).")
+        basename(dirname(abspath(request_path))) == _cw_string(get(request, "run_id", nothing), "request.run_id") || error("Request run_id does not match its standard durable path.")
+        _cw_validate_runtime_identity(request)
+        plan = _cw_dict(get(request, "plan", nothing), "request.plan")
+        plan_hash = get(plan, "canonical_sha256", nothing)
+        plan_body = Dict{String,Any}(plan)
+        delete!(plan_body, "canonical_sha256")
+        plan_hash == _cw_fingerprint(plan_body) || error("Plan canonical_sha256 mismatches canonical Plan bytes.")
+        result = if action == "evaluate"
+            _cw_evaluate(request)
+        else
+            _cw_validate_existing_optimization_receipt!(receipt_path, request)
+            _cw_optimize(
+                request, joinpath(dirname(receipt_path), "circuit-workbench-optimization-ledger.v1.json"),
+            )
+        end
+        status = if action == "evaluate"
+            result["status"]
+        elseif !isnothing(result["best"])
+            "PASS"
+        else
+            ledger = _cw_load_ledger(result["ledger_path"], _cw_string(get(request, "fingerprint_sha256", nothing), "request.fingerprint_sha256"))
+            outcomes = [_cw_dict(get(_cw_dict(entry, "ledger entry"), "outcome", nothing), "ledger outcome") for entry in _cw_array(ledger["entries"], "ledger entries")]
+            !isempty(outcomes) && all(get(outcome, "status", nothing) == "REJECTED_BY_GATE" for outcome in outcomes) ? "REJECTED_BY_GATE" : "NOT_EVALUABLE"
+        end
+        receipt = _cw_receipt(request, status, request_path; result=result)
+        _cw_atomic_json(receipt_path, receipt)
+        return receipt_path
+    catch exception
+        failure = Dict(
+            "type" => string(typeof(exception)),
+            "message" => sprint(showerror, exception),
+        )
+        try
+            ledger_path = joinpath(dirname(receipt_path), "circuit-workbench-optimization-ledger.v1.json")
+            _cw_atomic_json(
+                receipt_path,
+                _cw_receipt(
+                    request,
+                    "FAILED",
+                    request_path;
+                    failure=failure,
+                    ledger_sha=isfile(ledger_path) ? _cw_sha256(ledger_path) : nothing,
+                ),
+            )
+        catch
+            # The original execution defect remains authoritative when even its
+            # sealed request cannot support a failure receipt.
+        end
+        rethrow()
     end
-    receipt = _cw_receipt(request, status, request_path; result=result)
-    _cw_atomic_json(receipt_path, receipt)
-    return receipt_path
 end

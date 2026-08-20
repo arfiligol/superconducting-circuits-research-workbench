@@ -23,6 +23,8 @@ from typing import Any, Literal, cast
 PLAN_SCHEMA = "circuit-workbench-plan.v1"
 REQUEST_SCHEMA = "circuit-workbench-run-request.v1"
 RECEIPT_SCHEMA = "circuit-workbench-run-receipt.v1"
+_LIFECYCLE_STATES = {"CONVERGING", "ACCEPTED", "STABILIZED"}
+_DATA_CLASSIFICATIONS = {"public", "project-internal", "NCUAS-private", "report-safe-derived"}
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 _SOURCE_CORE_ROOT = _PACKAGE_ROOT.parents[2]
 _JULIA_ROOT = (
@@ -315,6 +317,7 @@ _BUILTIN_PARALLEL_LC = ComponentType(
     (
         ParameterDeclaration("capacitance_f", "F", "capacitance"),
         ParameterDeclaration("inductance_h", "H", "inductance"),
+        ParameterDeclaration("conductance_s", "S", "conductance"),
     ),
     (CoordinateDeclaration("signal", "node_flux", "signal"),),
     lowerer="parallel_lc_resonator",
@@ -489,6 +492,10 @@ class CircuitPlan:
 class CircuitSim:
     run_root: Path | str
     run_id: str
+    lifecycle_state: Literal["CONVERGING", "ACCEPTED", "STABILIZED"] = "CONVERGING"
+    data_classification: Literal[
+        "public", "project-internal", "NCUAS-private", "report-safe-derived"
+    ] = "project-internal"
     _libraries: list[CircuitLibrary] = field(default_factory=lambda: [_BUILTIN_LIBRARY], init=False)
     _plan: CircuitPlan | None = field(default=None, init=False)
     _artifacts: dict[str, Mapping[str, Any]] = field(default_factory=dict, init=False)
@@ -505,6 +512,14 @@ class CircuitSim:
             or self.run_id in {".", ".."}
         ):
             raise RuntimeContractError("run_id must be one path-safe directory name.")
+        if self.lifecycle_state not in _LIFECYCLE_STATES:
+            raise RuntimeContractError(
+                "lifecycle_state must be CONVERGING, ACCEPTED, or STABILIZED."
+            )
+        if self.data_classification not in _DATA_CLASSIFICATIONS:
+            raise RuntimeContractError(
+                "data_classification must be public, project-internal, NCUAS-private, or report-safe-derived."
+            )
 
     def register_library(self, library: CircuitLibrary) -> None:
         if not isinstance(library, CircuitLibrary):
@@ -753,6 +768,12 @@ class CircuitSim:
             raise RuntimeContractError(
                 "Receipt artifact bindings do not exactly match durable request artifacts."
             )
+        if receipt.get("lifecycle_state") != request.get("lifecycle_state") or receipt.get(
+            "data_classification"
+        ) != request.get("data_classification"):
+            raise RuntimeContractError(
+                "Receipt lifecycle/data classification does not exactly match the durable request."
+            )
         for name, artifact in request.get("artifacts", {}).items():
             if not isinstance(artifact, Mapping) or not isinstance(artifact.get("path"), str):
                 raise RuntimeContractError(f"Artifact '{name}' is malformed in durable request.")
@@ -791,6 +812,13 @@ class CircuitSim:
                 raise RuntimeContractError(
                     "Optimization ledger does not bind the durable request fingerprint."
                 )
+            _validate_optimization_ledger(ledger_data, fingerprint)
+        elif (run_dir / "circuit-workbench-optimization-ledger.v1.json").is_file():
+            ledger = run_dir / "circuit-workbench-optimization-ledger.v1.json"
+            if _sha256(ledger.read_bytes()) != receipt.get("ledger_sha256"):
+                raise RuntimeContractError("Optimization ledger path/hash mismatches receipt.")
+            ledger_data = json.loads(ledger.read_text(encoding="utf-8"))
+            _validate_optimization_ledger(ledger_data, fingerprint)
         return _ResultHandle(receipt, receipt_path)
 
     def _request(self, *, action: str, backend: str) -> dict[str, Any]:
@@ -844,6 +872,8 @@ class CircuitSim:
             "action": action,
             "backend": backend,
             "run_id": self.run_id,
+            "lifecycle_state": self.lifecycle_state,
+            "data_classification": self.data_classification,
             "plan": sealed_plan,
             "artifacts": self._artifacts,
             "reduction": reduction,
@@ -883,25 +913,39 @@ class CircuitSim:
                 "Existing durable request path has different sealed request bytes."
             )
         _atomic_write(request_path, request_bytes)
+        if request.get("action") == "optimize" and receipt.is_file():
+            self.analyze()
         optimizer = request.get("optimizer")
         worker_count = (
             int(optimizer.get("resource_controls", {}).get("worker_count", 1))
             if isinstance(optimizer, Mapping)
             else 1
         )
-        subprocess.run(
+        completed = subprocess.run(
             [
                 str(_resolved_julia_executable()),
+                "--startup-file=no",
                 f"--threads={worker_count}",
                 f"--project={_RUNNER_PROJECT}",
                 str(_RUNNER_CLI),
                 str(request_path),
                 str(receipt),
             ],
-            check=True,
             text=True,
         )
-        return self.analyze()
+        if receipt.is_file():
+            sealed = self.analyze()
+            if completed.returncode:
+                failure = sealed.get("failure")
+                message = failure.get("message") if isinstance(failure, Mapping) else None
+                raise RuntimeContractError(
+                    "Julia action failed after sealing its failure receipt"
+                    f" (exit status {completed.returncode}): {message or 'no failure message'}"
+                )
+            return sealed
+        raise RuntimeContractError(
+            f"Julia action exited without sealing a receipt (exit status {completed.returncode})."
+        )
 
     def _receipt_path(self) -> Path:
         root = Path(self.run_root).resolve()
@@ -953,10 +997,15 @@ def _validate_component(component: ComponentInstance, declared: ComponentType) -
             raise RuntimeContractError(
                 f"Component '{component.id}' parameter '{name}' must be finite."
             )
-        if declared.lowerer == "parallel_lc_resonator" and float(value) <= 0:
-            raise RuntimeContractError(
-                f"Component '{component.id}' LC parameter '{name}' must be positive."
-            )
+        if declared.lowerer == "parallel_lc_resonator":
+            if name in {"capacitance_f", "inductance_h"} and float(value) <= 0:
+                raise RuntimeContractError(
+                    f"Component '{component.id}' LC parameter '{name}' must be positive."
+                )
+            if name == "conductance_s" and float(value) < 0:
+                raise RuntimeContractError(
+                    f"Component '{component.id}' conductance_s must be nonnegative."
+                )
 
 
 def _elaborate_components(
@@ -1257,6 +1306,38 @@ def _canonical_bytes(value: Any) -> bytes:
 
 def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _validate_optimization_ledger(ledger: Mapping[str, Any], fingerprint: str) -> None:
+    entries = ledger.get("entries")
+    if not isinstance(entries, list):
+        raise RuntimeContractError("Optimization ledger entries must be a list.")
+    previous = _fingerprint(
+        {
+            "schema": "circuit-workbench-optimization-ledger.v1",
+        }
+    )
+    for index, entry in enumerate(entries, start=1):
+        if not isinstance(entry, Mapping) or entry.get("candidate_index") != index:
+            raise RuntimeContractError("Optimization ledger candidate indices must be contiguous.")
+        latent = entry.get("latent")
+        if (
+            not isinstance(latent, list)
+            or any(
+                isinstance(value, bool) or not isinstance(value, (int, float)) for value in latent
+            )
+            or entry.get("candidate_key") != _fingerprint([float(value) for value in latent])
+            or entry.get("previous_entry_sha256") != previous
+        ):
+            raise RuntimeContractError("Optimization ledger hash chain is broken.")
+        body = dict(entry)
+        expected = body.pop("entry_sha256", None)
+        actual = _fingerprint(body)
+        if expected != actual:
+            raise RuntimeContractError("Optimization ledger entry hash mismatches its content.")
+        previous = actual
+    if ledger.get("history_sha256") != previous:
+        raise RuntimeContractError("Optimization ledger history hash mismatches its entries.")
 
 
 def _tree_sha256(root: Path, *, excluded_top_level: set[str] | None = None) -> str:

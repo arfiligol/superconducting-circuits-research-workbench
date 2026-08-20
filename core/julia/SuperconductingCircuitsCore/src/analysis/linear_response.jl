@@ -127,6 +127,44 @@ function schur_dynamic_stiffness(
     )
 end
 
+"""Schur-reduce `K - omega^2 C - i*omega*G` onto ordered terminal indices."""
+function schur_dynamic_stiffness(
+    capacitance,
+    inverse_inductance,
+    conductance,
+    angular_frequency_rad_s,
+    terminal_indices,
+)
+    capacitance_matrix, stiffness_matrix = _linear_response_matrices(
+        capacitance,
+        inverse_inductance,
+    )
+    conductance_matrix = _linear_response_real_matrix(
+        conductance,
+        "Linear-response conductance",
+    )
+    size(conductance_matrix) == size(capacitance_matrix) || _validation_error(
+        "Linear-response conductance must match the C/K matrix size.",
+    )
+    conductance_matrix, _, _ = _require_positive_semidefinite(
+        conductance_matrix,
+        "Linear-response conductance matrix",
+    )
+    angular_frequency = _positive_angular_frequency(angular_frequency_rad_s)
+    dynamic_stiffness = ComplexF64.(
+        stiffness_matrix - angular_frequency^2 * capacitance_matrix,
+    ) - im * angular_frequency * conductance_matrix
+    all(value -> isfinite(real(value)) && isfinite(imag(value)), dynamic_stiffness) ||
+        _validation_error("Linear-response C/K/G dynamic stiffness contains non-finite values.")
+    terminals, interior = _linear_response_partition(size(dynamic_stiffness, 1), terminal_indices)
+    return (
+        dynamic_stiffness = _schur_dynamic_stiffness(dynamic_stiffness, terminals, interior),
+        terminal_indices = terminals,
+        interior_indices = interior,
+        angular_frequency_rad_s = angular_frequency,
+    )
+end
+
 """Return terminal `D`, `Y=D/(-i*omega)`, and `Z=Y\\I`.
 
 The sign follows `V = dPhi/dt = -i*omega*Phi`; a parallel LC therefore has

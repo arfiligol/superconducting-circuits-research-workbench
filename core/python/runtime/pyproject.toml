@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Python authoring and receipt runtime for Circuit Workbench"
 requires-python = ">=3.12"
 dependencies = [
-    "schemdraw-circuit-library",
+    "schemdraw>=0.21",
 ]
 
 [build-system]
@@ -13,7 +13,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["superconducting_circuits_runtime*"]
+include = ["superconducting_circuits_runtime*", "schemdraw_circuit_library*"]
 
 [tool.setuptools.package-data]
-superconducting_circuits_runtime = ["py.typed"]
+superconducting_circuits_runtime = ["py.typed", "_julia/**"]
+schemdraw_circuit_library = ["py.typed"]

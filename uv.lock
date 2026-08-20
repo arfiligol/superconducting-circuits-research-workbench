@@ -1849,11 +1849,11 @@ name = "superconducting-circuits-runtime"
 version = "0.1.0"
 source = { editable = "core/python/runtime" }
 dependencies = [
-    { name = "schemdraw-circuit-library" },
+    { name = "schemdraw" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "schemdraw-circuit-library", editable = "core/python/circuit_libraries" }]
+requires-dist = [{ name = "schemdraw", specifier = ">=0.21" }]
 
 [[package]]
 name = "traitlets"

@@ -34,6 +34,7 @@ extraPaths = [
     "core/python",
     "core/python/analysis/superconducting_circuits_analysis",
     "core/python/circuit_libraries",
+    "core/python/runtime",
 ]
 # Basic presence checks only, as requested
 reportMissingParameterType = "warning"

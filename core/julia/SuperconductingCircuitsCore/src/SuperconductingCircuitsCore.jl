@@ -162,10 +162,12 @@ export JosephsonCompiledCircuit
 export TopologyKey
 export topology_key
 export LinearNodalModel
+export LinearNodalCKGModel
 export ReducedLinearModel
 export GeneralizedModeSolution
 export SelectedModeProjection
 export extract_linear_nodal_model
+export extract_linear_nodal_ckg_model
 export reduce_free_charge_coordinates
 export reduce_linear_model_pair
 export solve_generalized_modes
