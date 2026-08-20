@@ -1,4 +1,4 @@
-"""Minimal Schemdraw adapter for the public Circuit Workbench plan schema."""
+"""Private Schemdraw adapter for the sealed Circuit Workbench V1 plan."""
 
 from __future__ import annotations
 
@@ -8,12 +8,36 @@ from typing import Any
 import schemdraw
 import schemdraw.elements as elm
 
-from ..components.lumped import GroundedLCResonator
-from .from_schematic_export import UnsupportedSchematicComponentError
+
+class GroundedLCResonator(elm.ElementCompound):
+    """Minimal grounded parallel-LC drawing with one exposed signal anchor."""
+
+    def __init__(self, component_id: str, **kwargs: Any) -> None:
+        self.component_id = component_id
+        super().__init__(**kwargs)
+
+    def setup(self) -> None:
+        anchors = {
+            "start": (-1.5, 0.0),
+            "signal": (-1.5, 0.0),
+            "cap_top": (0.0, 0.0),
+            "ind_top": (3.0, 0.0),
+            "cap_bottom": (0.0, -3.0),
+            "ind_bottom": (3.0, -3.0),
+            "end": (4.5, 0.0),
+            "ground": (1.5, -3.0),
+        }
+        self.anchors.update(anchors)
+        self.add(elm.Line().endpoints(anchors["signal"], anchors["end"]))
+        self.add(elm.Capacitor().endpoints(anchors["cap_top"], anchors["cap_bottom"]))
+        self.add(elm.Inductor().endpoints(anchors["ind_top"], anchors["ind_bottom"]))
+        self.add(elm.Line().endpoints(anchors["cap_bottom"], anchors["ind_bottom"]))
+        self.add(elm.Ground().at(anchors["ground"]))
+        self.elmparams["drop"] = anchors["end"]
 
 
 def render_runtime_plan(plan: Mapping[str, Any]) -> schemdraw.Drawing:
-    """Render supported public runtime leaves; unsupported visual types fail closed."""
+    """Render the supported V1 schematic intent without workspace imports."""
 
     intent = plan.get("schematic_intent")
     if (
@@ -31,26 +55,23 @@ def render_runtime_plan(plan: Mapping[str, Any]) -> schemdraw.Drawing:
             not isinstance(item, Mapping)
             or item.get("type_id") != "workbench.parallel_lc_resonator.v1"
         ):
-            raise UnsupportedSchematicComponentError(
+            raise ValueError(
                 "Circuit Workbench runtime has no Schemdraw mapping for this component type."
             )
         component_id = str(item.get("id", ""))
-        visual = GroundedLCResonator(component_id=component_id).at((index * 8.0, 0.0))
+        visual = GroundedLCResonator(component_id).at((index * 8.0, 0.0))
         drawing += visual
         anchors[f"{component_id}.signal"] = visual.absanchors["signal"]
     for connection in intent.get("connections", []):
         if not isinstance(connection, Mapping):
             raise ValueError("Circuit Workbench schematic connection must be an object.")
-        left = connection.get("left")
-        right = connection.get("right")
+        left, right = connection.get("left"), connection.get("right")
         if not isinstance(left, Mapping) or not isinstance(right, Mapping):
             raise ValueError("Circuit Workbench schematic connection endpoints must be objects.")
         left_key = f"{left.get('component_id')}.{left.get('pin_name')}"
         right_key = f"{right.get('component_id')}.{right.get('pin_name')}"
         if left_key not in anchors or right_key not in anchors:
-            raise UnsupportedSchematicComponentError(
-                "Connection targets an unsupported runtime visual pin."
-            )
+            raise ValueError("Connection targets an unsupported runtime visual pin.")
         drawing += elm.Line().at(anchors[left_key]).to(anchors[right_key])
     for port in intent.get("ports", []):
         if not isinstance(port, Mapping) or not isinstance(port.get("endpoint"), Mapping):
@@ -58,8 +79,6 @@ def render_runtime_plan(plan: Mapping[str, Any]) -> schemdraw.Drawing:
         endpoint = port["endpoint"]
         key = f"{endpoint.get('component_id')}.{endpoint.get('pin_name')}"
         if key not in anchors:
-            raise UnsupportedSchematicComponentError(
-                "Port targets an unsupported runtime visual pin."
-            )
+            raise ValueError("Port targets an unsupported runtime visual pin.")
         drawing += elm.Dot().at(anchors[key]).label(str(port.get("id", "port")), loc="right")
     return drawing

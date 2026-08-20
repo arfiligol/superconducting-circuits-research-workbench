@@ -39,6 +39,19 @@ _RUNNER_CLI = _RUNNER_PROJECT / "bin" / "circuit_workbench_runtime.jl"
 class RuntimeContractError(ValueError):
     """Raised before Julia for a malformed or incomplete consumer declaration."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str = "circuit_workbench_contract_invalid",
+        category: str = "validation_error",
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.category = category
+        self.retryable = retryable
+
 
 def _nonempty_string(value: Any) -> bool:
     return isinstance(value, str) and bool(value)
@@ -478,9 +491,9 @@ class CircuitPlan:
         return payload
 
     def show(self, libraries: Sequence[CircuitLibrary] = ()) -> Any:
-        """Validate and render through the installed Schemdraw Circuit Library without Julia."""
+        """Validate and render the sealed topology through Schemdraw without Julia."""
 
-        from schemdraw_circuit_library.rendering.runtime_plan import render_runtime_plan
+        from ._runtime_plan import render_runtime_plan
 
         sealed = self.seal((_BUILTIN_LIBRARY, *libraries))
         drawing = render_runtime_plan(sealed)
@@ -727,6 +740,15 @@ class CircuitSim:
             raise RuntimeContractError(
                 "Request fingerprint does not match durable request or receipt."
             )
+        failure = receipt.get("failure")
+        if receipt.get("status") == "FAILED" and (
+            not isinstance(failure, Mapping)
+            or not _nonempty_string(failure.get("error_code"))
+            or not _nonempty_string(failure.get("category"))
+            or not isinstance(failure.get("retryable"), bool)
+            or not _nonempty_string(failure.get("message"))
+        ):
+            raise RuntimeContractError("Failed receipt lacks stable failure identity.")
         plan = request.get("plan")
         if not isinstance(plan, Mapping):
             raise RuntimeContractError("Receipt Plan is absent from durable request.")
@@ -913,8 +935,14 @@ class CircuitSim:
                 "Existing durable request path has different sealed request bytes."
             )
         _atomic_write(request_path, request_bytes)
-        if request.get("action") == "optimize" and receipt.is_file():
-            self.analyze()
+        if request.get("action") == "optimize":
+            ledger = run_dir / "circuit-workbench-optimization-ledger.v1.json"
+            if receipt.is_file():
+                self.analyze()
+            elif ledger.is_file():
+                raise RuntimeContractError(
+                    "Existing optimization ledger has no sealed receipt anchor."
+                )
         optimizer = request.get("optimizer")
         worker_count = (
             int(optimizer.get("resource_controls", {}).get("worker_count", 1))
@@ -938,9 +966,27 @@ class CircuitSim:
             if completed.returncode:
                 failure = sealed.get("failure")
                 message = failure.get("message") if isinstance(failure, Mapping) else None
+                error_code = (
+                    failure.get("error_code")
+                    if isinstance(failure, Mapping)
+                    else "circuit_workbench_action_failed"
+                )
+                category = (
+                    failure.get("category")
+                    if isinstance(failure, Mapping)
+                    else "task_execution_failed"
+                )
+                retryable = failure.get("retryable") if isinstance(failure, Mapping) else False
+                if not isinstance(error_code, str) or not error_code:
+                    error_code = "circuit_workbench_action_failed"
+                if not isinstance(category, str) or not category:
+                    category = "task_execution_failed"
                 raise RuntimeContractError(
                     "Julia action failed after sealing its failure receipt"
-                    f" (exit status {completed.returncode}): {message or 'no failure message'}"
+                    f" (exit status {completed.returncode}): {message or 'no failure message'}",
+                    error_code=error_code,
+                    category=category,
+                    retryable=retryable if isinstance(retryable, bool) else False,
                 )
             return sealed
         raise RuntimeContractError(

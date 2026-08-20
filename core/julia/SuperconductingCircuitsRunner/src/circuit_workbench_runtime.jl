@@ -748,6 +748,14 @@ end
 function _cw_receipt(request, status, request_path; result=nothing, failure=nothing, ledger_sha=nothing)
     plan = _cw_dict(get(request, "plan", nothing), "request.plan")
     runtime = _cw_dict(get(request, "runtime", nothing), "request.runtime")
+    lifecycle_state = _cw_string(get(request, "lifecycle_state", nothing), "request.lifecycle_state")
+    lifecycle_state in ("CONVERGING", "ACCEPTED", "STABILIZED") || error(
+        "Request lifecycle_state must be CONVERGING, ACCEPTED, or STABILIZED.",
+    )
+    data_classification = _cw_string(get(request, "data_classification", nothing), "request.data_classification")
+    data_classification in ("public", "project-internal", "NCUAS-private", "report-safe-derived") || error(
+        "Request data_classification must be public, project-internal, NCUAS-private, or report-safe-derived.",
+    )
     output_sha = isnothing(result) ? nothing : _cw_fingerprint(result)
     ledger_sha = isnothing(result) ? ledger_sha : get(result, "ledger_sha256", nothing)
     receipt = Dict{String,Any}(
@@ -763,8 +771,8 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
         "core_tree_sha256" => _cw_string(get(runtime, "core_tree_sha256", nothing), "runtime.core_tree_sha256"),
         "julia_executable_sha256" => _cw_string(get(runtime, "julia_executable_sha256", nothing), "runtime.julia_executable_sha256"),
         "status" => status,
-        "lifecycle_state" => _cw_string(get(request, "lifecycle_state", nothing), "request.lifecycle_state"),
-        "data_classification" => _cw_string(get(request, "data_classification", nothing), "request.data_classification"),
+        "lifecycle_state" => lifecycle_state,
+        "data_classification" => data_classification,
         "promotion_eligible" => false,
         "artifact_bindings" => get(request, "artifacts", Dict{String,Any}()),
         "output_sha256" => output_sha,
@@ -786,6 +794,10 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
     basename(receipt_path) == "circuit-workbench-run-receipt.v1.json" || error("Receipt must use the standard durable receipt filename.")
     dirname(abspath(request_path)) == dirname(abspath(receipt_path)) || error("Request and receipt must share one run directory.")
     request = _cw_dict(JSON3.read(read(request_path, String)), "request")
+    ledger_path = joinpath(dirname(receipt_path), "circuit-workbench-optimization-ledger.v1.json")
+    if get(request, "action", nothing) == "optimize" && !isfile(receipt_path) && isfile(ledger_path)
+        error("Existing optimization ledger has no sealed receipt anchor.")
+    end
     try
         get(request, "schema", nothing) == _CW_REQUEST_SCHEMA || error("Request schema is not $(_CW_REQUEST_SCHEMA).")
         action = _cw_string(get(request, "action", nothing), "request.action")
@@ -794,7 +806,10 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
         lifecycle_state in ("CONVERGING", "ACCEPTED", "STABILIZED") || error(
             "Request lifecycle_state must be CONVERGING, ACCEPTED, or STABILIZED.",
         )
-        _cw_string(get(request, "data_classification", nothing), "request.data_classification")
+        data_classification = _cw_string(get(request, "data_classification", nothing), "request.data_classification")
+        data_classification in ("public", "project-internal", "NCUAS-private", "report-safe-derived") || error(
+            "Request data_classification must be public, project-internal, NCUAS-private, or report-safe-derived.",
+        )
         expected = get(request, "fingerprint_sha256", nothing)
         request_without_fingerprint = Dict{String,Any}(request)
         delete!(request_without_fingerprint, "fingerprint_sha256")
@@ -829,6 +844,9 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
         return receipt_path
     catch exception
         failure = Dict(
+            "error_code" => "circuit_workbench_action_failed",
+            "category" => "task_execution_failed",
+            "retryable" => false,
             "type" => string(typeof(exception)),
             "message" => sprint(showerror, exception),
         )

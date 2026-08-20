@@ -2,6 +2,7 @@
 name = "superconducting-circuits-runtime"
 version = "0.1.0"
 description = "Python authoring and receipt runtime for Circuit Workbench"
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "schemdraw>=0.21",
@@ -13,8 +14,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["superconducting_circuits_runtime*", "schemdraw_circuit_library*"]
+include = ["superconducting_circuits_runtime*"]
 
 [tool.setuptools.package-data]
 superconducting_circuits_runtime = ["py.typed", "_julia/**"]
-schemdraw_circuit_library = ["py.typed"]

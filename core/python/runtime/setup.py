@@ -12,15 +12,6 @@ def _ignore_julia_build_state(_directory: str, names: list[str]) -> set[str]:
     }
 
 
-def _schemdraw_library_source() -> Path:
-    packaged = Path(__file__).resolve().parent / "schemdraw_circuit_library"
-    return (
-        packaged
-        if packaged.is_dir()
-        else Path(__file__).resolve().parents[1] / "circuit_libraries" / "schemdraw_circuit_library"
-    )
-
-
 class BuildPyWithJulia(build_py):
     """Bundle the pinned Julia runtime used by git-pinned consumer installs."""
 
@@ -39,12 +30,6 @@ class BuildPyWithJulia(build_py):
                 dirs_exist_ok=True,
                 ignore=_ignore_julia_build_state,
             )
-        copytree(
-            _schemdraw_library_source(),
-            Path(self.build_lib) / "schemdraw_circuit_library",
-            dirs_exist_ok=True,
-            ignore=_ignore_julia_build_state,
-        )
 
 
 class SdistWithJulia(sdist):
@@ -61,12 +46,6 @@ class SdistWithJulia(sdist):
                 dirs_exist_ok=True,
                 ignore=_ignore_julia_build_state,
             )
-        copytree(
-            Path(__file__).resolve().parents[1] / "circuit_libraries" / "schemdraw_circuit_library",
-            Path(base_dir) / "schemdraw_circuit_library",
-            dirs_exist_ok=True,
-            ignore=_ignore_julia_build_state,
-        )
 
 
 setup(cmdclass={"build_py": BuildPyWithJulia, "sdist": SdistWithJulia})

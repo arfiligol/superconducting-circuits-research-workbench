@@ -192,11 +192,21 @@ def test_sealed_direct_action_and_pure_analysis(tmp_path: Path) -> None:
         Path(parallel_result["result"]["ledger_path"]).read_text(encoding="utf-8")
     )
     assert serial_ledger["entries"] == parallel_ledger["entries"]
-    tampered = json.loads(Path(optimized["result"]["ledger_path"]).read_text(encoding="utf-8"))
+    tampered = json.loads(
+        Path(parallel_result["result"]["ledger_path"]).read_text(encoding="utf-8")
+    )
     tampered["entries"][0]["outcome"]["cost"] = 0.0
-    Path(optimized["result"]["ledger_path"]).write_text(json.dumps(tampered), encoding="utf-8")
+    Path(parallel_result["result"]["ledger_path"]).write_text(
+        json.dumps(tampered), encoding="utf-8"
+    )
     with pytest.raises(RuntimeContractError, match="Optimization ledger"):
+        parallel.optimize()
+
+    receipt_path = tmp_path / "optimizer" / "circuit-workbench-run-receipt.v1.json"
+    receipt_path.unlink()
+    with pytest.raises(RuntimeContractError, match="sealed receipt anchor"):
         optimizer.optimize()
+    assert not receipt_path.exists()
 
 
 def test_invalid_contract_fails_before_julia(tmp_path: Path) -> None:
@@ -298,14 +308,21 @@ def test_lossy_direct_ckg_and_failure_receipt(tmp_path: Path) -> None:
     closed = _sim(tmp_path, "lossy_closed")
     closed.set_plan(plan)
     closed.set_objective(_objective())
-    with pytest.raises(RuntimeContractError, match="Julia action failed"):
+    with pytest.raises(RuntimeContractError, match="Julia action failed") as raised:
         closed.evaluate()
+    assert raised.value.error_code == "circuit_workbench_action_failed"
+    assert raised.value.category == "task_execution_failed"
+    assert raised.value.retryable is False
     failure = closed.analyze()
     assert failure["status"] == "FAILED"
     assert failure["result"] is None
+    assert failure["failure"]["error_code"] == "circuit_workbench_action_failed"
+    assert failure["failure"]["category"] == "task_execution_failed"
+    assert failure["failure"]["retryable"] is False
+    assert failure["failure"]["message"]
 
 
-def test_runtime_sdist_installs_with_bundled_julia_and_schemdraw(tmp_path: Path) -> None:
+def test_runtime_sdist_installs_with_bundled_julia_and_private_renderer(tmp_path: Path) -> None:
     root = Path(__file__).parents[3]
     dist = tmp_path / "dist"
     uv = shutil.which("uv")
@@ -336,3 +353,43 @@ def test_runtime_sdist_installs_with_bundled_julia_and_schemdraw(tmp_path: Path)
         ],
         check=True,
     )
+    sibling_dist = tmp_path / "sibling-dist"
+    subprocess.run(
+        [uv, "build", root / "core/python/circuit_libraries", "--wheel", "--out-dir", sibling_dist],
+        check=True,
+    )
+    sibling_wheel = next(sibling_dist.glob("schemdraw_circuit_library*.whl"))
+    subprocess.run([uv, "pip", "install", "--python", python, sibling_wheel], check=True)
+    subprocess.run(
+        [
+            python,
+            "-c",
+            "from superconducting_circuits_runtime import CircuitPlan; "
+            "from superconducting_circuits_runtime.catalog import parallel_lc_resonator; "
+            "plan = CircuitPlan('coinstalled'); "
+            "plan.add(parallel_lc_resonator(id='r', capacitance_f=1e-12, inductance_h=1e-9)); "
+            "assert plan.show().elements",
+        ],
+        check=True,
+    )
+    subprocess.run(
+        [uv, "pip", "uninstall", "--python", python, "schemdraw-circuit-library"], check=True
+    )
+    subprocess.run(
+        [
+            python,
+            "-c",
+            "from superconducting_circuits_runtime import CircuitPlan; "
+            "from superconducting_circuits_runtime.catalog import parallel_lc_resonator; "
+            "plan = CircuitPlan('runtime-alone'); "
+            "plan.add(parallel_lc_resonator(id='r', capacitance_f=1e-12, inductance_h=1e-9)); "
+            "assert plan.show().elements",
+        ],
+        check=True,
+    )
+    subprocess.run([uv, "pip", "install", "--python", python, sibling_wheel], check=True)
+    subprocess.run(
+        [uv, "pip", "uninstall", "--python", python, "superconducting-circuits-runtime"],
+        check=True,
+    )
+    subprocess.run([python, "-c", "import schemdraw_circuit_library"], check=True)
