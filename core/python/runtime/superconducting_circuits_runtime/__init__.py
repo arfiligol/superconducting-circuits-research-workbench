@@ -3,6 +3,12 @@
 Python seals declarative circuit work; Julia is the only compute authority.
 """
 
+from .catalog import (
+    intrinsic_interferometric_purcell_filter,
+    linearized_floating_qubit,
+    parallel_lc_resonator,
+    transmission_line,
+)
 from .runtime import (
     CircuitLibrary,
     CircuitPlan,
@@ -25,4 +31,8 @@ __all__ = [
     "ReductionSpec",
     "VariableSpec",
     "circuit_component",
+    "intrinsic_interferometric_purcell_filter",
+    "linearized_floating_qubit",
+    "parallel_lc_resonator",
+    "transmission_line",
 ]

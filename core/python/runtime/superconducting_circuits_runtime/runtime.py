@@ -335,15 +335,111 @@ _BUILTIN_PARALLEL_LC = ComponentType(
     (CoordinateDeclaration("signal", "node_flux", "signal"),),
     lowerer="parallel_lc_resonator",
 )
+_BUILTIN_TRANSMISSION_LINE = ComponentType(
+    "workbench.transmission_line.v1",
+    ("head", "tail"),
+    (
+        ParameterDeclaration("length_m", "m", "length"),
+        ParameterDeclaration("n_sections", "count", "discretization", variable_capable=False),
+        ParameterDeclaration("l_per_m_h", "H/m", "inductance_density"),
+        ParameterDeclaration("c_per_m_f", "F/m", "capacitance_density"),
+        ParameterDeclaration("r_per_m_ohm", "Ohm/m", "resistance_density"),
+        ParameterDeclaration("g_per_m_s", "S/m", "conductance_density"),
+    ),
+    (
+        CoordinateDeclaration("head", "node_flux", "signal"),
+        CoordinateDeclaration("tail", "node_flux", "signal"),
+    ),
+    lowerer="transmission_line",
+)
+_BUILTIN_LINEARIZED_FLOATING_QUBIT = ComponentType(
+    "workbench.linearized_floating_qubit.v1",
+    ("readout_attachment", "island_1", "island_2"),
+    (
+        ParameterDeclaration("c01_f", "F", "island_1_ground_capacitance"),
+        ParameterDeclaration("c02_f", "F", "island_2_ground_capacitance"),
+        ParameterDeclaration("c12_f", "F", "island_mutual_capacitance"),
+        ParameterDeclaration("cr1_f", "F", "readout_island_1_capacitance"),
+        ParameterDeclaration("cr2_f", "F", "readout_island_2_capacitance"),
+        ParameterDeclaration("l_j_per_junction_h", "H", "josephson_inductance"),
+        ParameterDeclaration(
+            "josephson_branch_count", "count", "josephson_branch_count", variable_capable=False
+        ),
+    ),
+    tuple(
+        CoordinateDeclaration(name, "node_flux", "signal")
+        for name in ("readout_attachment", "island_1", "island_2")
+    ),
+    lowerer="linearized_floating_qubit",
+)
+_IPF_PARAMETERS = (
+    ("readout_open_length_m", "m", "readout_open_length"),
+    ("shared_short_length_m", "m", "shared_short_length"),
+    ("coupled_length_m", "m", "coupled_length"),
+    ("filter_open_length_m", "m", "filter_open_length"),
+    ("readout_short_sections", "count", "discretization"),
+    ("readout_open_sections", "count", "discretization"),
+    ("coupled_sections", "count", "discretization"),
+    ("filter_short_sections", "count", "discretization"),
+    ("filter_open_sections", "count", "discretization"),
+    ("readout_l_per_m_h", "H/m", "readout_inductance_density"),
+    ("readout_c_per_m_f", "F/m", "readout_capacitance_density"),
+    ("filter_l_per_m_h", "H/m", "filter_inductance_density"),
+    ("filter_c_per_m_f", "F/m", "filter_capacitance_density"),
+    ("mtl_l11_per_m_h", "H/m", "mtl_inductance_matrix"),
+    ("mtl_l12_per_m_h", "H/m", "mtl_inductance_matrix"),
+    ("mtl_l21_per_m_h", "H/m", "mtl_inductance_matrix"),
+    ("mtl_l22_per_m_h", "H/m", "mtl_inductance_matrix"),
+    ("mtl_c11_per_m_f", "F/m", "mtl_capacitance_matrix"),
+    ("mtl_c12_per_m_f", "F/m", "mtl_capacitance_matrix"),
+    ("mtl_c21_per_m_f", "F/m", "mtl_capacitance_matrix"),
+    ("mtl_c22_per_m_f", "F/m", "mtl_capacitance_matrix"),
+    ("idc_finger_length_um", "um", "idc_finger_length"),
+    ("idc_source_min_um", "um", "idc_fit_support"),
+    ("idc_source_max_um", "um", "idc_fit_support"),
+    ("idc_filter_ground_slope_f_per_um", "F/um", "idc_ols_coefficient"),
+    ("idc_filter_ground_intercept_f", "F", "idc_ols_coefficient"),
+    ("idc_feedline_ground_slope_f_per_um", "F/um", "idc_ols_coefficient"),
+    ("idc_feedline_ground_intercept_f", "F", "idc_ols_coefficient"),
+    ("idc_mutual_slope_f_per_um", "F/um", "idc_ols_coefficient"),
+    ("idc_mutual_intercept_f", "F", "idc_ols_coefficient"),
+    ("c0r_f", "F", "readout_attachment_ground_capacitance"),
+)
+_IPF_SECTION_PARAMETERS = {
+    "readout_short_sections",
+    "readout_open_sections",
+    "coupled_sections",
+    "filter_short_sections",
+    "filter_open_sections",
+}
+_BUILTIN_INTRINSIC_INTERFEROMETRIC_PURCELL_FILTER = ComponentType(
+    "workbench.intrinsic_interferometric_purcell_filter.v1",
+    ("readout_attachment", "feedline_attachment"),
+    tuple(
+        ParameterDeclaration(*item, variable_capable=item[0] not in _IPF_SECTION_PARAMETERS)
+        for item in _IPF_PARAMETERS
+    ),
+    (
+        CoordinateDeclaration("readout_attachment", "node_flux", "signal"),
+        CoordinateDeclaration("filter_open_tail", "node_flux", "signal"),
+    ),
+    lowerer="intrinsic_interferometric_purcell_filter",
+)
+_BUILTIN_TYPES = (
+    _BUILTIN_PARALLEL_LC,
+    _BUILTIN_TRANSMISSION_LINE,
+    _BUILTIN_LINEARIZED_FLOATING_QUBIT,
+    _BUILTIN_INTRINSIC_INTERFEROMETRIC_PURCELL_FILTER,
+)
 _BUILTIN_LIBRARY = CircuitLibrary(
     id="workbench.core.catalog",
     version="1",
     source_sha256=hashlib.sha256(
-        json.dumps(asdict(_BUILTIN_PARALLEL_LC), sort_keys=True, separators=(",", ":")).encode(
-            "utf-8"
-        )
+        json.dumps(
+            [asdict(item) for item in _BUILTIN_TYPES], sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
     ).hexdigest(),
-    types={_BUILTIN_PARALLEL_LC.type_id: _BUILTIN_PARALLEL_LC},
+    types={item.type_id: item for item in _BUILTIN_TYPES},
 )
 
 
@@ -372,7 +468,7 @@ class GateSpec:
 @dataclass(frozen=True)
 class VariableSpec:
     ref: ParameterRef
-    transform: Literal["identity", "log"] = "identity"
+    transform: Literal["identity", "log", "unit_interval"] = "identity"
     lower: float | None = None
     upper: float | None = None
 
@@ -546,10 +642,10 @@ class CircuitSim:
         if not isinstance(plan, CircuitPlan):
             raise RuntimeContractError("set_plan requires CircuitPlan.")
         sealed = plan.seal(self._libraries)
-        builtin_leaf = "workbench.parallel_lc_resonator.v1"
-        if any(component["type_id"] != builtin_leaf for component in sealed["components"]):
+        builtin_leaves = set(_BUILTIN_LIBRARY.types)
+        if any(component["type_id"] not in builtin_leaves for component in sealed["components"]):
             raise RuntimeContractError(
-                "Circuit Workbench V1 accepts only registered composite types and the built-in parallel-LC leaf lowerer."
+                "Circuit Workbench V1 accepts only registered composite types and built-in leaf lowerers."
             )
         self._plan = plan
 
@@ -601,6 +697,7 @@ class CircuitSim:
             raise RuntimeContractError(
                 "ObjectiveSpec requires cared outputs, residuals, and cost expression."
             )
+        targeted_anchors: tuple[Any, Any, Any] | None = None
         for name, cared in spec.cared_outputs.items():
             if not name or not isinstance(cared, Mapping):
                 raise RuntimeContractError(
@@ -613,12 +710,33 @@ class CircuitSim:
                 "closed_mode_frequency_hz": {"kind", "mode_index"},
                 "schur_dynamic_stiffness_abs": {"kind", "frequency_hz", "row", "column"},
                 "s_parameter": {"kind", "frequency_hz", "output_port", "input_port", "part"},
+                "targeted_schur": {
+                    "kind",
+                    "quantity",
+                    "readout_root_anchor_hz",
+                    "filter_root_anchor_hz",
+                    "transfer_zero_anchor_hz",
+                },
             }.get(kind)
             if allowed is None or set(cared) != allowed:
                 raise RuntimeContractError(
                     f"Unsupported or malformed cared-output declaration '{name}'."
                 )
             _validate_cared_output(name, cared)
+            if kind == "targeted_schur":
+                anchors = tuple(
+                    cared[field_name]
+                    for field_name in (
+                        "readout_root_anchor_hz",
+                        "filter_root_anchor_hz",
+                        "transfer_zero_anchor_hz",
+                    )
+                )
+                if targeted_anchors is not None and anchors != targeted_anchors:
+                    raise RuntimeContractError(
+                        "All targeted-Schur cared outputs must use identical anchors."
+                    )
+                targeted_anchors = anchors
         for expression in spec.residuals.values():
             _validate_expression(expression, set(spec.cared_outputs))
         _validate_expression(spec.cost, set(spec.residuals))
@@ -875,9 +993,14 @@ class CircuitSim:
                     raise RuntimeContractError(
                         "Direct Schur cared outputs require an explicit ReductionSpec."
                     )
+            elif cared_kinds == {"targeted_schur"}:
+                if reduction is None:
+                    raise RuntimeContractError(
+                        "Targeted Schur cared outputs require an explicit ReductionSpec."
+                    )
             else:
                 raise RuntimeContractError(
-                    "Direct backend supports either closed-mode or Schur cared outputs, not a mixture."
+                    "Direct backend supports one cared-output family, not a mixture."
                 )
         elif backend == "hb":
             if cared_kinds != {"s_parameter"} or reduction is not None:
@@ -1052,6 +1175,115 @@ def _validate_component(component: ComponentInstance, declared: ComponentType) -
                 raise RuntimeContractError(
                     f"Component '{component.id}' conductance_s must be nonnegative."
                 )
+    if declared.lowerer == "transmission_line":
+        _validate_positive_parameters(
+            component,
+            {"length_m", "l_per_m_h", "c_per_m_f"},
+        )
+        _validate_nonnegative_parameters(component, {"r_per_m_ohm", "g_per_m_s"})
+        _validate_positive_integer_parameters(component, {"n_sections"})
+    elif declared.lowerer == "linearized_floating_qubit":
+        _validate_positive_parameters(
+            component,
+            {"c01_f", "c02_f", "c12_f", "cr1_f", "cr2_f", "l_j_per_junction_h"},
+        )
+        branch_count = component.parameters["josephson_branch_count"]
+        if (
+            isinstance(branch_count, bool)
+            or not isinstance(branch_count, int)
+            or branch_count not in {1, 2}
+        ):
+            raise RuntimeContractError(
+                f"Component '{component.id}' josephson_branch_count must be exactly 1 or 2."
+            )
+    elif declared.lowerer == "intrinsic_interferometric_purcell_filter":
+        _validate_intrinsic_interferometric_purcell_filter(component)
+
+
+def _validate_positive_parameters(component: ComponentInstance, names: set[str]) -> None:
+    for name in names:
+        if component.parameters[name] <= 0:
+            raise RuntimeContractError(
+                f"Component '{component.id}' parameter '{name}' must be positive."
+            )
+
+
+def _validate_nonnegative_parameters(component: ComponentInstance, names: set[str]) -> None:
+    for name in names:
+        if component.parameters[name] < 0:
+            raise RuntimeContractError(
+                f"Component '{component.id}' parameter '{name}' must be nonnegative."
+            )
+
+
+def _validate_positive_integer_parameters(component: ComponentInstance, names: set[str]) -> None:
+    for name in names:
+        value = component.parameters[name]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise RuntimeContractError(
+                f"Component '{component.id}' parameter '{name}' must be a positive integer."
+            )
+
+
+def _validate_intrinsic_interferometric_purcell_filter(component: ComponentInstance) -> None:
+    _validate_positive_parameters(
+        component,
+        {
+            "readout_open_length_m",
+            "shared_short_length_m",
+            "coupled_length_m",
+            "filter_open_length_m",
+            "readout_l_per_m_h",
+            "readout_c_per_m_f",
+            "filter_l_per_m_h",
+            "filter_c_per_m_f",
+            "mtl_l11_per_m_h",
+            "mtl_l22_per_m_h",
+            "mtl_c11_per_m_f",
+            "mtl_c22_per_m_f",
+            "idc_finger_length_um",
+            "idc_source_min_um",
+            "idc_source_max_um",
+        },
+    )
+    _validate_positive_integer_parameters(
+        component,
+        {
+            "readout_short_sections",
+            "readout_open_sections",
+            "coupled_sections",
+            "filter_short_sections",
+            "filter_open_sections",
+        },
+    )
+    _validate_nonnegative_parameters(component, {"c0r_f"})
+    minimum = component.parameters["idc_source_min_um"]
+    maximum = component.parameters["idc_source_max_um"]
+    finger_length = component.parameters["idc_finger_length_um"]
+    if minimum >= maximum or not minimum <= finger_length <= maximum:
+        raise RuntimeContractError(
+            f"Component '{component.id}' IDC finger length must lie within its closed source support."
+        )
+    for capacitance_name, slope_name, intercept_name in (
+        (
+            "IDC filter-ground capacitance",
+            "idc_filter_ground_slope_f_per_um",
+            "idc_filter_ground_intercept_f",
+        ),
+        (
+            "IDC feedline-ground capacitance",
+            "idc_feedline_ground_slope_f_per_um",
+            "idc_feedline_ground_intercept_f",
+        ),
+        ("IDC mutual capacitance", "idc_mutual_slope_f_per_um", "idc_mutual_intercept_f"),
+    ):
+        capacitance = (
+            component.parameters[slope_name] * finger_length + component.parameters[intercept_name]
+        )
+        if capacitance <= 0:
+            raise RuntimeContractError(
+                f"Component '{component.id}' {capacitance_name} must evaluate positive."
+            )
 
 
 def _elaborate_components(
@@ -1326,7 +1558,7 @@ def _validate_cared_output(name: str, cared: Mapping[str, Any]) -> None:
                 raise RuntimeContractError(
                     f"Cared output '{name}' {field_name} must be a positive integer."
                 )
-    else:
+    elif kind == "s_parameter":
         frequency = cared["frequency_hz"]
         ports = (cared["output_port"], cared["input_port"])
         if (
@@ -1342,6 +1574,32 @@ def _validate_cared_output(name: str, cared: Mapping[str, Any]) -> None:
             raise RuntimeContractError(f"Cared output '{name}' ports must be positive integers.")
         if cared["part"] not in {"abs", "real", "imag"}:
             raise RuntimeContractError(f"Cared output '{name}' has unsupported S-parameter part.")
+    else:
+        if cared["quantity"] not in {
+            "readout_diagonal_root_hz",
+            "filter_diagonal_root_hz",
+            "transfer_cofactor_zero_hz",
+            "residue_normalized_midpoint_exchange_abs_real_hz",
+            "diagonal_root_linewidth_sum_hz",
+        }:
+            raise RuntimeContractError(
+                f"Cared output '{name}' has an unsupported targeted-Schur quantity."
+            )
+        for field_name in (
+            "readout_root_anchor_hz",
+            "filter_root_anchor_hz",
+            "transfer_zero_anchor_hz",
+        ):
+            value = cared[field_name]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                or value <= 0
+            ):
+                raise RuntimeContractError(
+                    f"Cared output '{name}' {field_name} must be finite and positive."
+                )
 
 
 def _canonical_bytes(value: Any) -> bytes:
@@ -1531,7 +1789,7 @@ def _resolved_variables(
     result: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for spec in specs:
-        if spec.transform not in {"identity", "log"}:
+        if spec.transform not in {"identity", "log", "unit_interval"}:
             raise RuntimeContractError("VariableSpec transform is unsupported.")
         key = f"{spec.ref.component_id}.{spec.ref.parameter_name}"
         target = bindings.get(key)
@@ -1568,13 +1826,25 @@ def _resolved_variables(
             )
         for label, value in (("lower", spec.lower), ("upper", spec.upper)):
             if value is not None and (
-                not math.isfinite(value) or (spec.transform == "log" and value <= 0)
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or (spec.transform == "log" and value <= 0)
             ):
                 raise RuntimeContractError(
                     f"VariableSpec {label} must be finite and positive for log transform."
                 )
         if spec.lower is not None and spec.upper is not None and spec.lower >= spec.upper:
             raise RuntimeContractError("VariableSpec lower must be less than upper.")
+        if spec.transform == "unit_interval":
+            if spec.lower is None or spec.upper is None:
+                raise RuntimeContractError(
+                    "VariableSpec unit_interval transform requires finite lower and upper bounds."
+                )
+            if not spec.lower <= baseline <= spec.upper:
+                raise RuntimeContractError(
+                    "VariableSpec unit_interval baseline must lie within its physical bounds."
+                )
         result.append(
             {
                 "requested_ref": {
