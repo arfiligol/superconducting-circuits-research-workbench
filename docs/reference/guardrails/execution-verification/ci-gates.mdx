@@ -10,7 +10,7 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: PR quality threshold for develop daily integration and main release promotion, including public site, app layout, Julia Runner, desktop shell and docs route validation.
+scope: Workbench technical validation thresholds for changed surfaces, including public site, app layout, Julia Runner, desktop shell, and docs route validation.
 version: v3.4.0
 last_updated: 2026-08-21
 updated_by: codex
@@ -20,8 +20,9 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # CI Gates
 
-All PRs must pass the necessary checks corresponding to the touched area before merging.
-The default target for daily integration is `develop`; `main` only receives verified release promotion.
+Apply the required Workbench checks for the touched area before merge. Merge
+eligibility, target branches, and promotion mechanics come from the active host
+delivery profile.
 
 <Aside type="note" title="How to use this page">
 
