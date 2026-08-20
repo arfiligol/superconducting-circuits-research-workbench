@@ -1,12 +1,8 @@
 ## Commit Standards
-- **When to Commit**:
-  - Single logical unit complete (one feature, one fix, one refactor).
-  - All checks pass: `uv run pre-commit run --all-files`.
-  - Independently revertable.
-- **When NOT to Commit**:
-  - Code doesn't compile/type-check.
-  - Mixed changes (bug fix + feature + formatting).
-  - Incomplete work (unless `WIP:` prefix).
-- **Commit Format**: `<type>: <description>`
-  - Types: `feat`, `fix`, `docs`, `refactor`, `style`, `test`, `chore`.
-- **Before Commit**: ALWAYS run `uv run pre-commit run --all-files`.
+- Commit one coherent, independently reviewable change at a time.
+- Include required source and extracted-mirror updates in the same coherent commit.
+- Run the checks required for the touched Workbench surface; no single repository-wide command replaces those checks universally.
+- Do not commit unrelated changes or use unpublished WIP commits as local checkpoints.
+- Push every coherent commit immediately according to the active host delivery profile.
+- Never amend, rebase, squash, or force-push already-published shared history; profile-permitted consolidation belongs to Integration at PR merge.
+- Use `<type>: <short description>` with `feat`, `fix`, `docs`, `refactor`, `style`, `test`, or `chore` as appropriate.

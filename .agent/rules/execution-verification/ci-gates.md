@@ -18,10 +18,7 @@
   - `uv run python scripts/check_docs_nav_routes.py --check-source` when docs are touched
   - `./scripts/build_docs_sites.sh` when docs are touched
   - `uv run python scripts/check_docs_nav_routes.py --check-built` when docs are touched
-- `main` must not receive direct pushes.
-- Daily feature/docs/test integration targets `develop` by default.
-- `main` only receives verified release promotion from `develop`.
-- Branch roles, direct-develop policy, and optional worktree use are defined in `Branch & Worktree Flow`.
+- Branch, worktree, PR, merge, synchronization, and cleanup mechanics come from the active host delivery profile through `Branch & Worktree Flow`.
 - Guardrail source changes must keep `.agent/rules` in sync.
 - Starlight dev preview warnings do not fail CI by themselves; failing build, route, or API reference integrity checks block merge.
 - Any failing required check blocks merge.

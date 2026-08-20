@@ -7,12 +7,12 @@ tags:
  - audience/user
  - sot/true
  - topic/project-context
-status: incubating
+status: stable
 owner: docs-team
 audience: user
 scope: Discover host-project research semantics, use Circuit Workbench as a tool, and hand evidence back to the owning project.
-version: v1.0.0
-last_updated: 2026-07-29
+version: v1.1.0
+last_updated: 2026-08-21
 updated_by: codex
 title: Use Circuit Workbench In A Project
 description: Resolve project context before implementation, or ask only for the missing semantics required by the task.
@@ -111,19 +111,19 @@ repository-specific form.
 
 | Role | Authority |
 | --- | --- |
-| Human Research Director | Sets the research direction and decides whether evidence is convincing. |
-| Main Agent / Semantic Lead | Resolves the host owners, lifecycle state, work scope, and stop conditions. |
-| Implementing Agent | Uses Workbench owner contracts to produce scoped implementation and inspectable artifacts. |
-| Independent Reviewing Agent | Replays the work and checks the claim through an independent representation or validator. |
-| Host Project | Owns Design Targets, reusable domain knowledge and conventions, acceptance, and decision history. |
+| Human | Owns research semantics, Gates, and acceptance decisions. |
+| Host Project | Owns Design Targets, reusable domain knowledge and conventions, evidence meaning, and decision history. |
 | Circuit Workbench | Owns tool APIs, Workbench-owned Julia Core catalog implementation, workflows, schemas, and artifact contracts. External Component Libraries and project Plan Builders keep their declared owners. |
+| Host collaboration authority | Resolves repository writers, reviewers, delivery roles, and Git profiles. SCQ_Design uses the installed `$scq-collaboration-roles` router. |
 
 An Agent may make reversible implementation decisions inside a settled
 contract. It must return new research semantics, ownership changes, and
 acceptance decisions to the Human and the host owner.
 
-Detailed delegation and review responsibilities remain owned by
-[Multi-Agent Collaboration](reference/guardrails/execution-verification/multi-agent-collaboration.mdx).
+[Multi-Agent Collaboration](reference/guardrails/execution-verification/multi-agent-collaboration.mdx)
+governs only bounded internal workers after the host collaboration authority
+has resolved ownership. It does not create repository, review, merge, or Human
+acceptance authority.
 
 ## Follow The Owning Lifecycle
 
@@ -176,11 +176,13 @@ Use an existing host or Workbench artifact contract when one exists.
 | [Export a Circuit Diagram](contribute/contributing/circuit-diagrams.mdx) | Resolve the circuit contract and the Human review question. | Export from the same Julia plan, render with the drawing pipeline, and cross-check netlist connectivity against the visual projection. |
 | [Use Pluto](start/first-pluto-notebook.md) | Resolve the target, parameter meanings, and decision gate. | Call the shared component or project builder, show inputs, diagnostics, outputs, and links to the owning semantics; keep the notebook as a thin evidence narrative. |
 
-## Candidate Semantic Status
+## Accepted Semantic Status
 
 - Scope: Workbench Project Context Discovery and Evidence Handoff V1.
-- Prior state: no explicit Workbench-wide host-project context contract.
-- Current state: `CONVERGING`.
+- Prior state: `CONVERGING` candidate with fixed Agent-role authority.
+- Current state: `ACCEPTED` for host-owned research semantics, Human-only Gates
+  and acceptance, Workbench tool boundaries, and host-resolved collaboration
+  roles.
 - Intended public behavior: Agents use readable host owners when available,
   continue context-independent tool work without them, and ask only for
   task-required missing research semantics.
@@ -189,8 +191,7 @@ Use an existing host or Workbench artifact contract when one exists.
   while external libraries and project builders keep their declared owners.
 - Failure behavior: stop before inventing missing project semantics,
   acceptance criteria, or ownership.
-- Test policy: `no_test_writes`; documentation build and source checks are
-  diagnostic evidence only.
+- Test policy: existing documentation validation only; no durable test writes
+  are authorized.
 - Excluded: a Workbench Knowledge Base, a universal project/evidence manifest,
   automatic parent discovery, and changes to host Project content.
-- Unresolved: Human acceptance of this candidate contract.

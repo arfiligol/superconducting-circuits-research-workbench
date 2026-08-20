@@ -10,7 +10,7 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Lightweight work summaries for direct-develop work.
+scope: Lightweight work summaries independent of the host delivery profile.
 version: v3.0.0
 last_updated: 2026-05-28
 updated_by: codex

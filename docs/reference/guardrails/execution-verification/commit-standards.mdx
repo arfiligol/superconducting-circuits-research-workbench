@@ -8,105 +8,75 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "Commit timing, granularity, format specifications"
-version: v1.1.0
-last_updated: 2026-03-14
-updated_by: docs-team
+scope: "Workbench-local commit cohesion, checks, messages, and publication discipline"
+version: v2.0.0
+last_updated: 2026-08-21
+updated_by: codex
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 # Commit Standards
 
-Specify **when** and **how** to submit code.
+Use a commit for one coherent, independently reviewable change. Branch, PR,
+merge, and cleanup mechanics come from the active host delivery profile through
+[Branch & Worktree Flow](branch-and-worktree-flow.mdx).
 
-<Aside type="note" title="Use this page before creating a commit">
+<Aside type="note" title="Coherent means reviewable">
 
-First determine whether this is a single logical unit, and then confirm whether the check has passed. If you need to write a long description to explain "why this commit changes many unrelated things at the same time", it usually means that the commit granularity is too large.
-
-</Aside>
-
-## Decision Map
-
-| Question | Qualified Answer |
-| --- | --- |
-| Is this a single logical unit? | A feature, a bugfix, a refactor |
-| Is this the right time to commit? | Compilation, type, testing, and necessary checks have all passed |
-| Can this commit be revert independently? | Yes, other functions will not be broken together |
-
-## When should Commit
-
-1. **Single logical unit completed** - one feature, one bugfix, and one refactor
-2. **PASS ALL CHECK** - `uv run pre-commit run --all-files` PASSED
-3. **Independently revert** - This commit can be undone independently without destroying other functions
-
-## When not to Commit
-
-1. **Failed halfway** - Failed to compile, type error, failed test
-2. **Mixed changes** - fix bugs + add features + change format at the same time
-3. **WIP Status** - Function not completed (unless explicitly marked `WIP:`)
-
-## Commit granularity
-
-| Type | Granularity | Example |
-|------|------|------|
-| `feat:` | A complete function | `feat: add SQLite persistence layer` |
-| `fix:` | A bug fix | `fix: handle empty dataset in fit` |
-| `docs:` | A document update | `docs: add logging guardrails` |
-| `refactor:` | A reconstruction step | `refactor: extract repositories` |
-| `style:` | Format correction | `style: apply ruff formatting` |
-| `test:` | Test new/modified | `test: add unit tests for UoW` |
-| `chore:` | Maintenance tasks | `chore: update dependencies` |
-
-<Aside type="caution" title="Do not hide mixed changes">
-
-If the same commit is mixed with features, bugfixes, formatting, and file organization, the review and revert costs will increase. Unpacking is more important than stuffing it all at once.
+A coherent commit has one purpose, includes the corresponding source and
+required mirror updates, and has completed the checks required for its touched
+area. It is not an unpublished WIP checkpoint.
 
 </Aside>
 
-## Commit Message format
+## Commit Boundary
 
-```
+Commit when:
+
+- the change is one logical unit;
+- its required source and generated or extracted mirrors agree;
+- the relevant Workbench checks for the touched paths pass; and
+- the commit can be reviewed and reverted without pulling in unrelated work.
+
+Do not commit incomplete behavior, unrelated formatting, or unrelated dirty
+bytes merely to save local progress.
+
+## Publication And History
+
+- Push every coherent commit immediately to the branch selected by the active
+  delivery profile.
+- Do not leave a WIP commit as the only copy on one workstation.
+- Do not amend, rebase, squash, or force-push already-published shared history.
+- When the selected profile permits consolidation, Integration performs it at
+  PR merge.
+
+## Validation
+
+Run the checks required by the touched-area rules and CI configuration. The
+repository-wide pre-commit command can be useful when applicable, but it is not
+a universal substitute for the actual docs, package, build, or CI checks named
+for the changed surface.
+
+## Commit Message
+
+Use:
+
+```text
 <type>: <short description>
-
-[Optional: detailed description]
-
-[Optional: Closes #issue]
 ```
 
-**example:**
-
-```
-feat: add colored logging with Rich
-
-- Created superconducting_circuits_analysis/infrastructure/logging.py setup function
-- Updated tech-stack.md with Rich dependency
-- Added logging.md guardrails
-
-Closes #42
-```
-
-<details class="docs-disclosure docs-disclosure--note">
-<summary>WIP commits</summary>
-
-Unfinished commits that need to be saved on-site are only allowed if the team process explicitly accepts them and the commit message has a clear `WIP:` prefix.
-
-</details>
-
----
+Common types are `feat`, `fix`, `docs`, `refactor`, `style`, `test`, and
+`chore`.
 
 ## Agent Rule
 ```markdown
 ## Commit Standards
-- **When to Commit**:
-  - Single logical unit complete (one feature, one fix, one refactor).
-  - All checks pass: `uv run pre-commit run --all-files`.
-  - Independently revertable.
-- **When NOT to Commit**:
-  - Code doesn't compile/type-check.
-  - Mixed changes (bug fix + feature + formatting).
-  - Incomplete work (unless `WIP:` prefix).
-- **Commit Format**: `<type>: <description>`
-  - Types: `feat`, `fix`, `docs`, `refactor`, `style`, `test`, `chore`.
-- **Before Commit**: ALWAYS run `uv run pre-commit run --all-files`.
+- Commit one coherent, independently reviewable change at a time.
+- Include required source and extracted-mirror updates in the same coherent commit.
+- Run the checks required for the touched Workbench surface; no single repository-wide command replaces those checks universally.
+- Do not commit unrelated changes or use unpublished WIP commits as local checkpoints.
+- Push every coherent commit immediately according to the active host delivery profile.
+- Never amend, rebase, squash, or force-push already-published shared history; profile-permitted consolidation belongs to Integration at PR merge.
+- Use `<type>: <short description>` with `feat`, `fix`, `docs`, `refactor`, `style`, `test`, or `chore` as appropriate.
 ```

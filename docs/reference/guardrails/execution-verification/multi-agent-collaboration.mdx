@@ -9,102 +9,60 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Codex-managed subagent work lanes, main-thread ownership, integrated delivery, and verification expectations.
-version: v4.2.1
-last_updated: 2026-07-10
+scope: Bounded internal-worker coordination after repository and path ownership are resolved by the active host authority.
+version: v5.0.0
+last_updated: 2026-08-21
 updated_by: codex
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-# Codex Subagent Coordination
+# Codex Internal-Worker Coordination
 
-Codex coordinates reusable Sol, Terra, and Luna agent archetypes. Each spawned instance is a temporary worker assigned to one bounded repo lane, not a permanent project team.
+Internal workers are implementation mechanisms, not collaboration authorities.
+Resolve the repository owner, semantic authority, data boundary, delivery
+profile, and exact paths before assigning any worker.
 
-The Sol Main Agent owns Human communication, semantics, contracts, work decomposition, integration, final architecture consistency, validation, and the final report. Terra is the default repo-aware implementer, while Luna executes narrow contract-bounded work.
+<Aside type="caution" title="Host ownership comes first">
 
-<Aside type="caution" title="Single visible owner">
-
-Even if Codex uses multiple subagents, the delivered change must read as one coherent update. The final response must identify what changed, what was verified, and what remains risky or unverified.
+Under SCQ_Design, load `$scq-collaboration-roles` and resolve the registered
+owner before considering delegation. Load `$model-routing` only after that
+boundary is known. This page does not define repository roles or GitFlow.
 
 </Aside>
 
-## Current Policy
+## Owner Responsibilities
 
-| Concern | Rule |
-| --- | --- |
-| Sol Main Agent | owns Human communication, semantics, contracts, lane selection, integration, conflict resolution, validation, and final report |
-| Terra | default repo-aware implementer for established contracts and non-trivial repository work |
-| Luna | narrow executor for explicit, mechanically verifiable work packages |
-| Spawned instances | temporary lane workers created from reusable Sol, Terra, or Luna archetypes; use the smallest pool that covers separable work |
-| `Plans/` coordination files | retired; do not create new active plan artifacts |
-| Direct `develop` work | allowed when the working tree stays coherent and touched-area checks are run |
-| Final accountability | Sol and the current conversation own the integrated result |
+The resolved repository owner:
 
-## Sol Main Agent Responsibilities
+- holds the repository write queue and assigns one primary writer per path;
+- gives each worker an exact bounded package, allowed paths, validation, and
+  stop conditions;
+- sequences overlapping work instead of allowing concurrent writers;
+- reconciles worker results into the current repository package; and
+- retains Human communication, semantic escalation, publication, merge, and
+  final-report responsibilities assigned by the host authority.
 
-Sol must:
+## Worker Boundaries
 
-- read the relevant SoT before assigning or doing work;
-- define the current vertical slice, product semantics, contracts, and success criteria;
-- choose whether Terra or Luna work lanes are useful;
-- keep subagents inside folder structure and owner-boundary rules;
-- reconcile cross-lane conflicts;
-- run or account for touched-area validation;
-- produce the final integrated report.
+An internal worker may inspect or change only its assigned paths. It must not:
 
-Sol does not perform the main feature implementation by default. Sol may write contract documents and scaffolds, and may implement feature logic directly only when the Human explicitly requests it or when implementation cannot yet be separated safely from unsettled semantics.
+- claim Human acceptance or create a Gate;
+- change goal semantics, public contracts, data ownership, or repository
+  ownership;
+- negotiate directly with another repository owner;
+- merge protected branches, publish outside the assigned package, or clean
+  shared state; or
+- create persistent coordination files merely to relay its work.
 
-## Subagent Work Lanes
-
-Map Terra or Luna instances to these repo lanes. The archetype identifies the worker's capability; the lane identifies its temporary repo scope. Use the smallest pool that covers separable work.
-
-| Lane | Typical surfaces | Responsibilities |
-| --- | --- | --- |
-| Julia Core + Pluto Research | `core/julia/SuperconductingCircuitsCore/`, `notebooks/pluto/` | Julia Core APIs, Pluto direct research workflow, JosephsonCircuits.jl validation, component/circuit prototypes, research sweep and analysis prototypes |
-| Product Async Contracts | `docs/app/architecture/contracts/`, `app/backend/app_backend/domain/runtime_contracts/`, `app/backend/`, Backend API contracts | simulation request contracts, runner task envelopes, runner result manifest, result-view API, OpenAPI alignment |
-| Backend + Runner Integration | `app/backend/`, `core/julia/SuperconductingCircuitsRunner/`, `data/staging/`, `data/trace_store/` | task lifecycle, runner claim/heartbeat/progress/cancellation/complete/fail, task dispatch, Zarr staging, manifest validation, Backend publication |
-| Application Workbench | `app/frontend/`, `app/desktop/` | Simulation Workbench UI, task submission UI, task status/result viewer, Raw Data Browser integration, Electron runtime shell |
-| Python Notebook / Data Inspection | `notebooks/python/`, notebook reference docs | programmable data analysis, direct local/exported/canonical data reads, Backend API use for platform state, migration/debug/emergency analysis |
-| Docs / SoT Consistency | `README.md`, `docs/`, `site/astro.config.mjs`, `site/src/content.config.ts`, `.agent/rules/**` | SoT consistency, forbidden-regression searches, navigation, guardrail mirrors, stale architecture cleanup |
-
-## Lane Rules
-
-Subagents must:
-
-- stay inside the assigned surface and owner boundary;
-- have one primary owner for every modified path, with explicit allowed and forbidden paths;
-- not coordinate directly with other subagents;
-- avoid redefining architecture or product semantics;
-- report `inspected_files`, `changed_files`, `produced_artifacts`, `validation`, and `blockers` back to Sol;
-- escalate cross-boundary conflicts instead of patching around them;
-- avoid creating persistent prompt bundles or committed lane handoffs.
-
-Do not let two implementers modify the same path unless Sol explicitly sequences their work. Subagents may recommend follow-up work, but Sol decides whether it belongs in the current vertical slice.
-
-## Escalation
-
-- Luna escalates to Terra if its scope expands, a new dependency or public API change appears necessary, or a failure exposes implementation uncertainty.
-- Terra escalates to Sol and the Human when product semantics, public contracts, data or state ownership, or architecture boundaries are undefined.
-- Sol returns unclear design decisions or acceptance semantics to the Human instead of inventing behavior.
-
-## Vertical Slice Rule
-
-A product feature may span several lanes. For example, a real frequency-sweep workflow touches async contracts, Backend/Runner integration, Application Workbench, and Docs/SoT consistency.
-
-Do not let each lane independently define its own version of the workflow. Sol owns the end-to-end contract and validates the integrated result.
+When its package no longer fits the assigned boundary, the worker stops and
+returns the exact conflict to the repository owner.
 
 ## Handoff
 
-Prefer concise in-thread summaries over committed planning files:
-
-- `inspected_files`;
-- `changed_files`;
-- `produced_artifacts`;
-- `validation` commands and results;
-- `blockers`, including known risks or skipped checks.
-
-Long-term decisions belong in `docs/reference/**`, not in temporary planning artifacts.
+Return only the changed paths or artifact identity, validation, blockers, and
+residual risks needed by the repository owner. The owner synthesizes the
+repository result and follows the host-selected delivery profile.
 
 ## Related
 
@@ -112,30 +70,16 @@ Long-term decisions belong in `docs/reference/**`, not in temporary planning art
 - [Task Scope Sizing](./prompt-grading.md)
 - [Work Summary Formats](./contributor-reporting.md)
 - [Testing](testing.mdx)
-- [Agent Skill Library](../../agent-skills/index.mdx)
 
 ## Agent Rule
 ```markdown
-## Codex Subagent Coordination
-- The Sol Main Agent owns Human communication, product semantics, architecture and ownership boundaries, contract design, work decomposition, acceptance criteria, integration, validation, and final decisions.
-- Sol does not perform the main feature implementation by default. Sol may write contract documents and scaffolds, and may implement feature logic directly only when the Human explicitly requests it or implementation cannot yet be separated safely from unsettled semantics.
-- Terra is the default repo-aware implementer for established contracts and non-trivial repository work.
-- Luna executes narrow, explicit, contract-bounded, mechanically verifiable work packages.
-- Sol, Terra, and Luna are reusable archetypes; each spawned instance is a temporary lane worker. Use the smallest pool that covers separable work.
-- Recommended lanes are:
-  - Julia Core + Pluto Research
-  - Product Async Contracts
-  - Backend + Runner Integration
-  - Application Workbench
-  - Python Notebook / Data Inspection
-  - Docs / SoT Consistency
-- Assign one primary owner per modified path and give every instance explicit owned, allowed, and forbidden paths.
-- Subagents must stay inside assigned folder structure and owner-boundary rules, avoid redefining architecture, and must not coordinate directly with other subagents.
-- Luna escalates expanded scope, new dependencies or public APIs, and implementation uncertainty to Terra. Terra escalates undefined semantics, contracts, ownership, or architecture to Sol and the Human.
-- Each subagent reports `inspected_files`, `changed_files`, `produced_artifacts`, `validation`, and `blockers` to Sol.
-- Cross-lane conflicts are resolved by Sol against the relevant SoT.
-- Do not create new active `Plans/` coordination artifacts or committed lane handoffs.
-- Direct `develop` updates are allowed when the working tree stays coherent and touched-area checks are run.
-- Long-term decisions belong in `docs/reference/**`, not temporary planning files.
-- Final reports should summarize inspected and changed files, produced artifacts, validation, blockers, risks, and any skipped checks.
+## Codex Internal-Worker Coordination
+- Resolve host semantic authority, repository ownership, data boundary, delivery profile, and exact paths before delegation.
+- Under SCQ_Design, load `$scq-collaboration-roles`; load `$model-routing` only after ownership is resolved.
+- The resolved repository owner holds path leases and assigns one primary writer per path.
+- Internal workers receive bounded implementation packages; they do not gain repository, semantic, Human-acceptance, publication, merge, synchronization, or cleanup authority.
+- Workers must not negotiate cross-owner changes or redefine public contracts, data ownership, or goal semantics.
+- Sequence overlapping paths; do not allow concurrent writers on the same path.
+- Workers return changed paths or artifact identity, validation, blockers, and residual risks to the repository owner.
+- This rule does not define GitFlow; use the host-selected delivery profile.
 ```

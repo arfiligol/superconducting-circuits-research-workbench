@@ -153,7 +153,7 @@ rules:
     tier: critical
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks involve branch roles, direct-develop updates, optional worktree isolation, or release promotion.
+    description: Apply when routing branch, worktree, PR, merge, synchronization, or cleanup mechanics to the active host delivery profile.
     triggers: ["branch", "branches", "worktree", "git flow", "develop", "main", "direct develop", "fast iteration"]
     touched_paths: ["docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "app/desktop/**", "desktop/**", "legacy/**", "src/**", ".github/**"]
 
@@ -162,7 +162,7 @@ rules:
     tier: critical
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks involve Codex subagents, work lanes, coordination, review, or integrated delivery flow.
+    description: Apply when assigning bounded internal workers after host authority, repository ownership, delivery profile, and exact paths are resolved.
     triggers: ["subagent", "subagents", "work lane", "work lanes", "agent", "agents", "planning", "review", "handoff", "collaboration", "multi-agent"]
     touched_paths: ["docs/reference/guardrails/**", "docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**"]
 
