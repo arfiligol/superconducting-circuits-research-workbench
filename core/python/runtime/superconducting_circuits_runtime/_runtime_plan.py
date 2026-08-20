@@ -36,6 +36,40 @@ class GroundedLCResonator(elm.ElementCompound):
         self.elmparams["drop"] = anchors["end"]
 
 
+class RuntimeBlock(elm.ElementCompound):
+    """Minimal labeled runtime leaf visual with explicit exposed-pin anchors."""
+
+    def __init__(
+        self, label: str, pin_anchors: Mapping[str, tuple[float, float]], **kwargs: Any
+    ) -> None:
+        self._runtime_label = label
+        self.pin_anchors = pin_anchors
+        super().__init__(**kwargs)
+
+    def setup(self) -> None:
+        self.anchors.update(self.pin_anchors)
+        self.add(elm.Line().endpoints((-2.0, -1.0), (2.0, -1.0)))
+        self.add(elm.Line().endpoints((2.0, -1.0), (2.0, 1.0)))
+        self.add(elm.Line().endpoints((2.0, 1.0), (-2.0, 1.0)))
+        self.add(
+            elm.Line().endpoints((-2.0, 1.0), (-2.0, -1.0)).label(self._runtime_label, loc="top")
+        )
+        self.elmparams["drop"] = (2.0, 0.0)
+
+
+_RUNTIME_BLOCKS = {
+    "workbench.transmission_line.v1": ("TL", {"head": (-2.0, 0.0), "tail": (2.0, 0.0)}),
+    "workbench.intrinsic_interferometric_purcell_filter.v1": (
+        "IPF",
+        {"readout_attachment": (-2.0, 0.0), "feedline_attachment": (2.0, 0.0)},
+    ),
+    "workbench.linearized_floating_qubit.v1": (
+        "Q",
+        {"readout_attachment": (0.0, 1.0), "island_1": (-1.0, -1.0), "island_2": (1.0, -1.0)},
+    ),
+}
+
+
 def render_runtime_plan(plan: Mapping[str, Any]) -> schemdraw.Drawing:
     """Render the supported V1 schematic intent without workspace imports."""
 
@@ -51,17 +85,30 @@ def render_runtime_plan(plan: Mapping[str, Any]) -> schemdraw.Drawing:
     drawing = schemdraw.Drawing(show=False, transparent=True, dpi=96)
     anchors: dict[str, tuple[float, float]] = {}
     for index, item in enumerate(components):
-        if (
-            not isinstance(item, Mapping)
-            or item.get("type_id") != "workbench.parallel_lc_resonator.v1"
-        ):
+        if not isinstance(item, Mapping):
             raise ValueError(
                 "Circuit Workbench runtime has no Schemdraw mapping for this component type."
             )
         component_id = str(item.get("id", ""))
-        visual = GroundedLCResonator(component_id).at((index * 8.0, 0.0))
+        type_id = item.get("type_id")
+        if type_id == "workbench.parallel_lc_resonator.v1":
+            visual = GroundedLCResonator(component_id).at((index * 8.0, 0.0))
+            pins = ("signal",)
+        else:
+            if not isinstance(type_id, str):
+                raise ValueError(
+                    "Circuit Workbench runtime has no Schemdraw mapping for this component type."
+                )
+            block = _RUNTIME_BLOCKS.get(type_id)
+            if block is None:
+                raise ValueError(
+                    "Circuit Workbench runtime has no Schemdraw mapping for this component type."
+                )
+            visual = RuntimeBlock(*block).at((index * 8.0, 0.0))
+            pins = block[1]
         drawing += visual
-        anchors[f"{component_id}.signal"] = visual.absanchors["signal"]
+        for pin in pins:
+            anchors[f"{component_id}.{pin}"] = visual.absanchors[pin]
     for connection in intent.get("connections", []):
         if not isinstance(connection, Mapping):
             raise ValueError("Circuit Workbench schematic connection must be an object.")
