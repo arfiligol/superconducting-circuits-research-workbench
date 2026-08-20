@@ -15,6 +15,7 @@ package = false
 members = [
     "core/python/analysis/superconducting_circuits_analysis",
     "core/python/circuit_libraries",
+    "core/python/runtime",
     "app/backend",
     "notebooks/python",
 ]
@@ -88,3 +89,4 @@ dev = [
 
 [tool.uv.sources]
 schemdraw-circuit-library = { workspace = true }
+superconducting-circuits-runtime = { workspace = true }

@@ -17,6 +17,7 @@ members = [
     "superconducting-circuits-backend",
     "superconducting-circuits-python-notebooks",
     "superconducting-circuits-research-workbench",
+    "superconducting-circuits-runtime",
 ]
 
 [[package]]
@@ -1842,6 +1843,17 @@ dev = [
     { name = "schemdraw-circuit-library", editable = "core/python/circuit_libraries" },
     { name = "sphinx", specifier = ">=9.1.0" },
 ]
+
+[[package]]
+name = "superconducting-circuits-runtime"
+version = "0.1.0"
+source = { editable = "core/python/runtime" }
+dependencies = [
+    { name = "schemdraw-circuit-library" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "schemdraw-circuit-library", editable = "core/python/circuit_libraries" }]
 
 [[package]]
 name = "traitlets"

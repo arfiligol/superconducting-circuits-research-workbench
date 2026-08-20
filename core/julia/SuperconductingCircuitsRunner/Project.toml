@@ -4,9 +4,11 @@ authors = ["arfiligol"]
 version = "0.1.0"
 
 [deps]
+CMAEvolutionStrategy = "8d3b24bd-414e-49e0-94fb-163cc3a3e411"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 SuperconductingCircuitsCore = "b25d36e2-7598-4d7b-9e68-62f725d58ebd"
 Zarr = "0a941bbe-ad1d-11e8-39d9-ab76183a1d99"

@@ -27,6 +27,7 @@ __all__ = [
     "load_schematic_export",
     "render_theme_variants",
     "run_preview_cli",
+    "render_runtime_plan",
 ]
 
 
@@ -54,5 +55,10 @@ def __getattr__(name: str) -> Any:
         from . import variants
 
         return getattr(variants, name)
+
+    if name == "render_runtime_plan":
+        from .runtime_plan import render_runtime_plan
+
+        return render_runtime_plan
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

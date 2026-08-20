@@ -9,6 +9,8 @@
 module SuperconductingCircuitsRunner
 
 using Dates
+using LinearAlgebra
+import CMAEvolutionStrategy
 using HTTP
 using JSON3
 using SHA
@@ -16,12 +18,14 @@ import SuperconductingCircuitsCore
 
 export RunnerClaim
 export execute_task
+export execute_circuit_workbench_action
 export manifest_sha256
 export parse_task_claim
 export run_polling_runner
 export write_trace_zarr_package
 
 include("staging/zarr_writer.jl")
+include("circuit_workbench_runtime.jl")
 
 const _SUPPORTED_FREQUENCY_SWEEP_DEFINITION_IDS = Set([
     "c8f08463-bf18-4f8e-a5d5-735f3d7b0d6e",
