@@ -1,13 +1,15 @@
 # ruff: noqa: E501
 """Sealed Python authoring and Julia-action transport for Circuit Workbench.
 
-This module deliberately has no Julia embedding.  A completed evaluate action is
-one Julia subprocess, while analyze only verifies an existing sealed receipt.
+This module deliberately has no Julia embedding.  Each execute action may start
+one Julia subprocess; resolve paths only verify sealed stage receipts.
 """
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import html
 import json
 import math
 import os
@@ -15,14 +17,35 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
+import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, is_dataclass
+from datetime import UTC, datetime
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Literal, cast
 
 PLAN_SCHEMA = "circuit-workbench-plan.v1"
 REQUEST_SCHEMA = "circuit-workbench-run-request.v1"
 RECEIPT_SCHEMA = "circuit-workbench-run-receipt.v1"
+STAGE_ORDER = (
+    "optimize",
+    "refine_winner",
+    "evaluate_responses",
+    "fit_c11",
+    "evaluate_t1",
+    "build_report",
+)
+STAGE_DEPENDENCIES = {
+    "optimize": (),
+    "refine_winner": ("optimize",),
+    "evaluate_responses": ("optimize", "refine_winner"),
+    "fit_c11": ("evaluate_responses",),
+    "evaluate_t1": ("optimize", "fit_c11"),
+    "build_report": STAGE_ORDER[:-1],
+}
+_STAGE_ACTIONS = {"execute", "resolve"}
 _LIFECYCLE_STATES = {"CONVERGING", "ACCEPTED", "STABILIZED"}
 _DATA_CLASSIFICATIONS = {"public", "project-internal", "NCUAS-private", "report-safe-derived"}
 _PACKAGE_ROOT = Path(__file__).resolve().parent
@@ -55,29 +78,6 @@ class RuntimeContractError(ValueError):
 
 def _nonempty_string(value: Any) -> bool:
     return isinstance(value, str) and bool(value)
-
-
-@dataclass(frozen=True)
-class _ResultHandle(Mapping[str, Any]):
-    payload: Mapping[str, Any]
-    path: Path
-
-    def __getitem__(self, key: str) -> Any:
-        return self.payload[key]
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self.payload)
-
-    def __len__(self) -> int:
-        return len(self.payload)
-
-    @property
-    def status(self) -> str:
-        return str(self.payload["status"])
-
-    @property
-    def result(self) -> Any:
-        return self.payload.get("result")
 
 
 @dataclass(frozen=True)
@@ -451,10 +451,150 @@ class ReductionSpec:
 
 
 @dataclass(frozen=True)
-class ObjectiveSpec:
+class CircuitObjective:
     cared_outputs: Mapping[str, Mapping[str, Any]]
     residuals: Mapping[str, Mapping[str, Any]]
     cost: Mapping[str, Any]
+
+    @classmethod
+    def from_targets(cls, declaration: Mapping[str, Any]) -> CircuitObjective:
+        """Compile visible targets and weights to the restricted Julia objective AST.
+
+        ``declaration`` has exactly three mappings: ``outputs`` contains the
+        existing cared-output declarations, ``values`` maps each output id to a
+        nonzero target, and ``weights`` maps the same ids to positive weights.
+        Target meaning and values remain consumer-owned; this helper only owns
+        the mechanical relative-residual expression.
+        """
+
+        if not isinstance(declaration, Mapping) or set(declaration) != {
+            "outputs",
+            "values",
+            "weights",
+        }:
+            raise RuntimeContractError(
+                "CircuitObjective.from_targets requires only outputs, values, and weights."
+            )
+        outputs = declaration["outputs"]
+        values = declaration["values"]
+        weights = declaration["weights"]
+        if not all(isinstance(item, Mapping) and item for item in (outputs, values, weights)):
+            raise RuntimeContractError(
+                "CircuitObjective targets require nonempty outputs, values, and weights mappings."
+            )
+        names = set(outputs)
+        if set(values) != names or set(weights) != names:
+            raise RuntimeContractError(
+                "CircuitObjective target values and weights must exactly match output ids."
+            )
+        residuals: dict[str, Mapping[str, Any]] = {}
+        weighted: list[Mapping[str, Any]] = []
+        for name in sorted(names):
+            target = values[name]
+            weight = weights[name]
+            if (
+                isinstance(target, bool)
+                or not isinstance(target, (int, float))
+                or not math.isfinite(float(target))
+                or float(target) == 0.0
+            ):
+                raise RuntimeContractError(
+                    f"CircuitObjective target '{name}' must be finite and nonzero."
+                )
+            if (
+                isinstance(weight, bool)
+                or not isinstance(weight, (int, float))
+                or not math.isfinite(float(weight))
+                or float(weight) <= 0.0
+            ):
+                raise RuntimeContractError(
+                    f"CircuitObjective weight '{name}' must be finite and positive."
+                )
+            residual_id = f"relative_{name}"
+            residuals[residual_id] = {
+                "op": "div",
+                "args": [
+                    {
+                        "op": "sub",
+                        "args": [{"output": name}, {"const": float(target)}],
+                    },
+                    {"const": float(target)},
+                ],
+            }
+            weighted.append(
+                {
+                    "op": "mul",
+                    "args": [
+                        {"const": float(weight)},
+                        {"output": residual_id},
+                    ],
+                }
+            )
+        return cls(
+            cared_outputs={str(name): dict(outputs[name]) for name in sorted(names)},
+            residuals=residuals,
+            cost={"op": "sum_squares", "args": weighted},
+        )
+
+
+@dataclass(frozen=True)
+class ResponseSpec:
+    frequency_hz: tuple[float, ...]
+    input_port: str
+    output_port: str
+    pump_frequency_hz: float
+
+    def __post_init__(self) -> None:
+        values = tuple(float(value) for value in self.frequency_hz)
+        if (
+            len(values) < 3
+            or any(not math.isfinite(value) or value <= 0.0 for value in values)
+            or any(right <= left for left, right in pairwise(values))
+        ):
+            raise RuntimeContractError(
+                "ResponseSpec frequency_hz must be a strictly increasing positive grid."
+            )
+        if not _nonempty_string(self.input_port) or not _nonempty_string(self.output_port):
+            raise RuntimeContractError("ResponseSpec requires named input and output ports.")
+        if self.input_port == self.output_port:
+            raise RuntimeContractError("ResponseSpec input and output ports must differ.")
+        if not math.isfinite(self.pump_frequency_hz) or self.pump_frequency_hz <= 0.0:
+            raise RuntimeContractError("ResponseSpec pump_frequency_hz must be positive.")
+        object.__setattr__(self, "frequency_hz", values)
+
+
+@dataclass(frozen=True)
+class T1Spec:
+    frequency_hz: tuple[float, ...]
+    feedline_ports: tuple[str, str]
+    qubit_probe_ports: tuple[str, str]
+    common_mode_weights: tuple[float, float]
+    pump_frequency_hz: float
+
+    def __post_init__(self) -> None:
+        values = tuple(float(value) for value in self.frequency_hz)
+        ports = (*self.feedline_ports, *self.qubit_probe_ports)
+        alpha, beta = (float(value) for value in self.common_mode_weights)
+        if (
+            len(values) < 3
+            or any(not math.isfinite(value) or value <= 0.0 for value in values)
+            or any(right <= left for left, right in pairwise(values))
+        ):
+            raise RuntimeContractError(
+                "T1Spec frequency_hz must be a strictly increasing positive grid."
+            )
+        if any(not _nonempty_string(port) for port in ports) or len(set(ports)) != 4:
+            raise RuntimeContractError("T1Spec requires four unique named ports.")
+        if (
+            not math.isfinite(alpha)
+            or not math.isfinite(beta)
+            or not math.isclose(alpha + beta, 1.0, rel_tol=0.0, abs_tol=1.0e-9)
+        ):
+            raise RuntimeContractError("T1Spec common-mode weights must be finite and sum to one.")
+        if not math.isfinite(self.pump_frequency_hz) or self.pump_frequency_hz <= 0.0:
+            raise RuntimeContractError("T1Spec pump_frequency_hz must be positive.")
+        object.__setattr__(self, "frequency_hz", values)
+        object.__setattr__(self, "common_mode_weights", (alpha, beta))
 
 
 @dataclass(frozen=True)
@@ -609,10 +749,14 @@ class CircuitSim:
     _plan: CircuitPlan | None = field(default=None, init=False)
     _artifacts: dict[str, Mapping[str, Any]] = field(default_factory=dict, init=False)
     _reduction: ReductionSpec | None = field(default=None, init=False)
-    _objective: ObjectiveSpec | None = field(default=None, init=False)
+    _objective: CircuitObjective | None = field(default=None, init=False)
     _gates: list[GateSpec] = field(default_factory=list, init=False)
     _variables: list[VariableSpec] = field(default_factory=list, init=False)
     _optimizer: OptimizerSpec | None = field(default=None, init=False)
+    _refinement_plan: CircuitPlan | None = field(default=None, init=False)
+    _refinement_tolerance: float | None = field(default=None, init=False)
+    _response: ResponseSpec | None = field(default=None, init=False)
+    _t1: T1Spec | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         if (
@@ -649,13 +793,19 @@ class CircuitSim:
             )
         self._plan = plan
 
-    def bind_artifact(self, name: str, artifact: Mapping[str, Any]) -> None:
-        if not name or not isinstance(artifact, Mapping):
-            raise RuntimeContractError("Artifact bindings require a name and mapping.")
-        units = artifact.get("units")
-        provenance = artifact.get("provenance")
+    def bind_artifact(
+        self,
+        name: str,
+        path: Path | str,
+        *,
+        schema: str,
+        units: str | Mapping[str, Any],
+        provenance: Mapping[str, Any],
+    ) -> None:
+        if not _nonempty_string(name):
+            raise RuntimeContractError("Artifact bindings require a nonempty name.")
         if (
-            not _nonempty_string(artifact.get("schema"))
+            not _nonempty_string(schema)
             or not (_nonempty_string(units) or (isinstance(units, Mapping) and bool(units)))
             or not isinstance(provenance, Mapping)
             or not provenance
@@ -663,20 +813,16 @@ class CircuitSim:
             raise RuntimeContractError(
                 "Artifact binding requires declared schema, units, and provenance."
             )
-        source = artifact.get("source_sha256")
-        if (
-            not isinstance(source, str)
-            or len(source) != 64
-            or any(char not in "0123456789abcdef" for char in source)
-        ):
-            raise RuntimeContractError("Artifact binding requires exact source_sha256.")
-        path = artifact.get("path")
-        if not isinstance(path, str) or not path:
-            raise RuntimeContractError("Artifact binding requires a readable bound file path.")
         resolved = Path(path).resolve()
-        if not resolved.is_file() or _sha256(resolved.read_bytes()) != source:
-            raise RuntimeContractError("Artifact path is absent or does not match source_sha256.")
-        sealed = {**dict(artifact), "path": str(resolved)}
+        if not resolved.is_file():
+            raise RuntimeContractError("Artifact binding requires a readable bound file path.")
+        sealed = {
+            "schema": schema,
+            "units": units,
+            "provenance": dict(provenance),
+            "path": str(resolved),
+            "source_sha256": _sha256(resolved.read_bytes()),
+        }
         try:
             _canonical_bytes(sealed)
         except (TypeError, ValueError) as error:
@@ -690,12 +836,12 @@ class CircuitSim:
             raise RuntimeContractError("set_reduction requires ReductionSpec.")
         self._reduction = spec
 
-    def set_objective(self, spec: ObjectiveSpec) -> None:
-        if not isinstance(spec, ObjectiveSpec):
-            raise RuntimeContractError("set_objective requires ObjectiveSpec.")
+    def set_objective(self, spec: CircuitObjective) -> None:
+        if not isinstance(spec, CircuitObjective):
+            raise RuntimeContractError("set_objective requires CircuitObjective.")
         if not spec.cared_outputs or not spec.residuals or not spec.cost:
             raise RuntimeContractError(
-                "ObjectiveSpec requires cared outputs, residuals, and cost expression."
+                "CircuitObjective requires cared outputs, residuals, and cost expression."
             )
         targeted_anchors: tuple[Any, Any, Any] | None = None
         for name, cared in spec.cared_outputs.items():
@@ -741,6 +887,37 @@ class CircuitSim:
             _validate_expression(expression, set(spec.cared_outputs))
         _validate_expression(spec.cost, set(spec.residuals))
         self._objective = spec
+
+    def set_refinement(
+        self,
+        *,
+        plan: CircuitPlan,
+        relative_tolerance: float,
+    ) -> None:
+        if not isinstance(plan, CircuitPlan):
+            raise RuntimeContractError("set_refinement requires a CircuitPlan.")
+        plan.seal(self._libraries)
+        if (
+            isinstance(relative_tolerance, bool)
+            or not isinstance(relative_tolerance, (int, float))
+            or not math.isfinite(float(relative_tolerance))
+            or float(relative_tolerance) < 0.0
+        ):
+            raise RuntimeContractError(
+                "set_refinement relative_tolerance must be finite and nonnegative."
+            )
+        self._refinement_plan = plan
+        self._refinement_tolerance = float(relative_tolerance)
+
+    def set_responses(self, spec: ResponseSpec) -> None:
+        if not isinstance(spec, ResponseSpec):
+            raise RuntimeContractError("set_responses requires ResponseSpec.")
+        self._response = spec
+
+    def set_t1(self, spec: T1Spec) -> None:
+        if not isinstance(spec, T1Spec):
+            raise RuntimeContractError("set_t1 requires T1Spec.")
+        self._t1 = spec
 
     def set_gates(self, specs: Sequence[GateSpec]) -> None:
         if self._objective is None:
@@ -812,161 +989,163 @@ class CircuitSim:
                 raise RuntimeContractError(f"Optimizer control {name} must be a positive integer.")
         self._optimizer = spec
 
-    def evaluate(self, *, backend: Literal["direct", "hb"] = "direct") -> Mapping[str, Any]:
-        request = self._request(action="evaluate", backend=backend)
-        return self._run_julia(request)
-
-    def optimize(self) -> Mapping[str, Any]:
+    def optimize(
+        self, *, action: Literal["execute", "resolve"]
+    ) -> ResolvedCircuitStage:
+        if action == "resolve":
+            return self._resolve_stage("optimize")
+        _validate_stage_action(action)
         if self._optimizer is None:
             raise RuntimeContractError("optimize requires set_optimizer first.")
         if self._optimizer.algorithm != "cma_es":
             raise RuntimeContractError("Circuit Workbench V1 supports only algorithm='cma_es'.")
         if not self._variables:
             raise RuntimeContractError("optimize requires at least one declared VariableSpec.")
-        return self._run_julia(self._request(action="optimize", backend="direct"))
+        request = self._request(action="optimize", backend="direct")
+        return self._run_julia(request, "optimize")
 
-    def analyze(self) -> Mapping[str, Any]:
-        receipt_path = self._receipt_path()
-        if not receipt_path.is_file():
-            raise RuntimeContractError(
-                "No sealed run receipt exists for this run_id; analyze never recomputes."
-            )
-        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-        if receipt.get("schema") != RECEIPT_SCHEMA:
-            raise RuntimeContractError("Receipt schema is not circuit-workbench-run-receipt.v1.")
-        expected = receipt.get("canonical_sha256")
-        body = dict(receipt)
-        body.pop("canonical_sha256", None)
-        if not isinstance(expected, str) or expected != _fingerprint(body):
-            raise RuntimeContractError("Receipt canonical_sha256 is missing or mismatched.")
-        run_dir = (Path(self.run_root).resolve() / self.run_id).resolve()
-        request_path = Path(receipt.get("request_path", "")).resolve()
-        expected_request_path = run_dir / "circuit-workbench-run-request.v1.json"
-        if request_path != expected_request_path or not request_path.is_file():
-            raise RuntimeContractError(
-                "Receipt request path is not the standard durable request for this run_id."
-            )
-        request_bytes = request_path.read_bytes()
-        if receipt.get("request_sha256") != _sha256(request_bytes):
-            raise RuntimeContractError("Receipt durable request hash mismatches its request bytes.")
-        request = json.loads(request_bytes)
-        request_body = dict(request)
-        fingerprint = request_body.pop("fingerprint_sha256", None)
-        if fingerprint != _fingerprint(request_body) or fingerprint != receipt.get(
-            "request_fingerprint_sha256"
-        ):
-            raise RuntimeContractError(
-                "Request fingerprint does not match durable request or receipt."
-            )
-        failure = receipt.get("failure")
-        if receipt.get("status") == "FAILED" and (
-            not isinstance(failure, Mapping)
-            or not _nonempty_string(failure.get("error_code"))
-            or not _nonempty_string(failure.get("category"))
-            or not isinstance(failure.get("retryable"), bool)
-            or not _nonempty_string(failure.get("message"))
-        ):
-            raise RuntimeContractError("Failed receipt lacks stable failure identity.")
-        plan = request.get("plan")
-        if not isinstance(plan, Mapping):
-            raise RuntimeContractError("Receipt Plan is absent from durable request.")
-        plan_body = dict(plan)
-        plan_hash = plan_body.pop("canonical_sha256", None)
-        if plan_hash != _fingerprint(plan_body) or plan_hash != receipt.get("plan_sha256"):
-            raise RuntimeContractError("Receipt Plan identity mismatches the durable request.")
-        runtime = request.get("runtime")
-        julia = _resolved_julia_executable()
-        expected_runtime = {
-            "python_package_source_sha256": _tree_sha256(
-                _PACKAGE_ROOT, excluded_top_level={"_julia"}
-            ),
-            "runner_tree_sha256": _tree_sha256(_RUNNER_PROJECT, excluded_top_level={"test"}),
-            "core_tree_sha256": _tree_sha256(
-                _JULIA_ROOT / "SuperconductingCircuitsCore", excluded_top_level={"test"}
-            ),
-            "julia_executable_path": str(julia),
-            "julia_executable_sha256": _sha256(julia.read_bytes()),
-        }
-        if not isinstance(runtime, Mapping) or any(
-            runtime.get(key) != value for key, value in expected_runtime.items()
-        ):
-            raise RuntimeContractError("Request Python runtime package identity is stale.")
-        if receipt.get("python_runtime_source_sha256") != runtime.get(
-            "python_package_source_sha256"
-        ):
-            raise RuntimeContractError(
-                "Receipt Python runtime identity mismatches durable request."
-            )
-        identities = {
-            "runner_tree_sha256": expected_runtime["runner_tree_sha256"],
-            "core_tree_sha256": expected_runtime["core_tree_sha256"],
-            "julia_executable_sha256": expected_runtime["julia_executable_sha256"],
-        }
-        if any(receipt.get(name) != value for name, value in identities.items()):
-            raise RuntimeContractError("Receipt Julia Runner/Core identity is stale.")
-        if receipt.get("artifact_bindings") != request.get("artifacts", {}):
-            raise RuntimeContractError(
-                "Receipt artifact bindings do not exactly match durable request artifacts."
-            )
-        if receipt.get("lifecycle_state") != request.get("lifecycle_state") or receipt.get(
-            "data_classification"
-        ) != request.get("data_classification"):
-            raise RuntimeContractError(
-                "Receipt lifecycle/data classification does not exactly match the durable request."
-            )
-        for name, artifact in request.get("artifacts", {}).items():
-            if not isinstance(artifact, Mapping) or not isinstance(artifact.get("path"), str):
-                raise RuntimeContractError(f"Artifact '{name}' is malformed in durable request.")
-            artifact_path = Path(artifact["path"])
-            if not artifact_path.is_file() or _sha256(artifact_path.read_bytes()) != artifact.get(
-                "source_sha256"
-            ):
-                raise RuntimeContractError(
-                    f"Artifact '{name}' no longer matches its sealed source hash."
-                )
-        result = receipt.get("result")
-        if result is not None and receipt.get("output_sha256") != _fingerprint(result):
-            raise RuntimeContractError("Receipt embedded output hash mismatches result.")
+    def refine_winner(
+        self, *, action: Literal["execute", "resolve"]
+    ) -> ResolvedCircuitStage:
+        if action == "resolve":
+            return self._resolve_stage("refine_winner")
+        _validate_stage_action(action)
         if (
-            isinstance(result, Mapping)
-            and result.get("validated_artifacts") is not None
-            and result.get("validated_artifacts") != request.get("artifacts", {})
+            self._refinement_plan is None
+            or self._refinement_tolerance is None
         ):
-            raise RuntimeContractError(
-                "Result validated artifacts do not cross-bind every durable request artifact."
-            )
-        if isinstance(result, Mapping) and "ledger_path" in result:
-            ledger = Path(result["ledger_path"])
-            expected_ledger = run_dir / "circuit-workbench-optimization-ledger.v1.json"
-            if (
-                ledger != expected_ledger
-                or not ledger.is_file()
-                or _sha256(ledger.read_bytes()) != receipt.get("ledger_sha256")
-            ):
-                raise RuntimeContractError("Optimization ledger path/hash mismatches receipt.")
-            ledger_data = json.loads(ledger.read_text(encoding="utf-8"))
-            if (
-                ledger_data.get("schema") != "circuit-workbench-optimization-ledger.v1"
-                or ledger_data.get("request_fingerprint_sha256") != fingerprint
-            ):
-                raise RuntimeContractError(
-                    "Optimization ledger does not bind the durable request fingerprint."
-                )
-            _validate_optimization_ledger(ledger_data, fingerprint)
-        elif (run_dir / "circuit-workbench-optimization-ledger.v1.json").is_file():
-            ledger = run_dir / "circuit-workbench-optimization-ledger.v1.json"
-            if _sha256(ledger.read_bytes()) != receipt.get("ledger_sha256"):
-                raise RuntimeContractError("Optimization ledger path/hash mismatches receipt.")
-            ledger_data = json.loads(ledger.read_text(encoding="utf-8"))
-            _validate_optimization_ledger(ledger_data, fingerprint)
-        return _ResultHandle(receipt, receipt_path)
+            raise RuntimeContractError("refine_winner requires set_refinement first.")
+        optimization = self._require_stage("optimize")
+        result = _mapping(optimization.receipt.get("result"), "optimization result")
+        best = _mapping(result.get("best"), "optimization winner")
+        overrides = _mapping(
+            result.get("winner_physical_parameters"), "optimization winner parameters"
+        )
+        request = self._request(
+            action="refine_winner",
+            backend="direct",
+            plan=self._refinement_plan,
+            extras={
+                "parameter_overrides": overrides,
+                "coarse_outputs": _mapping(best.get("cared_outputs"), "winner cared outputs"),
+                "relative_tolerance": self._refinement_tolerance,
+                "upstream_receipts": {"optimize": optimization.canonical_sha256},
+            },
+        )
+        return self._run_julia(request, "refine_winner")
 
-    def _request(self, *, action: str, backend: str) -> dict[str, Any]:
-        if self._plan is None:
-            raise RuntimeContractError("evaluate requires set_plan first.")
+    def evaluate_responses(
+        self, *, action: Literal["execute", "resolve"]
+    ) -> ResolvedCircuitStage:
+        if action == "resolve":
+            return self._resolve_stage("evaluate_responses")
+        _validate_stage_action(action)
+        if self._response is None:
+            raise RuntimeContractError("evaluate_responses requires set_responses first.")
+        optimization = self._require_stage("optimize")
+        refinement = self._require_stage("refine_winner")
+        winner = _mapping(optimization.receipt.get("result"), "optimization result")
+        request = self._request(
+            action="evaluate_responses",
+            backend="direct_hb",
+            extras={
+                "parameter_overrides": _mapping(
+                    winner.get("winner_physical_parameters"), "optimization winner parameters"
+                ),
+                "response": _plain(self._response),
+                "upstream_receipts": {
+                    "optimize": optimization.canonical_sha256,
+                    "refine_winner": refinement.canonical_sha256,
+                },
+            },
+        )
+        return self._run_julia(request, "evaluate_responses")
+
+    def fit_c11(
+        self, *, action: Literal["execute", "resolve"]
+    ) -> ResolvedCircuitStage:
+        if action == "resolve":
+            return self._resolve_stage("fit_c11")
+        _validate_stage_action(action)
+        responses = self._require_stage("evaluate_responses")
+        request = self._request(
+            action="fit_c11",
+            backend="python",
+            extras={
+                "upstream_receipts": {
+                    "evaluate_responses": responses.canonical_sha256,
+                }
+            },
+        )
+        return self._run_python_stage(
+            request,
+            "fit_c11",
+            lambda directory: _fit_c11_stage(directory, responses),
+        )
+
+    def evaluate_t1(
+        self, *, action: Literal["execute", "resolve"]
+    ) -> ResolvedCircuitStage:
+        if action == "resolve":
+            return self._resolve_stage("evaluate_t1")
+        _validate_stage_action(action)
+        if self._t1 is None:
+            raise RuntimeContractError("evaluate_t1 requires set_t1 first.")
+        optimization = self._require_stage("optimize")
+        c11 = self._require_stage("fit_c11")
+        winner = _mapping(optimization.receipt.get("result"), "optimization result")
+        request = self._request(
+            action="evaluate_t1",
+            backend="hb",
+            extras={
+                "parameter_overrides": _mapping(
+                    winner.get("winner_physical_parameters"), "optimization winner parameters"
+                ),
+                "t1": _plain(self._t1),
+                "upstream_receipts": {
+                    "optimize": optimization.canonical_sha256,
+                    "fit_c11": c11.canonical_sha256,
+                },
+            },
+        )
+        return self._run_julia(request, "evaluate_t1")
+
+    def build_report(
+        self, *, action: Literal["execute", "resolve"]
+    ) -> ResolvedCircuitStage:
+        if action == "resolve":
+            return self._resolve_stage("build_report")
+        _validate_stage_action(action)
+        upstream = {name: self._require_stage(name) for name in STAGE_ORDER[:-1]}
+        request = self._request(
+            action="build_report",
+            backend="python",
+            extras={
+                "upstream_receipts": {
+                    name: stage.canonical_sha256 for name, stage in upstream.items()
+                }
+            },
+        )
+        return self._run_python_stage(
+            request,
+            "build_report",
+            lambda directory: _build_report_stage(directory, self.run_id, upstream),
+        )
+
+    def _request(
+        self,
+        *,
+        action: str,
+        backend: str,
+        plan: CircuitPlan | None = None,
+        extras: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        selected_plan = plan or self._plan
+        if selected_plan is None:
+            raise RuntimeContractError(f"{action} requires set_plan first.")
         if self._objective is None:
-            raise RuntimeContractError("evaluate requires set_objective first.")
-        sealed_plan = self._plan.seal(self._libraries)
+            raise RuntimeContractError(f"{action} requires set_objective first.")
+        sealed_plan = selected_plan.seal(self._libraries)
         if self._reduction is not None:
             exposed = set(sealed_plan["coordinate_bindings"])
             if self._reduction.eliminated != "complete_complement" or not self._reduction.retained:
@@ -982,7 +1161,7 @@ class CircuitSim:
         else:
             reduction = None
         cared_kinds = {item["kind"] for item in self._objective.cared_outputs.values()}
-        if backend == "direct":
+        if action in {"optimize", "refine_winner"} and backend == "direct":
             if cared_kinds <= {"closed_mode_frequency_hz"}:
                 if reduction is not None:
                     raise RuntimeContractError(
@@ -1002,14 +1181,11 @@ class CircuitSim:
                 raise RuntimeContractError(
                     "Direct backend supports one cared-output family, not a mixture."
                 )
-        elif backend == "hb":
-            if cared_kinds != {"s_parameter"} or reduction is not None:
-                raise RuntimeContractError(
-                    "HB backend supports S-parameter cared outputs and no ReductionSpec."
-                )
+        elif action in {"evaluate_responses", "evaluate_t1", "fit_c11", "build_report"}:
+            pass
         else:
             raise RuntimeContractError(
-                "Circuit Workbench V1 supports only direct or hb backend actions."
+                f"Unsupported Circuit Workbench staged action/backend: {action}/{backend}."
             )
         julia = _resolved_julia_executable()
         payload: dict[str, Any] = {
@@ -1040,32 +1216,33 @@ class CircuitSim:
                 "julia_executable_sha256": _sha256(julia.read_bytes()),
             },
         }
+        if extras:
+            overlap = set(payload) & set(extras)
+            if overlap:
+                raise RuntimeContractError(
+                    f"Stage request extras overlap reserved fields: {sorted(overlap)}."
+                )
+            payload.update(dict(extras))
         payload["fingerprint_sha256"] = _fingerprint(payload)
         return payload
 
-    def _run_julia(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+    def _run_julia(
+        self, request: Mapping[str, Any], stage: str
+    ) -> ResolvedCircuitStage:
         if not (_RUNNER_PROJECT / "Project.toml").is_file() or not _RUNNER_CLI.is_file():
             raise RuntimeContractError(
                 "Circuit Workbench Runner source project is unavailable; this source-editable runtime cannot launch Julia."
             )
-        run_dir = Path(self.run_root) / self.run_id
-        run_dir.mkdir(parents=True, exist_ok=True)
-        receipt = self._receipt_path()
-        request_path = run_dir / "circuit-workbench-run-request.v1.json"
-        request_bytes = _canonical_bytes(request)
-        if request_path.exists() and request_path.read_bytes() != request_bytes:
+        stage_dir = self._stage_dir(stage)
+        if stage_dir.exists():
             raise RuntimeContractError(
-                "Existing durable request path has different sealed request bytes."
+                f"Stage '{stage}' already has durable bytes; use action='resolve' or a fresh run_id."
             )
+        stage_dir.mkdir(parents=True)
+        receipt = stage_dir / "circuit-workbench-run-receipt.v1.json"
+        request_path = stage_dir / "circuit-workbench-run-request.v1.json"
+        request_bytes = _canonical_bytes(request)
         _atomic_write(request_path, request_bytes)
-        if request.get("action") == "optimize":
-            ledger = run_dir / "circuit-workbench-optimization-ledger.v1.json"
-            if receipt.is_file():
-                self.analyze()
-            elif ledger.is_file():
-                raise RuntimeContractError(
-                    "Existing optimization ledger has no sealed receipt anchor."
-                )
         optimizer = request.get("optimizer")
         worker_count = (
             int(optimizer.get("resource_controls", {}).get("worker_count", 1))
@@ -1085,9 +1262,9 @@ class CircuitSim:
             text=True,
         )
         if receipt.is_file():
-            sealed = self.analyze()
+            sealed = self._resolve_stage(stage)
             if completed.returncode:
-                failure = sealed.get("failure")
+                failure = sealed.receipt.get("failure")
                 message = failure.get("message") if isinstance(failure, Mapping) else None
                 error_code = (
                     failure.get("error_code")
@@ -1116,12 +1293,546 @@ class CircuitSim:
             f"Julia action exited without sealing a receipt (exit status {completed.returncode})."
         )
 
-    def _receipt_path(self) -> Path:
+    def _run_python_stage(
+        self,
+        request: Mapping[str, Any],
+        stage: str,
+        operation: Callable[[Path], Mapping[str, Any]],
+    ) -> ResolvedCircuitStage:
+        stage_dir = self._stage_dir(stage)
+        if stage_dir.exists():
+            raise RuntimeContractError(
+                f"Stage '{stage}' already has durable bytes; use action='resolve' or a fresh run_id."
+            )
+        run_dir = stage_dir.parent.parent
+        run_dir.mkdir(parents=True, exist_ok=True)
+        temporary = Path(tempfile.mkdtemp(prefix=f".{stage}-", dir=run_dir))
+        try:
+            request_path = temporary / "circuit-workbench-run-request.v1.json"
+            _atomic_write(request_path, _canonical_bytes(request))
+            started = time.perf_counter()
+            result = dict(operation(temporary))
+            result["wall_seconds"] = time.perf_counter() - started
+            receipt = _python_stage_receipt(
+                request,
+                request_path,
+                result,
+                durable_request_path=stage_dir
+                / "circuit-workbench-run-request.v1.json",
+                durable_stage_dir=stage_dir,
+            )
+            _atomic_write(
+                temporary / "circuit-workbench-run-receipt.v1.json",
+                _canonical_bytes(receipt),
+            )
+            temporary.replace(stage_dir)
+        except Exception as error:
+            if temporary.exists() and request_path.is_file():
+                failure = {
+                    "error_code": getattr(error, "error_code", "circuit_workbench_action_failed"),
+                    "category": getattr(error, "category", "task_execution_failed"),
+                    "retryable": getattr(error, "retryable", False),
+                    "type": type(error).__name__,
+                    "message": str(error),
+                }
+                receipt = _python_stage_receipt(
+                    request,
+                    request_path,
+                    None,
+                    durable_request_path=stage_dir
+                    / "circuit-workbench-run-request.v1.json",
+                    durable_stage_dir=stage_dir,
+                    failure=failure,
+                )
+                _atomic_write(
+                    temporary / "circuit-workbench-run-receipt.v1.json",
+                    _canonical_bytes(receipt),
+                )
+                temporary.replace(stage_dir)
+                raise RuntimeContractError(
+                    f"Python stage failed after sealing its failure receipt: {error}",
+                    error_code=str(failure["error_code"]),
+                    category=str(failure["category"]),
+                    retryable=bool(failure["retryable"]),
+                ) from error
+            shutil.rmtree(temporary, ignore_errors=True)
+            raise
+        return self._resolve_stage(stage)
+
+    def _resolve_stage(self, stage: str) -> ResolvedCircuitStage:
+        return resolve_circuit_result(self._run_dir()).stage(stage)
+
+    def _require_stage(self, stage: str) -> ResolvedCircuitStage:
+        resolved = self._resolve_stage(stage)
+        if resolved.status != "PASS":
+            raise RuntimeContractError(
+                f"Stage '{stage}' is not a complete PASS dependency: {resolved.failure or resolved.status}."
+            )
+        return resolved
+
+    def _run_dir(self) -> Path:
         root = Path(self.run_root).resolve()
-        target = (root / self.run_id / "circuit-workbench-run-receipt.v1.json").resolve()
+        target = (root / self.run_id).resolve()
         if not target.is_relative_to(root):
             raise RuntimeContractError("run_id escapes run_root.")
         return target
+
+    def _stage_dir(self, stage: str) -> Path:
+        if stage not in STAGE_ORDER:
+            raise RuntimeContractError(f"Unknown Circuit Workbench stage '{stage}'.")
+        return self._run_dir() / "stages" / stage
+
+
+def _validate_stage_action(action: str) -> None:
+    if action not in _STAGE_ACTIONS:
+        raise RuntimeContractError("Stage action must be 'execute' or 'resolve'.")
+
+
+def _mapping(value: Any, label: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise RuntimeContractError(f"{label} must be an object.")
+    return value
+
+
+@dataclass(frozen=True)
+class _HtmlView:
+    html_text: str
+
+    def _repr_html_(self) -> str:
+        return self.html_text
+
+    def __str__(self) -> str:
+        return self.html_text
+
+
+@dataclass(frozen=True)
+class ResolvedCircuitStage(Mapping[str, Any]):
+    name: str
+    path: Path
+    receipt: Mapping[str, Any]
+    status: str
+    failure: str | None = None
+
+    def __getitem__(self, key: str) -> Any:
+        return self.receipt[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.receipt)
+
+    def __len__(self) -> int:
+        return len(self.receipt)
+
+    @property
+    def result(self) -> Mapping[str, Any] | None:
+        value = self.receipt.get("result")
+        return value if isinstance(value, Mapping) else None
+
+    @property
+    def canonical_sha256(self) -> str:
+        value = self.receipt.get("canonical_sha256")
+        return str(value) if isinstance(value, str) else ""
+
+    def show(self) -> _HtmlView:
+        return _HtmlView(
+            _html_table(
+                ("Field", "Value"),
+                (
+                    ("Stage", self.name),
+                    ("Status", self.status),
+                    ("Receipt", str(self.path)),
+                    ("Receipt SHA-256", self.canonical_sha256 or "NOT_AVAILABLE"),
+                    ("Failure", self.failure or "—"),
+                ),
+            )
+        )
+
+
+@dataclass(frozen=True)
+class ResolvedCircuitResult:
+    run_dir: Path
+    stages: Mapping[str, ResolvedCircuitStage]
+
+    @property
+    def run_id(self) -> str:
+        return self.run_dir.name
+
+    @property
+    def status(self) -> str:
+        return (
+            "PASS"
+            if all(self.stages[name].status == "PASS" for name in STAGE_ORDER)
+            else "NOT_EVALUABLE"
+        )
+
+    def stage(self, name: str) -> ResolvedCircuitStage:
+        if name not in STAGE_ORDER:
+            raise RuntimeContractError(f"Unknown Circuit Workbench stage '{name}'.")
+        return self.stages[name]
+
+    def show_run_trustworthiness(self) -> _HtmlView:
+        rows = [
+            (
+                name,
+                self.stages[name].status,
+                self.stages[name].canonical_sha256 or "—",
+                self.stages[name].failure or "—",
+            )
+            for name in STAGE_ORDER
+        ]
+        return _HtmlView(
+            f"<h3>{html.escape(self.run_id)} · {self.status}</h3>"
+            + _html_table(("Stage", "Status", "Receipt SHA-256", "Failure"), rows)
+        )
+
+    def show_optimization(self) -> _HtmlView:
+        stage = self.stage("optimize")
+        if stage.status != "PASS" or stage.result is None:
+            return stage.show()
+        result = stage.result
+        best = result.get("best") if isinstance(result.get("best"), Mapping) else {}
+        rows = (
+            ("Candidate count", result.get("candidate_count", "—")),
+            ("Generation count", result.get("generation_count", "—")),
+            ("Stop reason", result.get("optimizer_stop_reason", "—")),
+            ("Best cost", best.get("cost", "—") if isinstance(best, Mapping) else "—"),
+            ("Winner", json.dumps(result.get("winner_physical_parameters"), sort_keys=True)),
+            (
+                "Winner cared outputs",
+                json.dumps(best.get("cared_outputs"), sort_keys=True)
+                if isinstance(best, Mapping)
+                else "—",
+            ),
+            (
+                "Winner residuals",
+                json.dumps(best.get("residuals"), sort_keys=True)
+                if isinstance(best, Mapping)
+                else "—",
+            ),
+        )
+        ledger = _stage_artifact_path(stage, "ledger")
+        chart = ""
+        if ledger is not None:
+            payload = json.loads(ledger.read_text(encoding="utf-8"))
+            costs = [
+                float(entry["outcome"]["cost"])
+                for entry in payload.get("entries", [])
+                if isinstance(entry, Mapping)
+                and isinstance(entry.get("outcome"), Mapping)
+                and entry["outcome"].get("status") == "PASS"
+            ]
+            if costs:
+                chart = _svg_line_chart(range(1, len(costs) + 1), costs, "Candidate", "Cost")
+        return _HtmlView("<h3>Optimization</h3>" + chart + _html_table(("Field", "Value"), rows))
+
+    def show_winner_refinement(self) -> _HtmlView:
+        stage = self.stage("refine_winner")
+        if stage.status != "PASS" or stage.result is None:
+            return stage.show()
+        comparison = stage.result.get("relative_changes", {})
+        rows = [
+            (name, value)
+            for name, value in sorted(comparison.items())
+        ] if isinstance(comparison, Mapping) else []
+        return _HtmlView(
+            "<h3>Winner N→2N Refinement</h3>"
+            + _html_table(("Cared output", "Relative change"), rows)
+        )
+
+    def show_responses(self) -> _HtmlView:
+        stage = self.stage("evaluate_responses")
+        if stage.status != "PASS":
+            return stage.show()
+        path = _stage_artifact_path(stage, "response")
+        if path is None:
+            return stage.show()
+        columns = _read_numeric_csv(path)
+        frequency = columns["frequency_hz"]
+        direct = [
+            math.hypot(real, imag)
+            for real, imag in zip(
+                columns["direct_s21_real"], columns["direct_s21_imag"], strict=True
+            )
+        ]
+        hb = [
+            math.hypot(real, imag)
+            for real, imag in zip(columns["hb_s21_real"], columns["hb_s21_imag"], strict=True)
+        ]
+        series = {"Direct": direct, "HB": hb}
+        c11_stage = self.stage("fit_c11")
+        c11_path = _stage_artifact_path(c11_stage, "response")
+        if c11_stage.status == "PASS" and c11_path is not None:
+            fitted = _read_numeric_csv(c11_path)
+            series["C11"] = [
+                math.hypot(real, imag)
+                for real, imag in zip(
+                    fitted["c11_s21_real"], fitted["c11_s21_imag"], strict=True
+                )
+            ]
+        return _HtmlView(
+            "<h3>Direct, pump-off HB, and C11 response</h3>"
+            + _svg_multi_line_chart(frequency, series, "Frequency (Hz)", "|S21|")
+        )
+
+    def show_c11_fit(self) -> _HtmlView:
+        stage = self.stage("fit_c11")
+        if stage.status != "PASS" or stage.result is None:
+            return stage.show()
+        parameters = stage.result.get("parameters_hz", {})
+        rows = list(sorted(parameters.items())) if isinstance(parameters, Mapping) else []
+        rows.extend(
+            [
+                ("normalized_complex_rmse", stage.result.get("normalized_complex_rmse", "—")),
+                ("successful_start_count", stage.result.get("successful_start_count", "—")),
+            ]
+        )
+        return _HtmlView("<h3>Restricted C11 fit</h3>" + _html_table(("Field", "Value"), rows))
+
+    def show_qubit_t1(self) -> _HtmlView:
+        stage = self.stage("evaluate_t1")
+        if stage.status != "PASS":
+            return stage.show()
+        path = _stage_artifact_path(stage, "t1")
+        if path is None:
+            return stage.show()
+        columns = _read_numeric_csv(path)
+        finite_x: list[float] = []
+        finite_y: list[float] = []
+        for frequency, value in zip(columns["frequency_hz"], columns["t1_s"], strict=True):
+            if math.isfinite(value):
+                finite_x.append(frequency)
+                finite_y.append(value * 1.0e6)
+        chart = (
+            _svg_line_chart(finite_x, finite_y, "Frequency (Hz)", "T1 (µs)")
+            if finite_x
+            else "<p>NOT_EVALUABLE: no finite T1 samples.</p>"
+        )
+        admittance = _svg_multi_line_chart(
+            columns["frequency_hz"],
+            {"Re(Yeff)": columns["y_eff_real_s"], "Im(Yeff)": columns["y_eff_imag_s"]},
+            "Frequency (Hz)",
+            "Yeff (S)",
+        )
+        return _HtmlView("<h3>HB-derived qubit admittance and T1</h3>" + admittance + chart)
+
+    def show_simulation_benchmark(self) -> _HtmlView:
+        rows = []
+        for name in STAGE_ORDER:
+            result = self.stages[name].result
+            rows.append((name, result.get("wall_seconds", "—") if result else "—"))
+        return _HtmlView(
+            "<h3>Stage timing</h3>" + _html_table(("Stage", "Wall seconds"), rows)
+        )
+
+    def show_all_results(self) -> _HtmlView:
+        report = self.stage("build_report")
+        path = _stage_artifact_path(report, "report") if report.status == "PASS" else None
+        if path is not None:
+            return _HtmlView(path.read_text(encoding="utf-8"))
+        sections = (
+            self.show_run_trustworthiness(),
+            self.show_optimization(),
+            self.show_winner_refinement(),
+            self.show_responses(),
+            self.show_c11_fit(),
+            self.show_qubit_t1(),
+            self.show_simulation_benchmark(),
+        )
+        return _HtmlView("".join(section.html_text for section in sections))
+
+
+@dataclass(frozen=True)
+class ResolvedCircuitCampaign:
+    results: tuple[ResolvedCircuitResult, ...]
+
+    @property
+    def status(self) -> str:
+        return "PASS" if all(item.status == "PASS" for item in self.results) else "NOT_EVALUABLE"
+
+    def show_all_results(self) -> _HtmlView:
+        rows = []
+        for item in self.results:
+            c11 = item.stage("fit_c11").result or {}
+            t1 = item.stage("evaluate_t1").result or {}
+            rows.append(
+                (
+                    item.run_id,
+                    item.status,
+                    c11.get("normalized_complex_rmse", "—"),
+                    t1.get("minimum_finite_t1_s", "—"),
+                )
+            )
+        return _HtmlView(
+            f"<h2>Circuit campaign · {self.status}</h2>"
+            + _html_table(("Run", "Status", "C11 RMSE", "Minimum finite T1 (s)"), rows)
+        )
+
+
+def resolve_circuit_result(run_dir: Path | str) -> ResolvedCircuitResult:
+    root = Path(run_dir).resolve()
+    stages = {
+        name: _resolve_stage_directory(root, name)
+        for name in STAGE_ORDER
+    }
+    return ResolvedCircuitResult(root, stages)
+
+
+def resolve_circuit_campaign(run_dirs: Sequence[Path | str]) -> ResolvedCircuitCampaign:
+    if isinstance(run_dirs, (str, Path)):
+        raise RuntimeContractError("Circuit campaign requires a sequence of run directories.")
+    paths = tuple(Path(path).resolve() for path in run_dirs)
+    if not paths or len(set(paths)) != len(paths):
+        raise RuntimeContractError("Circuit campaign requires unique explicit run directories.")
+    return ResolvedCircuitCampaign(tuple(resolve_circuit_result(path) for path in paths))
+
+
+def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
+    stage_dir = run_dir / "stages" / stage
+    receipt_path = stage_dir / "circuit-workbench-run-receipt.v1.json"
+    request_path = stage_dir / "circuit-workbench-run-request.v1.json"
+    try:
+        if not receipt_path.is_file() or not request_path.is_file():
+            raise RuntimeContractError("sealed request/receipt pair is absent")
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        request_bytes = request_path.read_bytes()
+        request = json.loads(request_bytes)
+        if receipt.get("schema") != RECEIPT_SCHEMA or request.get("schema") != REQUEST_SCHEMA:
+            raise RuntimeContractError("request or receipt schema mismatches")
+        if request.get("action") != stage:
+            raise RuntimeContractError("request action does not match stage directory")
+        if receipt.get("stage") != stage:
+            raise RuntimeContractError("receipt stage does not match stage directory")
+        if request.get("run_id") != run_dir.name or receipt.get("run_id") != run_dir.name:
+            raise RuntimeContractError("request or receipt run_id mismatches the run directory")
+        for name in ("lifecycle_state", "data_classification"):
+            if receipt.get(name) != request.get(name):
+                raise RuntimeContractError(f"receipt {name} mismatches the request")
+        receipt_body = dict(receipt)
+        receipt_hash = receipt_body.pop("canonical_sha256", None)
+        if receipt_hash != _fingerprint(receipt_body):
+            raise RuntimeContractError("receipt canonical hash mismatches")
+        request_body = dict(request)
+        fingerprint = request_body.pop("fingerprint_sha256", None)
+        if fingerprint != _fingerprint(request_body):
+            raise RuntimeContractError("request fingerprint mismatches")
+        if (
+            receipt.get("request_fingerprint_sha256") != fingerprint
+            or receipt.get("request_sha256") != _sha256(request_bytes)
+        ):
+            raise RuntimeContractError("receipt does not bind the durable request")
+        durable_path = Path(str(receipt.get("request_path", ""))).resolve()
+        if durable_path != request_path:
+            raise RuntimeContractError("receipt request path is not the stage request")
+        plan = _mapping(request.get("plan"), "stage plan")
+        plan_body = dict(plan)
+        plan_hash = plan_body.pop("canonical_sha256", None)
+        if plan_hash != _fingerprint(plan_body) or receipt.get("plan_sha256") != plan_hash:
+            raise RuntimeContractError("plan identity mismatches")
+        runtime = _mapping(request.get("runtime"), "stage runtime")
+        for receipt_key, request_key in (
+            ("python_runtime_source_sha256", "python_package_source_sha256"),
+            ("runner_tree_sha256", "runner_tree_sha256"),
+            ("core_tree_sha256", "core_tree_sha256"),
+            ("julia_executable_sha256", "julia_executable_sha256"),
+        ):
+            if receipt.get(receipt_key) != runtime.get(request_key):
+                raise RuntimeContractError(f"receipt runtime identity {receipt_key} mismatches")
+        for name, artifact in _mapping(request.get("artifacts", {}), "artifacts").items():
+            binding = _mapping(artifact, f"artifact {name}")
+            path = Path(str(binding.get("path", "")))
+            if not path.is_file() or _sha256(path.read_bytes()) != binding.get("source_sha256"):
+                raise RuntimeContractError(f"bound artifact '{name}' is missing or changed")
+        if receipt.get("artifact_bindings") != request.get("artifacts", {}):
+            raise RuntimeContractError("receipt artifact bindings mismatch the request")
+        upstream_receipts = _mapping(
+            request.get("upstream_receipts", {}), "upstream receipts"
+        )
+        if set(upstream_receipts) != set(STAGE_DEPENDENCIES[stage]):
+            raise RuntimeContractError("stage has invalid upstream dependencies")
+        for upstream_name, expected in upstream_receipts.items():
+            upstream_path = run_dir / "stages" / upstream_name / "circuit-workbench-run-receipt.v1.json"
+            if not upstream_path.is_file():
+                raise RuntimeContractError(f"upstream receipt '{upstream_name}' is absent")
+            upstream = json.loads(upstream_path.read_text(encoding="utf-8"))
+            if upstream.get("canonical_sha256") != expected:
+                raise RuntimeContractError(f"upstream receipt '{upstream_name}' identity mismatches")
+        result = receipt.get("result")
+        if result is not None and receipt.get("output_sha256") != _fingerprint(result):
+            raise RuntimeContractError("receipt result hash mismatches")
+        produced = receipt.get("produced_artifacts", {})
+        for name, artifact in _mapping(produced, "produced artifacts").items():
+            declaration = _mapping(artifact, f"produced artifact {name}")
+            relative = Path(str(declaration.get("path", "")))
+            path = (stage_dir / relative).resolve()
+            if (
+                relative.is_absolute()
+                or not path.is_relative_to(stage_dir.resolve())
+                or not path.is_file()
+                or _sha256(path.read_bytes()) != declaration.get("sha256")
+            ):
+                raise RuntimeContractError(f"produced artifact '{name}' is missing or changed")
+        status = str(receipt.get("status", "NOT_EVALUABLE"))
+        if status != "PASS":
+            failure = receipt.get("failure")
+            return ResolvedCircuitStage(stage, receipt_path, receipt, status, str(failure))
+        return ResolvedCircuitStage(stage, receipt_path, receipt, status)
+    except Exception as error:
+        return ResolvedCircuitStage(stage, receipt_path, {}, "NOT_EVALUABLE", str(error))
+
+
+def _python_stage_receipt(
+    request: Mapping[str, Any],
+    request_path: Path,
+    result: Mapping[str, Any] | None,
+    *,
+    durable_request_path: Path,
+    durable_stage_dir: Path,
+    failure: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    runtime = _mapping(request.get("runtime"), "request runtime")
+    plan = _mapping(request.get("plan"), "request plan")
+    produced = _mapping(result.get("produced_artifacts", {}), "produced artifacts") if result else {}
+    for name, artifact in produced.items():
+        declaration = _mapping(artifact, f"produced artifact {name}")
+        relative = Path(str(declaration.get("path", "")))
+        source = request_path.parent / relative
+        if relative.is_absolute() or not source.is_file():
+            raise RuntimeContractError(f"Python stage artifact '{name}' is absent.")
+        if declaration.get("sha256") != _sha256(source.read_bytes()):
+            raise RuntimeContractError(f"Python stage artifact '{name}' hash mismatches.")
+        target = (durable_stage_dir / relative).resolve()
+        if not target.is_relative_to(durable_stage_dir.resolve()):
+            raise RuntimeContractError(f"Python stage artifact '{name}' escapes its stage.")
+    receipt: dict[str, Any] = {
+        "schema": RECEIPT_SCHEMA,
+        "stage": request["action"],
+        "run_id": request["run_id"],
+        "request_fingerprint_sha256": request["fingerprint_sha256"],
+        "request_path": str(durable_request_path.resolve()),
+        "request_sha256": _sha256(request_path.read_bytes()),
+        "plan_sha256": plan["canonical_sha256"],
+        "python_runtime_source_sha256": runtime["python_package_source_sha256"],
+        "julia_version": None,
+        "runner_tree_sha256": runtime["runner_tree_sha256"],
+        "core_tree_sha256": runtime["core_tree_sha256"],
+        "julia_executable_sha256": runtime["julia_executable_sha256"],
+        "status": "FAILED" if failure else "PASS",
+        "lifecycle_state": request["lifecycle_state"],
+        "data_classification": request["data_classification"],
+        "promotion_eligible": False,
+        "artifact_bindings": request.get("artifacts", {}),
+        "produced_artifacts": produced,
+        "output_sha256": _fingerprint(result) if result is not None else None,
+        "ledger_sha256": None,
+        "completed_at": datetime.now(UTC).isoformat(),
+        "nonclaims": [
+            "no scientific acceptance claim",
+            "no promotion or publication claim",
+        ],
+        "result": result,
+        "failure": failure,
+    }
+    receipt["canonical_sha256"] = _fingerprint(receipt)
+    return receipt
 
 
 def _endpoint(value: EndpointRef) -> EndpointRef:
@@ -1894,3 +2605,286 @@ def _hashable(value: Any) -> Any:
     if isinstance(value, tuple | list):
         return [_hashable(item) for item in value]
     return value
+
+
+def _stage_artifact_path(stage: ResolvedCircuitStage, name: str) -> Path | None:
+    produced = stage.receipt.get("produced_artifacts", {})
+    if isinstance(produced, Mapping) and isinstance(produced.get(name), Mapping):
+        relative = Path(str(produced[name].get("path", "")))
+        path = (stage.path.parent / relative).resolve()
+        if not relative.is_absolute() and path.is_file():
+            return path
+    if name == "ledger" and stage.result is not None:
+        raw = stage.result.get("ledger_path")
+        if isinstance(raw, str) and Path(raw).is_file():
+            return Path(raw)
+    return None
+
+
+def _read_numeric_csv(path: Path) -> dict[str, list[float]]:
+    with path.open(newline="", encoding="utf-8") as stream:
+        reader = csv.DictReader(stream)
+        if not reader.fieldnames:
+            raise RuntimeContractError(f"CSV artifact has no header: {path}")
+        result = {name: [] for name in reader.fieldnames}
+        for row in reader:
+            for name in reader.fieldnames:
+                try:
+                    result[name].append(float(row[name]))
+                except (TypeError, ValueError) as error:
+                    raise RuntimeContractError(
+                        f"CSV artifact column '{name}' contains a nonnumeric value."
+                    ) from error
+    return result
+
+
+def _fit_c11_stage(
+    directory: Path,
+    responses: ResolvedCircuitStage,
+) -> Mapping[str, Any]:
+    source = _stage_artifact_path(responses, "response")
+    if source is None:
+        raise RuntimeContractError("fit_c11 requires the sealed response CSV.")
+    columns = _read_numeric_csv(source)
+    required = {
+        "frequency_hz",
+        "direct_s21_real",
+        "direct_s21_imag",
+        "hb_s21_real",
+        "hb_s21_imag",
+    }
+    if not required <= set(columns):
+        raise RuntimeContractError("Response CSV lacks the Direct/HB complex trace columns.")
+
+    import numpy as np
+    from scipy.optimize import least_squares
+
+    frequency = np.asarray(columns["frequency_hz"], dtype=float)
+    direct = np.asarray(columns["direct_s21_real"], dtype=float) + 1j * np.asarray(
+        columns["direct_s21_imag"], dtype=float
+    )
+    hb = np.asarray(columns["hb_s21_real"], dtype=float) + 1j * np.asarray(
+        columns["hb_s21_imag"], dtype=float
+    )
+    if len(frequency) < 3 or not np.all(np.diff(frequency) > 0):
+        raise RuntimeContractError("C11 requires a strictly increasing response grid.")
+    weight = np.linspace(0.0, 1.0, len(hb))
+    baseline = (1.0 - weight) * hb[0] + weight * hb[-1]
+    if np.any(np.abs(baseline) <= np.finfo(float).eps):
+        raise RuntimeContractError("C11 endpoint baseline crosses zero.")
+    normalized = hb / baseline
+
+    span = float(frequency[-1] - frequency[0])
+    lower = np.asarray([frequency[0] + 1.0, frequency[0] + 1.0, 1.0, 1.0])
+    upper = np.asarray([frequency[-1] - 1.0, frequency[-1] - 1.0, 2 * span, 4 * span])
+    anchors = [frequency[0] + fraction * span for fraction in (0.25, 0.5, 0.75)]
+    starts = [
+        np.asarray([fa, fb, span * coupling_scale, span * kappa_scale])
+        for fa, fb in (
+            (anchors[0], anchors[1]),
+            (anchors[1], anchors[2]),
+            (anchors[0], anchors[2]),
+        )
+        for coupling_scale in (0.01, 0.05, 0.2)
+        for kappa_scale in (0.01, 0.05, 0.2)
+    ]
+
+    def model(parameters: Any) -> Any:
+        fa_hz, fb_hz, coupling_hz, kappa_hz = parameters
+        omega = 2 * np.pi * frequency
+        delta_a = 2 * np.pi * fa_hz - omega
+        delta_b = 2 * np.pi * fb_hz - omega
+        coupling = 2 * np.pi * coupling_hz
+        kappa = 2 * np.pi * kappa_hz
+        return 1 - kappa * (2j * delta_b) / (
+            4 * coupling**2 + (2j * delta_a + kappa) * (2j * delta_b)
+        )
+
+    def residual(parameters: Any) -> Any:
+        delta = model(parameters) - normalized
+        return np.concatenate((delta.real, delta.imag))
+
+    results = [
+        least_squares(
+            residual,
+            start,
+            bounds=(lower, upper),
+            x_scale=np.asarray([span, span, span, span], dtype=float),
+            ftol=1.0e-12,
+            xtol=1.0e-12,
+            gtol=1.0e-12,
+            max_nfev=4000,
+        )
+        for start in starts
+    ]
+    successful = [result for result in results if result.success]
+    if not successful:
+        raise RuntimeContractError("All deterministic C11 least-squares starts failed.")
+    winner = min(successful, key=lambda result: result.cost)
+    parameters = np.asarray(winner.x, dtype=float)
+    fitted = model(parameters) * baseline
+    normalized_residual = fitted / baseline - normalized
+    output = directory / "response.csv"
+    with output.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(
+            (
+                "frequency_hz",
+                "direct_s21_real",
+                "direct_s21_imag",
+                "hb_s21_real",
+                "hb_s21_imag",
+                "c11_s21_real",
+                "c11_s21_imag",
+            )
+        )
+        writer.writerows(
+            zip(
+                frequency,
+                direct.real,
+                direct.imag,
+                hb.real,
+                hb.imag,
+                fitted.real,
+                fitted.imag,
+                strict=True,
+            )
+        )
+    artifact = {"path": output.name, "sha256": _sha256(output.read_bytes())}
+    return {
+        "status": "PASS",
+        "fit_input": "pump_off_hb_s21",
+        "phasor_convention": "exp(-i*omega*t)",
+        "baseline": "complex_linear_endpoints",
+        "parameters_hz": {
+            "fa_hz": float(parameters[0]),
+            "fb_hz": float(parameters[1]),
+            "coupling_hz": float(parameters[2]),
+            "kappa_hz": float(parameters[3]),
+        },
+        "normalized_complex_rmse": float(
+            np.sqrt(np.mean(np.abs(normalized_residual) ** 2))
+        ),
+        "normalized_maximum_absolute_residual": float(
+            np.max(np.abs(normalized_residual))
+        ),
+        "start_count": len(results),
+        "successful_start_count": len(successful),
+        "iterations": int(winner.nfev),
+        "produced_artifacts": {"response": artifact},
+    }
+
+
+def _build_report_stage(
+    directory: Path,
+    run_id: str,
+    upstream: Mapping[str, ResolvedCircuitStage],
+) -> Mapping[str, Any]:
+    pending_report = ResolvedCircuitStage(
+        "build_report", directory / "circuit-workbench-run-receipt.v1.json", {}, "PASS"
+    )
+    stages = {name: upstream.get(name, pending_report) for name in STAGE_ORDER}
+    result = ResolvedCircuitResult(Path(run_id), stages)
+    body = "".join(
+        section.html_text
+        for section in (
+            result.show_run_trustworthiness(),
+            result.show_optimization(),
+            result.show_winner_refinement(),
+            result.show_responses(),
+            result.show_c11_fit(),
+            result.show_qubit_t1(),
+            result.show_simulation_benchmark(),
+        )
+    )
+    report_path = directory / "report.html"
+    report_path.write_text(
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<style>body{font:14px system-ui;max-width:1200px;margin:auto;padding:24px}"
+        "table{border-collapse:collapse;width:100%;margin:12px 0 28px}"
+        "th,td{border:1px solid #ccc;padding:6px;text-align:left}"
+        "svg{width:100%;height:auto;background:#fff}</style></head><body>"
+        f"<h1>{html.escape(run_id)} Circuit Report</h1>{body}</body></html>",
+        encoding="utf-8",
+    )
+    manifest_path = directory / "report.json"
+    manifest = {
+        "schema": "circuit-workbench-report.v1",
+        "run_id": run_id,
+        "status": "PASS",
+        "source_receipts": {
+            name: stage.canonical_sha256 for name, stage in upstream.items()
+        },
+        "report": {"path": report_path.name, "sha256": _sha256(report_path.read_bytes())},
+        "nonclaims": ["no scientific acceptance claim", "no publication claim"],
+    }
+    _atomic_write(manifest_path, _canonical_bytes(manifest))
+    artifacts = {
+        "report": {"path": report_path.name, "sha256": _sha256(report_path.read_bytes())},
+        "manifest": {"path": manifest_path.name, "sha256": _sha256(manifest_path.read_bytes())},
+    }
+    return {"status": "PASS", "produced_artifacts": artifacts}
+
+
+def _html_table(headers: Sequence[str], rows: Sequence[Sequence[Any]]) -> str:
+    head = "".join(f"<th>{html.escape(str(value))}</th>" for value in headers)
+    body = "".join(
+        "<tr>" + "".join(f"<td>{html.escape(str(value))}</td>" for value in row) + "</tr>"
+        for row in rows
+    )
+    return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+
+
+def _svg_line_chart(
+    x_values: Sequence[float], y_values: Sequence[float], x_label: str, y_label: str
+) -> str:
+    return _svg_multi_line_chart(x_values, {y_label: y_values}, x_label, y_label)
+
+
+def _svg_multi_line_chart(
+    x_values: Sequence[float],
+    series: Mapping[str, Sequence[float]],
+    x_label: str,
+    y_label: str,
+) -> str:
+    x = [float(value) for value in x_values]
+    finite_series = {
+        name: [float(value) for value in values]
+        for name, values in series.items()
+        if len(values) == len(x)
+    }
+    all_y = [value for values in finite_series.values() for value in values if math.isfinite(value)]
+    finite_x = [value for value in x if math.isfinite(value)]
+    if not finite_x or not all_y:
+        return "<p>NOT_EVALUABLE: no finite plot samples.</p>"
+    x_min, x_max = min(finite_x), max(finite_x)
+    y_min, y_max = min(all_y), max(all_y)
+    x_span = x_max - x_min or 1.0
+    y_span = y_max - y_min or 1.0
+    colors = ("#2563eb", "#dc2626", "#16a34a", "#9333ea")
+    polylines = []
+    legends = []
+    for index, (name, values) in enumerate(finite_series.items()):
+        points = " ".join(
+            f"{60 + 880 * (x_value - x_min) / x_span:.2f},{20 + 320 * (y_max - y_value) / y_span:.2f}"
+            for x_value, y_value in zip(x, values, strict=True)
+            if math.isfinite(x_value) and math.isfinite(y_value)
+        )
+        color = colors[index % len(colors)]
+        polylines.append(
+            f"<polyline fill='none' stroke='{color}' stroke-width='2' points='{points}'/>"
+        )
+        legends.append(
+            f"<text x='{70 + index * 180}' y='380' fill='{color}'>{html.escape(name)}</text>"
+        )
+    return (
+        "<svg viewBox='0 0 1000 410' role='img' aria-label='"
+        + html.escape(f"{y_label} by {x_label}")
+        + "'><line x1='60' y1='340' x2='940' y2='340' stroke='#444'/>"
+        + "<line x1='60' y1='20' x2='60' y2='340' stroke='#444'/>"
+        + "".join(polylines)
+        + f"<text x='500' y='405' text-anchor='middle'>{html.escape(x_label)}</text>"
+        + f"<text x='15' y='180' transform='rotate(-90 15 180)' text-anchor='middle'>{html.escape(y_label)}</text>"
+        + "".join(legends)
+        + "</svg>"
+    )

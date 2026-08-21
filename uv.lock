@@ -1849,11 +1849,17 @@ name = "superconducting-circuits-runtime"
 version = "0.1.0"
 source = { editable = "core/python/runtime" }
 dependencies = [
+    { name = "numpy" },
     { name = "schemdraw" },
+    { name = "scipy" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "schemdraw", specifier = ">=0.21" }]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.2" },
+    { name = "schemdraw", specifier = ">=0.21" },
+    { name = "scipy", specifier = ">=1.15" },
+]
 
 [[package]]
 name = "traitlets"

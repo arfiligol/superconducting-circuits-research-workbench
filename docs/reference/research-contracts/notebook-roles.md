@@ -7,12 +7,12 @@ tags:
  - audience/team
  - sot/true
  - topic/research-contracts
-status: stable
+status: converging
 owner: docs-team
 audience: team
-scope: Contract-level Pluto and Python notebook responsibilities across circuit runtime, analysis, and quantum routes.
-version: v1.1.0
-last_updated: 2026-08-20
+scope: Contract-level Pluto and Python notebook responsibilities, including the converging staged Circuit Runtime boundary.
+version: v1.2.0
+last_updated: 2026-08-21
 updated_by: codex
 title: Notebook Roles
 description: Defines Pluto and Python notebook responsibilities for circuit execution, external-result analysis, quantum modeling, and pulse simulation.
@@ -40,19 +40,22 @@ Pluto may consume normalized external result packages, but it should not become 
 
 ## Python Notebook
 
-Python notebooks are the routine client for the accepted public circuit runtime
+Python notebooks are the routine client for the public circuit runtime
 and also own Python-native research exploration:
 
 - visible generic `CircuitPlan` assembly and consumer-owned circuit libraries
 - declarative artifact bindings, reduction, cared outputs, objective, exact
   Human-authorized Gates, variables, and optimizer controls
-- explicit `CircuitSim.evaluate()`, `optimize()`, and pure-Python `analyze()`
+- explicit `CircuitSim` stages: `optimize`, `refine_winner`,
+  `evaluate_responses`, `fit_c11`, `evaluate_t1`, and `build_report`
+- a visible `execute` or `resolve` value beside each stage call
+- pure-Python, read-only result, campaign, and report resolution
 
 - trace table, Touchstone, and Zarr ingestion sketches
 - scikit-rf-compatible inspection and conversion
 - fitting experiments before promotion to Python Analysis Core
 - scqubits, QuTiP, and qutip-qip studies
-- report evidence assembly
+- consumer-specific report interpretation
 
 Python notebooks may read local/exported/canonical data files directly for ad
 hoc analysis. Persistent application state mutations stay out of research
@@ -60,10 +63,18 @@ notebooks and use the application service contracts.
 
 ## Process Boundary
 
-The public runtime starts one Julia process for each complete `evaluate` action
-and one for the complete `optimize` search. Candidate and frequency-point work
-does not call back into Python. `analyze` verifies sealed evidence in pure Python
-and never starts Julia.
+`execute` performs one complete named stage. A Julia-backed stage starts exactly
+one Julia process for that action; candidate and frequency-point work never
+calls back into Python. Python-owned fit/report stages start none. `resolve` and
+the result/campaign/report readers are pure Python and read-only: they start no
+Julia process, recompute nothing, mutate nothing, and fail closed over absent,
+stale, incomplete, or identity-mismatched evidence.
+
+The notebook owns visible plan assembly and consumer declarations, not stage
+orchestration internals, identities, receipt writing, scientific calculations,
+or generic report construction. Each independent case should use an explicit
+run directory; campaign readers consume only the directories the notebook
+lists and never select a latest run.
 
 Python notebooks must not import `juliacall`, invoke Julia Core directly, build
 C/K/G, or call Schur helpers. Application execution remains a separate

@@ -7,15 +7,15 @@ tags:
  - audience/team
  - sot/true
  - topic/research-contracts
-status: accepted
+status: converging
 owner: docs-team
 audience: team
-scope: Accepted public Circuit Workbench runtime and Python-consumer boundary.
-version: v1.0.1
+scope: Converging staged-action extension to the accepted public Circuit Workbench runtime and Python-consumer boundary.
+version: v1.1.0
 last_updated: 2026-08-21
 updated_by: codex
 title: Circuit Runtime / Python Consumer
-description: Accepted V1 contract for visible Python circuit plans, Julia action execution, sealed evidence, and pure-Python analysis.
+description: Converging contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution.
 sidebar:
  label: Circuit Runtime / Python Consumer
  order: 45
@@ -23,41 +23,25 @@ sidebar:
 
 # Circuit Runtime / Python Consumer
 
-This page records the Human-accepted V1 consumer contract. Delivery is separate:
-the runtime implementation and generated API reference remain owned by the
-Workbench implementation package and must bind this contract before integration.
-
-Contract artifact SHA-256:
-`e1c2fc83c91a2fff94c4fd59f8bf919e69c2e3bf7ef8a2489874068f971e52ef`.
-The accepted source baseline is Workbench
-`f78b04f35f974c0f4fdaf4e60895df2c289c04f6`.
-
-## Bound Implementation Candidate
-
-Delivery remains `NOT_INTEGRATED`. The current implementation binding is
-[Workbench PR #32](https://github.com/arfiligol/superconducting-circuits-research-workbench/pull/32):
-
-| Identity | SHA |
-| --- | --- |
-| Base | `f78b04f35f974c0f4fdaf4e60895df2c289c04f6` |
-| Head | `182a1f1781b69a14cdc84fbeac07e98cd4eb59ae` |
-| Tree | `32d9e332bbcca3d0ddba34f6ed8147545aa87558` |
-| Base-to-head full-index binary diff SHA-256 | `5754aa010ecfbfa8d08cb889fd20222591bbeafb5c1e854a99c7ecf0e309b315` |
-
-This binding records delivery provenance only. It does not change the accepted
-public semantics below and does not claim integration, release, or deployment.
+The visible `CircuitPlan`, `CircuitSim`, source-bound request/receipt schemas,
+and one-process Julia boundary are integrated in Workbench
+`10ce1ab2c03baec24b3c972bf19028d4bfda4b88`. The staged action and resolver
+extension on this page is a `CONVERGING / NOT_INTEGRATED` candidate. It does
+not change the acceptance state of the already integrated plan and compiler
+foundation.
 
 ## Ownership Boundary
 
 | Owner | Owns |
 | --- | --- |
-| Workbench runtime | Public package and schemas; element/relation semantics; public component catalog; whole-plan compiler; Direct C/K/G; coordinate transforms; complete-complement Schur reduction; HB; optimizer execution; fingerprints and receipts. |
-| Consumer | Notebook source; visible `CircuitPlan`; consumer libraries; artifact bindings; reduction and cared outputs; objective; exact Human-authorized Gates; optimizer specification; run evidence. |
-| Root SCQ Design Kit / Human | Reusable scientific meaning, Design Targets, Gate authority, acceptance, and decision history. |
-| Layout and solver owners | Layout, geometry, materials, and solver artifacts consumed through sealed bindings. Workbench does not execute those solvers. |
+| Workbench runtime | Public package and schemas; visible generic plan/compiler; named-coordinate propagation; node ordering and passivity checks; complete-complement Schur and physical-quantity extraction; stage execution; automatic identities; immutable receipts; generic result and report readers. |
+| JosephsonCircuits.jl | Parse the compiled closed linear netlist and assemble the full-system numeric C/K/G matrices; execute the separate HB backend for S/Y/Z responses. |
+| Consumer | Notebook source; plan assembly; consumer libraries; artifact declarations; targets, objective meaning, reduction, exact Human-authorized Gates, variables, optimizer controls, stage parameters, and run locations. |
+| Host project / Human | Scientific meaning, Design Targets, Gate authority, acceptance, and decision history. |
+| Layout and solver owners | Layout, geometry, materials, and solver artifacts supplied through sealed bindings. Workbench does not execute those solvers. |
 
-Public examples remain with their public consumers. Private plans, libraries,
-inputs, and results remain with their private owner.
+Public examples remain with public consumers. Private plans, variables, targets,
+objectives, identities, artifacts, and evidence remain with their private owner.
 
 ## Public Surface
 
@@ -67,133 +51,160 @@ The distribution is `superconducting-circuits-runtime`; its import name is
 ```python
 from superconducting_circuits_runtime import (
     CircuitLibrary,
+    CircuitObjective,
     CircuitPlan,
     CircuitSim,
     GateSpec,
-    ObjectiveSpec,
     OptimizerSpec,
     ReductionSpec,
+    ResponseSpec,
+    T1Spec,
     VariableSpec,
     circuit_component,
+    resolve_circuit_campaign,
+    resolve_circuit_result,
 )
 ```
 
-Catalog components come from `superconducting_circuits_runtime.catalog`.
-Python analysis remains a separate package and is not a circuit-compute
-implementation.
+`CircuitPlan` remains the sole complete-plan container. It owns visible
+topology, parameters, connections, ports, and inspectable engineering and
+schematic intent. A `@circuit_component` factory may compose registered types,
+but it must seal a graph before Julia starts; it is never a candidate-evaluation
+callback. `plan.show()` validates and renders without Julia or a numerical
+evaluability claim.
 
-### Visible plan
+The plan does not own artifact bindings, reductions, targets, objective meaning,
+Gates, variables, optimizer settings, stage actions, receipts, or reporting.
 
-`CircuitPlan` is the sole complete-plan container. It owns topology, parameters,
-connections, ports, and inspectable engineering and schematic intent. Every
-placed object is an instance of a registered component type; a plan is not a
-dictionary, compiled netlist fragment, or design-specific subclass.
+## Objective And Artifact Declarations
 
-A `@circuit_component` factory may compose registered types, but it must seal a
-component/relationship graph before Julia starts. It cannot become a Python
-callback during compilation or candidate evaluation. `plan.show()` validates
-and renders through the schematic-export/Schemdraw path without starting Julia
-or claiming numerical evaluability.
+`CircuitObjective.from_targets(...)` is the typed consumer-facing builder for
+named cared outputs, target values, and weights. It compiles the mechanical
+relative-residual expression. It does not own or reinterpret target values,
+plan assembly, reductions, objective meaning, or Human Gates. Arbitrary Python
+callbacks are not accepted.
 
-The plan does **not** own artifact bindings, retained/eliminated coordinates,
-cared outputs, objective, Gates, variables, or optimizer settings. Those remain
-explicit consumer declarations on `CircuitSim`.
+`bind_artifact(...)` receives a path plus declared schema, units, and
+provenance. The runtime derives the file hash. Consumers do not hand-author an
+authoritative artifact hash or runtime-source hash.
 
-### Explicit stages and actions
+## Staged Actions
 
-```python
-sim = CircuitSim(run_root=RUN_ROOT, run_id=RUN_ID)
-sim.register_library(library)
-sim.set_plan(plan)
-sim.bind_artifact("q2d", q2d_artifact)
-sim.set_reduction(reduction)
-sim.set_objective(objective)
-sim.set_gates(gates)
-sim.set_variables(variables)
-sim.set_optimizer(optimizer)
+The candidate workflow is ordered:
 
-result = sim.evaluate(backend="direct")  # or "hb"
-search = sim.optimize()
-report = sim.analyze()
+```text
+optimize
+-> refine_winner
+-> evaluate_responses
+-> fit_c11
+-> evaluate_t1
+-> build_report
 ```
 
-There is no generic `run()` dispatcher and no notebook-facing Schur helper.
-The notebook keeps `WORKFLOW_ACTION = "evaluate" | "optimize" | "analyze"`
-visible and calls the matching explicit method.
+This sequence expresses stage dependencies; it is not a new scientific Gate.
+The public methods are:
 
-| Action | Execution | Result |
-| --- | --- | --- |
-| `evaluate(backend="direct" | "hb")` | One Julia process for the complete evaluation. Julia compiles the whole plan, binds artifacts, transforms, reduces, evaluates, and seals evidence. | Typed Python handle plus run receipt. |
-| `optimize()` | One Julia process for the complete search. Candidate and frequency-point work never calls back into Python. | Result, deterministic progress ledger, winner identity, and run receipt. |
-| `analyze()` | Pure Python. It verifies the receipt, fingerprint, and artifact hashes and loads existing evidence. | Python result/report objects; optional consumer-owned presentation. |
+```python
+optimization = sim.optimize(action="execute")
+refinement = sim.refine_winner(action="execute")
+responses = sim.evaluate_responses(action="execute")
+c11 = sim.fit_c11(action="execute")
+t1 = sim.evaluate_t1(action="execute")
+report = sim.build_report(action="execute")
+```
 
-`analyze()` never starts Julia and never silently recomputes. Missing,
-incomplete, stale, or identity-mismatched evidence is an error.
+Every method accepts exactly one semantic action mode:
 
-## Declarative Scientific Inputs
+| Mode | Contract |
+| --- | --- |
+| `execute` | Perform the complete named stage and seal its result. A stage that requires Julia starts exactly one Julia process for that action; it never spawns Julia per candidate or per frequency point. Python-owned fit/report stages start no Julia process. |
+| `resolve` | Pure read-only verification and loading of the existing sealed stage. It starts no Julia process, performs no recomputation or mutation, and returns `NOT_EVALUABLE` when the stage is absent, stale, incomplete, corrupt, or identity-mismatched. |
 
-- `ReductionSpec` uses coordinate references from registered instances, ordered
-  transforms, an explicit retained set, and
-  `eliminated="complete_complement"`. Julia constructs and executes the
-  reduction.
-- `ObjectiveSpec` is a restricted serializable expression graph over named
-  cared outputs. Arbitrary Python callbacks are forbidden.
-- `GateSpec` is separate from objective cost. Only an active Gate carrying an
-  exact Human authority reference may reject, stop, or promote. Inactive
-  proposals are diagnostics only.
-- `VariableSpec` binds physical parameter references and transforms.
-- `OptimizerSpec` records algorithm, seed, resources, and Human-authorized
-  search controls. Resources may affect throughput, not deterministic candidate
-  order, cost ledger, tie breaking, or result identity for a fixed request.
+There is no generic `run()` dispatcher and no compatibility path through the
+superseded `evaluate` / `optimize` / `analyze` workflow. Stage dependencies
+must resolve to complete `PASS` receipts before downstream execution.
 
-## Language and Evidence Boundary
+Reusable components guarantee that named retainable coordinates survive from
+the plan to matrix indices. JosephsonCircuits.jl parses the compiled closed
+linear netlist and assembles full-system C/K/G. Workbench then performs the
+declared complete-complement Schur reduction and extracts roots, transfer zero,
+exchange, and linewidth quantities on the retained coordinates. Their physical
+meaning remains with the consumer's accepted scientific authority.
 
-Python is the routine client; Julia is the sole compiler and circuit-compute
-authority. Python seals one action request and fingerprint. Julia writes into a
-temporary action directory and atomically seals the receipt only after declared
-artifacts exist and their hashes match.
+`refine_winner` owns the declared N-to-2N cared-output comparison. Response
+evaluation owns Direct and pump-off HB traces. Pump-off HB is a separate
+response/cross-check backend, not a second solver inside the Direct targeted-
+Schur optimization loop. `fit_c11` consumes the sealed HB
+response, and `evaluate_t1` owns the HB-derived effective admittance and T1
+surface. These are runtime mechanics; their consumer-supplied values and
+scientific meaning remain outside Workbench ownership.
 
-Small control documents use canonical JSON. Large arrays use sealed files or
-Zarr references and do not travel through HTTP JSON. V1 has three top-level
-schemas:
+## Identity, Receipts, And Failure
+
+Python seals one request for each stage. The runtime automatically derives and
+binds exact artifact, request, plan, Python Runtime, Julia Runner, Julia Core,
+Julia executable, dependency-receipt, output-artifact, and output identities.
+
+Each immutable stage receipt binds:
+
+- request and plan identities;
+- exact upstream receipt identities;
+- input artifacts and runtime sources;
+- produced artifacts and their hashes;
+- completion or failure state; and
+- explicit nonclaims.
+
+A receipt seals only after the complete stage and declared artifact validation
+succeed. Schema mismatch, missing or changed input, stale dependency, corrupt or
+partial output, runtime identity mismatch, or failed execution remains closed;
+no stale result, placeholder, permissive fallback, or fake success is returned.
+An accepted scientific contract may separately define a typed
+`NOT_EVALUABLE` result. Programming, schema, transport, and unexpected runtime
+defects abort and seal failure where the request is valid enough to do so.
+
+The existing public schema names remain:
 
 | Schema | Owns |
 | --- | --- |
-| `circuit-workbench-plan.v1` | Libraries, component instances, values/units/roles, relations, ports, coordinate references, engineering graph, schematic intent, and canonical plan hash. |
-| `circuit-workbench-run-request.v1` | Action, plan identity, bindings, reduction, cared outputs, objective, Gates, variables, optimizer/resources, runtime source pin, and fingerprint. |
-| `circuit-workbench-run-receipt.v1` | Request/fingerprint identity, runtime identities, source/output hashes, lifecycle and data classification, status/failure, progress identity, result references, and nonclaims. |
+| `circuit-workbench-plan.v1` | Libraries, component instances, values/units/roles, relations, ports, coordinate references, engineering graph, schematic intent, and canonical plan identity. |
+| `circuit-workbench-run-request.v1` | Named stage, plan and input bindings, consumer declarations, dependencies, runtime identities, and request fingerprint. |
+| `circuit-workbench-run-receipt.v1` | Request, plan, runtime, dependency and artifact identities; status/failure; result; and nonclaims. |
 
-Consumer notebooks must not import `juliacall`, invoke Julia Core directly,
-construct C/K/G, call Schur helpers, or require the desktop application or its
-managed numeric store. The existing Julia-to-Python Analysis Bridge remains
-one-way analysis infrastructure; it is not inverted into this runtime.
+## Resolve And Reports
 
-## Fail-Closed Contract
+```python
+result = resolve_circuit_result(RUN_DIR)
+result.show_all_results()
 
-The runtime fails when a component, pin, coordinate, relation, parameter, unit,
-library identity, artifact binding, or declarative reference is missing or
-ambiguous; when a plan cannot be sealed; when evidence is absent, stale,
-malformed, incomplete, or hash-mismatched; when an active Gate lacks exact Human
-authority; or when compilation, evaluation, optimization, resume, or receipt
-sealing fails.
+campaign = resolve_circuit_campaign(EXPLICIT_RUN_DIRS)
+campaign.show_all_results()
+```
 
-A scientific contract may define a typed `NOT_EVALUABLE` candidate result.
-Programming, schema, transport, and unexpected runtime defects instead abort.
-No placeholder value, stale result, permissive fallback, or fake success is
-allowed.
+`resolve_circuit_result`, `resolve_circuit_campaign`, stage `resolve` actions,
+and report-reading surfaces are pure Python and read-only. They never start
+Julia, recompute, mutate, select a latest run, accept scientific meaning, or
+fall back to incomplete evidence. A campaign preserves each explicitly supplied
+run and its missing or failed state.
 
-## Supersession and Nonclaims
+`build_report(action="execute")` is different: it seals the report stage and
+its generated artifacts from already verified upstream receipts. Reading that
+report through a resolver remains read-only. Generic result surfaces include
+run trustworthiness, optimizer history and winner residuals, N-to-2N
+comparison, Direct/HB/C11 responses, C11 fit parameters and residuals,
+effective admittance/T1, timing, and provenance.
 
-This contract supersedes general statements that restrict Python notebooks to
-exported-result inspection or require the application service/Julia Runner for
-routine circuit evaluation. The application remains a separate persisted async
-surface with its own service, runner, authorization, storage, and publication
-contracts.
+## Language And Privacy Boundary
 
-This package does not migrate D3, add a D3 compatibility shim, accept a private
-component/objective/Gate/result, change a Design Target, or authorize
-publication. Existing D3 bytes remain unchanged and replayable until a separate
-owner package proves equivalence and receives an explicit pin-switch decision.
+Python is the routine client; Julia is the sole plan compiler and
+circuit-compute authority. Consumer notebooks must not import `juliacall`, call
+Julia Core directly, construct C/K/G, call Schur helpers, hand-write receipts,
+or duplicate report calculations. The application service and async Julia
+Runner remain a separate product execution surface.
+
+This public contract describes only generic APIs and stage behavior. It does
+not publish or accept a private component library, plan, variable, target,
+objective, Gate, run identity, artifact, result, migration, compatibility shim,
+or design-specific workflow.
 
 ## Related
 

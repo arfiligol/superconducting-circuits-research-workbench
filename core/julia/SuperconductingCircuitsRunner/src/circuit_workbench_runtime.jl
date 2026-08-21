@@ -103,6 +103,21 @@ function _cw_atomic_json(path::AbstractString, value)
     return path
 end
 
+function _cw_atomic_csv(path::AbstractString, header, rows)
+    mkpath(dirname(path))
+    temporary = string(path, ".tmp.", getpid())
+    try
+        open(temporary, "w") do io
+            println(io, join(header, ','))
+            foreach(row -> println(io, join(row, ',')), rows)
+        end
+        mv(temporary, path; force=true)
+    finally
+        isfile(temporary) && rm(temporary; force=true)
+    end
+    return path
+end
+
 function _cw_json(value)
     if value isa AbstractDict
         keys_sorted = sort!(String.(collect(keys(value))))
@@ -911,10 +926,12 @@ function _cw_direct_cared_outputs(compiled, objective, reduction; targeted_conte
         return Dict{String,Float64}(name => bundle[quantity] for (quantity, name) in quantities)
     end
     isnothing(compiled) && error("Direct cared outputs require a compiled circuit.")
-    model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(compiled)
     uses_schur = any(==("schur_dynamic_stiffness_abs"), kinds)
     uses_closed = any(==("closed_mode_frequency_hz"), kinds)
     uses_schur && uses_closed && error("A direct request cannot mix closed-mode and explicit Schur cared-output kinds.")
+    model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
+        uses_closed ? _cw_direct_closed_compiled(compiled) : compiled,
+    )
     if uses_schur
         all(==("schur_dynamic_stiffness_abs"), kinds) || error("Unsupported direct cared-output kind.")
         capacitance, inverse_inductance, conductance, terminals = _cw_reduction_model(model, reduction)
@@ -938,7 +955,9 @@ function _cw_direct_cared_outputs(compiled, objective, reduction; targeted_conte
         "closed_mode_frequency_hz requires zero conductance; use explicit C/K/G Schur cared outputs for a lossy Plan.",
     )
     reduced = SuperconductingCircuitsCore.reduce_free_charge_coordinates(
-        SuperconductingCircuitsCore.extract_linear_nodal_model(compiled),
+        SuperconductingCircuitsCore.extract_linear_nodal_model(
+            _cw_direct_closed_compiled(compiled),
+        ),
     )
     modes = SuperconductingCircuitsCore.solve_generalized_modes(reduced)
     result = Dict{String,Float64}()
@@ -1299,6 +1318,364 @@ function _cw_optimize(request, ledger_path)
     )
 end
 
+function _cw_parameter_overrides(request)
+    raw = _cw_dict(get(request, "parameter_overrides", Dict{String,Any}()), "request.parameter_overrides")
+    return Dict{String,Float64}(
+        String(name) => _cw_number(value, "parameter override $(name)")
+        for (name, value) in raw
+    )
+end
+
+function _cw_validate_upstream_receipts(request, request_path)
+    stages_root = dirname(dirname(abspath(request_path)))
+    action = _cw_string(get(request, "action", nothing), "request.action")
+    upstream = _cw_dict(
+        get(request, "upstream_receipts", Dict{String,Any}()),
+        "request.upstream_receipts",
+    )
+    required = Dict(
+        "optimize" => Set{String}(),
+        "refine_winner" => Set(["optimize"]),
+        "evaluate_responses" => Set(["optimize", "refine_winner"]),
+        "evaluate_t1" => Set(["optimize", "fit_c11"]),
+    )[action]
+    Set(keys(upstream)) == required || error("Stage $(action) has invalid upstream dependencies.")
+    for (stage, raw_expected) in upstream
+        expected = _cw_string(raw_expected, "upstream receipt identity")
+        path = joinpath(stages_root, stage, "circuit-workbench-run-receipt.v1.json")
+        isfile(path) || error("Upstream receipt $(stage) is absent.")
+        receipt = _cw_dict(JSON3.read(read(path, String)), "upstream receipt $(stage)")
+        actual = _cw_string(get(receipt, "canonical_sha256", nothing), "upstream canonical_sha256")
+        actual == expected || error("Upstream receipt $(stage) identity mismatches.")
+        body = Dict{String,Any}(receipt)
+        delete!(body, "canonical_sha256")
+        actual == _cw_fingerprint(body) || error("Upstream receipt $(stage) is corrupt.")
+        get(receipt, "status", nothing) == "PASS" || error("Upstream stage $(stage) is not PASS.")
+    end
+    return nothing
+end
+
+function _cw_refine_winner(request)
+    coarse = _cw_dict(get(request, "coarse_outputs", nothing), "request.coarse_outputs")
+    tolerance = _cw_number(get(request, "relative_tolerance", nothing), "request.relative_tolerance")
+    tolerance >= 0 || error("relative_tolerance must be nonnegative.")
+    fine = _cw_evaluate(request; overrides=_cw_parameter_overrides(request))
+    get(fine, "status", nothing) == "PASS" || return Dict{String,Any}(
+        "status" => "NOT_EVALUABLE",
+        "fine" => fine,
+        "relative_tolerance" => tolerance,
+    )
+    fine_outputs = _cw_dict(get(fine, "cared_outputs", nothing), "fine cared outputs")
+    Set(keys(coarse)) == Set(keys(fine_outputs)) || error(
+        "N and 2N cared-output ids must match exactly.",
+    )
+    changes = Dict{String,Float64}()
+    for name in sort!(collect(keys(coarse)))
+        coarse_value = _cw_number(coarse[name], "coarse cared output $(name)")
+        fine_value = _cw_number(fine_outputs[name], "fine cared output $(name)")
+        changes[name] = iszero(coarse_value) ? (iszero(fine_value) ? 0.0 : Inf) :
+            abs(fine_value - coarse_value) / abs(coarse_value)
+    end
+    maximum_change = maximum(values(changes))
+    return Dict{String,Any}(
+        "status" => maximum_change <= tolerance ? "PASS" : "REJECTED_BY_GATE",
+        "relative_tolerance" => tolerance,
+        "maximum_relative_change" => maximum_change,
+        "relative_changes" => changes,
+        "coarse_outputs" => coarse,
+        "fine_outputs" => fine_outputs,
+        "fine" => fine,
+    )
+end
+
+function _cw_plan_port(plan, id)
+    ports = _cw_array(get(plan, "ports", Any[]), "plan.ports")
+    matches = [
+        (index=index, data=_cw_dict(raw, "plan port"))
+        for (index, raw) in enumerate(ports)
+        if get(_cw_dict(raw, "plan port"), "id", nothing) == id
+    ]
+    length(matches) == 1 || error("Plan port $(id) must resolve exactly once.")
+    return only(matches)
+end
+
+function _cw_port_node_index(compiled, model, port)
+    endpoint = _cw_dict(get(port, "endpoint", nothing), "plan port endpoint")
+    component_id = _cw_string(get(endpoint, "component_id", nothing), "port endpoint component_id")
+    pin = _cw_string(get(endpoint, "pin_name", nothing), "port endpoint pin_name")
+    node = get(compiled.node_map, (:external_node, "cw_$(component_id)_$(pin)"), nothing)
+    node isa AbstractString || error("Plan port $(component_id).$(pin) lacks a compiled node.")
+    index = findfirst(==(node), model.node_names)
+    isnothing(index) && error("Plan port $(component_id).$(pin) lacks a C/K node.")
+    return index
+end
+
+function _cw_direct_closed_compiled(compiled)
+    netlist = Any[
+        row for row in compiled.netlist
+        if !(row isa Tuple && !isempty(row) &&
+             (startswith(string(first(row)), "P") || startswith(string(first(row)), "R_port_")))
+    ]
+    return SuperconductingCircuitsCore.JosephsonCompiledCircuit(
+        netlist=netlist,
+        component_values=compiled.component_values,
+        node_map=compiled.node_map,
+        component_map=compiled.component_map,
+        line_tap_map=compiled.line_tap_map,
+        hb_intent_summary=compiled.hb_intent_summary,
+        source_slot_map=compiled.source_slot_map,
+        observable_request_map=compiled.observable_request_map,
+        hb_validation_summary=compiled.hb_validation_summary,
+        warnings=compiled.warnings,
+        provenance=compiled.provenance,
+        metadata=compiled.metadata,
+    )
+end
+
+function _cw_trace(result, family, label, expected_length)
+    traces = get(result.traces, family, nothing)
+    traces isa AbstractDict || error("HB result lacks $(family) traces.")
+    trace = get(traces, label, nothing)
+    trace isa AbstractVector && length(trace) == expected_length || error(
+        "HB result lacks complete $(label) trace.",
+    )
+    return ComplexF64.(trace)
+end
+
+function _cw_write_response_csv(path, frequencies, direct, hb)
+    return _cw_atomic_csv(
+        path,
+        ("frequency_hz", "direct_s21_real", "direct_s21_imag", "hb_s21_real", "hb_s21_imag"),
+        (
+            (
+                frequencies[index], real(direct[index]), imag(direct[index]),
+                real(hb[index]), imag(hb[index]),
+            )
+            for index in eachindex(frequencies)
+        ),
+    )
+end
+
+function _cw_evaluate_responses(request, stage_dir)
+    spec = _cw_dict(get(request, "response", nothing), "request.response")
+    frequencies = Float64[
+        _cw_number(value, "response frequency")
+        for value in _cw_array(get(spec, "frequency_hz", nothing), "response.frequency_hz")
+    ]
+    length(frequencies) >= 3 && all(>(0), frequencies) && all(diff(frequencies) .> 0) ||
+        error("Response grid must be strictly increasing, positive, and contain at least three points.")
+    plan = _cw_dict(get(request, "plan", nothing), "request.plan")
+    input_id = _cw_string(get(spec, "input_port", nothing), "response.input_port")
+    output_id = _cw_string(get(spec, "output_port", nothing), "response.output_port")
+    input = _cw_plan_port(plan, input_id)
+    output = _cw_plan_port(plan, output_id)
+    input.index != output.index || error("Response input and output ports must differ.")
+    overrides = _cw_parameter_overrides(request)
+    compiled = _cw_build_plan(plan; overrides=overrides)
+
+    closed = _cw_direct_closed_compiled(compiled)
+    model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(closed)
+    ports = [
+        (index=index, data=_cw_dict(raw, "plan port"))
+        for (index, raw) in enumerate(_cw_array(get(plan, "ports", Any[]), "plan.ports"))
+    ]
+    selector = zeros(Float64, length(model.node_names), length(ports))
+    impedances = Float64[]
+    for port in ports
+        selector[_cw_port_node_index(compiled, model, port.data), port.index] = 1.0
+        push!(impedances, _cw_number(get(port.data, "resistance_ohm", nothing), "port resistance"))
+    end
+    direct = ComplexF64[
+        SuperconductingCircuitsCore.matched_port_response(
+            model.capacitance,
+            model.inverse_inductance,
+            2pi * frequency,
+            selector,
+            impedances,
+        ).scattering[output.index, input.index]
+        for frequency in frequencies
+    ]
+
+    port_indices = collect(eachindex(ports))
+    pump_frequency = _cw_number(
+        get(spec, "pump_frequency_hz", nothing),
+        "response.pump_frequency_hz",
+    )
+    hb_result = SuperconductingCircuitsCore.run_frequency_sweep(
+        compiled.netlist,
+        compiled.component_values,
+        frequencies;
+        pump_frequencies_hz=[pump_frequency],
+        sources=[(mode=(1,), port=input.index, current=0.0)],
+        port_indices=port_indices,
+        returnS=true,
+        returnZ=false,
+        returnQE=false,
+        returnCM=false,
+    )
+    hb = conj.(_cw_trace(
+        hb_result,
+        :zero_mode_s,
+        "S$(output.index)$(input.index)",
+        length(frequencies),
+    ))
+    path = joinpath(stage_dir, "response.csv")
+    _cw_write_response_csv(path, frequencies, direct, hb)
+    return Dict{String,Any}(
+        "status" => "PASS",
+        "grid" => Dict(
+            "start_hz" => first(frequencies),
+            "stop_hz" => last(frequencies),
+            "points" => length(frequencies),
+        ),
+        "ports" => Dict("input" => input_id, "output" => output_id),
+        "phasor_translation" => "project_exp_minus_iwt=conj(solver_output)",
+        "maximum_direct_hb_complex_error" => maximum(abs.(direct .- hb)),
+        "produced_artifacts" => Dict(
+            "response" => Dict("path" => "response.csv", "sha256" => _cw_sha256(path)),
+        ),
+    )
+end
+
+function _cw_hb_z_stack(result, ports, count)
+    modes = get(result.traces, :modes, nothing)
+    modes isa AbstractVector || error("HB result lacks mode metadata.")
+    zero_mode = findfirst(mode -> mode isa AbstractVector && all(iszero, mode), modes)
+    isnothing(zero_mode) && error("HB result lacks a zero mode.")
+    token = join(string.(Int.(modes[zero_mode])), ',')
+    traces = get(result.traces, :z_parameter_mode, nothing)
+    traces isa AbstractDict || error("HB result lacks Z-parameter traces.")
+    values = Array{ComplexF64,3}(undef, length(ports), length(ports), count)
+    for (row, output_port) in enumerate(ports), (column, input_port) in enumerate(ports)
+        label = "om=$(token)|op=$(output_port)|im=$(token)|ip=$(input_port)"
+        trace = get(traces, label, nothing)
+        trace isa AbstractVector && length(trace) == count || error(
+            "HB result lacks complete zero-mode $(label) trace.",
+        )
+        values[row, column, :] = conj.(ComplexF64.(trace))
+    end
+    return values
+end
+
+function _cw_write_t1_csv(path, frequencies, y_eff, capacitance, t1, conditions)
+    return _cw_atomic_csv(
+        path,
+        (
+            "frequency_hz", "y_eff_real_s", "y_eff_imag_s", "c_q_dynamic_f",
+            "t1_s", "kron_condition_number",
+        ),
+        (
+            (
+                frequencies[index], real(y_eff[index]), imag(y_eff[index]),
+                capacitance[index], t1[index], conditions[index],
+            )
+            for index in eachindex(frequencies)
+        ),
+    )
+end
+
+function _cw_evaluate_t1(request, stage_dir)
+    spec = _cw_dict(get(request, "t1", nothing), "request.t1")
+    frequencies = Float64[
+        _cw_number(value, "T1 frequency")
+        for value in _cw_array(get(spec, "frequency_hz", nothing), "t1.frequency_hz")
+    ]
+    length(frequencies) >= 3 && all(>(0), frequencies) && all(diff(frequencies) .> 0) ||
+        error("T1 grid must be strictly increasing, positive, and contain at least three points.")
+    plan = _cw_dict(get(request, "plan", nothing), "request.plan")
+    feedline_ids = String[
+        _cw_string(value, "t1.feedline_port")
+        for value in _cw_array(get(spec, "feedline_ports", nothing), "t1.feedline_ports")
+    ]
+    probe_ids = String[
+        _cw_string(value, "t1.qubit_probe_port")
+        for value in _cw_array(get(spec, "qubit_probe_ports", nothing), "t1.qubit_probe_ports")
+    ]
+    length(feedline_ids) == 2 && length(probe_ids) == 2 || error(
+        "T1 requires two feedline and two qubit probe ports.",
+    )
+    selected = [_cw_plan_port(plan, id) for id in (feedline_ids..., probe_ids...)]
+    indices = [item.index for item in selected]
+    length(unique(indices)) == 4 || error("T1 ports must be unique.")
+    compiled = _cw_build_plan(plan; overrides=_cw_parameter_overrides(request))
+    result = SuperconductingCircuitsCore.run_frequency_sweep(
+        compiled.netlist,
+        compiled.component_values,
+        frequencies;
+        pump_frequencies_hz=[_cw_number(get(spec, "pump_frequency_hz", nothing), "t1.pump_frequency_hz")],
+        sources=[(mode=(1,), port=indices[1], current=0.0)],
+        port_indices=indices,
+        returnS=false,
+        returnZ=true,
+        returnQE=false,
+        returnCM=false,
+    )
+    z_stack = _cw_hb_z_stack(result, indices, length(frequencies))
+    y_stack = similar(z_stack)
+    for frequency_index in eachindex(frequencies)
+        y_stack[:, :, frequency_index] = inv(z_stack[:, :, frequency_index])
+    end
+    for local_index in (3, 4)
+        resistance = _cw_number(
+            get(selected[local_index].data, "resistance_ohm", nothing),
+            "probe resistance",
+        )
+        y_stack[local_index, local_index, :] .-= 1 / resistance
+    end
+    weights = Float64[
+        _cw_number(value, "t1.common_mode_weight")
+        for value in _cw_array(get(spec, "common_mode_weights", nothing), "t1.common_mode_weights")
+    ]
+    length(weights) == 2 && isapprox(sum(weights), 1.0; rtol=0.0, atol=1.0e-9) ||
+        error("T1 common-mode weights must contain two values summing to one.")
+    transform = Matrix{ComplexF64}(I, 4, 4)
+    transform[3, :] .= 0
+    transform[3, 3] = weights[1]
+    transform[3, 4] = weights[2]
+    transform[4, :] .= 0
+    transform[4, 3] = 1
+    transform[4, 4] = -1
+    inverse_transform = inv(transform)
+    y_eff = Vector{ComplexF64}(undef, length(frequencies))
+    conditions = Vector{Float64}(undef, length(frequencies))
+    for frequency_index in eachindex(frequencies)
+        transformed = transpose(inverse_transform) * y_stack[:, :, frequency_index] * inverse_transform
+        eliminated = transformed[1:3, 1:3]
+        conditions[frequency_index] = cond(eliminated)
+        isfinite(conditions[frequency_index]) || error("T1 eliminated admittance block is singular.")
+        y_eff[frequency_index] = transformed[4, 4] -
+            only(transformed[4, 1:3]' * (eliminated \ transformed[1:3, 4]))
+    end
+    omega = 2pi .* frequencies
+    capacitance = Vector{Float64}(undef, length(frequencies))
+    capacitance[1] = -0.5 * (imag(y_eff[2]) - imag(y_eff[1])) / (omega[2] - omega[1])
+    capacitance[end] = -0.5 * (imag(y_eff[end]) - imag(y_eff[end - 1])) /
+        (omega[end] - omega[end - 1])
+    for index in 2:(length(frequencies) - 1)
+        capacitance[index] = -0.5 * (imag(y_eff[index + 1]) - imag(y_eff[index - 1])) /
+            (omega[index + 1] - omega[index - 1])
+    end
+    t1 = Float64[
+        real(value) > 0 && capacitance[index] > 0 ? capacitance[index] / real(value) : NaN
+        for (index, value) in enumerate(y_eff)
+    ]
+    finite_t1 = filter(isfinite, t1)
+    path = joinpath(stage_dir, "t1.csv")
+    _cw_write_t1_csv(path, frequencies, y_eff, capacitance, t1, conditions)
+    return Dict{String,Any}(
+        "status" => "PASS",
+        "method" => "pump-off HB Z -> probe-shunt-compensated Y -> common/differential transform -> complete-complement q",
+        "sample_count" => length(t1),
+        "finite_sample_count" => length(finite_t1),
+        "not_evaluable_sample_count" => length(t1) - length(finite_t1),
+        "minimum_finite_t1_s" => isempty(finite_t1) ? nothing : minimum(finite_t1),
+        "maximum_kron_condition_number" => maximum(conditions),
+        "produced_artifacts" => Dict(
+            "t1" => Dict("path" => "t1.csv", "sha256" => _cw_sha256(path)),
+        ),
+    )
+end
+
 function _cw_receipt(request, status, request_path; result=nothing, failure=nothing, ledger_sha=nothing)
     plan = _cw_dict(get(request, "plan", nothing), "request.plan")
     runtime = _cw_dict(get(request, "runtime", nothing), "request.runtime")
@@ -1312,8 +1689,19 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
     )
     output_sha = isnothing(result) ? nothing : _cw_fingerprint(result)
     ledger_sha = isnothing(result) ? ledger_sha : get(result, "ledger_sha256", nothing)
+    produced_artifacts = isnothing(result) ? Dict{String,Any}() : _cw_dict(
+        get(result, "produced_artifacts", Dict{String,Any}()),
+        "result.produced_artifacts",
+    )
+    if !isnothing(ledger_sha)
+        produced_artifacts["ledger"] = Dict(
+            "path" => "circuit-workbench-optimization-ledger.v1.json",
+            "sha256" => ledger_sha,
+        )
+    end
     receipt = Dict{String,Any}(
         "schema" => _CW_RECEIPT_SCHEMA,
+        "stage" => _cw_string(get(request, "action", nothing), "request.action"),
         "run_id" => _cw_string(get(request, "run_id", nothing), "request.run_id"),
         "request_fingerprint_sha256" => _cw_string(get(request, "fingerprint_sha256", nothing), "request.fingerprint_sha256"),
         "request_path" => abspath(request_path),
@@ -1329,6 +1717,7 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
         "data_classification" => data_classification,
         "promotion_eligible" => false,
         "artifact_bindings" => get(request, "artifacts", Dict{String,Any}()),
+        "produced_artifacts" => produced_artifacts,
         "output_sha256" => output_sha,
         "ledger_sha256" => ledger_sha,
         "nonclaims" => [
@@ -1355,7 +1744,8 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
     try
         get(request, "schema", nothing) == _CW_REQUEST_SCHEMA || error("Request schema is not $(_CW_REQUEST_SCHEMA).")
         action = _cw_string(get(request, "action", nothing), "request.action")
-        action in ("evaluate", "optimize") || error("Unsupported Circuit Workbench action $(action).")
+        action in ("optimize", "refine_winner", "evaluate_responses", "evaluate_t1") ||
+            error("Unsupported Circuit Workbench action $(action).")
         lifecycle_state = _cw_string(get(request, "lifecycle_state", nothing), "request.lifecycle_state")
         lifecycle_state in ("CONVERGING", "ACCEPTED", "STABILIZED") || error(
             "Request lifecycle_state must be CONVERGING, ACCEPTED, or STABILIZED.",
@@ -1369,22 +1759,31 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
         delete!(request_without_fingerprint, "fingerprint_sha256")
         actual = _cw_fingerprint(request_without_fingerprint)
         expected == actual || error("Request fingerprint_sha256 mismatches canonical request bytes: expected=$(expected) actual=$(actual).")
-        basename(dirname(abspath(request_path))) == _cw_string(get(request, "run_id", nothing), "request.run_id") || error("Request run_id does not match its standard durable path.")
+        basename(dirname(dirname(dirname(abspath(request_path))))) ==
+            _cw_string(get(request, "run_id", nothing), "request.run_id") ||
+            error("Request run_id does not match its standard staged path.")
         _cw_validate_runtime_identity(request)
         plan = _cw_dict(get(request, "plan", nothing), "request.plan")
         plan_hash = get(plan, "canonical_sha256", nothing)
         plan_body = Dict{String,Any}(plan)
         delete!(plan_body, "canonical_sha256")
         plan_hash == _cw_fingerprint(plan_body) || error("Plan canonical_sha256 mismatches canonical Plan bytes.")
-        result = if action == "evaluate"
-            _cw_evaluate(request)
-        else
+        _cw_validate_upstream_receipts(request, request_path)
+        started_ns = time_ns()
+        result = if action == "optimize"
             _cw_validate_existing_optimization_receipt!(receipt_path, request)
             _cw_optimize(
                 request, joinpath(dirname(receipt_path), "circuit-workbench-optimization-ledger.v1.json"),
             )
+        elseif action == "refine_winner"
+            _cw_refine_winner(request)
+        elseif action == "evaluate_responses"
+            _cw_evaluate_responses(request, dirname(receipt_path))
+        else
+            _cw_evaluate_t1(request, dirname(receipt_path))
         end
-        status = if action == "evaluate"
+        result["wall_seconds"] = (time_ns() - started_ns) / 1.0e9
+        status = if action != "optimize"
             result["status"]
         elseif !isnothing(result["best"])
             "PASS"
