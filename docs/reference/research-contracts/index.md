@@ -32,7 +32,7 @@ These contracts keep the four research routes connected without mixing implement
 | [External FEM Result Contract](external-fem-result-contract.md) | accepted input artifact families and normalized trace semantics |
 | [Equivalent Circuit Model Contract](equivalent-circuit-model-contract.md) | fitted model fields, metrics, provenance, and handoff expectations |
 | [Quantum Model Boundary](quantum-model-boundary.md) | scqubits, QuTiP, qutip-qip, and isolated Julia dynamics placement rules |
-| [Circuit Runtime / Python Consumer](circuit-runtime-python-consumer.md) | accepted staged `execute`/`resolve` actions, immutable receipts, typed objective builder, and read-only result/campaign/report resolution |
+| [Circuit Runtime / Python Consumer](circuit-runtime-python-consumer.md) | stabilized staged `execute`/`resolve` actions, immutable receipts, typed objective builder, and read-only result/campaign/report resolution |
 | [Notebook Roles](notebook-roles.md) | Pluto and Python notebook responsibilities |
 
 ## Route Fit

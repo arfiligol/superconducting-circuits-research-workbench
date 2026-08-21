@@ -10,12 +10,12 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Accepted staged-action contract for the public Circuit Workbench runtime and Python-consumer boundary.
+scope: Stabilized staged-action contract for the public Circuit Workbench runtime and Python-consumer boundary.
 version: v1.1.0
 last_updated: 2026-08-22
 updated_by: codex
 title: Circuit Runtime / Python Consumer
-description: Accepted contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution.
+description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution.
 sidebar:
  label: Circuit Runtime / Python Consumer
  order: 45
@@ -212,7 +212,7 @@ or design-specific workflow.
 
 - Scope: staged Circuit Runtime execution, resolution, receipt, and report
   contract described on this page.
-- State: `ACCEPTED`.
+- State: `STABILIZED`.
 - State changed: 2026-08-22.
 - Human acceptance: explicitly accepted the exact V1 packet for candidate
   `0b5ae925ea65b1006e3381c1220a45809c76b940`, tree
@@ -220,6 +220,14 @@ or design-specific workflow.
   `771c821d7158d8f012647b08af99f6263705edf8f0f0de08980e80812fc9dfa7`.
 - Supersedes: `ObjectiveSpec` and the generic `evaluate` / `analyze` workflow.
 - Retained compatibility or migration: none.
+- Stabilization evidence: Workbench `168132a843df1ed4eb5e2ffbd45f0d214c96fc83`
+  freezes the six-stage execution and read-only resolution contract, receipt
+  and artifact tamper rejection, dependency-chain validation, N-to-2N
+  comparison, composite parameter binding, Direct matched-response internal-G
+  propagation,
+  partial report/campaign resolution, and removal of the superseded public
+  surface. Runtime, Core, Runner, documentation integrity, and all four hosted
+  PR checks passed at that revision.
 - Test policy: `stabilization_tests_authorized`.
 - Delivery status: Workbench PR #37, `NOT_INTEGRATED`.
 - Unresolved semantic decisions: none.
