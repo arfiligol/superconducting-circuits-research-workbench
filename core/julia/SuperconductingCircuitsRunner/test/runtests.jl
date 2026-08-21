@@ -109,6 +109,12 @@ end
     @test !isdefined(SuperconductingCircuitsRunner, removed_name)
 end
 
+@testset "Circuit Workbench exposes only the staged action entry" begin
+    @test isdefined(SuperconductingCircuitsRunner, :execute_circuit_workbench_action)
+    @test !isdefined(SuperconductingCircuitsRunner, :evaluate)
+    @test !isdefined(SuperconductingCircuitsRunner, :analyze)
+end
+
 @testset "real task kinds fail clearly until implemented" begin
     mktempdir() do dir
         task_kinds = [

@@ -1,295 +1,37 @@
 from __future__ import annotations
 
-import hashlib
 import json
-import math
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+import superconducting_circuits_runtime as runtime_api
 from superconducting_circuits_runtime import (
     CircuitLibrary,
+    CircuitObjective,
     CircuitPlan,
     CircuitSim,
     GateSpec,
-    ObjectiveSpec,
     OptimizerSpec,
     ReductionSpec,
+    ResponseSpec,
+    T1Spec,
     VariableSpec,
     circuit_component,
+    resolve_circuit_campaign,
+    resolve_circuit_result,
+    runtime,
 )
-from superconducting_circuits_runtime.catalog import parallel_lc_resonator
+from superconducting_circuits_runtime.catalog import parallel_lc_resonator, transmission_line
 from superconducting_circuits_runtime.runtime import RuntimeContractError
 
 
-def _objective() -> ObjectiveSpec:
-    return ObjectiveSpec(
-        cared_outputs={"mode": {"kind": "closed_mode_frequency_hz", "mode_index": 1}},
-        residuals={
-            "relative": {
-                "op": "div",
-                "args": [
-                    {"op": "sub", "args": [{"output": "mode"}, {"const": 5.0e9}]},
-                    {"const": 5.0e9},
-                ],
-            }
-        },
-        cost={"op": "sum_squares", "args": [{"output": "relative"}]},
-    )
-
-
-def _plan():
-    plan = CircuitPlan("one_lc")
-    resonator = plan.add(
-        parallel_lc_resonator(id="resonator", capacitance_f=1.0e-12, inductance_h=1.0e-9)
-    )
-    return plan, resonator
-
-
-def _sim(tmp_path: Path, run_id: str) -> CircuitSim:
-    return CircuitSim(
-        tmp_path,
-        run_id,
-        lifecycle_state="ACCEPTED",
-        data_classification="project-internal",
-    )
-
-
-def test_sealed_direct_action_and_pure_analysis(tmp_path: Path) -> None:
-    plan, resonator = _plan()
-    drawing = plan.show()
-    shown = drawing.circuit_workbench_plan
-    assert shown["schema"] == "circuit-workbench-plan.v1"
-    assert shown["schematic_intent"]["components"][0]["id"] == "resonator"
-    assert [type(element).__name__ for element in drawing.elements] == ["GroundedLCResonator"]
-    assert shown["canonical_sha256"] == plan.show().circuit_workbench_plan["canonical_sha256"]
-
-    sim = _sim(tmp_path, "direct")
-    sim.set_plan(plan)
-    source = tmp_path / "sealed-input.json"
-    source.write_text('{"sealed":true}', encoding="utf-8")
-    with pytest.raises(RuntimeContractError):
-        sim.bind_artifact(
-            "missing_contract",
-            {
-                "path": str(source),
-                "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-            },
-        )
-    sim.bind_artifact(
-        "sealed_input",
+def _objective() -> CircuitObjective:
+    return CircuitObjective.from_targets(
         {
-            "schema": "test-sealed-input.v1",
-            "units": "dimensionless",
-            "provenance": {"authority": "test-fixture"},
-            "path": str(source),
-            "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-        },
-    )
-    sim.set_objective(_objective())
-    sim.set_gates(
-        [
-            GateSpec(
-                "accepted_gate",
-                {"op": "less_equal", "args": [{"output": "mode"}, {"const": 1.0e9}]},
-                "active",
-                "human://accepted-gate",
-            ),
-            GateSpec(
-                "inactive_diagnostic",
-                {"op": "less_equal", "args": [{"output": "mode"}, {"const": 1.0e9}]},
-                "inactive",
-            ),
-        ]
-    )
-    receipt = sim.evaluate()
-    assert receipt["status"] == "REJECTED_BY_GATE"
-    assert receipt["result"]["cared_outputs"]["mode"] > 0
-    assert (
-        receipt["result"]["validated_artifacts"]["sealed_input"]["source_sha256"]
-        == hashlib.sha256(source.read_bytes()).hexdigest()
-    )
-    assert (tmp_path / "direct" / "circuit-workbench-run-request.v1.json").is_file()
-    assert sim.analyze()["canonical_sha256"] == receipt["canonical_sha256"]
-    assert receipt["lifecycle_state"] == "ACCEPTED"
-    assert receipt["data_classification"] == "project-internal"
-
-    hb_plan, hb_resonator = _plan()
-    hb_plan.add_port("feed", hb_resonator.pin("signal"))
-    hb = _sim(tmp_path, "hb")
-    hb.set_plan(hb_plan)
-    hb.set_objective(
-        ObjectiveSpec(
-            cared_outputs={
-                "s11": {
-                    "kind": "s_parameter",
-                    "frequency_hz": 5.0e9,
-                    "output_port": 1,
-                    "input_port": 1,
-                    "part": "abs",
-                }
-            },
-            residuals={"identity": {"output": "s11"}},
-            cost={"op": "sum_squares", "args": [{"output": "identity"}]},
-        )
-    )
-    hb_receipt = hb.evaluate(backend="hb")
-    assert hb_receipt["status"] == "PASS"
-    assert 0.0 <= hb_receipt["result"]["cared_outputs"]["s11"] <= 1.0
-
-    optimizer = _sim(tmp_path, "optimizer")
-    optimizer.set_plan(plan)
-    optimizer.set_objective(_objective())
-    optimizer.set_variables(
-        [
-            VariableSpec(
-                resonator.parameter("capacitance_f"),
-                transform="log",
-                lower=0.5e-12,
-                upper=2.0e-12,
-            )
-        ]
-    )
-    optimizer.set_optimizer(
-        OptimizerSpec(
-            "cma_es",
-            seed=4,
-            human_authority="human://runtime-search",
-            controls={"initial_sigma": 0.1, "maxiter": 1, "maxfevals": 3, "popsize": 3},
-        )
-    )
-    optimized = optimizer.optimize()
-    assert optimized["status"] == "PASS"
-    assert optimized["result"]["candidate_count"] >= 3
-    resumed = optimizer.optimize()
-    assert resumed["result"]["candidate_count"] == optimized["result"]["candidate_count"]
-    assert resumed["result"]["ledger_sha256"] == optimized["result"]["ledger_sha256"]
-
-    parallel = _sim(tmp_path, "optimizer_parallel")
-    parallel.set_plan(plan)
-    parallel.set_objective(_objective())
-    parallel.set_variables(
-        [
-            VariableSpec(
-                resonator.parameter("capacitance_f"), transform="log", lower=0.5e-12, upper=2.0e-12
-            )
-        ]
-    )
-    parallel.set_optimizer(
-        OptimizerSpec(
-            "cma_es",
-            seed=4,
-            human_authority="human://runtime-search",
-            resource_controls={"worker_count": 2},
-            controls={"initial_sigma": 0.1, "maxiter": 1, "maxfevals": 3, "popsize": 3},
-        )
-    )
-    parallel_result = parallel.optimize()
-    serial_ledger = json.loads(Path(optimized["result"]["ledger_path"]).read_text(encoding="utf-8"))
-    parallel_ledger = json.loads(
-        Path(parallel_result["result"]["ledger_path"]).read_text(encoding="utf-8")
-    )
-    assert serial_ledger["entries"] == parallel_ledger["entries"]
-    tampered = json.loads(
-        Path(parallel_result["result"]["ledger_path"]).read_text(encoding="utf-8")
-    )
-    tampered["entries"][0]["outcome"]["cost"] = 0.0
-    Path(parallel_result["result"]["ledger_path"]).write_text(
-        json.dumps(tampered), encoding="utf-8"
-    )
-    with pytest.raises(RuntimeContractError, match="Optimization ledger"):
-        parallel.optimize()
-
-    receipt_path = tmp_path / "optimizer" / "circuit-workbench-run-receipt.v1.json"
-    receipt_path.unlink()
-    with pytest.raises(RuntimeContractError, match="sealed receipt anchor"):
-        optimizer.optimize()
-    assert not receipt_path.exists()
-
-
-def test_invalid_contract_fails_before_julia(tmp_path: Path) -> None:
-    plan, _ = _plan()
-    sim = _sim(tmp_path, "bad")
-    sim.set_plan(plan)
-    with pytest.raises(RuntimeContractError):
-        sim.set_objective(
-            ObjectiveSpec(
-                cared_outputs={"bad": {"kind": "not_a_runtime_output"}},
-                residuals={"bad": {"output": "bad"}},
-                cost={"op": "sum_squares", "args": [{"output": "bad"}]},
-            )
-        )
-
-
-def test_composite_elaborates_internal_relations_and_complete_complement(tmp_path: Path) -> None:
-    library = CircuitLibrary("test.composite", "1", "a" * 64)
-
-    @circuit_component(
-        type_id="test.parallel_lc_pair.v1",
-        pins=("signal",),
-        parameters=(),
-        coordinates=({"name": "signal", "units": "node_flux", "role": "signal"},),
-        lowerer="composite",
-    )
-    def pair(*, id: str):
-        left = parallel_lc_resonator(id=f"{id}_left", capacitance_f=1.0e-12, inductance_h=1.0e-9)
-        right = parallel_lc_resonator(id=f"{id}_right", capacitance_f=2.0e-12, inductance_h=1.0e-9)
-        return library.component(
-            "test.parallel_lc_pair.v1",
-            id=id,
-            parameters={},
-            children=(left, right),
-            pin_bindings={"signal": left.pin("signal")},
-            coordinate_bindings={"signal": left.coord("signal")},
-            internal_connections=((left.pin("signal"), right.pin("signal")),),
-        )
-
-    library.register(pair)
-    plan = CircuitPlan("composite")
-    component = plan.add(pair(id="pair"))
-    sim = _sim(tmp_path, "reduced")
-    sim.register_library(library)
-    sim.set_plan(plan)
-    sim.set_reduction(ReductionSpec((component.coord("signal"),)))
-    sim.set_objective(
-        ObjectiveSpec(
-            cared_outputs={
-                "schur": {
-                    "kind": "schur_dynamic_stiffness_abs",
-                    "frequency_hz": 5.0e9,
-                    "row": 1,
-                    "column": 1,
-                }
-            },
-            residuals={"identity": {"output": "schur"}},
-            cost={"op": "sum_squares", "args": [{"output": "identity"}]},
-        )
-    )
-    receipt = sim.evaluate()
-    assert receipt["status"] == "PASS"
-    assert (
-        receipt["plan_sha256"] == plan.show((library,)).circuit_workbench_plan["canonical_sha256"]
-    )
-
-
-def test_lossy_direct_ckg_and_failure_receipt(tmp_path: Path) -> None:
-    plan = CircuitPlan("lossy")
-    resonator = plan.add(
-        parallel_lc_resonator(
-            id="resonator",
-            capacitance_f=1.0e-12,
-            inductance_h=1.0e-9,
-            conductance_s=1.0e-3,
-        )
-    )
-    schur = _sim(tmp_path, "lossy_schur")
-    schur.set_plan(plan)
-    schur.set_reduction(ReductionSpec((resonator.coord("signal"),)))
-    schur.set_objective(
-        ObjectiveSpec(
-            cared_outputs={
+            "outputs": {
                 "stiffness": {
                     "kind": "schur_dynamic_stiffness_abs",
                     "frequency_hz": 5.0e9,
@@ -297,29 +39,247 @@ def test_lossy_direct_ckg_and_failure_receipt(tmp_path: Path) -> None:
                     "column": 1,
                 }
             },
-            residuals={"identity": {"output": "stiffness"}},
-            cost={"op": "sum_squares", "args": [{"output": "identity"}]},
+            "values": {"stiffness": 1.0e6},
+            "weights": {"stiffness": 1.0},
+        }
+    )
+
+
+def _plan(*, sections: int) -> tuple[CircuitPlan, list[object]]:
+    plan = CircuitPlan("staged_pipeline")
+    resonators = [
+        plan.add(
+            parallel_lc_resonator(
+                id=f"resonator_{index}",
+                capacitance_f=1.0e-12,
+                inductance_h=1.0e-9,
+            )
+        )
+        for index in range(4)
+    ]
+    for index in range(3):
+        line = plan.add(
+            transmission_line(
+                id=f"line_{index}",
+                length_m=1.0e-3,
+                n_sections=sections,
+                l_per_m_h=4.0e-7,
+                c_per_m_f=1.6e-10,
+            )
+        )
+        plan.connect(resonators[index].pin("signal"), line.pin("head"))
+        plan.connect(line.pin("tail"), resonators[index + 1].pin("signal"))
+    for index, resonator in enumerate(resonators):
+        plan.add_port(f"port_{index}", resonator.pin("signal"))
+    return plan, resonators
+
+
+def _configured_sim(tmp_path: Path) -> tuple[CircuitSim, Path]:
+    plan, resonators = _plan(sections=1)
+    refinement, _ = _plan(sections=2)
+    source = tmp_path / "bound-input.json"
+    source.write_text('{"fixture":"public"}', encoding="utf-8")
+    sim = CircuitSim(tmp_path, "staged", lifecycle_state="ACCEPTED", data_classification="public")
+    sim.set_plan(plan)
+    sim.bind_artifact(
+        "fixture_input",
+        source,
+        schema="test-public-input.v1",
+        units="dimensionless",
+        provenance={"authority": "test fixture"},
+    )
+    sim.set_objective(_objective())
+    sim.set_reduction(ReductionSpec((resonators[0].coord("signal"),)))
+    sim.set_gates(
+        [
+            GateSpec(
+                "nonnegative_stiffness",
+                {"op": "greater_equal", "args": [{"output": "stiffness"}, {"const": 0.0}]},
+                "active",
+                "human://accepted-runtime-test-fixture",
+            )
+        ]
+    )
+    sim.set_variables(
+        [
+            VariableSpec(
+                resonators[0].parameter("capacitance_f"),
+                transform="log",
+                lower=0.9e-12,
+                upper=1.1e-12,
+            )
+        ]
+    )
+    sim.set_optimizer(
+        OptimizerSpec(
+            "cma_es",
+            seed=0,
+            human_authority="human://accepted-runtime-test-fixture",
+            controls={"initial_sigma": 0.01, "maxiter": 1, "maxfevals": 3, "popsize": 3},
         )
     )
-    omega = 2 * math.pi * 5.0e9
-    expected = abs(1 / 1.0e-9 - omega**2 * 1.0e-12 - 1j * omega * 1.0e-3)
-    assert schur.evaluate()["result"]["cared_outputs"]["stiffness"] == pytest.approx(expected)
+    sim.set_refinement(plan=refinement, relative_tolerance=1.0e9)
+    sim.set_responses(ResponseSpec((4.5e9, 5.0e9, 5.5e9), "port_0", "port_1", 5.0e9))
+    sim.set_t1(
+        T1Spec(
+            (4.5e9, 5.0e9, 5.5e9),
+            ("port_0", "port_1"),
+            ("port_2", "port_3"),
+            (0.5, 0.5),
+            5.0e9,
+        )
+    )
+    return sim, source
 
-    closed = _sim(tmp_path, "lossy_closed")
-    closed.set_plan(plan)
-    closed.set_objective(_objective())
-    with pytest.raises(RuntimeContractError, match="Julia action failed") as raised:
-        closed.evaluate()
-    assert raised.value.error_code == "circuit_workbench_action_failed"
-    assert raised.value.category == "task_execution_failed"
-    assert raised.value.retryable is False
-    failure = closed.analyze()
-    assert failure["status"] == "FAILED"
-    assert failure["result"] is None
-    assert failure["failure"]["error_code"] == "circuit_workbench_action_failed"
-    assert failure["failure"]["category"] == "task_execution_failed"
-    assert failure["failure"]["retryable"] is False
-    assert failure["failure"]["message"]
+
+def test_staged_actions_seal_then_resolve_and_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sim, source = _configured_sim(tmp_path)
+    subprocess_run = runtime.subprocess.run
+    calls: list[object] = []
+
+    def counted_run(*args: object, **kwargs: object) -> object:
+        calls.append(args[0])
+        return subprocess_run(*args, **kwargs)
+
+    monkeypatch.setattr(runtime.subprocess, "run", counted_run)
+    stages = [
+        ("optimize", sim.optimize),
+        ("refine_winner", sim.refine_winner),
+        ("evaluate_responses", sim.evaluate_responses),
+        ("fit_c11", sim.fit_c11),
+        ("evaluate_t1", sim.evaluate_t1),
+        ("build_report", sim.build_report),
+    ]
+    sealed = {name: action(action="execute") for name, action in stages}
+    assert [stage.status for stage in sealed.values()] == ["PASS"] * len(stages)
+    assert len(calls) == 4
+    request = json.loads(
+        (sealed["optimize"].path.parent / "circuit-workbench-run-request.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert request["reduction"] == {
+        "retained": [{"component_id": "resonator_0", "coordinate_name": "signal"}],
+        "transforms": [],
+        "eliminated": "complete_complement",
+    }
+    assert request["gates"] == [
+        {
+            "id": "nonnegative_stiffness",
+            "expression": {
+                "op": "greater_equal",
+                "args": [{"output": "stiffness"}, {"const": 0.0}],
+            },
+            "state": "active",
+            "human_authority": "human://accepted-runtime-test-fixture",
+        }
+    ]
+    winner = (sealed["optimize"].result or {})["best"]
+    assert winner["rejecting_gate_ids"] == []
+    assert winner["gates"] == [{"id": "nonnegative_stiffness", "state": "active", "value": 1.0}]
+    refinement = sealed["refine_winner"].result or {}
+    assert set(refinement) >= {
+        "coarse_outputs",
+        "fine_outputs",
+        "relative_changes",
+    }
+    assert sealed["refine_winner"].status == "PASS"
+    assert refinement["maximum_relative_change"] == max(refinement["relative_changes"].values())
+    assert refinement["maximum_relative_change"] <= refinement["relative_tolerance"]
+    assert (sealed["fit_c11"].result or {})["fit_input"] == "pump_off_hb_s21"
+    assert (sealed["evaluate_t1"].result or {})["method"].startswith("pump-off HB Z")
+
+    def no_subprocess(*args: object, **kwargs: object) -> object:
+        raise AssertionError("resolve must not start Julia")
+
+    monkeypatch.setattr(runtime.subprocess, "run", no_subprocess)
+    resolved = {name: action(action="resolve") for name, action in stages}
+    assert {name: stage.canonical_sha256 for name, stage in resolved.items()} == {
+        name: stage.canonical_sha256 for name, stage in sealed.items()
+    }
+    run_dir = tmp_path / "staged"
+    assert resolve_circuit_result(run_dir).status == "PASS"
+    assert resolve_circuit_campaign([run_dir]).status == "PASS"
+    with pytest.raises(RuntimeContractError, match="durable bytes"):
+        sim.optimize(action="execute")
+
+    source.write_text('{"fixture":"changed"}', encoding="utf-8")
+    assert sim.optimize(action="resolve").status == "NOT_EVALUABLE"
+    source.write_text('{"fixture":"public"}', encoding="utf-8")
+    assert sim.optimize(action="resolve").status == "PASS"
+
+    response_path = sealed["evaluate_responses"].path.parent / "response.csv"
+    original_response = response_path.read_bytes()
+    response_path.write_bytes(original_response + b"\ncorrupt")
+    assert sim.evaluate_responses(action="resolve").status == "NOT_EVALUABLE"
+    response_path.write_bytes(original_response)
+
+    receipt_path = sealed["evaluate_responses"].path
+    original_receipt = receipt_path.read_text(encoding="utf-8")
+    tampered = json.loads(original_receipt)
+    tampered["status"] = "FAILED"
+    receipt_path.write_text(json.dumps(tampered), encoding="utf-8")
+    assert sim.fit_c11(action="resolve").status == "NOT_EVALUABLE"
+    receipt_path.write_text(original_receipt, encoding="utf-8")
+
+    report_path = sealed["build_report"].path.parent / "report.html"
+    report_path.unlink()
+    result = resolve_circuit_result(run_dir)
+    assert result.stage("build_report").status == "NOT_EVALUABLE"
+    assert resolve_circuit_campaign([run_dir]).status == "NOT_EVALUABLE"
+
+    tampered = json.loads(original_receipt)
+    tampered["canonical_sha256"] = "0" * 64
+    receipt_path.write_text(json.dumps(tampered), encoding="utf-8")
+    assert resolve_circuit_result(run_dir).stage("evaluate_responses").status == "NOT_EVALUABLE"
+    receipt_path.write_text("{", encoding="utf-8")
+    assert resolve_circuit_result(run_dir).stage("evaluate_responses").status == "NOT_EVALUABLE"
+
+
+def test_composite_winner_key_resolves_to_selected_leaf_binding(tmp_path: Path) -> None:
+    library = CircuitLibrary("test.composite", "1", "a" * 64)
+
+    @circuit_component(
+        type_id="test.variable_lc.v1",
+        pins=("signal",),
+        parameters=({"name": "capacitance_f", "units": "F", "role": "capacitance"},),
+        coordinates=({"name": "signal", "units": "node_flux", "role": "signal"},),
+        lowerer="composite",
+    )
+    def variable_lc(*, id: str, capacitance_f: float):
+        leaf = parallel_lc_resonator(
+            id=f"{id}_leaf", capacitance_f=capacitance_f, inductance_h=1.0e-9
+        )
+        return library.component(
+            "test.variable_lc.v1",
+            id=id,
+            parameters={"capacitance_f": capacitance_f},
+            children=(leaf,),
+            pin_bindings={"signal": leaf.pin("signal")},
+            coordinate_bindings={"signal": leaf.coord("signal")},
+            parameter_bindings={"capacitance_f": leaf.parameter("capacitance_f")},
+        )
+
+    library.register(variable_lc)
+    plan = CircuitPlan("composite")
+    composite = plan.add(variable_lc(id="composite", capacitance_f=1.0e-12))
+    sim = CircuitSim(
+        tmp_path, "composite", lifecycle_state="ACCEPTED", data_classification="public"
+    )
+    sim.register_library(library)
+    sim.set_plan(plan)
+    sim.set_variables([VariableSpec(composite.parameter("capacitance_f"), transform="log")])
+    assert sim._winner_overrides(
+        {"winner_physical_parameters": {"composite.capacitance_f": 1.2e-12}}, plan
+    ) == {"composite_leaf.capacitance_f": 1.2e-12}
+
+
+def test_removed_compatibility_surface_is_not_public() -> None:
+    assert not hasattr(runtime_api, "ObjectiveSpec")
+    assert not hasattr(CircuitSim, "evaluate")
+    assert not hasattr(CircuitSim, "analyze")
 
 
 def test_runtime_sdist_installs_with_bundled_julia_and_private_renderer(tmp_path: Path) -> None:

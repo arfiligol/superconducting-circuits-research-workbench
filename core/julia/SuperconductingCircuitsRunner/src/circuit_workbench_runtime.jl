@@ -544,14 +544,23 @@ function _cw_cared_outputs(compiled, objective)
     return result
 end
 
-function _cw_coordinate_index(model, raw, label)
+function _cw_coordinate_index(compiled, model, raw, label)
     ref = _cw_dict(raw, label)
     component_id = _cw_string(get(ref, "component_id", nothing), "$(label).component_id")
     coordinate = _cw_string(get(ref, "coordinate_name", nothing), "$(label).coordinate_name")
+    resolved = get(
+        compiled.node_map,
+        SuperconductingCircuitsCore.external_node("cw_$(component_id)_$(coordinate)"),
+        nothing,
+    )
     # Runtime lowerers expose authored pins as `cw_<component>_<coordinate>`.
     # Composite Core builders may own an internal coordinate directly under the
     # component id (the intrinsic filter's filter_open_tail is one example).
-    candidates = (
+    candidates = resolved isa AbstractString ? (
+        resolved,
+        "ext_cw_$(component_id)_$(coordinate)",
+        "ext_$(component_id)_$(coordinate)",
+    ) : (
         "ext_cw_$(component_id)_$(coordinate)",
         "ext_$(component_id)_$(coordinate)",
     )
@@ -562,7 +571,7 @@ function _cw_coordinate_index(model, raw, label)
     return only(indices)
 end
 
-function _cw_reduction_model(model, reduction)
+function _cw_reduction_model(compiled, model, reduction)
     reduction isa AbstractDict || error("Direct Schur cared outputs require an explicit ReductionSpec.")
     data = _cw_dict(reduction, "request.reduction")
     get(data, "eliminated", nothing) == "complete_complement" || error("ReductionSpec must declare complete_complement.")
@@ -573,7 +582,7 @@ function _cw_reduction_model(model, reduction)
         coordinates = _cw_array(get(transform, "coordinates", nothing), "reduction.transform.coordinates")
         matrix_rows = _cw_array(get(transform, "matrix", nothing), "reduction.transform.matrix")
         length(coordinates) == length(matrix_rows) && !isempty(coordinates) || error("Reduction transform matrix must be nonempty and square.")
-        indices = [_cw_coordinate_index(model, raw, "reduction.transform.coordinate") for raw in coordinates]
+        indices = [_cw_coordinate_index(compiled, model, raw, "reduction.transform.coordinate") for raw in coordinates]
         length(unique(indices)) == length(indices) || error("Reduction transform coordinates must be unique.")
         matrix = Matrix{Float64}(undef, length(indices), length(indices))
         for row in eachindex(matrix_rows)
@@ -593,7 +602,7 @@ function _cw_reduction_model(model, reduction)
     isempty(retained) && error("ReductionSpec retained coordinates cannot be empty.")
     indices = Int[]
     for raw in retained
-        index = _cw_coordinate_index(model, raw, "reduction.retained coordinate")
+        index = _cw_coordinate_index(compiled, model, raw, "reduction.retained coordinate")
         index in indices && error("Reduction retained coordinates must be ordered and unique.")
         push!(indices, index)
     end
@@ -712,7 +721,7 @@ function _cw_targeted_schur_context(request, variables)
     reference_model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
         _cw_targeted_portless_compiled(reference_compiled),
     )
-    c_ref, k_ref, g_ref, retained = _cw_reduction_model(reference_model, get(request, "reduction", nothing))
+    c_ref, k_ref, g_ref, retained = _cw_reduction_model(reference_compiled, reference_model, get(request, "reduction", nothing))
     length(retained) == 2 || error("targeted_schur requires exactly two retained complete-complement coordinates.")
     all(isfinite, c_ref) && all(isfinite, k_ref) && all(isfinite, g_ref) ||
         error("targeted_schur reference C/K/G matrices must be finite.")
@@ -743,7 +752,7 @@ function _cw_targeted_schur_context(request, variables)
         )
         candidate_model.node_names == reference_model.node_names ||
             error("targeted_schur variable $(key) changes compiled coordinate topology.")
-        c1, k1, g1, retained1 = _cw_reduction_model(candidate_model, get(request, "reduction", nothing))
+        c1, k1, g1, retained1 = _cw_reduction_model(candidate, candidate_model, get(request, "reduction", nothing))
         retained1 == retained || error("targeted_schur variable $(key) changes retained coordinates.")
         isapprox(g1, g_ref; rtol=1.0e-12, atol=1.0e-18) ||
             error("targeted_schur variables must not change the fixed open conductance matrix.")
@@ -930,11 +939,11 @@ function _cw_direct_cared_outputs(compiled, objective, reduction; targeted_conte
     uses_closed = any(==("closed_mode_frequency_hz"), kinds)
     uses_schur && uses_closed && error("A direct request cannot mix closed-mode and explicit Schur cared-output kinds.")
     model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
-        uses_closed ? _cw_direct_closed_compiled(compiled) : compiled,
+        uses_closed ? _cw_direct_closed_compiled(compiled) : _cw_targeted_portless_compiled(compiled),
     )
     if uses_schur
         all(==("schur_dynamic_stiffness_abs"), kinds) || error("Unsupported direct cared-output kind.")
-        capacitance, inverse_inductance, conductance, terminals = _cw_reduction_model(model, reduction)
+        capacitance, inverse_inductance, conductance, terminals = _cw_reduction_model(compiled, model, reduction)
         result = Dict{String,Float64}()
         for name in sort!(collect(keys(outputs)))
             spec = _cw_dict(outputs[name], "cared output $(name)")
