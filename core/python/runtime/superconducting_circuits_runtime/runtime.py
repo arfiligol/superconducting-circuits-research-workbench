@@ -1749,11 +1749,12 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
         if set(upstream_receipts) != set(STAGE_DEPENDENCIES[stage]):
             raise RuntimeContractError("stage has invalid upstream dependencies")
         for upstream_name, expected in upstream_receipts.items():
-            upstream_path = run_dir / "stages" / upstream_name / "circuit-workbench-run-receipt.v1.json"
-            if not upstream_path.is_file():
-                raise RuntimeContractError(f"upstream receipt '{upstream_name}' is absent")
-            upstream = json.loads(upstream_path.read_text(encoding="utf-8"))
-            if upstream.get("canonical_sha256") != expected:
+            upstream = _resolve_stage_directory(run_dir, upstream_name)
+            if upstream.status != "PASS":
+                raise RuntimeContractError(
+                    f"upstream receipt '{upstream_name}' is not trustworthy: {upstream.failure}"
+                )
+            if upstream.canonical_sha256 != expected:
                 raise RuntimeContractError(f"upstream receipt '{upstream_name}' identity mismatches")
         result = receipt.get("result")
         if result is not None and receipt.get("output_sha256") != _fingerprint(result):

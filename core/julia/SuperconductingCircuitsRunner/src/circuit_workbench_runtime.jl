@@ -1491,7 +1491,8 @@ function _cw_evaluate_responses(request, stage_dir)
             model.inverse_inductance,
             2pi * frequency,
             selector,
-            impedances,
+            impedances;
+            internal_conductance=model.conductance,
         ).scattering[output.index, input.index]
         for frequency in frequencies
     ]
