@@ -153,7 +153,7 @@ rules:
     tier: critical
     load: on_demand
     activation_mode: model_decision
-    description: Apply when routing branch, worktree, PR, merge, synchronization, or cleanup mechanics to the active host delivery profile.
+    description: Select the active host delivery profile for Git work; under SCQ_Design the Circuit Workbench profile identifier is `standard-topic-pr`.
     triggers: ["branch", "branches", "worktree", "git flow", "develop", "main", "direct develop", "fast iteration"]
     touched_paths: ["docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "app/desktop/**", "desktop/**", "legacy/**", "src/**", ".github/**"]
 

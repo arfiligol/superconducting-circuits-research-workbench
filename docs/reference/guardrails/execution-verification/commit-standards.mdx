@@ -8,8 +8,8 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "Workbench-local commit cohesion, checks, messages, and publication discipline"
-version: v2.0.0
+scope: "Workbench-local commit cohesion, checks, and messages"
+version: v2.1.0
 last_updated: 2026-08-21
 updated_by: codex
 ---
@@ -26,7 +26,7 @@ merge, and cleanup mechanics come from the active host delivery profile through
 
 A coherent commit has one purpose, includes the corresponding source and
 required mirror updates, and has completed the checks required for its touched
-area. It is not an unpublished WIP checkpoint.
+area. It is not incomplete work.
 
 </Aside>
 
@@ -42,14 +42,10 @@ Commit when:
 Do not commit incomplete behavior, unrelated formatting, or unrelated dirty
 bytes merely to save local progress.
 
-## Publication And History
+## Delivery Profile Boundary
 
-- Push every coherent commit immediately to the branch selected by the active
-  delivery profile.
-- Do not leave a WIP commit as the only copy on one workstation.
-- Do not amend, rebase, squash, or force-push already-published shared history.
-- When the selected profile permits consolidation, Integration performs it at
-  PR merge.
+Commit publication, shared-history handling, consolidation, and merge behavior
+come only from the active host delivery profile; this page defines no defaults.
 
 ## Validation
 
@@ -75,8 +71,7 @@ Common types are `feat`, `fix`, `docs`, `refactor`, `style`, `test`, and
 - Commit one coherent, independently reviewable change at a time.
 - Include required source and extracted-mirror updates in the same coherent commit.
 - Run the checks required for the touched Workbench surface; no single repository-wide command replaces those checks universally.
-- Do not commit unrelated changes or use unpublished WIP commits as local checkpoints.
-- Push every coherent commit immediately according to the active host delivery profile.
-- Never amend, rebase, squash, or force-push already-published shared history; profile-permitted consolidation belongs to Integration at PR merge.
+- Do not commit unrelated changes or incomplete work.
+- Resolve commit publication and shared-history mechanics only from the active host delivery profile; this rule defines none.
 - Use `<type>: <short description>` with `feat`, `fix`, `docs`, `refactor`, `style`, `test`, or `chore` as appropriate.
 ```
