@@ -1018,9 +1018,7 @@ class CircuitSim:
         optimization = self._require_stage("optimize")
         result = _mapping(optimization.receipt.get("result"), "optimization result")
         best = _mapping(result.get("best"), "optimization winner")
-        overrides = _mapping(
-            result.get("winner_physical_parameters"), "optimization winner parameters"
-        )
+        overrides = self._winner_overrides(result, self._refinement_plan)
         request = self._request(
             action="refine_winner",
             backend="direct",
@@ -1049,9 +1047,7 @@ class CircuitSim:
             action="evaluate_responses",
             backend="direct_hb",
             extras={
-                "parameter_overrides": _mapping(
-                    winner.get("winner_physical_parameters"), "optimization winner parameters"
-                ),
+                "parameter_overrides": self._winner_overrides(winner, self._plan),
                 "response": _plain(self._response),
                 "upstream_receipts": {
                     "optimize": optimization.canonical_sha256,
@@ -1098,9 +1094,7 @@ class CircuitSim:
             action="evaluate_t1",
             backend="hb",
             extras={
-                "parameter_overrides": _mapping(
-                    winner.get("winner_physical_parameters"), "optimization winner parameters"
-                ),
+                "parameter_overrides": self._winner_overrides(winner, self._plan),
                 "t1": _plain(self._t1),
                 "upstream_receipts": {
                     "optimize": optimization.canonical_sha256,
@@ -1131,6 +1125,39 @@ class CircuitSim:
             "build_report",
             lambda directory: _build_report_stage(directory, self.run_id, upstream),
         )
+
+    def _winner_overrides(
+        self,
+        result: Mapping[str, Any],
+        plan: CircuitPlan | None,
+    ) -> dict[str, float]:
+        if plan is None:
+            raise RuntimeContractError("Winner parameter resolution requires a sealed Plan.")
+        winner = _mapping(
+            result.get("winner_physical_parameters"), "optimization winner parameters"
+        )
+        bindings = {
+            f"{item['requested_ref']['component_id']}.{item['requested_ref']['parameter_name']}":
+            f"{item['ref']['component_id']}.{item['ref']['parameter_name']}"
+            for item in _resolved_variables(self._variables, plan.seal(self._libraries))
+        }
+        if set(winner) != set(bindings):
+            raise RuntimeContractError(
+                "Optimization winner parameters do not match the selected sealed Plan."
+            )
+        overrides: dict[str, float] = {}
+        for requested, resolved in bindings.items():
+            value = winner[requested]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+            ):
+                raise RuntimeContractError(
+                    f"Optimization winner parameter '{requested}' must be finite numeric."
+                )
+            overrides[resolved] = float(value)
+        return overrides
 
     def _request(
         self,
