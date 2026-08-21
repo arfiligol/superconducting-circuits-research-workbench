@@ -7,12 +7,12 @@ tags:
  - audience/team
  - sot/true
  - topic/research-contracts
-status: converging
+status: stable
 owner: docs-team
 audience: team
-scope: Contract-level Pluto and Python notebook responsibilities, including the converging staged Circuit Runtime boundary.
+scope: Contract-level Pluto and Python notebook responsibilities, including the accepted staged Circuit Runtime boundary.
 version: v1.2.0
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 updated_by: codex
 title: Notebook Roles
 description: Defines Pluto and Python notebook responsibilities for circuit execution, external-result analysis, quantum modeling, and pulse simulation.

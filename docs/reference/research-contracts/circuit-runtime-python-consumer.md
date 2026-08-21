@@ -7,15 +7,15 @@ tags:
  - audience/team
  - sot/true
  - topic/research-contracts
-status: converging
+status: stable
 owner: docs-team
 audience: team
-scope: Converging staged-action extension to the accepted public Circuit Workbench runtime and Python-consumer boundary.
+scope: Accepted staged-action contract for the public Circuit Workbench runtime and Python-consumer boundary.
 version: v1.1.0
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 updated_by: codex
 title: Circuit Runtime / Python Consumer
-description: Converging contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution.
+description: Accepted contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution.
 sidebar:
  label: Circuit Runtime / Python Consumer
  order: 45
@@ -25,9 +25,11 @@ sidebar:
 
 The visible `CircuitPlan`, `CircuitSim`, source-bound request/receipt schemas,
 and one-process Julia boundary are integrated in Workbench
-`10ce1ab2c03baec24b3c972bf19028d4bfda4b88`. The staged action and resolver
-extension on this page is a `CONVERGING / NOT_INTEGRATED` candidate. It does
-not change the acceptance state of the already integrated plan and compiler
+`10ce1ab2c03baec24b3c972bf19028d4bfda4b88`. The Human accepted the staged
+action and resolver extension on this page at exact candidate
+`0b5ae925ea65b1006e3381c1220a45809c76b940`; its repository delivery remains
+`PR OPEN / NOT_INTEGRATED` until Integration merges and verifies the target.
+The extension does not change the already integrated plan and compiler
 foundation.
 
 ## Ownership Boundary
@@ -90,7 +92,7 @@ authoritative artifact hash or runtime-source hash.
 
 ## Staged Actions
 
-The candidate workflow is ordered:
+The accepted workflow is ordered:
 
 ```text
 optimize
@@ -205,6 +207,22 @@ This public contract describes only generic APIs and stage behavior. It does
 not publish or accept a private component library, plan, variable, target,
 objective, Gate, run identity, artifact, result, migration, compatibility shim,
 or design-specific workflow.
+
+## Semantic Status
+
+- Scope: staged Circuit Runtime execution, resolution, receipt, and report
+  contract described on this page.
+- State: `ACCEPTED`.
+- State changed: 2026-08-22.
+- Human acceptance: explicitly accepted the exact V1 packet for candidate
+  `0b5ae925ea65b1006e3381c1220a45809c76b940`, tree
+  `336d2a4e37ffa7fb829a748b188448afb1bec3b1`, and full-index diff SHA-256
+  `771c821d7158d8f012647b08af99f6263705edf8f0f0de08980e80812fc9dfa7`.
+- Supersedes: `ObjectiveSpec` and the generic `evaluate` / `analyze` workflow.
+- Retained compatibility or migration: none.
+- Test policy: `stabilization_tests_authorized`.
+- Delivery status: Workbench PR #37, `NOT_INTEGRATED`.
+- Unresolved semantic decisions: none.
 
 ## Related
 
