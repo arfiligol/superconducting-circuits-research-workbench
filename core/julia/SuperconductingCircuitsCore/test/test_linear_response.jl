@@ -148,6 +148,30 @@ end
         matched.scattering rtol=2.0e-13 atol=2.0e-13
 end
 
+@testset "matched response includes the internal G matrix" begin
+    capacitance = reshape([100.0e-15], 1, 1)
+    inverse_inductance = reshape([1 / 10.0e-9], 1, 1)
+    internal_conductance = reshape([2.0e-3], 1, 1)
+    angular_frequency = 2π * 4.0e9
+    reference_impedance = 50.0
+    matched = matched_port_response(
+        capacitance,
+        inverse_inductance,
+        angular_frequency,
+        reshape([1.0], 1, 1),
+        reference_impedance;
+        internal_conductance=internal_conductance,
+    )
+    expected_conductance = internal_conductance[1, 1] + 1 / reference_impedance
+    expected_dynamic_stiffness = inverse_inductance[1, 1] -
+        angular_frequency^2 * capacitance[1, 1] - im * angular_frequency * expected_conductance
+    expected_scattering = -1 - 2im * angular_frequency / reference_impedance / expected_dynamic_stiffness
+    @test matched.conductance == reshape([expected_conductance], 1, 1)
+    @test matched.open_dynamic_stiffness[1, 1] ≈ expected_dynamic_stiffness rtol=1.0e-14
+    @test matched.scattering[1, 1] ≈ expected_scattering rtol=1.0e-14
+    @test abs2(matched.scattering[1, 1]) < 1
+end
+
 @testset "matched single-LC open pole follows the state eigenvalue" begin
     capacitance = 100.0e-15
     inductance = 10.0e-9

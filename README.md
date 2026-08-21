@@ -8,7 +8,7 @@
   <img alt="Status: active research workbench" src="https://img.shields.io/badge/status-active%20research%20workbench-2f855a">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Interface: notebook first" src="https://img.shields.io/badge/interface-notebook%20first-6b46c1">
-  <img alt="Core: JosephsonCircuits.jl wrapper" src="https://img.shields.io/badge/core-JosephsonCircuits.jl%20wrapper-f97316">
+  <img alt="Core: Workbench plus JosephsonCircuits.jl" src="https://img.shields.io/badge/core-Workbench%20%2B%20JosephsonCircuits.jl-f97316">
   <img alt="Docs: GitHub Pages" src="https://img.shields.io/badge/docs-GitHub%20Pages-0f766e">
 </p>
 
@@ -67,14 +67,19 @@ families, trace shapes, and reproducible validation. The useful workflow is not
 
 This project does **not** attempt to replace
 [JosephsonCircuits.jl](https://github.com/kpobrien/JosephsonCircuits.jl).
-Instead, it builds a semantic wrapper layer above JosephsonCircuits.jl.
+Instead, it adds visible circuit semantics and research workflows around
+JosephsonCircuits.jl without reimplementing its netlist parser or matrix
+assembly.
 
-The wrapper layer focuses on:
+The Workbench layer focuses on:
 
-- reusable circuit components;
+- reusable circuit components whose named retainable-coordinate identity is
+  preserved through `CircuitPlan` and compiled-netlist authoring;
 - circuit-semantic assembly;
 - `Circuit Plan` authoring and validation;
-- compilation into a JosephsonCircuits.jl-compatible netlist for HB solving;
+- compilation into JosephsonCircuits.jl-compatible linear and HB netlists;
+- complete-complement Schur reduction and derived roots, transfer zero,
+  exchange, and kappa quantities after JosephsonCircuits.jl assembles C/K/G;
 - schematic-export data that can be rendered with Python Schemdraw or another
   downstream renderer;
 - reusable notebook and runner workflows that keep circuit meaning explicit.
@@ -86,19 +91,27 @@ flowchart TD
     Components["Reusable Circuit Components"]
     Plan["Circuit Plan"]
     Compiler["Compiler"]
-    Netlist["HB Solver-ready<br/>JosephsonCircuits.jl netlist"]
+    Netlist["Closed linear<br/>JosephsonCircuits.jl netlist"]
+    CKG["JosephsonCircuits.jl<br/>parse + C/K/G assembly"]
+    Schur["Workbench complete-complement Schur<br/>+ physical quantities"]
+    Optimize["Direct optimization"]
+    HBNetlist["HB-ready netlist"]
     Schematic["Schematic export data<br/>Schemdraw-ready"]
-    HB["JosephsonCircuits.jl<br/>HB Solver"]
-    Results["S/Y/Z and analysis results"]
+    HB["JosephsonCircuits.jl<br/>pump-off HB"]
+    Results["Response and<br/>cross-check evidence"]
 
     Components --> Plan --> Compiler
-    Compiler --> Netlist --> HB --> Results
+    Compiler --> Netlist --> CKG --> Schur --> Optimize
+    Compiler --> HBNetlist --> HB --> Results
     Compiler --> Schematic
 ```
 
-JosephsonCircuits.jl remains the numerical simulation foundation. This project
-adds the circuit-semantic layer needed to make model construction, reuse,
-inspection, notebook prototyping, and app-backed execution easier to maintain.
+Reusable components own coordinate identity, JosephsonCircuits.jl is the
+assembly authority for the full-system linear C/K/G matrices, and Workbench
+owns the declared reduction and derived quantities. Pump-off HB is a separate
+response and cross-check backend, not a second solver inside the Direct
+optimization loop. Coordinate meaning, reduction policy, objectives, and Gates
+remain outside JosephsonCircuits.jl ownership.
 
 ## Notebook First, App Backed
 
@@ -117,7 +130,7 @@ one-off notebooks.
 | --- | --- |
 | Pluto notebooks | First research cockpit for rapid prototyping, simulation experiments, sweep design, and physics learning. |
 | Python notebooks | Routine circuit-runtime consumers with visible `CircuitPlan` assembly, plus Python-native analysis, reporting, and data inspection. |
-| Python circuit runtime | Public installable consumer surface; seals an action request, starts one Julia process for `evaluate` or the complete `optimize`, and analyzes sealed evidence in pure Python. |
+| Python circuit runtime | Public installable consumer surface with named `execute`/`resolve` stages, immutable evidence, and pure-Python read-only result, campaign, and report resolution. A Julia-backed execute stage may start one Julia process. |
 | Julia Core | Circuit-semantic authoring, reusable components, Circuit Plans, compilation, simulation helpers, and analysis helpers. |
 | Electron application | Stable workbench for dataset management, simulation requests, analysis requests, task history, result views, and trace browsing. |
 | Python Backend | Task lifecycle, metadata, publication, provenance, TraceStore registration, and platform data APIs. |
@@ -159,13 +172,13 @@ The main execution and inspection tracks are:
     v
 [superconducting_circuits_runtime]
     |
-    | one Julia process per evaluate or complete optimize action
+    | named execute/resolve stages; at most one Julia process per action
     v
-[Julia Core compiler / Direct C-K-G / Schur / HB / optimizer]
+[Julia Core compiler / JC.jl C-K-G or HB / Workbench Schur and quantities]
     |
-    | sealed request, result, and receipt
+    | immutable stage requests, results, artifacts, and receipts
     v
-[pure-Python analyze]
+[pure-Python result / campaign / report readers]
 ```
 
 ```text
@@ -367,9 +380,10 @@ Current boundaries:
 - Technical documentation lives in Starlight docs under `docs/` and is mounted at
   `/docs/` in the public artifact.
 - Research execution lives in Pluto notebooks and Julia Core.
-- Routine Python circuit consumers use the accepted installable runtime contract;
-  Julia remains the compiler and circuit-compute authority, while `analyze()` is
-  pure Python over sealed evidence.
+- Routine Python circuit consumers use the installable runtime contract;
+  named stages expose explicit `execute` or read-only `resolve` behavior, and
+  result/campaign/report reading remains pure Python over sealed evidence. See
+  the [Circuit Runtime / Python Consumer contract](docs/reference/research-contracts/circuit-runtime-python-consumer.md).
 - Productized simulation and analysis tasks go through the Application, Python
   Backend, and Julia Runner.
 - Python Backend owns task lifecycle, metadata, publication, provenance, and

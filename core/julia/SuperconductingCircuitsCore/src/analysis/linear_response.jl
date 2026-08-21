@@ -269,9 +269,10 @@ function impedance_to_scattering(impedance, reference_impedance_ohm)
     ))
 end
 
-"""Evaluate the matched N-port response of one closed linear C/K model.
+"""Evaluate the matched N-port response of one closed linear C/K/G model.
 
-For selector `B` and `Y0=diag(1/z0)`, the port loading is `G=B*Y0*B'` and
+For selector `B` and `Y0=diag(1/z0)`, the total conductance is the model's
+internal conductance plus the port loading `B*Y0*B'`, and
 `Dopen=K-omega^2*C-i*omega*G`. The returned scattering matrix implements the
 declared `exp(-i*omega*t)` convention directly, without an HB/port simulation.
 """
@@ -280,7 +281,8 @@ function matched_port_response(
     inverse_inductance,
     angular_frequency_rad_s,
     selector,
-    reference_impedance_ohm,
+    reference_impedance_ohm;
+    internal_conductance=nothing,
 )
     capacitance_matrix, stiffness_matrix = _linear_response_matrices(
         capacitance,
@@ -291,7 +293,18 @@ function matched_port_response(
     port_count = size(selector_matrix, 2)
     z0 = _reference_impedance_vector(reference_impedance_ohm, port_count)
     square_root_y0 = Diagonal(1 ./ sqrt.(z0))
-    conductance = selector_matrix * Diagonal(1 ./ z0) * transpose(selector_matrix)
+    model_conductance = internal_conductance === nothing ?
+        zeros(Float64, size(capacitance_matrix)) :
+        _linear_response_real_matrix(internal_conductance, "Internal conductance")
+    size(model_conductance) == size(capacitance_matrix) || _validation_error(
+        "Internal conductance must match the C/K matrix size.",
+    )
+    model_conductance, _, _ = _require_positive_semidefinite(
+        model_conductance,
+        "Internal conductance matrix",
+    )
+    port_conductance = selector_matrix * Diagonal(1 ./ z0) * transpose(selector_matrix)
+    conductance = model_conductance + port_conductance
     open_dynamic_stiffness = ComplexF64.(
         stiffness_matrix - angular_frequency^2 * capacitance_matrix,
     ) - im * angular_frequency * conductance
