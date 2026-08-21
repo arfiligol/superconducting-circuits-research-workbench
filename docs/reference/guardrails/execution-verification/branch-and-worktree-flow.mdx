@@ -12,52 +12,31 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Route branch, worktree, PR, merge, synchronization, and cleanup mechanics to the active host delivery profile.
-version: v3.0.0
+scope: Select the active host delivery profile without defining Git mechanics.
+version: v3.1.0
 last_updated: 2026-08-21
 updated_by: codex
 ---
 
-import { Aside } from '@astrojs/starlight/components';
-
 # Branch & Worktree Flow
 
-This page is a repository adapter, not an independent GitFlow authority. Resolve
-the readable host project's collaboration owner and selected delivery profile
-before changing Git state, then follow that profile without weakening or
-replacing it here.
-
-<Aside type="caution" title="Host delivery policy is authoritative">
-
-Do not infer permission for direct target-branch updates, development worktrees,
-local integration, history rewriting, merge, synchronization, or cleanup from
-this repository page.
-
-</Aside>
+This page is a thin host profile selector, not an independent GitFlow
+authority.
 
 ## SCQ_Design Host
 
-When Circuit Workbench is used inside SCQ_Design:
+Under SCQ_Design, load `$scq-collaboration-roles`. Circuit Workbench's
+delivery-profile identifier is `standard-topic-pr`.
 
-1. Load the installed `$scq-collaboration-roles` router.
-2. Resolve the Workbench repository owner and the `standard-topic-pr` profile
-   from its ownership registry.
-3. Use the registered physical checkout, starting from a clean synchronized
-   `origin/develop`.
-4. Create one topic branch in that checkout, immediately push every coherent
-   commit, and maintain one PR to `develop`.
-5. Leave squash merge, exact-target verification, applicable pin or checkout
-   synchronization, and safe cleanup to Integration & Sync.
-
-The Workbench profile does not use a development worktree and does not authorize
-direct development on `develop`.
+Read checkout, branch/worktree, commit-publication, PR, merge, target
+verification, pin/synchronization, and cleanup mechanics from that canonical
+profile.
 
 ## Other Hosts
 
 Use the readable host's declared collaboration and delivery authority. If it
-does not define one, this adapter grants no additional Git permission; preserve
-existing bytes and obtain the missing authority before choosing a delivery
-path.
+does not define one, this adapter grants no Git permission; preserve existing
+bytes and obtain the missing authority before choosing a delivery path.
 
 ## Related
 
@@ -68,10 +47,7 @@ path.
 ## Agent Rule
 ```markdown
 ## Branch & Worktree Flow
-- This page is a host adapter, not an independent GitFlow authority.
-- Under SCQ_Design, load `$scq-collaboration-roles` and use the ownership-registry-selected profile.
-- Circuit Workbench uses `standard-topic-pr`: registered physical checkout, clean synchronized `origin/develop`, one topic branch, immediate push of every coherent commit, and one PR to `develop`.
-- The Workbench profile does not use a development worktree or direct development on `develop`.
-- Integration & Sync alone performs the squash merge, exact-target verification, applicable pin/synchronization, and safe cleanup.
-- Preserve unrelated or dirty bytes; this adapter grants no history-rewrite, merge, synchronization, or cleanup authority.
+- This is a thin host adapter, not an independent GitFlow authority.
+- Under SCQ_Design, load `$scq-collaboration-roles`; Circuit Workbench's delivery-profile identifier is `standard-topic-pr`.
+- Resolve every Git mechanic from the active host profile; this repository rule grants none.
 ```

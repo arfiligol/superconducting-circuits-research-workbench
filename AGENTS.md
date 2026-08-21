@@ -4,11 +4,10 @@ Circuit Workbench is a tool repository. The host Project or Super Repo owns
 research goals, Design Targets, reusable domain knowledge and conventions,
 Human acceptance, and project decision history.
 
-For collaboration or Git work under the SCQ_Design host, load
-`$scq-collaboration-roles` before mutation. Its ownership registry and selected
-delivery profile are authoritative; Circuit Workbench uses
-`standard-topic-pr`. The local branch/worktree guardrail is only a host adapter
-and cannot override that profile.
+For collaboration or Git work under SCQ_Design, load
+`$scq-collaboration-roles`. Circuit Workbench's delivery-profile identifier is
+`standard-topic-pr`; resolve its current owner and every Git mechanic only
+through that router.
 
 Before project-semantic work, read
 [`docs/project-context.mdx`](docs/project-context.mdx).
