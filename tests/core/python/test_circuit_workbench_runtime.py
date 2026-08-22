@@ -150,10 +150,9 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
         ("evaluate_responses", sim.evaluate_responses),
         ("fit_c11", sim.fit_c11),
         ("evaluate_t1", sim.evaluate_t1),
-        ("build_report", sim.build_report),
     ]
     sealed = {name: action(action="execute") for name, action in stages}
-    assert [stage.status for stage in sealed.values()] == ["PASS"] * len(stages)
+    assert [stage.status for stage in sealed.values()] == ["PASS"] * 4 + ["NOT_EVALUABLE"]
     assert len(calls) == 4
     request = json.loads(
         (sealed["optimize"].path.parent / "circuit-workbench-run-request.v1.json").read_text(
@@ -189,7 +188,12 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert refinement["maximum_relative_change"] == max(refinement["relative_changes"].values())
     assert refinement["maximum_relative_change"] <= refinement["relative_tolerance"]
     assert (sealed["fit_c11"].result or {})["fit_input"] == "pump_off_hb_s21"
-    assert (sealed["evaluate_t1"].result or {})["method"].startswith("pump-off HB Z")
+    t1_result = sealed["evaluate_t1"].result or {}
+    assert t1_result["method"].startswith("pump-off HB Z")
+    assert t1_result["finite_sample_count"] == 0
+    assert t1_result["not_evaluable_sample_count"] == t1_result["sample_count"]
+    with pytest.raises(RuntimeContractError, match=r"evaluate_t1.*not a complete PASS"):
+        sim.build_report(action="execute")
 
     def no_subprocess(*args: object, **kwargs: object) -> object:
         raise AssertionError("resolve must not start Julia")
@@ -199,9 +203,10 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert {name: stage.canonical_sha256 for name, stage in resolved.items()} == {
         name: stage.canonical_sha256 for name, stage in sealed.items()
     }
+    assert sim.build_report(action="resolve").status == "NOT_EVALUABLE"
     run_dir = tmp_path / "staged"
-    assert resolve_circuit_result(run_dir).status == "PASS"
-    assert resolve_circuit_campaign([run_dir]).status == "PASS"
+    assert resolve_circuit_result(run_dir).status == "NOT_EVALUABLE"
+    assert resolve_circuit_campaign([run_dir]).status == "NOT_EVALUABLE"
     with pytest.raises(RuntimeContractError, match="durable bytes"):
         sim.optimize(action="execute")
 
@@ -224,8 +229,6 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert sim.fit_c11(action="resolve").status == "NOT_EVALUABLE"
     receipt_path.write_text(original_receipt, encoding="utf-8")
 
-    report_path = sealed["build_report"].path.parent / "report.html"
-    report_path.unlink()
     result = resolve_circuit_result(run_dir)
     assert result.stage("build_report").status == "NOT_EVALUABLE"
     assert resolve_circuit_campaign([run_dir]).status == "NOT_EVALUABLE"
