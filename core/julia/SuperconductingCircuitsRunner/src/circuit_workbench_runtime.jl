@@ -1673,7 +1673,7 @@ function _cw_evaluate_t1(request, stage_dir)
     path = joinpath(stage_dir, "t1.csv")
     _cw_write_t1_csv(path, frequencies, y_eff, capacitance, t1, conditions)
     return Dict{String,Any}(
-        "status" => "PASS",
+        "status" => isempty(finite_t1) ? "NOT_EVALUABLE" : "PASS",
         "method" => "pump-off HB Z -> probe-shunt-compensated Y -> common/differential transform -> complete-complement q",
         "sample_count" => length(t1),
         "finite_sample_count" => length(finite_t1),
