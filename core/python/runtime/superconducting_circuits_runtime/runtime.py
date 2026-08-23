@@ -743,17 +743,6 @@ class CircuitPlan:
         payload["canonical_sha256"] = _fingerprint(payload)
         return payload
 
-    def show(self, libraries: Sequence[CircuitLibrary] = ()) -> Any:
-        """Validate and render the sealed topology through Schemdraw without Julia."""
-
-        from ._runtime_plan import render_runtime_plan
-
-        sealed = self.seal((_BUILTIN_LIBRARY, *libraries))
-        drawing = render_runtime_plan(sealed)
-        cast(Any, drawing).circuit_workbench_plan = sealed
-        return drawing
-
-
 @dataclass
 class CircuitSim:
     run_root: Path | str

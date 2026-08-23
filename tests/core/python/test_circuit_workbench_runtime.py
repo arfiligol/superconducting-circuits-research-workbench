@@ -334,9 +334,10 @@ def test_removed_compatibility_surface_is_not_public() -> None:
     assert not hasattr(runtime_api, "ObjectiveSpec")
     assert not hasattr(CircuitSim, "evaluate")
     assert not hasattr(CircuitSim, "analyze")
+    assert not hasattr(CircuitPlan, "show")
 
 
-def test_runtime_sdist_installs_with_bundled_julia_and_private_renderer(tmp_path: Path) -> None:
+def test_runtime_sdist_installs_with_bundled_julia(tmp_path: Path) -> None:
     root = Path(__file__).parents[3]
     dist = tmp_path / "dist"
     uv = shutil.which("uv")
@@ -356,54 +357,9 @@ def test_runtime_sdist_installs_with_bundled_julia_and_private_renderer(tmp_path
         [
             python,
             "-c",
-            "from superconducting_circuits_runtime import CircuitPlan; "
-            "from superconducting_circuits_runtime.catalog import parallel_lc_resonator; "
             "from superconducting_circuits_runtime.runtime import _JULIA_ROOT; "
-            "plan = CircuitPlan('installed'); "
-            "plan.add(parallel_lc_resonator(id='r', capacitance_f=1e-12, inductance_h=1e-9)); "
-            "assert plan.show().elements; "
             "assert (_JULIA_ROOT / 'SuperconductingCircuitsCore/Project.toml').is_file(); "
             "assert (_JULIA_ROOT / 'SuperconductingCircuitsRunner/Project.toml').is_file()",
         ],
         check=True,
     )
-    sibling_dist = tmp_path / "sibling-dist"
-    subprocess.run(
-        [uv, "build", root / "core/python/circuit_libraries", "--wheel", "--out-dir", sibling_dist],
-        check=True,
-    )
-    sibling_wheel = next(sibling_dist.glob("schemdraw_circuit_library*.whl"))
-    subprocess.run([uv, "pip", "install", "--python", python, sibling_wheel], check=True)
-    subprocess.run(
-        [
-            python,
-            "-c",
-            "from superconducting_circuits_runtime import CircuitPlan; "
-            "from superconducting_circuits_runtime.catalog import parallel_lc_resonator; "
-            "plan = CircuitPlan('coinstalled'); "
-            "plan.add(parallel_lc_resonator(id='r', capacitance_f=1e-12, inductance_h=1e-9)); "
-            "assert plan.show().elements",
-        ],
-        check=True,
-    )
-    subprocess.run(
-        [uv, "pip", "uninstall", "--python", python, "schemdraw-circuit-library"], check=True
-    )
-    subprocess.run(
-        [
-            python,
-            "-c",
-            "from superconducting_circuits_runtime import CircuitPlan; "
-            "from superconducting_circuits_runtime.catalog import parallel_lc_resonator; "
-            "plan = CircuitPlan('runtime-alone'); "
-            "plan.add(parallel_lc_resonator(id='r', capacitance_f=1e-12, inductance_h=1e-9)); "
-            "assert plan.show().elements",
-        ],
-        check=True,
-    )
-    subprocess.run([uv, "pip", "install", "--python", python, sibling_wheel], check=True)
-    subprocess.run(
-        [uv, "pip", "uninstall", "--python", python, "superconducting-circuits-runtime"],
-        check=True,
-    )
-    subprocess.run([python, "-c", "import schemdraw_circuit_library"], check=True)

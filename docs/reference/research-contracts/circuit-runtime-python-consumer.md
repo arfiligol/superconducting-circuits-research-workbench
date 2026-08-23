@@ -72,8 +72,9 @@ from superconducting_circuits_runtime import (
 topology, parameters, connections, ports, and inspectable engineering and
 schematic intent. A `@circuit_component` factory may compose registered types,
 but it must seal a graph before Julia starts; it is never a candidate-evaluation
-callback. `plan.show()` validates and renders without Julia or a numerical
-evaluability claim.
+callback. `CircuitPlan` currently exposes no diagram renderer; its sealed
+schematic intent remains inspectable while canonical renderer integration is
+deferred.
 
 The plan does not own artifact bindings, reductions, targets, objective meaning,
 Gates, variables, optimizer settings, stage actions, receipts, or reporting.
@@ -281,6 +282,18 @@ Optimization Progress Observer extension:
   optional process-local `sim.optimize(action="execute", on_progress=...)`; no
   observer effect on sealed requests, ledgers, fingerprints, receipts,
   artifacts, results, objectives, Gates, or scientific semantics.
+- Unresolved semantic decisions: none.
+
+`CircuitPlan` diagram surface:
+
+- State: `STABILIZED`.
+- Delivery status: `NOT_INTEGRATED`.
+- Human acceptance: on 2026-08-23 the Human explicitly selected temporary
+  absence of `CircuitPlan.show()` until canonical renderer integration is
+  separately resumed.
+- Supersedes: the runtime-private minimal preview and its Schemdraw dependency.
+- Retained compatibility, fallback, or placeholder renderer: none.
+- Test policy: `stabilization_tests_authorized`.
 - Unresolved semantic decisions: none.
 
 ## Related

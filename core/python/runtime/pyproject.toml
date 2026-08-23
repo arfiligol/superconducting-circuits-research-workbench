@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.2",
-    "schemdraw>=0.21",
     "scipy>=1.15",
 ]
 
