@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import sys
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from superconducting_circuits_runtime import (
     CircuitPlan,
     CircuitSim,
     GateSpec,
+    OptimizationProgress,
     OptimizerSpec,
     ReductionSpec,
     ResponseSpec,
@@ -74,7 +76,7 @@ def _plan(*, sections: int) -> tuple[CircuitPlan, list[object]]:
     return plan, resonators
 
 
-def _configured_sim(tmp_path: Path) -> tuple[CircuitSim, Path]:
+def _configured_sim(tmp_path: Path, *, maximum_generations: int = 1) -> tuple[CircuitSim, Path]:
     plan, resonators = _plan(sections=1)
     refinement, _ = _plan(sections=2)
     source = tmp_path / "bound-input.json"
@@ -115,7 +117,12 @@ def _configured_sim(tmp_path: Path) -> tuple[CircuitSim, Path]:
             "cma_es",
             seed=0,
             human_authority="human://accepted-runtime-test-fixture",
-            controls={"initial_sigma": 0.01, "maxiter": 1, "maxfevals": 3, "popsize": 3},
+            controls={
+                "initial_sigma": 0.01,
+                "maxiter": maximum_generations,
+                "maxfevals": maximum_generations * 3,
+                "popsize": 3,
+            },
         )
     )
     sim.set_refinement(plan=refinement, relative_tolerance=1.0e9)
@@ -145,7 +152,7 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
 
     monkeypatch.setattr(runtime.subprocess, "run", counted_run)
     stages = [
-        ("optimize", sim.optimize),
+        ("optimize", lambda *, action: sim.optimize(action=action, on_progress=None)),
         ("refine_winner", sim.refine_winner),
         ("evaluate_responses", sim.evaluate_responses),
         ("fit_c11", sim.fit_c11),
@@ -239,6 +246,50 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert resolve_circuit_result(run_dir).stage("evaluate_responses").status == "NOT_EVALUABLE"
     receipt_path.write_text("{", encoding="utf-8")
     assert resolve_circuit_result(run_dir).stage("evaluate_responses").status == "NOT_EVALUABLE"
+
+
+def test_optimization_progress_is_transient_after_ledger_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sim, _ = _configured_sim(tmp_path, maximum_generations=2)
+    ledger_path = (
+        tmp_path
+        / "staged"
+        / "stages"
+        / "optimize"
+        / "circuit-workbench-optimization-ledger.v1.json"
+    )
+    observed: list[OptimizationProgress] = []
+
+    def failing_observer(progress: OptimizationProgress) -> None:
+        assert ledger_path.is_file()
+        assert json.loads(ledger_path.read_text(encoding="utf-8"))["entries"]
+        with pytest.raises(FrozenInstanceError):
+            progress.__setattr__("generation", 0)
+        observed.append(progress)
+        raise RuntimeError("public-fixture observer failure")
+
+    with pytest.warns(RuntimeWarning, match="observer disabled") as warnings:
+        sealed = sim.optimize(action="execute", on_progress=failing_observer)
+    assert len(warnings) == 1
+    assert observed == [OptimizationProgress(generation=1, maximum_generations=2)]
+    assert sealed.status == "PASS"
+
+    stage_dir = sealed.path.parent
+    for path in (
+        stage_dir / "circuit-workbench-run-request.v1.json",
+        ledger_path,
+        sealed.path,
+    ):
+        assert '"on_progress":' not in path.read_text(encoding="utf-8")
+
+    def no_subprocess(*args: object, **kwargs: object) -> object:
+        raise AssertionError("resolve must not start Julia")
+
+    monkeypatch.setattr(runtime.subprocess, "run", no_subprocess)
+    monkeypatch.setattr(runtime.subprocess, "Popen", no_subprocess)
+    assert sim.optimize(action="resolve", on_progress=observed.append).status == "PASS"
+    assert observed == [OptimizationProgress(generation=1, maximum_generations=2)]
 
 
 def test_composite_winner_key_resolves_to_selected_leaf_binding(tmp_path: Path) -> None:
