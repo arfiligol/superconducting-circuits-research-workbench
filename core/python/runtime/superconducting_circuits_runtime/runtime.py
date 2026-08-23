@@ -2926,7 +2926,11 @@ def _show_report_inputs(request: Mapping[str, Any]) -> _HtmlView:
     residuals = objective.get("residuals") if isinstance(objective, Mapping) else None
     if isinstance(residuals, Mapping):
         for residual in residuals.values():
-            if not isinstance(residual, Mapping) or residual.get("op") != "div":
+            if (
+                not isinstance(residual, Mapping)
+                or set(residual) != {"op", "args"}
+                or residual.get("op") != "div"
+            ):
                 continue
             args = residual.get("args")
             if not isinstance(args, list) or len(args) != 2:
@@ -2934,11 +2938,17 @@ def _show_report_inputs(request: Mapping[str, Any]) -> _HtmlView:
             numerator, denominator = args
             numerator_args = numerator.get("args") if isinstance(numerator, Mapping) else None
             if (
-                not isinstance(numerator_args, list)
+                not isinstance(numerator, Mapping)
+                or set(numerator) != {"op", "args"}
+                or numerator.get("op") != "sub"
+                or not isinstance(numerator_args, list)
                 or len(numerator_args) != 2
                 or not isinstance(numerator_args[0], Mapping)
+                or set(numerator_args[0]) != {"output"}
                 or not isinstance(numerator_args[1], Mapping)
+                or set(numerator_args[1]) != {"const"}
                 or not isinstance(denominator, Mapping)
+                or set(denominator) != {"const"}
                 or numerator_args[1].get("const") != denominator.get("const")
             ):
                 continue
@@ -2961,6 +2971,11 @@ def _show_report_inputs(request: Mapping[str, Any]) -> _HtmlView:
     return _HtmlView(
         "<h3>Objective targets</h3>"
         + _html_table(("Output", "Target value"), target_rows)
+        + "<h3>Sealed objective declaration</h3>"
+        + _html_table(
+            ("Field", "Value"),
+            (("objective", json.dumps(objective, sort_keys=True)),),
+        )
         + "<h3>Bound consumer artifacts</h3>"
         + _html_table(("Artifact", "Schema", "Units", "Provenance", "SHA-256"), artifact_rows)
     )

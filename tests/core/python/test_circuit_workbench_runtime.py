@@ -88,7 +88,7 @@ def _configured_sim(tmp_path: Path, *, maximum_generations: int = 1) -> tuple[Ci
         source,
         schema="test-public-input.v1",
         units="dimensionless",
-        provenance={"authority": "test fixture"},
+        provenance={"authority": "test <fixture>"},
     )
     sim.set_objective(_objective())
     sim.set_reduction(ReductionSpec((resonators[0].coord("signal"),)))
@@ -204,8 +204,12 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     report_html = (sealed["build_report"].path.parent / "report.html").read_text(encoding="utf-8")
     assert "Objective targets" in report_html
     assert "stiffness" in report_html and "1000000.0" in report_html
+    assert "Sealed objective declaration" in report_html
     assert "Bound consumer artifacts" in report_html
-    assert "test-public-input.v1" in report_html and "test fixture" in report_html
+    assert "fixture_input" in report_html and "test-public-input.v1" in report_html
+    assert "dimensionless" in report_html
+    assert request["artifacts"]["fixture_input"]["source_sha256"] in report_html
+    assert "test &lt;fixture&gt;" in report_html and "test <fixture>" not in report_html
 
     def no_subprocess(*args: object, **kwargs: object) -> object:
         raise AssertionError("resolve must not start Julia")
