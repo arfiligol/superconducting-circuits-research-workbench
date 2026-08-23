@@ -88,7 +88,7 @@ def _configured_sim(tmp_path: Path, *, maximum_generations: int = 1) -> tuple[Ci
         source,
         schema="test-public-input.v1",
         units="dimensionless",
-        provenance={"authority": "test fixture"},
+        provenance={"authority": "test <fixture>"},
     )
     sim.set_objective(_objective())
     sim.set_reduction(ReductionSpec((resonators[0].coord("signal"),)))
@@ -157,9 +157,10 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
         ("evaluate_responses", sim.evaluate_responses),
         ("fit_c11", sim.fit_c11),
         ("evaluate_t1", sim.evaluate_t1),
+        ("build_report", sim.build_report),
     ]
     sealed = {name: action(action="execute") for name, action in stages}
-    assert [stage.status for stage in sealed.values()] == ["PASS"] * 4 + ["NOT_EVALUABLE"]
+    assert [stage.status for stage in sealed.values()] == ["PASS"] * 6
     assert len(calls) == 4
     request = json.loads(
         (sealed["optimize"].path.parent / "circuit-workbench-run-request.v1.json").read_text(
@@ -197,10 +198,18 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert (sealed["fit_c11"].result or {})["fit_input"] == "pump_off_hb_s21"
     t1_result = sealed["evaluate_t1"].result or {}
     assert t1_result["method"].startswith("pump-off HB Z")
-    assert t1_result["finite_sample_count"] == 0
-    assert t1_result["not_evaluable_sample_count"] == t1_result["sample_count"]
-    with pytest.raises(RuntimeContractError, match=r"evaluate_t1.*not a complete PASS"):
-        sim.build_report(action="execute")
+    assert t1_result["finite_sample_count"] == t1_result["sample_count"]
+    assert t1_result["not_evaluable_sample_count"] == 0
+    assert t1_result["minimum_finite_t1_s"] is not None
+    report_html = (sealed["build_report"].path.parent / "report.html").read_text(encoding="utf-8")
+    assert "Objective targets" in report_html
+    assert "stiffness" in report_html and "1000000.0" in report_html
+    assert "Sealed objective declaration" in report_html
+    assert "Bound consumer artifacts" in report_html
+    assert "fixture_input" in report_html and "test-public-input.v1" in report_html
+    assert "dimensionless" in report_html
+    assert request["artifacts"]["fixture_input"]["source_sha256"] in report_html
+    assert "test &lt;fixture&gt;" in report_html and "test <fixture>" not in report_html
 
     def no_subprocess(*args: object, **kwargs: object) -> object:
         raise AssertionError("resolve must not start Julia")
@@ -210,10 +219,10 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert {name: stage.canonical_sha256 for name, stage in resolved.items()} == {
         name: stage.canonical_sha256 for name, stage in sealed.items()
     }
-    assert sim.build_report(action="resolve").status == "NOT_EVALUABLE"
+    assert sim.build_report(action="resolve").status == "PASS"
     run_dir = tmp_path / "staged"
-    assert resolve_circuit_result(run_dir).status == "NOT_EVALUABLE"
-    assert resolve_circuit_campaign([run_dir]).status == "NOT_EVALUABLE"
+    assert resolve_circuit_result(run_dir).status == "PASS"
+    assert resolve_circuit_campaign([run_dir]).status == "PASS"
     with pytest.raises(RuntimeContractError, match="durable bytes"):
         sim.optimize(action="execute")
 
@@ -237,8 +246,8 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     receipt_path.write_text(original_receipt, encoding="utf-8")
 
     result = resolve_circuit_result(run_dir)
-    assert result.stage("build_report").status == "NOT_EVALUABLE"
-    assert resolve_circuit_campaign([run_dir]).status == "NOT_EVALUABLE"
+    assert result.stage("build_report").status == "PASS"
+    assert resolve_circuit_campaign([run_dir]).status == "PASS"
 
     tampered = json.loads(original_receipt)
     tampered["canonical_sha256"] = "0" * 64
@@ -246,6 +255,19 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert resolve_circuit_result(run_dir).stage("evaluate_responses").status == "NOT_EVALUABLE"
     receipt_path.write_text("{", encoding="utf-8")
     assert resolve_circuit_result(run_dir).stage("evaluate_responses").status == "NOT_EVALUABLE"
+
+    optimize_receipt = sealed["optimize"].path
+    tampered = json.loads(optimize_receipt.read_text(encoding="utf-8"))
+    tampered["status"] = "NOT_EVALUABLE"
+    tampered["failure"] = None
+    tampered.pop("canonical_sha256")
+    tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+    optimize_receipt.write_text(json.dumps(tampered), encoding="utf-8")
+    assert sim.optimize(action="resolve").failure is None
+    with pytest.raises(RuntimeContractError) as error:
+        sim.refine_winner(action="execute")
+    assert "dependency: NOT_EVALUABLE" in str(error.value)
+    assert "dependency: None" not in str(error.value)
 
 
 def test_optimization_progress_is_transient_after_ledger_write(

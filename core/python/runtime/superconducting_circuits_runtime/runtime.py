@@ -1134,7 +1134,7 @@ class CircuitSim:
         return self._run_python_stage(
             request,
             "build_report",
-            lambda directory: _build_report_stage(directory, self.run_id, upstream),
+            lambda directory: _build_report_stage(directory, self.run_id, upstream, request),
         )
 
     def _winner_overrides(
@@ -1863,7 +1863,9 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
         status = str(receipt.get("status", "NOT_EVALUABLE"))
         if status != "PASS":
             failure = receipt.get("failure")
-            return ResolvedCircuitStage(stage, receipt_path, receipt, status, str(failure))
+            return ResolvedCircuitStage(
+                stage, receipt_path, receipt, status, str(failure) if failure is not None else None
+            )
         return ResolvedCircuitStage(stage, receipt_path, receipt, status)
     except Exception as error:
         return ResolvedCircuitStage(stage, receipt_path, {}, "NOT_EVALUABLE", str(error))
@@ -2869,6 +2871,7 @@ def _build_report_stage(
     directory: Path,
     run_id: str,
     upstream: Mapping[str, ResolvedCircuitStage],
+    request: Mapping[str, Any],
 ) -> Mapping[str, Any]:
     pending_report = ResolvedCircuitStage(
         "build_report", directory / "circuit-workbench-run-receipt.v1.json", {}, "PASS"
@@ -2878,6 +2881,7 @@ def _build_report_stage(
     body = "".join(
         section.html_text
         for section in (
+            _show_report_inputs(request),
             result.show_run_trustworthiness(),
             result.show_optimization(),
             result.show_winner_refinement(),
@@ -2914,6 +2918,67 @@ def _build_report_stage(
         "manifest": {"path": manifest_path.name, "sha256": _sha256(manifest_path.read_bytes())},
     }
     return {"status": "PASS", "produced_artifacts": artifacts}
+
+
+def _show_report_inputs(request: Mapping[str, Any]) -> _HtmlView:
+    target_rows = []
+    objective = request.get("objective")
+    residuals = objective.get("residuals") if isinstance(objective, Mapping) else None
+    if isinstance(residuals, Mapping):
+        for residual in residuals.values():
+            if (
+                not isinstance(residual, Mapping)
+                or set(residual) != {"op", "args"}
+                or residual.get("op") != "div"
+            ):
+                continue
+            args = residual.get("args")
+            if not isinstance(args, list) or len(args) != 2:
+                continue
+            numerator, denominator = args
+            numerator_args = numerator.get("args") if isinstance(numerator, Mapping) else None
+            if (
+                not isinstance(numerator, Mapping)
+                or set(numerator) != {"op", "args"}
+                or numerator.get("op") != "sub"
+                or not isinstance(numerator_args, list)
+                or len(numerator_args) != 2
+                or not isinstance(numerator_args[0], Mapping)
+                or set(numerator_args[0]) != {"output"}
+                or not isinstance(numerator_args[1], Mapping)
+                or set(numerator_args[1]) != {"const"}
+                or not isinstance(denominator, Mapping)
+                or set(denominator) != {"const"}
+                or numerator_args[1].get("const") != denominator.get("const")
+            ):
+                continue
+            target_rows.append((numerator_args[0].get("output", "—"), denominator.get("const")))
+
+    artifact_rows = []
+    artifacts = request.get("artifacts")
+    if isinstance(artifacts, Mapping):
+        for name, binding in sorted(artifacts.items()):
+            if isinstance(binding, Mapping):
+                artifact_rows.append(
+                    (
+                        name,
+                        binding.get("schema", "—"),
+                        json.dumps(binding.get("units"), sort_keys=True),
+                        json.dumps(binding.get("provenance"), sort_keys=True),
+                        binding.get("source_sha256", "—"),
+                    )
+                )
+    return _HtmlView(
+        "<h3>Objective targets</h3>"
+        + _html_table(("Output", "Target value"), target_rows)
+        + "<h3>Sealed objective declaration</h3>"
+        + _html_table(
+            ("Field", "Value"),
+            (("objective", json.dumps(objective, sort_keys=True)),),
+        )
+        + "<h3>Bound consumer artifacts</h3>"
+        + _html_table(("Artifact", "Schema", "Units", "Provenance", "SHA-256"), artifact_rows)
+    )
 
 
 def _html_table(headers: Sequence[str], rows: Sequence[Sequence[Any]]) -> str:
