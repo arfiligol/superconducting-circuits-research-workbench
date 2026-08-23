@@ -1863,7 +1863,9 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
         status = str(receipt.get("status", "NOT_EVALUABLE"))
         if status != "PASS":
             failure = receipt.get("failure")
-            return ResolvedCircuitStage(stage, receipt_path, receipt, status, str(failure))
+            return ResolvedCircuitStage(
+                stage, receipt_path, receipt, status, str(failure) if failure is not None else None
+            )
         return ResolvedCircuitStage(stage, receipt_path, receipt, status)
     except Exception as error:
         return ResolvedCircuitStage(stage, receipt_path, {}, "NOT_EVALUABLE", str(error))

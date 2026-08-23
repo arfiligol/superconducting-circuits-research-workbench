@@ -1671,7 +1671,7 @@ function _cw_evaluate_t1(request, stage_dir)
         conditions[frequency_index] = cond(eliminated)
         isfinite(conditions[frequency_index]) || error("T1 eliminated admittance block is singular.")
         y_eff[frequency_index] = transformed[4, 4] -
-            only(transformed[4, 1:3]' * (eliminated \ transformed[1:3, 4]))
+            only(transformed[4:4, 1:3] * (eliminated \ transformed[1:3, 4]))
     end
     omega = 2pi .* frequencies
     capacitance = Vector{Float64}(undef, length(frequencies))
