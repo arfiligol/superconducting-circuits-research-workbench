@@ -201,6 +201,11 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert t1_result["finite_sample_count"] == t1_result["sample_count"]
     assert t1_result["not_evaluable_sample_count"] == 0
     assert t1_result["minimum_finite_t1_s"] is not None
+    report_html = (sealed["build_report"].path.parent / "report.html").read_text(encoding="utf-8")
+    assert "Objective targets" in report_html
+    assert "stiffness" in report_html and "1000000.0" in report_html
+    assert "Bound consumer artifacts" in report_html
+    assert "test-public-input.v1" in report_html and "test fixture" in report_html
 
     def no_subprocess(*args: object, **kwargs: object) -> object:
         raise AssertionError("resolve must not start Julia")
