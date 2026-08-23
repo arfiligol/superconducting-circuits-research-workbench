@@ -10,12 +10,12 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Stabilized staged-action contract plus the converging live optimization-progress extension for the public Circuit Workbench runtime and Python-consumer boundary.
+scope: Stabilized staged-action contract plus the accepted live optimization-progress extension for the public Circuit Workbench runtime and Python-consumer boundary.
 version: v1.2.0
 last_updated: 2026-08-23
 updated_by: codex
 title: Circuit Runtime / Python Consumer
-description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution, with a converging live optimization-progress extension.
+description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution, with an accepted live optimization-progress extension.
 sidebar:
  label: Circuit Runtime / Python Consumer
  order: 45
@@ -28,7 +28,7 @@ request/receipt schemas, and one-process Julia boundary are stabilized and
 integrated as Workbench `6b6d13156bd3d5074b7da90baed6af10399765e7`;
 the current base `d2f5c1936a3e0cee13fc9ec72d4f4b3b3037605d` contains that
 identity. The live optimization-progress callback below is a scoped
-`CONVERGING / NOT_INTEGRATED` extension. It does not change the stabilized
+`ACCEPTED / NOT_INTEGRATED` extension. It does not change the stabilized
 plan, compiler, optimizer, staged-result, or receipt contracts.
 
 ## Ownership Boundary
@@ -126,7 +126,7 @@ There is no generic `run()` dispatcher and no compatibility path through the
 superseded `evaluate` / `optimize` / `analyze` workflow. Stage dependencies
 must resolve to complete `PASS` receipts before downstream execution.
 
-### CONVERGING Optimization Progress Observer
+### ACCEPTED Optimization Progress Observer
 
 An `execute` optimization may attach one process-local observer without
 changing its final `ResolvedCircuitStage` return:
@@ -269,10 +269,19 @@ or design-specific workflow.
 
 Optimization Progress Observer extension:
 
-- State: `CONVERGING`.
+- State: `ACCEPTED`.
 - Delivery status: `NOT_INTEGRATED`.
-- Test policy: `no_test_writes`.
-- Human acceptance: not yet requested.
+- Test policy: `stabilization_tests_authorized`.
+- Human acceptance: explicitly accepted the exact candidate based on
+  `d2f5c1936a3e0cee13fc9ec72d4f4b3b3037605d`, head
+  `4996f8c1d9b92107c2839b7b48546fe928e0fe7e`, tree
+  `23e2be4d6fff8694da683fb0f47c3f606b6118cc`, and full-index diff SHA-256
+  `3cbb24684c6e78a16581ef30a77bd77008ff53830b25b715d28fcfd23dbfed3a`.
+- Accepted scope: immutable `OptimizationProgress(generation, maximum_generations)`;
+  optional process-local `sim.optimize(action="execute", on_progress=...)`; no
+  observer effect on sealed requests, ledgers, fingerprints, receipts,
+  artifacts, results, objectives, Gates, or scientific semantics.
+- Unresolved semantic decisions: none.
 
 ## Related
 
