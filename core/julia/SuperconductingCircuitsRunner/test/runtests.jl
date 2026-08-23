@@ -115,6 +115,32 @@ end
     @test !isdefined(SuperconductingCircuitsRunner, :analyze)
 end
 
+@testset "targeted Schur validates the matrix residual after Newton step stagnation" begin
+    context = (
+        capacitance=[1.0 0.0; 0.0 1.0],
+        stiffness=[4.0 0.0; 0.0 9.0],
+        conductance=zeros(2, 2),
+        retained_indices=[1, 2],
+        eliminated_indices=Int[],
+        dimension=2,
+    )
+    evaluations = Ref(0)
+    root = SuperconductingCircuitsRunner._cw_targeted_schur_newton(2.0, "synthetic diagonal root") do omega
+        evaluations[] += 1
+        operator = SuperconductingCircuitsRunner._cw_targeted_schur_operator(context, omega)
+        derivative = operator.derivative[1, 1]
+        noise = (isodd(evaluations[]) ? 1.0 : -1.0) * 5.0e-10 * abs(omega) * derivative
+        operator.dynamic[1, 1] + noise, derivative
+    end
+    @test root.iterations == 32
+    @test_nowarn SuperconductingCircuitsRunner._cw_targeted_simple_root!(
+        context, root.root, 1, 1, "synthetic diagonal root",
+    )
+    @test_throws SuperconductingCircuitsRunner._CWTargetedSchurNumericalError SuperconductingCircuitsRunner._cw_targeted_simple_root!(
+        context, 1.0, 1, 1, "synthetic invalid root",
+    )
+end
+
 @testset "real task kinds fail clearly until implemented" begin
     mktempdir() do dir
         task_kinds = [
