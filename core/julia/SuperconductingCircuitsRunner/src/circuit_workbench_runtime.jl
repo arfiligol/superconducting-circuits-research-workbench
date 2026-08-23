@@ -5,6 +5,8 @@
 const _CW_PLAN_SCHEMA = "circuit-workbench-plan.v1"
 const _CW_REQUEST_SCHEMA = "circuit-workbench-run-request.v1"
 const _CW_RECEIPT_SCHEMA = "circuit-workbench-run-receipt.v1"
+const _CW_OPTIMIZATION_PROGRESS_ENV = "SC_CIRCUIT_WORKBENCH_PROGRESS_JSONL"
+const _CW_OPTIMIZATION_PROGRESS_PREFIX = "__CIRCUIT_WORKBENCH_OPTIMIZATION_PROGRESS__"
 
 struct _CWCandidateNotEvaluable <: Exception
     message::String
@@ -1223,6 +1225,8 @@ function _cw_optimize(request, ledger_path)
     objective_spec = _cw_dict(get(request, "objective", nothing), "request.objective")
     targeted_context = _cw_uses_targeted_schur(objective_spec) ?
         _cw_targeted_schur_context(request, variables) : nothing
+    progress_enabled = get(ENV, _CW_OPTIMIZATION_PROGRESS_ENV, "") == "1"
+    completed_generations = Ref(0)
     ledger = _cw_load_ledger(ledger_path, fingerprint)
     entries = _cw_array(get(ledger, "entries", nothing), "optimization ledger entries")
     cache = Dict{String,Dict{String,Any}}()
@@ -1288,7 +1292,20 @@ function _cw_optimize(request, ledger_path)
         end
         ledger["entries"] = entries
         _cw_atomic_json(ledger_path, ledger)
-        return [haskey(cache, key) ? _cw_ledger_entry_cost(cache[key]) : error("Candidate ledger entry missing.") for key in keys]
+        costs = [haskey(cache, key) ? _cw_ledger_entry_cost(cache[key]) : error("Candidate ledger entry missing.") for key in keys]
+        completed_generations[] += 1
+        if progress_enabled
+            println(
+                stdout,
+                _CW_OPTIMIZATION_PROGRESS_PREFIX,
+                JSON3.write(Dict(
+                    "generation" => completed_generations[],
+                    "maximum_generations" => maxiter,
+                )),
+            )
+            flush(stdout)
+        end
+        return costs
     end
     cma = CMAEvolutionStrategy.minimize(
         objective,

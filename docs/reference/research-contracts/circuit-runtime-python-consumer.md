@@ -10,12 +10,12 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Stabilized staged-action contract for the public Circuit Workbench runtime and Python-consumer boundary.
-version: v1.1.0
-last_updated: 2026-08-22
+scope: Stabilized staged-action contract plus the converging live optimization-progress extension for the public Circuit Workbench runtime and Python-consumer boundary.
+version: v1.2.0
+last_updated: 2026-08-23
 updated_by: codex
 title: Circuit Runtime / Python Consumer
-description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution.
+description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution, with a converging live optimization-progress extension.
 sidebar:
  label: Circuit Runtime / Python Consumer
  order: 45
@@ -23,14 +23,13 @@ sidebar:
 
 # Circuit Runtime / Python Consumer
 
-The visible `CircuitPlan`, `CircuitSim`, source-bound request/receipt schemas,
-and one-process Julia boundary are integrated in Workbench
-`10ce1ab2c03baec24b3c972bf19028d4bfda4b88`. The Human accepted the staged
-action and resolver extension on this page at exact candidate
-`0b5ae925ea65b1006e3381c1220a45809c76b940`; its repository delivery remains
-`PR OPEN / NOT_INTEGRATED` until Integration merges and verifies the target.
-The extension does not change the already integrated plan and compiler
-foundation.
+The visible `CircuitPlan`, `CircuitSim`, staged actions, source-bound
+request/receipt schemas, and one-process Julia boundary are stabilized and
+integrated as Workbench `6b6d13156bd3d5074b7da90baed6af10399765e7`;
+the current base `d2f5c1936a3e0cee13fc9ec72d4f4b3b3037605d` contains that
+identity. The live optimization-progress callback below is a scoped
+`CONVERGING / NOT_INTEGRATED` extension. It does not change the stabilized
+plan, compiler, optimizer, staged-result, or receipt contracts.
 
 ## Ownership Boundary
 
@@ -57,6 +56,7 @@ from superconducting_circuits_runtime import (
     CircuitPlan,
     CircuitSim,
     GateSpec,
+    OptimizationProgress,
     OptimizerSpec,
     ReductionSpec,
     ResponseSpec,
@@ -125,6 +125,40 @@ Every method accepts exactly one semantic action mode:
 There is no generic `run()` dispatcher and no compatibility path through the
 superseded `evaluate` / `optimize` / `analyze` workflow. Stage dependencies
 must resolve to complete `PASS` receipts before downstream execution.
+
+### CONVERGING Optimization Progress Observer
+
+An `execute` optimization may attach one process-local observer without
+changing its final `ResolvedCircuitStage` return:
+
+```python
+def show_progress(progress: OptimizationProgress) -> None:
+    print(f"Generation {progress.generation} / {progress.maximum_generations}")
+
+
+optimization = sim.optimize(action="execute", on_progress=show_progress)
+```
+
+`OptimizationProgress` is immutable and contains exactly the 1-based count of
+completed `generation`s and configured `maximum_generations`
+(`OptimizerSpec.controls` `maxiter`). `maximum_generations` is a configured
+ceiling, not a promise that optimization will reach it; existing stop
+conditions may finish earlier. The callback runs on the Python caller thread
+once after each completed CMA-ES population/generation and only after the
+existing optimization ledger has been atomically written successfully; no
+partial-generation event is emitted. `on_progress=None` preserves existing
+execution behavior. `resolve` remains pure read-only and emits or replays no
+callback, including when the same optional observer is supplied.
+
+Progress is transient observability only. It is not part of the request,
+ledger, fingerprint, receipt, artifact identity, result, objective, Gate, ETA,
+candidate score, scientific semantics, claim, or acceptance evidence. If an
+observer raises, the runtime warns once and disables further observer calls for
+that invocation while the same Julia execution continues. The observer cannot
+determine the stage result. The optimizer algorithm, seed, variables,
+transforms, population, `maxiter`, `maxfevals`, objective, Gates, evaluation
+order, ledger bytes and hash chain, stop behavior, receipts, results, and
+one-Julia-process boundary remain unchanged.
 
 Reusable components guarantee that named retainable coordinates survive from
 the plan to matrix indices. JosephsonCircuits.jl parses the compiled closed
@@ -229,8 +263,16 @@ or design-specific workflow.
   surface. Runtime, Core, Runner, documentation integrity, and all four hosted
   PR checks passed at that revision.
 - Test policy: `stabilization_tests_authorized`.
-- Delivery status: Workbench PR #37, `NOT_INTEGRATED`.
+- Delivery status: `INTEGRATED` as Workbench
+  `6b6d13156bd3d5074b7da90baed6af10399765e7`.
 - Unresolved semantic decisions: none.
+
+Optimization Progress Observer extension:
+
+- State: `CONVERGING`.
+- Delivery status: `NOT_INTEGRATED`.
+- Test policy: `no_test_writes`.
+- Human acceptance: not yet requested.
 
 ## Related
 

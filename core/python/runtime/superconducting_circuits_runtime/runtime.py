@@ -19,7 +19,9 @@ import subprocess
 import sys
 import tempfile
 import time
+import warnings
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import UTC, datetime
 from itertools import pairwise
@@ -57,6 +59,8 @@ _JULIA_ROOT = (
 )
 _RUNNER_PROJECT = _JULIA_ROOT / "SuperconductingCircuitsRunner"
 _RUNNER_CLI = _RUNNER_PROJECT / "bin" / "circuit_workbench_runtime.jl"
+_OPTIMIZATION_PROGRESS_ENV = "SC_CIRCUIT_WORKBENCH_PROGRESS_JSONL"
+_OPTIMIZATION_PROGRESS_PREFIX = "__CIRCUIT_WORKBENCH_OPTIMIZATION_PROGRESS__"
 
 
 class RuntimeContractError(ValueError):
@@ -74,6 +78,11 @@ class RuntimeContractError(ValueError):
         self.error_code = error_code
         self.category = category
         self.retryable = retryable
+
+
+def _warn_progress(message: str) -> None:
+    with suppress(Exception):
+        warnings.warn(message, RuntimeWarning, stacklevel=3)
 
 
 def _nonempty_string(value: Any) -> bool:
@@ -623,6 +632,14 @@ class OptimizerSpec:
 
 
 @dataclass(frozen=True)
+class OptimizationProgress:
+    """Process-local notice counting completed CMA-ES generations against maxiter."""
+
+    generation: int
+    maximum_generations: int
+
+
+@dataclass(frozen=True)
 class _Connection:
     left: EndpointRef
     right: EndpointRef
@@ -990,8 +1007,13 @@ class CircuitSim:
         self._optimizer = spec
 
     def optimize(
-        self, *, action: Literal["execute", "resolve"]
+        self,
+        *,
+        action: Literal["execute", "resolve"],
+        on_progress: Callable[[OptimizationProgress], None] | None = None,
     ) -> ResolvedCircuitStage:
+        if on_progress is not None and not callable(on_progress):
+            raise RuntimeContractError("optimize on_progress must be callable or None.")
         if action == "resolve":
             return self._resolve_stage("optimize")
         _validate_stage_action(action)
@@ -1002,7 +1024,7 @@ class CircuitSim:
         if not self._variables:
             raise RuntimeContractError("optimize requires at least one declared VariableSpec.")
         request = self._request(action="optimize", backend="direct")
-        return self._run_julia(request, "optimize")
+        return self._run_julia(request, "optimize", on_progress=on_progress)
 
     def refine_winner(
         self, *, action: Literal["execute", "resolve"]
@@ -1254,7 +1276,11 @@ class CircuitSim:
         return payload
 
     def _run_julia(
-        self, request: Mapping[str, Any], stage: str
+        self,
+        request: Mapping[str, Any],
+        stage: str,
+        *,
+        on_progress: Callable[[OptimizationProgress], None] | None = None,
     ) -> ResolvedCircuitStage:
         if not (_RUNNER_PROJECT / "Project.toml").is_file() or not _RUNNER_CLI.is_file():
             raise RuntimeContractError(
@@ -1276,21 +1302,68 @@ class CircuitSim:
             if isinstance(optimizer, Mapping)
             else 1
         )
-        completed = subprocess.run(
-            [
-                str(_resolved_julia_executable()),
-                "--startup-file=no",
-                f"--threads={worker_count}",
-                f"--project={_RUNNER_PROJECT}",
-                str(_RUNNER_CLI),
-                str(request_path),
-                str(receipt),
-            ],
-            text=True,
-        )
+        command = [
+            str(_resolved_julia_executable()),
+            "--startup-file=no",
+            f"--threads={worker_count}",
+            f"--project={_RUNNER_PROJECT}",
+            str(_RUNNER_CLI),
+            str(request_path),
+            str(receipt),
+        ]
+        if on_progress is None:
+            returncode = subprocess.run(command, text=True).returncode
+        else:
+            environment = dict(os.environ)
+            environment[_OPTIMIZATION_PROGRESS_ENV] = "1"
+            process = subprocess.Popen(
+                command,
+                text=True,
+                stdout=subprocess.PIPE,
+                bufsize=1,
+                env=environment,
+            )
+            callback: Callable[[OptimizationProgress], None] | None = on_progress
+            try:
+                assert process.stdout is not None
+                with process.stdout:
+                    for line in process.stdout:
+                        if not line.startswith(_OPTIMIZATION_PROGRESS_PREFIX):
+                            print(line, end="", flush=True)
+                            continue
+                        try:
+                            payload = json.loads(line.removeprefix(_OPTIMIZATION_PROGRESS_PREFIX))
+                            generation = payload["generation"]
+                            maximum = payload["maximum_generations"]
+                            if (
+                                isinstance(generation, bool)
+                                or not isinstance(generation, int)
+                                or generation < 1
+                                or isinstance(maximum, bool)
+                                or not isinstance(maximum, int)
+                                or maximum < generation
+                            ):
+                                raise ValueError("invalid generation bounds")
+                        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+                            _warn_progress(f"Ignored malformed optimization progress: {error}")
+                            continue
+                        if callback is None:
+                            continue
+                        try:
+                            callback(OptimizationProgress(generation, maximum))
+                        except Exception as error:
+                            _warn_progress(
+                                f"Optimization progress observer disabled after raising: {error}"
+                            )
+                            callback = None
+                returncode = process.wait()
+            except BaseException:
+                process.kill()
+                process.wait()
+                raise
         if receipt.is_file():
             sealed = self._resolve_stage(stage)
-            if completed.returncode:
+            if returncode:
                 failure = sealed.receipt.get("failure")
                 message = failure.get("message") if isinstance(failure, Mapping) else None
                 error_code = (
@@ -1310,14 +1383,14 @@ class CircuitSim:
                     category = "task_execution_failed"
                 raise RuntimeContractError(
                     "Julia action failed after sealing its failure receipt"
-                    f" (exit status {completed.returncode}): {message or 'no failure message'}",
+                    f" (exit status {returncode}): {message or 'no failure message'}",
                     error_code=error_code,
                     category=category,
                     retryable=retryable if isinstance(retryable, bool) else False,
                 )
             return sealed
         raise RuntimeContractError(
-            f"Julia action exited without sealing a receipt (exit status {completed.returncode})."
+            f"Julia action exited without sealing a receipt (exit status {returncode})."
         )
 
     def _run_python_stage(
