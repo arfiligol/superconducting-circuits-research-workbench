@@ -699,6 +699,7 @@ function _cw_with_netlist(compiled, netlist)
         node_map=compiled.node_map,
         component_map=compiled.component_map,
         line_tap_map=compiled.line_tap_map,
+        port_map=compiled.port_map,
         hb_intent_summary=compiled.hb_intent_summary,
         source_slot_map=compiled.source_slot_map,
         observable_request_map=compiled.observable_request_map,

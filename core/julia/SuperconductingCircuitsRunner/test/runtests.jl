@@ -1,4 +1,5 @@
 using JSON3
+import SuperconductingCircuitsCore
 using SuperconductingCircuitsRunner
 using Test
 
@@ -113,6 +114,29 @@ end
     @test isdefined(SuperconductingCircuitsRunner, :execute_circuit_workbench_action)
     @test !isdefined(SuperconductingCircuitsRunner, :evaluate)
     @test !isdefined(SuperconductingCircuitsRunner, :analyze)
+end
+
+@testset "Circuit Workbench separates terminated and nonloading ports" begin
+    compiled = SuperconductingCircuitsCore.JosephsonCompiledCircuit(
+        netlist=Any[
+            ("P1", "n1", "0", 1),
+            ("R_port_1", "n1", "0", :R_port_1),
+            ("P2", "n2", "0", 2),
+            ("R_port_2", "n2", "0", :R_port_2),
+            ("C1", "n1", "n2", :C1),
+        ],
+    )
+    plan = Dict(
+        "ports" => Any[
+            Dict("id" => "feedline", "role" => "terminated"),
+            Dict("id" => "probe", "role" => "nonloading_probe"),
+        ],
+    )
+
+    targeted = SuperconductingCircuitsRunner._cw_targeted_portless_compiled(compiled, plan)
+    response = SuperconductingCircuitsRunner._cw_response_compiled(compiled, plan)
+    @test first.(targeted.netlist) == ["R_port_1", "C1"]
+    @test first.(response.netlist) == ["P1", "R_port_1", "C1"]
 end
 
 @testset "targeted Schur validates the matrix residual after Newton step stagnation" begin
