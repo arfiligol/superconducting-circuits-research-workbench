@@ -126,7 +126,15 @@ def _configured_sim(tmp_path: Path, *, maximum_generations: int = 1) -> tuple[Ci
         )
     )
     sim.set_refinement(plan=refinement, relative_tolerance=1.0e9)
-    sim.set_responses(ResponseSpec((4.5e9, 5.0e9, 5.5e9), "port_0", "port_1", 5.0e9))
+    sim.set_responses(
+        ResponseSpec(
+            direct_frequency_hz=(4.5e9, 5.0e9, 5.5e9),
+            hb_frequency_hz=(4.5e9, 4.75e9, 5.0e9, 5.25e9, 5.5e9),
+            input_port="port_0",
+            output_port="port_1",
+            pump_frequency_hz=5.0e9,
+        )
+    )
     sim.set_t1(
         T1Spec(
             (4.5e9, 5.0e9, 5.5e9),
@@ -195,6 +203,29 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert sealed["refine_winner"].status == "PASS"
     assert refinement["maximum_relative_change"] == max(refinement["relative_changes"].values())
     assert refinement["maximum_relative_change"] <= refinement["relative_tolerance"]
+    responses = sealed["evaluate_responses"]
+    response_result = responses.result or {}
+    assert response_result["grids"]["direct"]["points"] == 3
+    assert response_result["grids"]["hb"]["points"] == 5
+    direct_path = responses.path.parent / "direct_response.csv"
+    hb_path = responses.path.parent / "hb_response.csv"
+    assert set(runtime._read_numeric_csv(direct_path)) == {
+        "frequency_hz",
+        "direct_s21_real",
+        "direct_s21_imag",
+    }
+    assert set(runtime._read_numeric_csv(hb_path)) == {
+        "frequency_hz",
+        "hb_s21_real",
+        "hb_s21_imag",
+    }
+    c11_path = sealed["fit_c11"].path.parent / "c11_fit.csv"
+    assert len(runtime._read_numeric_csv(c11_path)["frequency_hz"]) == 5
+    assert set(runtime._read_numeric_csv(c11_path)) == {
+        "frequency_hz",
+        "c11_s21_real",
+        "c11_s21_imag",
+    }
     assert (sealed["fit_c11"].result or {})["fit_input"] == "pump_off_hb_s21"
     t1_result = sealed["evaluate_t1"].result or {}
     assert t1_result["method"].startswith("pump-off HB Z")
@@ -210,6 +241,10 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert "dimensionless" in report_html
     assert request["artifacts"]["fixture_input"]["source_sha256"] in report_html
     assert "test &lt;fixture&gt;" in report_html and "test <fixture>" not in report_html
+    response_html = resolve_circuit_result(tmp_path / "staged").show_responses().html_text
+    assert "Direct response" in response_html
+    assert "Pump-off HB and C11 fit" in response_html
+    assert response_html.count("<svg") == 2
 
     def no_subprocess(*args: object, **kwargs: object) -> object:
         raise AssertionError("resolve must not start Julia")
@@ -231,11 +266,11 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     source.write_text('{"fixture":"public"}', encoding="utf-8")
     assert sim.optimize(action="resolve").status == "PASS"
 
-    response_path = sealed["evaluate_responses"].path.parent / "response.csv"
-    original_response = response_path.read_bytes()
-    response_path.write_bytes(original_response + b"\ncorrupt")
-    assert sim.evaluate_responses(action="resolve").status == "NOT_EVALUABLE"
-    response_path.write_bytes(original_response)
+    for response_path in (direct_path, hb_path):
+        original_response = response_path.read_bytes()
+        response_path.write_bytes(original_response + b"\ncorrupt")
+        assert sim.evaluate_responses(action="resolve").status == "NOT_EVALUABLE"
+        response_path.write_bytes(original_response)
 
     receipt_path = sealed["evaluate_responses"].path
     original_receipt = receipt_path.read_text(encoding="utf-8")
@@ -357,6 +392,31 @@ def test_removed_compatibility_surface_is_not_public() -> None:
     assert not hasattr(CircuitSim, "evaluate")
     assert not hasattr(CircuitSim, "analyze")
     assert not hasattr(CircuitPlan, "show")
+
+
+def test_response_spec_requires_two_independent_grids() -> None:
+    valid = {
+        "direct_frequency_hz": (1.0, 2.0, 3.0),
+        "hb_frequency_hz": (1.0, 1.5, 2.0, 2.5, 3.0),
+        "input_port": "input",
+        "output_port": "output",
+        "pump_frequency_hz": 2.0,
+    }
+    spec = ResponseSpec(**valid)
+    assert len(spec.direct_frequency_hz) == 3
+    assert len(spec.hb_frequency_hz) == 5
+    for field_name in ("direct_frequency_hz", "hb_frequency_hz"):
+        invalid = dict(valid)
+        invalid[field_name] = (1.0, 1.0, 2.0)
+        with pytest.raises(RuntimeContractError, match=field_name):
+            ResponseSpec(**invalid)
+    with pytest.raises(TypeError):
+        ResponseSpec(
+            frequency_hz=(1.0, 2.0, 3.0),
+            input_port="input",
+            output_port="output",
+            pump_frequency_hz=2.0,
+        )
 
 
 def test_runtime_sdist_installs_with_bundled_julia(tmp_path: Path) -> None:
