@@ -124,7 +124,19 @@ end
             ("P2", "n2", "0", 2),
             ("R_port_2", "n2", "0", :R_port_2),
             ("C1", "n1", "n2", :C1),
+            ("Cg1", "n1", "0", :Cg1),
+            ("Cg2", "n2", "0", :Cg2),
+            ("L1", "n2", "0", :L1),
         ],
+        component_values=Dict(
+            :R_port_1 => 50.0,
+            :R_port_2 => 50.0,
+            :C1 => 1.0e-12,
+            :Cg1 => 1.0e-12,
+            :Cg2 => 1.0e-12,
+            :L1 => 1.0e-9,
+        ),
+        port_map=Dict(:feedline => 1, :probe => 2),
     )
     plan = Dict(
         "ports" => Any[
@@ -134,9 +146,14 @@ end
     )
 
     targeted = SuperconductingCircuitsRunner._cw_targeted_portless_compiled(compiled, plan)
+    direct = SuperconductingCircuitsRunner._cw_direct_closed_compiled(compiled)
     response = SuperconductingCircuitsRunner._cw_response_compiled(compiled, plan)
-    @test first.(targeted.netlist) == ["R_port_1", "C1"]
-    @test first.(response.netlist) == ["P1", "R_port_1", "C1"]
+    @test first.(targeted.netlist) == ["R_port_1", "C1", "Cg1", "Cg2", "L1"]
+    @test isempty(targeted.port_map)
+    @test isempty(direct.port_map)
+    @test size(SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(targeted).capacitance) == (2, 2)
+    @test first.(response.netlist) == ["P1", "R_port_1", "C1", "Cg1", "Cg2", "L1"]
+    @test response.port_map == compiled.port_map
 end
 
 @testset "targeted Schur validates the matrix residual after Newton step stagnation" begin

@@ -692,14 +692,14 @@ function _cw_targeted_perturbation(variable, value)
     error("Cannot train a targeted_schur affine term at a fixed variable bound.")
 end
 
-function _cw_with_netlist(compiled, netlist)
+function _cw_with_netlist(compiled, netlist; port_map=compiled.port_map)
     return SuperconductingCircuitsCore.JosephsonCompiledCircuit(
         netlist=netlist,
         component_values=compiled.component_values,
         node_map=compiled.node_map,
         component_map=compiled.component_map,
         line_tap_map=compiled.line_tap_map,
-        port_map=compiled.port_map,
+        port_map=port_map,
         hb_intent_summary=compiled.hb_intent_summary,
         source_slot_map=compiled.source_slot_map,
         observable_request_map=compiled.observable_request_map,
@@ -746,7 +746,7 @@ function _cw_targeted_portless_compiled(compiled, plan)
             startswith(string(first(row)), "P") || string(first(row)) in nonloading
         ))
     ]
-    return _cw_with_netlist(compiled, netlist)
+    return _cw_with_netlist(compiled, netlist; port_map=Dict{Symbol,Any}())
 end
 
 function _cw_targeted_schur_context(request, variables)
@@ -1480,7 +1480,7 @@ function _cw_direct_closed_compiled(compiled)
         if !(row isa Tuple && !isempty(row) &&
              (startswith(string(first(row)), "P") || startswith(string(first(row)), "R_port_")))
     ]
-    return _cw_with_netlist(compiled, netlist)
+    return _cw_with_netlist(compiled, netlist; port_map=Dict{Symbol,Any}())
 end
 
 function _cw_response_compiled(compiled, plan)
