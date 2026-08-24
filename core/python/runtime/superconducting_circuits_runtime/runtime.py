@@ -50,6 +50,7 @@ STAGE_DEPENDENCIES = {
 _STAGE_ACTIONS = {"execute", "resolve"}
 _LIFECYCLE_STATES = {"CONVERGING", "ACCEPTED", "STABILIZED"}
 _DATA_CLASSIFICATIONS = {"public", "project-internal", "NCUAS-private", "report-safe-derived"}
+_PORT_ROLES = {"terminated", "nonloading_probe"}
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 _SOURCE_CORE_ROOT = _PACKAGE_ROOT.parents[2]
 _JULIA_ROOT = (
@@ -651,6 +652,7 @@ class _Connection:
 class _Port:
     id: str
     endpoint: EndpointRef
+    role: Literal["terminated", "nonloading_probe"]
     resistance_ohm: float
 
 
@@ -672,12 +674,21 @@ class CircuitPlan:
     def connect(self, left: EndpointRef, right: EndpointRef) -> None:
         self._connections.append(_Connection(_endpoint(left), _endpoint(right)))
 
-    def add_port(self, id: str, endpoint: EndpointRef, *, resistance_ohm: float = 50.0) -> None:
+    def add_port(
+        self,
+        id: str,
+        endpoint: EndpointRef,
+        *,
+        role: Literal["terminated", "nonloading_probe"],
+        resistance_ohm: float = 50.0,
+    ) -> None:
         if not id or any(port.id == id for port in self._ports):
             raise RuntimeContractError("Port ids must be nonempty and unique.")
+        if role not in _PORT_ROLES:
+            raise RuntimeContractError("Port role must be 'terminated' or 'nonloading_probe'.")
         if not math.isfinite(resistance_ohm) or resistance_ohm <= 0:
             raise RuntimeContractError("Port resistance_ohm must be finite and positive.")
-        self._ports.append(_Port(id, _endpoint(endpoint), float(resistance_ohm)))
+        self._ports.append(_Port(id, _endpoint(endpoint), role, float(resistance_ohm)))
 
     def seal(self, libraries: Sequence[CircuitLibrary]) -> dict[str, Any]:
         resolved = _resolve_types(libraries)
@@ -719,6 +730,7 @@ class CircuitPlan:
                 {
                     "id": item.id,
                     "endpoint": _plain(_resolve_endpoint(item.endpoint, endpoint_bindings)),
+                    "role": item.role,
                     "resistance_ohm": item.resistance_ohm,
                 }
                 for item in self._ports
@@ -1822,6 +1834,8 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                 raise RuntimeContractError(f"bound artifact '{name}' is missing or changed")
         if receipt.get("artifact_bindings") != request.get("artifacts", {}):
             raise RuntimeContractError("receipt artifact bindings mismatch the request")
+        if receipt.get("port_roles") != _sealed_port_roles(plan):
+            raise RuntimeContractError("receipt port roles mismatch the sealed plan")
         upstream_receipts = _mapping(request.get("upstream_receipts", {}), "upstream receipts")
         if set(upstream_receipts) != set(STAGE_DEPENDENCIES[stage]):
             raise RuntimeContractError("stage has invalid upstream dependencies")
@@ -1904,6 +1918,7 @@ def _python_stage_receipt(
         "data_classification": request["data_classification"],
         "promotion_eligible": False,
         "artifact_bindings": request.get("artifacts", {}),
+        "port_roles": _sealed_port_roles(plan),
         "produced_artifacts": produced,
         "output_sha256": _fingerprint(result) if result is not None else None,
         "ledger_sha256": None,
@@ -2259,11 +2274,24 @@ def _schematic_intent(
             {
                 "id": item.id,
                 "endpoint": _plain(_resolve_endpoint(item.endpoint, bindings)),
+                "role": item.role,
                 "resistance_ohm": item.resistance_ohm,
             }
             for item in ports
         ],
     }
+
+
+def _sealed_port_roles(plan: Mapping[str, Any]) -> dict[str, str]:
+    roles: dict[str, str] = {}
+    for raw in plan.get("ports", []):
+        port = _mapping(raw, "plan port")
+        port_id = port.get("id")
+        role = port.get("role")
+        if not _nonempty_string(port_id) or role not in _PORT_ROLES:
+            raise RuntimeContractError("Sealed Plan contains an invalid port role declaration.")
+        roles[cast(str, port_id)] = cast(str, role)
+    return roles
 
 
 def _plain(value: Any) -> Any:

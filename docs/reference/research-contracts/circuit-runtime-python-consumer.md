@@ -12,7 +12,7 @@ owner: docs-team
 audience: team
 scope: Stabilized staged-action contract plus the accepted live optimization-progress extension for the public Circuit Workbench runtime and Python-consumer boundary.
 version: v1.2.0
-last_updated: 2026-08-23
+last_updated: 2026-08-24
 updated_by: codex
 title: Circuit Runtime / Python Consumer
 description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution, with an accepted live optimization-progress extension.
@@ -78,6 +78,21 @@ deferred.
 
 The plan does not own artifact bindings, reductions, targets, objective meaning,
 Gates, variables, optimizer settings, stage actions, receipts, or reporting.
+
+### Explicit Port Loading Roles
+
+`CircuitPlan.add_port(...)` requires an explicit `role` of either
+`"terminated"` or `"nonloading_probe"`; there is no implicit default.
+Terminated ports contribute their declared loading to targeted-Schur
+optimization and Direct/HB response evaluation. Nonloading probes are excluded
+from those loading paths but remain available to T1 evaluation and its existing
+probe-shunt de-embedding.
+
+The sealed plan exposes every port role. Stage requests and immutable receipts
+identity-bind the applicable role map. Missing or invalid roles, identity
+mismatches, and use of a port in a stage that does not permit its role fail
+closed. Port roles select runtime loading behavior; they create no scientific
+Gate or project-specific meaning.
 
 ## Objective And Artifact Declarations
 
@@ -312,6 +327,18 @@ Split Direct/HB response-grid extension:
 - Accepted scope: independent Direct and HB grids and artifacts, HB-only C11
   fitting, independent report frequency arrays, and fail-closed HB/C11 identity
   validation.
+- Unresolved semantic decisions: none.
+
+Explicit port-role extension:
+
+- State: `ACCEPTED`.
+- Delivery status: Draft PR, `NOT_INTEGRATED`.
+- Test policy: `stabilization_tests_authorized`.
+- Accepted scope: required `terminated` or `nonloading_probe` roles; terminated
+  loading in targeted-Schur optimization and Direct/HB response; nonloading
+  probe exclusion from those paths with retained T1 probe-shunt de-embedding;
+  sealed plan/request/receipt role binding; and fail-closed role validation.
+- Implicit/default port role: none.
 - Unresolved semantic decisions: none.
 
 `CircuitPlan` diagram surface:

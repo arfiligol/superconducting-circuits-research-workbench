@@ -372,12 +372,14 @@ function _cw_build_plan(payload; overrides=Dict{String,Float64}())
         port = _cw_dict(raw, "plan.ports[$index]")
         resistance = _cw_number(get(port, "resistance_ohm", nothing), "port.resistance_ohm")
         resistance > 0 || error("port.resistance_ohm must be positive.")
+        role = _cw_port_role(port)
         SuperconductingCircuitsCore.external_port!(
             plan;
             id=_cw_string(get(port, "id", nothing), "port.id"),
             index=index,
             endpoint=_cw_endpoint(get(port, "endpoint", nothing), "port.endpoint"),
             resistance=resistance,
+            role=Symbol(role),
         )
     end
     report = SuperconductingCircuitsCore.validate_authoring(plan)
@@ -690,20 +692,14 @@ function _cw_targeted_perturbation(variable, value)
     error("Cannot train a targeted_schur affine term at a fixed variable bound.")
 end
 
-function _cw_targeted_portless_compiled(compiled)
-    # Core deliberately reserves linear C/K/G extraction for a closed netlist.
-    # A compiled port contributes its explicit R_port shunt (the target open
-    # conductance); only the solver P row is removed for this extraction.
-    netlist = Any[
-        row for row in compiled.netlist
-        if !(row isa Tuple && !isempty(row) && startswith(string(first(row)), "P"))
-    ]
+function _cw_with_netlist(compiled, netlist)
     return SuperconductingCircuitsCore.JosephsonCompiledCircuit(
         netlist=netlist,
         component_values=compiled.component_values,
         node_map=compiled.node_map,
         component_map=compiled.component_map,
         line_tap_map=compiled.line_tap_map,
+        port_map=compiled.port_map,
         hb_intent_summary=compiled.hb_intent_summary,
         source_slot_map=compiled.source_slot_map,
         observable_request_map=compiled.observable_request_map,
@@ -714,6 +710,45 @@ function _cw_targeted_portless_compiled(compiled)
     )
 end
 
+function _cw_port_role(port)
+    role = _cw_string(get(port, "role", nothing), "port.role")
+    role in ("terminated", "nonloading_probe") || error(
+        "port.role must be terminated or nonloading_probe.",
+    )
+    return role
+end
+
+function _cw_port_roles(plan)
+    return Dict(
+        _cw_string(get(port, "id", nothing), "port.id") => _cw_port_role(port)
+        for port in (
+            _cw_dict(raw, "plan port")
+            for raw in _cw_array(get(plan, "ports", Any[]), "plan.ports")
+        )
+    )
+end
+
+function _cw_nonloading_port_indices(plan)
+    return Set(
+        index for (index, raw) in enumerate(_cw_array(get(plan, "ports", Any[]), "plan.ports"))
+        if _cw_port_role(_cw_dict(raw, "plan port")) == "nonloading_probe"
+    )
+end
+
+function _cw_targeted_portless_compiled(compiled, plan)
+    # Core deliberately reserves linear C/K/G extraction for a closed netlist.
+    # Terminated ports retain their explicit R_port shunts. Nonloading probes
+    # and solver P rows are absent from optimization C/K/G extraction.
+    nonloading = Set("R_port_$(index)" for index in _cw_nonloading_port_indices(plan))
+    netlist = Any[
+        row for row in compiled.netlist
+        if !(row isa Tuple && !isempty(row) && (
+            startswith(string(first(row)), "P") || string(first(row)) in nonloading
+        ))
+    ]
+    return _cw_with_netlist(compiled, netlist)
+end
+
 function _cw_targeted_schur_context(request, variables)
     objective = _cw_dict(get(request, "objective", nothing), "request.objective")
     _cw_targeted_schur_specs(objective)
@@ -721,7 +756,7 @@ function _cw_targeted_schur_context(request, variables)
     baseline_overrides = isempty(variables) ? Dict{String,Float64}() : _cw_candidate_overrides(variables, baseline_latent)
     reference_compiled = _cw_build_plan(get(request, "plan", nothing); overrides=baseline_overrides)
     reference_model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
-        _cw_targeted_portless_compiled(reference_compiled),
+        _cw_targeted_portless_compiled(reference_compiled, get(request, "plan", nothing)),
     )
     c_ref, k_ref, g_ref, retained = _cw_reduction_model(reference_compiled, reference_model, get(request, "reduction", nothing))
     length(retained) == 2 || error("targeted_schur requires exactly two retained complete-complement coordinates.")
@@ -750,7 +785,7 @@ function _cw_targeted_schur_context(request, variables)
         perturbed_overrides[key] = perturbed
         candidate = _cw_build_plan(get(request, "plan", nothing); overrides=perturbed_overrides)
         candidate_model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
-            _cw_targeted_portless_compiled(candidate),
+            _cw_targeted_portless_compiled(candidate, get(request, "plan", nothing)),
         )
         candidate_model.node_names == reference_model.node_names ||
             error("targeted_schur variable $(key) changes compiled coordinate topology.")
@@ -927,7 +962,7 @@ function _cw_targeted_schur_outputs(context, anchors)
     )
 end
 
-function _cw_direct_cared_outputs(compiled, objective, reduction; targeted_context=nothing, overrides=Dict{String,Float64}())
+function _cw_direct_cared_outputs(compiled, objective, reduction; plan, targeted_context=nothing, overrides=Dict{String,Float64}())
     outputs = _cw_dict(get(objective, "cared_outputs", nothing), "objective.cared_outputs")
     kinds = [_cw_string(get(_cw_dict(spec, "cared output"), "kind", nothing), "cared output kind") for spec in values(outputs)]
     if any(==("targeted_schur"), kinds)
@@ -943,7 +978,7 @@ function _cw_direct_cared_outputs(compiled, objective, reduction; targeted_conte
     uses_closed = any(==("closed_mode_frequency_hz"), kinds)
     uses_schur && uses_closed && error("A direct request cannot mix closed-mode and explicit Schur cared-output kinds.")
     model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
-        uses_closed ? _cw_direct_closed_compiled(compiled) : _cw_targeted_portless_compiled(compiled),
+        uses_closed ? _cw_direct_closed_compiled(compiled) : _cw_targeted_portless_compiled(compiled, plan),
     )
     if uses_schur
         all(==("schur_dynamic_stiffness_abs"), kinds) || error("Unsupported direct cared-output kind.")
@@ -1087,6 +1122,7 @@ function _cw_evaluate(request; overrides=Dict{String,Float64}(), candidate_param
             compiled,
             objective,
             get(request, "reduction", nothing);
+            plan=get(request, "plan", nothing),
             targeted_context=targeted_context,
             overrides=overrides,
         ) : error("Unsupported backend $(backend).")
@@ -1444,19 +1480,20 @@ function _cw_direct_closed_compiled(compiled)
         if !(row isa Tuple && !isempty(row) &&
              (startswith(string(first(row)), "P") || startswith(string(first(row)), "R_port_")))
     ]
-    return SuperconductingCircuitsCore.JosephsonCompiledCircuit(
-        netlist=netlist,
-        component_values=compiled.component_values,
-        node_map=compiled.node_map,
-        component_map=compiled.component_map,
-        line_tap_map=compiled.line_tap_map,
-        hb_intent_summary=compiled.hb_intent_summary,
-        source_slot_map=compiled.source_slot_map,
-        observable_request_map=compiled.observable_request_map,
-        hb_validation_summary=compiled.hb_validation_summary,
-        warnings=compiled.warnings,
-        provenance=compiled.provenance,
-        metadata=compiled.metadata,
+    return _cw_with_netlist(compiled, netlist)
+end
+
+function _cw_response_compiled(compiled, plan)
+    nonloading = _cw_nonloading_port_indices(plan)
+    excluded = Set(
+        name for index in nonloading for name in ("P$(index)", "R_port_$(index)")
+    )
+    return _cw_with_netlist(
+        compiled,
+        Any[
+            row for row in compiled.netlist
+            if !(row isa Tuple && !isempty(row) && string(first(row)) in excluded)
+        ],
     )
 end
 
@@ -1509,6 +1546,12 @@ function _cw_evaluate_responses(request, stage_dir)
     input = _cw_plan_port(plan, input_id)
     output = _cw_plan_port(plan, output_id)
     input.index != output.index || error("Response input and output ports must differ.")
+    _cw_port_role(input.data) == "terminated" || error(
+        "Response input_port must have role terminated.",
+    )
+    _cw_port_role(output.data) == "terminated" || error(
+        "Response output_port must have role terminated.",
+    )
     overrides = _cw_parameter_overrides(request)
     compiled = _cw_build_plan(plan; overrides=overrides)
 
@@ -1517,13 +1560,17 @@ function _cw_evaluate_responses(request, stage_dir)
     ports = [
         (index=index, data=_cw_dict(raw, "plan port"))
         for (index, raw) in enumerate(_cw_array(get(plan, "ports", Any[]), "plan.ports"))
+        if _cw_port_role(_cw_dict(raw, "plan port")) == "terminated"
     ]
     selector = zeros(Float64, length(model.node_names), length(ports))
     impedances = Float64[]
-    for port in ports
-        selector[_cw_port_node_index(compiled, model, port.data), port.index] = 1.0
+    positions = Dict(port.index => position for (position, port) in enumerate(ports))
+    for (position, port) in enumerate(ports)
+        selector[_cw_port_node_index(compiled, model, port.data), position] = 1.0
         push!(impedances, _cw_number(get(port.data, "resistance_ohm", nothing), "port resistance"))
     end
+    input_position = positions[input.index]
+    output_position = positions[output.index]
     direct = ComplexF64[
         SuperconductingCircuitsCore.matched_port_response(
             model.capacitance,
@@ -1532,17 +1579,17 @@ function _cw_evaluate_responses(request, stage_dir)
             selector,
             impedances;
             internal_conductance=model.conductance,
-        ).scattering[output.index, input.index]
+        ).scattering[output_position, input_position]
         for frequency in direct_frequencies
     ]
 
-    port_indices = collect(eachindex(ports))
+    port_indices = [port.index for port in ports]
     pump_frequency = _cw_number(
         get(spec, "pump_frequency_hz", nothing),
         "response.pump_frequency_hz",
     )
     hb_result = SuperconductingCircuitsCore.run_frequency_sweep(
-        compiled.netlist,
+        _cw_response_compiled(compiled, plan).netlist,
         compiled.component_values,
         hb_frequencies;
         pump_frequencies_hz=[pump_frequency],
@@ -1578,6 +1625,9 @@ function _cw_evaluate_responses(request, stage_dir)
             ),
         ),
         "ports" => Dict("input" => input_id, "output" => output_id),
+        "active_terminated_ports" => [
+            _cw_string(get(port.data, "id", nothing), "port.id") for port in ports
+        ],
         "phasor_translation" => "project_exp_minus_iwt=conj(solver_output)",
         "produced_artifacts" => Dict(
             "direct_response" => Dict(
@@ -1652,6 +1702,12 @@ function _cw_evaluate_t1(request, stage_dir)
     selected = [_cw_plan_port(plan, id) for id in (feedline_ids..., probe_ids...)]
     indices = [item.index for item in selected]
     length(unique(indices)) == 4 || error("T1 ports must be unique.")
+    all(_cw_port_role(item.data) == "terminated" for item in selected[1:2]) || error(
+        "T1 feedline_ports must have role terminated.",
+    )
+    all(_cw_port_role(item.data) == "nonloading_probe" for item in selected[3:4]) || error(
+        "T1 qubit_probe_ports must have role nonloading_probe.",
+    )
     compiled = _cw_build_plan(plan; overrides=_cw_parameter_overrides(request))
     result = SuperconductingCircuitsCore.run_frequency_sweep(
         compiled.netlist,
@@ -1720,6 +1776,7 @@ function _cw_evaluate_t1(request, stage_dir)
     return Dict{String,Any}(
         "status" => isempty(finite_t1) ? "NOT_EVALUABLE" : "PASS",
         "method" => "pump-off HB Z -> probe-shunt-compensated Y -> common/differential transform -> complete-complement q",
+        "port_roles" => Dict(id => _cw_port_role(item.data) for (id, item) in zip((feedline_ids..., probe_ids...), selected)),
         "sample_count" => length(t1),
         "finite_sample_count" => length(finite_t1),
         "not_evaluable_sample_count" => length(t1) - length(finite_t1),
@@ -1772,6 +1829,7 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
         "data_classification" => data_classification,
         "promotion_eligible" => false,
         "artifact_bindings" => get(request, "artifacts", Dict{String,Any}()),
+        "port_roles" => _cw_port_roles(plan),
         "produced_artifacts" => produced_artifacts,
         "output_sha256" => output_sha,
         "ledger_sha256" => ledger_sha,
