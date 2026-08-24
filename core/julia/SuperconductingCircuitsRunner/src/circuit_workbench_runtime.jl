@@ -1470,15 +1470,12 @@ function _cw_trace(result, family, label, expected_length)
     return ComplexF64.(trace)
 end
 
-function _cw_write_response_csv(path, frequencies, direct, hb)
+function _cw_write_response_csv(path, frequencies, trace, prefix)
     return _cw_atomic_csv(
         path,
-        ("frequency_hz", "direct_s21_real", "direct_s21_imag", "hb_s21_real", "hb_s21_imag"),
+        ("frequency_hz", "$(prefix)_s21_real", "$(prefix)_s21_imag"),
         (
-            (
-                frequencies[index], real(direct[index]), imag(direct[index]),
-                real(hb[index]), imag(hb[index]),
-            )
+            (frequencies[index], real(trace[index]), imag(trace[index]))
             for index in eachindex(frequencies)
         ),
     )
@@ -1486,12 +1483,26 @@ end
 
 function _cw_evaluate_responses(request, stage_dir)
     spec = _cw_dict(get(request, "response", nothing), "request.response")
-    frequencies = Float64[
-        _cw_number(value, "response frequency")
-        for value in _cw_array(get(spec, "frequency_hz", nothing), "response.frequency_hz")
+    direct_frequencies = Float64[
+        _cw_number(value, "Direct response frequency")
+        for value in _cw_array(
+            get(spec, "direct_frequency_hz", nothing),
+            "response.direct_frequency_hz",
+        )
     ]
-    length(frequencies) >= 3 && all(>(0), frequencies) && all(diff(frequencies) .> 0) ||
-        error("Response grid must be strictly increasing, positive, and contain at least three points.")
+    hb_frequencies = Float64[
+        _cw_number(value, "HB response frequency")
+        for value in _cw_array(
+            get(spec, "hb_frequency_hz", nothing),
+            "response.hb_frequency_hz",
+        )
+    ]
+    for (label, frequencies) in (("Direct", direct_frequencies), ("HB", hb_frequencies))
+        length(frequencies) >= 3 && all(>(0), frequencies) && all(diff(frequencies) .> 0) ||
+            error(
+                "$(label) response grid must be strictly increasing, positive, and contain at least three points.",
+            )
+    end
     plan = _cw_dict(get(request, "plan", nothing), "request.plan")
     input_id = _cw_string(get(spec, "input_port", nothing), "response.input_port")
     output_id = _cw_string(get(spec, "output_port", nothing), "response.output_port")
@@ -1522,7 +1533,7 @@ function _cw_evaluate_responses(request, stage_dir)
             impedances;
             internal_conductance=model.conductance,
         ).scattering[output.index, input.index]
-        for frequency in frequencies
+        for frequency in direct_frequencies
     ]
 
     port_indices = collect(eachindex(ports))
@@ -1533,7 +1544,7 @@ function _cw_evaluate_responses(request, stage_dir)
     hb_result = SuperconductingCircuitsCore.run_frequency_sweep(
         compiled.netlist,
         compiled.component_values,
-        frequencies;
+        hb_frequencies;
         pump_frequencies_hz=[pump_frequency],
         sources=[(mode=(1,), port=input.index, current=0.0)],
         port_indices=port_indices,
@@ -1546,22 +1557,37 @@ function _cw_evaluate_responses(request, stage_dir)
         hb_result,
         :zero_mode_s,
         "S$(output.index)$(input.index)",
-        length(frequencies),
+        length(hb_frequencies),
     ))
-    path = joinpath(stage_dir, "response.csv")
-    _cw_write_response_csv(path, frequencies, direct, hb)
+    direct_path = joinpath(stage_dir, "direct_response.csv")
+    hb_path = joinpath(stage_dir, "hb_response.csv")
+    _cw_write_response_csv(direct_path, direct_frequencies, direct, "direct")
+    _cw_write_response_csv(hb_path, hb_frequencies, hb, "hb")
     return Dict{String,Any}(
         "status" => "PASS",
-        "grid" => Dict(
-            "start_hz" => first(frequencies),
-            "stop_hz" => last(frequencies),
-            "points" => length(frequencies),
+        "grids" => Dict(
+            "direct" => Dict(
+                "start_hz" => first(direct_frequencies),
+                "stop_hz" => last(direct_frequencies),
+                "points" => length(direct_frequencies),
+            ),
+            "hb" => Dict(
+                "start_hz" => first(hb_frequencies),
+                "stop_hz" => last(hb_frequencies),
+                "points" => length(hb_frequencies),
+            ),
         ),
         "ports" => Dict("input" => input_id, "output" => output_id),
         "phasor_translation" => "project_exp_minus_iwt=conj(solver_output)",
-        "maximum_direct_hb_complex_error" => maximum(abs.(direct .- hb)),
         "produced_artifacts" => Dict(
-            "response" => Dict("path" => "response.csv", "sha256" => _cw_sha256(path)),
+            "direct_response" => Dict(
+                "path" => "direct_response.csv",
+                "sha256" => _cw_sha256(direct_path),
+            ),
+            "hb_response" => Dict(
+                "path" => "hb_response.csv",
+                "sha256" => _cw_sha256(hb_path),
+            ),
         ),
     )
 end
