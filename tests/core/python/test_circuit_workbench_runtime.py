@@ -72,7 +72,11 @@ def _plan(*, sections: int) -> tuple[CircuitPlan, list[object]]:
         plan.connect(resonators[index].pin("signal"), line.pin("head"))
         plan.connect(line.pin("tail"), resonators[index + 1].pin("signal"))
     for index, resonator in enumerate(resonators):
-        plan.add_port(f"port_{index}", resonator.pin("signal"))
+        plan.add_port(
+            f"port_{index}",
+            resonator.pin("signal"),
+            role="terminated" if index < 2 else "nonloading_probe",
+        )
     return plan, resonators
 
 
@@ -180,6 +184,22 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
         "transforms": [],
         "eliminated": "complete_complement",
     }
+    assert request["plan"]["ports"] == [
+        {
+            "id": f"port_{index}",
+            "endpoint": {"component_id": f"resonator_{index}", "pin_name": "signal"},
+            "role": "terminated" if index < 2 else "nonloading_probe",
+            "resistance_ohm": 50.0,
+        }
+        for index in range(4)
+    ]
+    expected_roles = {
+        "port_0": "terminated",
+        "port_1": "terminated",
+        "port_2": "nonloading_probe",
+        "port_3": "nonloading_probe",
+    }
+    assert all(stage.receipt["port_roles"] == expected_roles for stage in sealed.values())
     assert request["gates"] == [
         {
             "id": "nonnegative_stiffness",
@@ -205,6 +225,7 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert refinement["maximum_relative_change"] <= refinement["relative_tolerance"]
     responses = sealed["evaluate_responses"]
     response_result = responses.result or {}
+    assert response_result["active_terminated_ports"] == ["port_0", "port_1"]
     assert response_result["grids"]["direct"]["points"] == 3
     assert response_result["grids"]["hb"]["points"] == 5
     direct_path = responses.path.parent / "direct_response.csv"
@@ -228,6 +249,7 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     }
     assert (sealed["fit_c11"].result or {})["fit_input"] == "pump_off_hb_s21"
     t1_result = sealed["evaluate_t1"].result or {}
+    assert t1_result["port_roles"] == expected_roles
     assert t1_result["method"].startswith("pump-off HB Z")
     assert t1_result["finite_sample_count"] == t1_result["sample_count"]
     assert t1_result["not_evaluable_sample_count"] == 0
@@ -392,6 +414,12 @@ def test_removed_compatibility_surface_is_not_public() -> None:
     assert not hasattr(CircuitSim, "evaluate")
     assert not hasattr(CircuitSim, "analyze")
     assert not hasattr(CircuitPlan, "show")
+
+
+def test_plan_port_role_is_explicit_and_closed() -> None:
+    plan, resonators = _plan(sections=1)
+    with pytest.raises(RuntimeContractError, match=r"terminated.*nonloading_probe"):
+        plan.add_port("invalid", resonators[0].pin("signal"), role="probe")  # type: ignore[arg-type]
 
 
 def test_response_spec_requires_two_independent_grids() -> None:
