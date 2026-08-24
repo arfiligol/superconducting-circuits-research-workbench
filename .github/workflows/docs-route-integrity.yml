@@ -13,7 +13,7 @@ on:
       - "scripts/check_docs_language_allowlist.txt"
       - ".github/workflows/docs-route-integrity.yml"
   push:
-    branches: [main]
+    branches: [develop, main]
     paths:
       - "docs/**"
       - "site/**"
@@ -24,6 +24,10 @@ on:
       - "scripts/check_docs_language.py"
       - "scripts/check_docs_language_allowlist.txt"
       - ".github/workflows/docs-route-integrity.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   docs-routes:

@@ -2,6 +2,7 @@ name: API Reference Integrity
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - "docs/api-reference/**"
       - "docs/reference/api/**"
@@ -21,7 +22,7 @@ on:
       - "core/julia/**"
       - ".github/workflows/api-reference-integrity.yml"
   push:
-    branches: [main]
+    branches: [develop, main]
     paths:
       - "docs/api-reference/**"
       - "docs/reference/api/**"
@@ -41,8 +42,13 @@ on:
       - "core/julia/**"
       - ".github/workflows/api-reference-integrity.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   api-reference:
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

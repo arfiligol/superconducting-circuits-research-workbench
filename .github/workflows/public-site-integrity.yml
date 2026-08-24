@@ -2,6 +2,7 @@ name: Public Site Integrity
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - "site/**"
       - "docs/**"
@@ -23,7 +24,7 @@ on:
       - ".github/workflows/public-site-integrity.yml"
       - ".github/workflows/deploy-docs.yml"
   push:
-    branches: [main]
+    branches: [develop, main]
     paths:
       - "site/**"
       - "docs/**"
@@ -45,8 +46,13 @@ on:
       - ".github/workflows/public-site-integrity.yml"
       - ".github/workflows/deploy-docs.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   public-site:
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
