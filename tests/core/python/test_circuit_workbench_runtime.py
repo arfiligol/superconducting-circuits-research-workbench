@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import shutil
 import subprocess
@@ -149,6 +150,45 @@ def _configured_sim(tmp_path: Path, *, maximum_generations: int = 1) -> tuple[Ci
         )
     )
     return sim, source
+
+
+def test_c11_fit_uses_off_anchor_hb_extrema_for_its_coupled_start(tmp_path: Path) -> None:
+    import numpy as np
+
+    frequency = np.linspace(4.0e9, 8.0e9, 1001)
+    expected = np.asarray([4.45e9, 4.70e9, 50.0e6, 60.0e6])
+    omega = 2 * np.pi * frequency
+    delta_a = 2 * np.pi * expected[0] - omega
+    delta_b = 2 * np.pi * expected[1] - omega
+    hb = 1 - (2 * np.pi * expected[3]) * (2j * delta_b) / (
+        4 * (2 * np.pi * expected[2]) ** 2
+        + (2j * delta_a + 2 * np.pi * expected[3]) * (2j * delta_b)
+    )
+
+    response_dir = tmp_path / "responses"
+    response_dir.mkdir()
+    response_path = response_dir / "hb_response.csv"
+    with response_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(("frequency_hz", "hb_s21_real", "hb_s21_imag"))
+        writer.writerows(zip(frequency, hb.real, hb.imag, strict=True))
+    responses = runtime.ResolvedCircuitStage(
+        "evaluate_responses",
+        response_dir / "receipt.json",
+        {"produced_artifacts": {"hb_response": {"path": response_path.name}}},
+        "PASS",
+    )
+    fit_dir = tmp_path / "fit"
+    fit_dir.mkdir()
+
+    result = runtime._fit_c11_stage(fit_dir, responses)
+
+    parameters = result["parameters_hz"]
+    assert parameters["fa_hz"] == pytest.approx(expected[0], rel=0.01)
+    assert parameters["fb_hz"] == pytest.approx(expected[1], rel=0.01)
+    assert parameters["coupling_hz"] == pytest.approx(expected[2], rel=0.05)
+    assert parameters["kappa_hz"] == pytest.approx(expected[3], rel=0.05)
+    assert result["start_count"] == 30
 
 
 def test_staged_actions_seal_then_resolve_and_fail_closed(

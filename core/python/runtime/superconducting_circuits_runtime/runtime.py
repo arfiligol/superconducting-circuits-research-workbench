@@ -2796,6 +2796,30 @@ def _fit_c11_stage(
         for kappa_scale in (0.01, 0.05, 0.2)
     ]
 
+    magnitude = np.abs(normalized)
+    minima = (
+        np.flatnonzero((magnitude[1:-1] <= magnitude[:-2]) & (magnitude[1:-1] < magnitude[2:])) + 1
+    )
+    extrema_pairs = []
+    for left, right in pairwise(minima):
+        peak = left + int(np.argmax(magnitude[left : right + 1]))
+        if left < peak < right:
+            contrast = min(
+                magnitude[peak] - magnitude[left],
+                magnitude[peak] - magnitude[right],
+            )
+            extrema_pairs.append((contrast, left, peak, right))
+    if extrema_pairs:
+        _, left, peak, right = max(extrema_pairs, key=lambda item: item[0])
+        left_hz, peak_hz, right_hz = frequency[[left, peak, right]]
+        fa_hz = left_hz + right_hz - peak_hz
+        coupling_hz = np.sqrt((peak_hz - left_hz) * (right_hz - peak_hz))
+        if lower[0] < fa_hz < upper[0] and lower[2] < coupling_hz < upper[2]:
+            starts.extend(
+                np.asarray([fa_hz, peak_hz, coupling_hz, span * kappa_scale])
+                for kappa_scale in (0.01, 0.05, 0.2)
+            )
+
     def model(parameters: Any) -> Any:
         fa_hz, fb_hz, coupling_hz, kappa_hz = parameters
         omega = 2 * np.pi * frequency
