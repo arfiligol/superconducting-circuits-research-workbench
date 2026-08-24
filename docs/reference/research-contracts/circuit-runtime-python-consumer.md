@@ -176,6 +176,20 @@ response, and `evaluate_t1` owns the HB-derived effective admittance and T1
 surface. These are runtime mechanics; their consumer-supplied values and
 scientific meaning remain outside Workbench ownership.
 
+### Split Direct And HB Response Grids
+
+`ResponseSpec` requires both `direct_frequency_hz` and `hb_frequency_hz`. The
+superseded shared `frequency_hz` field has no compatibility alias, migration
+path, or fallback. `evaluate_responses(action="execute")` computes Direct and
+pump-off HB responses on their independently declared grids and seals
+`direct_response.csv` and `hb_response.csv` in one stage receipt. The contract
+does not interpolate, downsample, align rows, or define pointwise
+Direct-versus-HB comparison.
+
+`fit_c11` consumes only the sealed HB response and seals `c11_fit.csv`. Reports
+plot Direct and HB against their own frequency arrays and fail closed when the
+sealed HB and C11-fit frequency identities do not match.
+
 ## Identity, Receipts, And Failure
 
 Python seals one request for each stage. The runtime automatically derives and
@@ -282,6 +296,22 @@ Optimization Progress Observer extension:
   optional process-local `sim.optimize(action="execute", on_progress=...)`; no
   observer effect on sealed requests, ledgers, fingerprints, receipts,
   artifacts, results, objectives, Gates, or scientific semantics.
+- Unresolved semantic decisions: none.
+
+Split Direct/HB response-grid extension:
+
+- State: `STABILIZED`.
+- Delivery status: Draft PR #43, `NOT_INTEGRATED`.
+- Test policy: `stabilization_tests_authorized`.
+- Human acceptance: explicitly accepted candidate
+  `4d8ab2f573c6de5f39430e4261efd575593110fb`, tree
+  `4d8d70dcced46c4187a216b41afdd07da6e45466`, and full-index diff SHA-256
+  `b232309ab9d5ca3030d1cba439f01dc5c88c1f6bad9c8b3186c9edb7d59963c1`.
+- Supersedes: the shared `ResponseSpec.frequency_hz` field.
+- Retained compatibility or migration: none.
+- Accepted scope: independent Direct and HB grids and artifacts, HB-only C11
+  fitting, independent report frequency arrays, and fail-closed HB/C11 identity
+  validation.
 - Unresolved semantic decisions: none.
 
 `CircuitPlan` diagram surface:

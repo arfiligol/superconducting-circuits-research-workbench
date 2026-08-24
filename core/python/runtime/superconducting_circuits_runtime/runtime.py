@@ -548,28 +548,30 @@ class CircuitObjective:
 
 @dataclass(frozen=True)
 class ResponseSpec:
-    frequency_hz: tuple[float, ...]
+    direct_frequency_hz: tuple[float, ...]
+    hb_frequency_hz: tuple[float, ...]
     input_port: str
     output_port: str
     pump_frequency_hz: float
 
     def __post_init__(self) -> None:
-        values = tuple(float(value) for value in self.frequency_hz)
-        if (
-            len(values) < 3
-            or any(not math.isfinite(value) or value <= 0.0 for value in values)
-            or any(right <= left for left, right in pairwise(values))
-        ):
-            raise RuntimeContractError(
-                "ResponseSpec frequency_hz must be a strictly increasing positive grid."
-            )
+        for field_name in ("direct_frequency_hz", "hb_frequency_hz"):
+            values = tuple(float(value) for value in getattr(self, field_name))
+            if (
+                len(values) < 3
+                or any(not math.isfinite(value) or value <= 0.0 for value in values)
+                or any(right <= left for left, right in pairwise(values))
+            ):
+                raise RuntimeContractError(
+                    f"ResponseSpec {field_name} must be a strictly increasing positive grid."
+                )
+            object.__setattr__(self, field_name, values)
         if not _nonempty_string(self.input_port) or not _nonempty_string(self.output_port):
             raise RuntimeContractError("ResponseSpec requires named input and output ports.")
         if self.input_port == self.output_port:
             raise RuntimeContractError("ResponseSpec input and output ports must differ.")
         if not math.isfinite(self.pump_frequency_hz) or self.pump_frequency_hz <= 0.0:
             raise RuntimeContractError("ResponseSpec pump_frequency_hz must be positive.")
-        object.__setattr__(self, "frequency_hz", values)
 
 
 @dataclass(frozen=True)
@@ -742,6 +744,7 @@ class CircuitPlan:
         }
         payload["canonical_sha256"] = _fingerprint(payload)
         return payload
+
 
 @dataclass
 class CircuitSim:
@@ -1015,16 +1018,11 @@ class CircuitSim:
         request = self._request(action="optimize", backend="direct")
         return self._run_julia(request, "optimize", on_progress=on_progress)
 
-    def refine_winner(
-        self, *, action: Literal["execute", "resolve"]
-    ) -> ResolvedCircuitStage:
+    def refine_winner(self, *, action: Literal["execute", "resolve"]) -> ResolvedCircuitStage:
         if action == "resolve":
             return self._resolve_stage("refine_winner")
         _validate_stage_action(action)
-        if (
-            self._refinement_plan is None
-            or self._refinement_tolerance is None
-        ):
+        if self._refinement_plan is None or self._refinement_tolerance is None:
             raise RuntimeContractError("refine_winner requires set_refinement first.")
         optimization = self._require_stage("optimize")
         result = _mapping(optimization.receipt.get("result"), "optimization result")
@@ -1043,9 +1041,7 @@ class CircuitSim:
         )
         return self._run_julia(request, "refine_winner")
 
-    def evaluate_responses(
-        self, *, action: Literal["execute", "resolve"]
-    ) -> ResolvedCircuitStage:
+    def evaluate_responses(self, *, action: Literal["execute", "resolve"]) -> ResolvedCircuitStage:
         if action == "resolve":
             return self._resolve_stage("evaluate_responses")
         _validate_stage_action(action)
@@ -1068,9 +1064,7 @@ class CircuitSim:
         )
         return self._run_julia(request, "evaluate_responses")
 
-    def fit_c11(
-        self, *, action: Literal["execute", "resolve"]
-    ) -> ResolvedCircuitStage:
+    def fit_c11(self, *, action: Literal["execute", "resolve"]) -> ResolvedCircuitStage:
         if action == "resolve":
             return self._resolve_stage("fit_c11")
         _validate_stage_action(action)
@@ -1090,9 +1084,7 @@ class CircuitSim:
             lambda directory: _fit_c11_stage(directory, responses),
         )
 
-    def evaluate_t1(
-        self, *, action: Literal["execute", "resolve"]
-    ) -> ResolvedCircuitStage:
+    def evaluate_t1(self, *, action: Literal["execute", "resolve"]) -> ResolvedCircuitStage:
         if action == "resolve":
             return self._resolve_stage("evaluate_t1")
         _validate_stage_action(action)
@@ -1115,9 +1107,7 @@ class CircuitSim:
         )
         return self._run_julia(request, "evaluate_t1")
 
-    def build_report(
-        self, *, action: Literal["execute", "resolve"]
-    ) -> ResolvedCircuitStage:
+    def build_report(self, *, action: Literal["execute", "resolve"]) -> ResolvedCircuitStage:
         if action == "resolve":
             return self._resolve_stage("build_report")
         _validate_stage_action(action)
@@ -1148,8 +1138,7 @@ class CircuitSim:
             result.get("winner_physical_parameters"), "optimization winner parameters"
         )
         bindings = {
-            f"{item['requested_ref']['component_id']}.{item['requested_ref']['parameter_name']}":
-            f"{item['ref']['component_id']}.{item['ref']['parameter_name']}"
+            f"{item['requested_ref']['component_id']}.{item['requested_ref']['parameter_name']}": f"{item['ref']['component_id']}.{item['ref']['parameter_name']}"
             for item in _resolved_variables(self._variables, plan.seal(self._libraries))
         }
         if set(winner) != set(bindings):
@@ -1406,8 +1395,7 @@ class CircuitSim:
                 request,
                 request_path,
                 result,
-                durable_request_path=stage_dir
-                / "circuit-workbench-run-request.v1.json",
+                durable_request_path=stage_dir / "circuit-workbench-run-request.v1.json",
                 durable_stage_dir=stage_dir,
             )
             _atomic_write(
@@ -1428,8 +1416,7 @@ class CircuitSim:
                     request,
                     request_path,
                     None,
-                    durable_request_path=stage_dir
-                    / "circuit-workbench-run-request.v1.json",
+                    durable_request_path=stage_dir / "circuit-workbench-run-request.v1.json",
                     durable_stage_dir=stage_dir,
                     failure=failure,
                 )
@@ -1618,10 +1605,11 @@ class ResolvedCircuitResult:
         if stage.status != "PASS" or stage.result is None:
             return stage.show()
         comparison = stage.result.get("relative_changes", {})
-        rows = [
-            (name, value)
-            for name, value in sorted(comparison.items())
-        ] if isinstance(comparison, Mapping) else []
+        rows = (
+            [(name, value) for name, value in sorted(comparison.items())]
+            if isinstance(comparison, Mapping)
+            else []
+        )
         return _HtmlView(
             "<h3>Winner N→2N Refinement</h3>"
             + _html_table(("Cared output", "Relative change"), rows)
@@ -1631,35 +1619,43 @@ class ResolvedCircuitResult:
         stage = self.stage("evaluate_responses")
         if stage.status != "PASS":
             return stage.show()
-        path = _stage_artifact_path(stage, "response")
-        if path is None:
+        direct_path = _stage_artifact_path(stage, "direct_response")
+        hb_path = _stage_artifact_path(stage, "hb_response")
+        if direct_path is None or hb_path is None:
             return stage.show()
-        columns = _read_numeric_csv(path)
-        frequency = columns["frequency_hz"]
+        direct_columns = _read_numeric_csv(direct_path)
+        hb_columns = _read_numeric_csv(hb_path)
         direct = [
             math.hypot(real, imag)
             for real, imag in zip(
-                columns["direct_s21_real"], columns["direct_s21_imag"], strict=True
+                direct_columns["direct_s21_real"],
+                direct_columns["direct_s21_imag"],
+                strict=True,
             )
         ]
         hb = [
             math.hypot(real, imag)
-            for real, imag in zip(columns["hb_s21_real"], columns["hb_s21_imag"], strict=True)
+            for real, imag in zip(hb_columns["hb_s21_real"], hb_columns["hb_s21_imag"], strict=True)
         ]
-        series = {"Direct": direct, "HB": hb}
+        hb_series = {"HB": hb}
         c11_stage = self.stage("fit_c11")
-        c11_path = _stage_artifact_path(c11_stage, "response")
+        c11_path = _stage_artifact_path(c11_stage, "c11_fit")
         if c11_stage.status == "PASS" and c11_path is not None:
             fitted = _read_numeric_csv(c11_path)
-            series["C11"] = [
+            if fitted["frequency_hz"] != hb_columns["frequency_hz"]:
+                raise RuntimeContractError("C11 fit grid does not match the sealed HB grid.")
+            hb_series["C11"] = [
                 math.hypot(real, imag)
-                for real, imag in zip(
-                    fitted["c11_s21_real"], fitted["c11_s21_imag"], strict=True
-                )
+                for real, imag in zip(fitted["c11_s21_real"], fitted["c11_s21_imag"], strict=True)
             ]
         return _HtmlView(
             "<h3>Direct, pump-off HB, and C11 response</h3>"
-            + _svg_multi_line_chart(frequency, series, "Frequency (Hz)", "|S21|")
+            + "<h4>Direct response</h4>"
+            + _svg_line_chart(direct_columns["frequency_hz"], direct, "Frequency (Hz)", "|S21|")
+            + "<h4>Pump-off HB and C11 fit</h4>"
+            + _svg_multi_line_chart(
+                hb_columns["frequency_hz"], hb_series, "Frequency (Hz)", "|S21|"
+            )
         )
 
     def show_c11_fit(self) -> _HtmlView:
@@ -1708,9 +1704,7 @@ class ResolvedCircuitResult:
         for name in STAGE_ORDER:
             result = self.stages[name].result
             rows.append((name, result.get("wall_seconds", "—") if result else "—"))
-        return _HtmlView(
-            "<h3>Stage timing</h3>" + _html_table(("Stage", "Wall seconds"), rows)
-        )
+        return _HtmlView("<h3>Stage timing</h3>" + _html_table(("Stage", "Wall seconds"), rows))
 
     def show_all_results(self) -> _HtmlView:
         report = self.stage("build_report")
@@ -1758,10 +1752,7 @@ class ResolvedCircuitCampaign:
 
 def resolve_circuit_result(run_dir: Path | str) -> ResolvedCircuitResult:
     root = Path(run_dir).resolve()
-    stages = {
-        name: _resolve_stage_directory(root, name)
-        for name in STAGE_ORDER
-    }
+    stages = {name: _resolve_stage_directory(root, name) for name in STAGE_ORDER}
     return ResolvedCircuitResult(root, stages)
 
 
@@ -1803,10 +1794,9 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
         fingerprint = request_body.pop("fingerprint_sha256", None)
         if fingerprint != _fingerprint(request_body):
             raise RuntimeContractError("request fingerprint mismatches")
-        if (
-            receipt.get("request_fingerprint_sha256") != fingerprint
-            or receipt.get("request_sha256") != _sha256(request_bytes)
-        ):
+        if receipt.get("request_fingerprint_sha256") != fingerprint or receipt.get(
+            "request_sha256"
+        ) != _sha256(request_bytes):
             raise RuntimeContractError("receipt does not bind the durable request")
         durable_path = Path(str(receipt.get("request_path", ""))).resolve()
         if durable_path != request_path:
@@ -1832,9 +1822,7 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                 raise RuntimeContractError(f"bound artifact '{name}' is missing or changed")
         if receipt.get("artifact_bindings") != request.get("artifacts", {}):
             raise RuntimeContractError("receipt artifact bindings mismatch the request")
-        upstream_receipts = _mapping(
-            request.get("upstream_receipts", {}), "upstream receipts"
-        )
+        upstream_receipts = _mapping(request.get("upstream_receipts", {}), "upstream receipts")
         if set(upstream_receipts) != set(STAGE_DEPENDENCIES[stage]):
             raise RuntimeContractError("stage has invalid upstream dependencies")
         for upstream_name, expected in upstream_receipts.items():
@@ -1844,7 +1832,9 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                     f"upstream receipt '{upstream_name}' is not trustworthy: {upstream.failure}"
                 )
             if upstream.canonical_sha256 != expected:
-                raise RuntimeContractError(f"upstream receipt '{upstream_name}' identity mismatches")
+                raise RuntimeContractError(
+                    f"upstream receipt '{upstream_name}' identity mismatches"
+                )
         result = receipt.get("result")
         if result is not None and receipt.get("output_sha256") != _fingerprint(result):
             raise RuntimeContractError("receipt result hash mismatches")
@@ -1882,7 +1872,9 @@ def _python_stage_receipt(
 ) -> dict[str, Any]:
     runtime = _mapping(request.get("runtime"), "request runtime")
     plan = _mapping(request.get("plan"), "request plan")
-    produced = _mapping(result.get("produced_artifacts", {}), "produced artifacts") if result else {}
+    produced = (
+        _mapping(result.get("produced_artifacts", {}), "produced artifacts") if result else {}
+    )
     for name, artifact in produced.items():
         declaration = _mapping(artifact, f"produced artifact {name}")
         relative = Path(str(declaration.get("path", "")))
@@ -2734,27 +2726,22 @@ def _fit_c11_stage(
     directory: Path,
     responses: ResolvedCircuitStage,
 ) -> Mapping[str, Any]:
-    source = _stage_artifact_path(responses, "response")
+    source = _stage_artifact_path(responses, "hb_response")
     if source is None:
-        raise RuntimeContractError("fit_c11 requires the sealed response CSV.")
+        raise RuntimeContractError("fit_c11 requires the sealed HB response CSV.")
     columns = _read_numeric_csv(source)
     required = {
         "frequency_hz",
-        "direct_s21_real",
-        "direct_s21_imag",
         "hb_s21_real",
         "hb_s21_imag",
     }
     if not required <= set(columns):
-        raise RuntimeContractError("Response CSV lacks the Direct/HB complex trace columns.")
+        raise RuntimeContractError("HB response CSV lacks the required complex trace columns.")
 
     import numpy as np
     from scipy.optimize import least_squares
 
     frequency = np.asarray(columns["frequency_hz"], dtype=float)
-    direct = np.asarray(columns["direct_s21_real"], dtype=float) + 1j * np.asarray(
-        columns["direct_s21_imag"], dtype=float
-    )
     hb = np.asarray(columns["hb_s21_real"], dtype=float) + 1j * np.asarray(
         columns["hb_s21_imag"], dtype=float
     )
@@ -2816,16 +2803,12 @@ def _fit_c11_stage(
     parameters = np.asarray(winner.x, dtype=float)
     fitted = model(parameters) * baseline
     normalized_residual = fitted / baseline - normalized
-    output = directory / "response.csv"
+    output = directory / "c11_fit.csv"
     with output.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
         writer.writerow(
             (
                 "frequency_hz",
-                "direct_s21_real",
-                "direct_s21_imag",
-                "hb_s21_real",
-                "hb_s21_imag",
                 "c11_s21_real",
                 "c11_s21_imag",
             )
@@ -2833,10 +2816,6 @@ def _fit_c11_stage(
         writer.writerows(
             zip(
                 frequency,
-                direct.real,
-                direct.imag,
-                hb.real,
-                hb.imag,
                 fitted.real,
                 fitted.imag,
                 strict=True,
@@ -2854,16 +2833,12 @@ def _fit_c11_stage(
             "coupling_hz": float(parameters[2]),
             "kappa_hz": float(parameters[3]),
         },
-        "normalized_complex_rmse": float(
-            np.sqrt(np.mean(np.abs(normalized_residual) ** 2))
-        ),
-        "normalized_maximum_absolute_residual": float(
-            np.max(np.abs(normalized_residual))
-        ),
+        "normalized_complex_rmse": float(np.sqrt(np.mean(np.abs(normalized_residual) ** 2))),
+        "normalized_maximum_absolute_residual": float(np.max(np.abs(normalized_residual))),
         "start_count": len(results),
         "successful_start_count": len(successful),
         "iterations": int(winner.nfev),
-        "produced_artifacts": {"response": artifact},
+        "produced_artifacts": {"c11_fit": artifact},
     }
 
 
@@ -2906,9 +2881,7 @@ def _build_report_stage(
         "schema": "circuit-workbench-report.v1",
         "run_id": run_id,
         "status": "PASS",
-        "source_receipts": {
-            name: stage.canonical_sha256 for name, stage in upstream.items()
-        },
+        "source_receipts": {name: stage.canonical_sha256 for name, stage in upstream.items()},
         "report": {"path": report_path.name, "sha256": _sha256(report_path.read_bytes())},
         "nonclaims": ["no scientific acceptance claim", "no publication claim"],
     }
