@@ -376,17 +376,19 @@ Explicit port-role extension:
 
 Explicit-candidate evaluation extension:
 
-- State: `CONVERGING`.
-- Delivery status: `INTEGRATION_PR / NOT_INTEGRATED`.
-- Test policy: `no_test_writes`.
-- Human acceptance: not requested.
-- Candidate scope: generic declaration of the existing physical variable
-  mapping for response, C11, T1, and report execution using an explicit
-  candidate bound to the current sealed Plan;
-  exact candidate/Plan/artifact/dependency identity binding; and an explicit
-  no-optimization/no-refinement-under-this-Plan nonclaim.
+- State: `STABILIZED`.
+- Delivery status: Workbench PR #46, `NOT_INTEGRATED`.
+- Test policy: `stabilization_tests_authorized`.
+- Human acceptance: on 2026-08-25 the Human explicitly accepted candidate
+  `dd7ad23315e9a6fe2d2e62ffa112dac3d0df1832`, tree
+  `50ac7817b7900dd15c00d123d470854869113dcf`.
+- Accepted scope: a fixed candidate may execute Response → C11 → T1 → Report
+  in the current sealed alternate-Plan run; receipts distinguish
+  `externally_selected_candidate`; no optimization or refinement is claimed
+  under that Plan.
+- Scientific-result acceptance or SCNSim change: none.
 - Retained compatibility or fallback: none.
-- Unresolved semantic decisions: none within the supplied candidate contract.
+- Unresolved semantic decisions: none.
 
 `CircuitPlan` diagram surface:
 
