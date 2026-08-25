@@ -1390,6 +1390,29 @@ function _cw_parameter_overrides(request)
     )
 end
 
+function _cw_candidate(request)
+    raw = get(request, "candidate", nothing)
+    isnothing(raw) && return nothing
+    candidate = _cw_dict(raw, "request.candidate")
+    Set(keys(candidate)) == Set([
+        "source",
+        "physical_parameters",
+        "provenance",
+        "canonical_sha256",
+    ]) || error("Candidate binding fields are malformed.")
+    source = _cw_string(get(candidate, "source", nothing), "candidate.source")
+    source in ("optimizer_winner", "externally_selected_candidate") ||
+        error("Candidate source is unsupported.")
+    isempty(_cw_dict(get(candidate, "physical_parameters", nothing), "candidate.physical_parameters")) &&
+        error("Candidate physical_parameters must be nonempty.")
+    isempty(_cw_dict(get(candidate, "provenance", nothing), "candidate.provenance")) &&
+        error("Candidate provenance must be nonempty.")
+    body = Dict{String,Any}(candidate)
+    identity = _cw_string(pop!(body, "canonical_sha256"), "candidate.canonical_sha256")
+    identity == _cw_fingerprint(body) || error("Candidate canonical identity mismatches its declaration.")
+    return candidate
+end
+
 function _cw_validate_upstream_receipts(request, request_path)
     stages_root = dirname(dirname(abspath(request_path)))
     action = _cw_string(get(request, "action", nothing), "request.action")
@@ -1397,12 +1420,21 @@ function _cw_validate_upstream_receipts(request, request_path)
         get(request, "upstream_receipts", Dict{String,Any}()),
         "request.upstream_receipts",
     )
-    required = Dict(
-        "optimize" => Set{String}(),
-        "refine_winner" => Set(["optimize"]),
-        "evaluate_responses" => Set(["optimize", "refine_winner"]),
-        "evaluate_t1" => Set(["optimize", "fit_c11"]),
-    )[action]
+    candidate = _cw_candidate(request)
+    source = isnothing(candidate) ? nothing : candidate["source"]
+    required = if source == "externally_selected_candidate"
+        Dict(
+            "evaluate_responses" => Set{String}(),
+            "evaluate_t1" => Set(["fit_c11"]),
+        )[action]
+    else
+        Dict(
+            "optimize" => Set{String}(),
+            "refine_winner" => Set(["optimize"]),
+            "evaluate_responses" => Set(["optimize", "refine_winner"]),
+            "evaluate_t1" => Set(["optimize", "fit_c11"]),
+        )[action]
+    end
     Set(keys(upstream)) == required || error("Stage $(action) has invalid upstream dependencies.")
     for (stage, raw_expected) in upstream
         expected = _cw_string(raw_expected, "upstream receipt identity")
@@ -1415,6 +1447,20 @@ function _cw_validate_upstream_receipts(request, request_path)
         delete!(body, "canonical_sha256")
         actual == _cw_fingerprint(body) || error("Upstream receipt $(stage) is corrupt.")
         get(receipt, "status", nothing) == "PASS" || error("Upstream stage $(stage) is not PASS.")
+        upstream_candidate = get(receipt, "candidate", nothing)
+        if source == "externally_selected_candidate" && isnothing(upstream_candidate)
+            error("Upstream stage $(stage) lacks the explicit candidate binding.")
+        end
+        if !isnothing(candidate) && !isnothing(upstream_candidate)
+            candidate["canonical_sha256"] == get(upstream_candidate, "canonical_sha256", nothing) ||
+                error("Upstream stage $(stage) candidate identity mismatches.")
+            plan = _cw_dict(get(request, "plan", nothing), "request.plan")
+            get(receipt, "plan_sha256", nothing) == get(plan, "canonical_sha256", nothing) ||
+                error("Upstream stage $(stage) plan identity mismatches.")
+            _cw_fingerprint(get(receipt, "artifact_bindings", Dict{String,Any}())) ==
+                _cw_fingerprint(get(request, "artifacts", Dict{String,Any}())) ||
+                error("Upstream stage $(stage) artifact bindings mismatch.")
+        end
     end
     return nothing
 end
@@ -1840,6 +1886,16 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
         "result" => result,
         "failure" => failure,
     )
+    candidate = get(request, "candidate", nothing)
+    if !isnothing(candidate)
+        receipt["candidate"] = candidate
+        if get(candidate, "source", nothing) == "externally_selected_candidate"
+            push!(
+                receipt["nonclaims"],
+                "candidate was not optimized or refined under this sealed plan",
+            )
+        end
+    end
     receipt["canonical_sha256"] = _cw_fingerprint(receipt)
     return receipt
 end

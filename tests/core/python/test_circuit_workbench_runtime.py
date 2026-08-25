@@ -367,6 +367,96 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert "dependency: None" not in str(error.value)
 
 
+def test_explicit_candidate_runs_downstream_stages_without_optimization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sim, source = _configured_sim(tmp_path)
+    candidate = {"resonator_0.capacitance_f": 1.0e-12}
+    with pytest.raises(RuntimeContractError, match="do not match"):
+        sim.set_explicit_candidate({"foreign.parameter": 1.0}, provenance={"source": "user"})
+    with pytest.raises(RuntimeContractError, match="above its bound"):
+        sim.set_explicit_candidate(
+            {"resonator_0.capacitance_f": 2.0e-12}, provenance={"source": "user"}
+        )
+    sim.set_explicit_candidate(candidate, provenance={"source": "public fixture"})
+
+    subprocess_run = runtime.subprocess.run
+    calls: list[object] = []
+
+    def counted_run(*args: object, **kwargs: object) -> object:
+        calls.append(args[0])
+        return subprocess_run(*args, **kwargs)
+
+    monkeypatch.setattr(runtime.subprocess, "run", counted_run)
+    stages = {
+        "evaluate_responses": sim.evaluate_responses(action="execute"),
+        "fit_c11": sim.fit_c11(action="execute"),
+        "evaluate_t1": sim.evaluate_t1(action="execute"),
+        "build_report": sim.build_report(action="execute"),
+    }
+    assert [stage.status for stage in stages.values()] == ["PASS"] * 4
+    assert len(calls) == 2
+    assert not (tmp_path / "staged" / "stages" / "optimize").exists()
+    assert not (tmp_path / "staged" / "stages" / "refine_winner").exists()
+
+    binding = stages["evaluate_responses"].receipt["candidate"]
+    assert binding["source"] == "externally_selected_candidate"
+    assert binding["physical_parameters"] == candidate
+    assert all(stage.receipt["candidate"] == binding for stage in stages.values())
+    response_request = json.loads(
+        (
+            stages["evaluate_responses"].path.parent / "circuit-workbench-run-request.v1.json"
+        ).read_text(encoding="utf-8")
+    )
+    report_request = json.loads(
+        (stages["build_report"].path.parent / "circuit-workbench-run-request.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert response_request["upstream_receipts"] == {}
+    assert set(report_request["upstream_receipts"]) == {
+        "evaluate_responses",
+        "fit_c11",
+        "evaluate_t1",
+    }
+    assert all(
+        "candidate was not optimized or refined under this sealed plan"
+        in stage.receipt["nonclaims"]
+        for stage in stages.values()
+    )
+
+    run_dir = tmp_path / "staged"
+    resolved = resolve_circuit_result(run_dir)
+    assert resolved.status == "PASS"
+    assert resolve_circuit_campaign([run_dir]).status == "PASS"
+    assert "Not run or claimed" in resolved.show_winner_refinement().html_text
+    report = (stages["build_report"].path.parent / "report.html").read_text(encoding="utf-8")
+    assert "externally_selected_candidate" in report
+    assert "Not run or claimed" in report
+
+    def no_subprocess(*args: object, **kwargs: object) -> object:
+        raise AssertionError("resolve must not start Julia")
+
+    monkeypatch.setattr(runtime.subprocess, "run", no_subprocess)
+    assert sim.evaluate_responses(action="resolve").status == "PASS"
+    assert sim.fit_c11(action="resolve").status == "PASS"
+    assert sim.evaluate_t1(action="resolve").status == "PASS"
+    assert sim.build_report(action="resolve").status == "PASS"
+
+    original_source = source.read_text(encoding="utf-8")
+    source.write_text('{"fixture":"changed"}', encoding="utf-8")
+    assert resolve_circuit_result(run_dir).status == "NOT_EVALUABLE"
+    source.write_text(original_source, encoding="utf-8")
+
+    response_receipt = stages["evaluate_responses"].path
+    tampered = json.loads(response_receipt.read_text(encoding="utf-8"))
+    tampered["candidate"]["canonical_sha256"] = "0" * 64
+    tampered.pop("canonical_sha256")
+    tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+    response_receipt.write_text(json.dumps(tampered), encoding="utf-8")
+    assert resolve_circuit_result(run_dir).status == "NOT_EVALUABLE"
+
+
 def test_optimization_progress_is_transient_after_ledger_write(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
