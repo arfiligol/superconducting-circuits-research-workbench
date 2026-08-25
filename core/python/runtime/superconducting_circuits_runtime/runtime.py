@@ -51,6 +51,7 @@ _STAGE_ACTIONS = {"execute", "resolve"}
 _LIFECYCLE_STATES = {"CONVERGING", "ACCEPTED", "STABILIZED"}
 _DATA_CLASSIFICATIONS = {"public", "project-internal", "NCUAS-private", "report-safe-derived"}
 _PORT_ROLES = {"terminated", "nonloading_probe"}
+_CANDIDATE_SOURCES = {"optimizer_winner", "externally_selected_candidate"}
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 _SOURCE_CORE_ROOT = _PACKAGE_ROOT.parents[2]
 _JULIA_ROOT = (
@@ -774,6 +775,7 @@ class CircuitSim:
     _gates: list[GateSpec] = field(default_factory=list, init=False)
     _variables: list[VariableSpec] = field(default_factory=list, init=False)
     _optimizer: OptimizerSpec | None = field(default=None, init=False)
+    _explicit_candidate: Mapping[str, Any] | None = field(default=None, init=False)
     _refinement_plan: CircuitPlan | None = field(default=None, init=False)
     _refinement_tolerance: float | None = field(default=None, init=False)
     _response: ResponseSpec | None = field(default=None, init=False)
@@ -972,6 +974,20 @@ class CircuitSim:
             )
         self._variables = list(specs)
 
+    def set_explicit_candidate(
+        self,
+        physical_parameters: Mapping[str, float],
+        *,
+        provenance: Mapping[str, Any],
+    ) -> None:
+        candidate = _candidate_binding(
+            "externally_selected_candidate",
+            physical_parameters,
+            provenance,
+        )
+        self._candidate_overrides(candidate, self._plan)
+        self._explicit_candidate = candidate
+
     def set_optimizer(self, spec: OptimizerSpec) -> None:
         if (
             not isinstance(spec, OptimizerSpec)
@@ -1059,19 +1075,26 @@ class CircuitSim:
         _validate_stage_action(action)
         if self._response is None:
             raise RuntimeContractError("evaluate_responses requires set_responses first.")
-        optimization = self._require_stage("optimize")
-        refinement = self._require_stage("refine_winner")
-        winner = _mapping(optimization.receipt.get("result"), "optimization result")
+        if self._explicit_candidate is None:
+            optimization = self._require_stage("optimize")
+            refinement = self._require_stage("refine_winner")
+            winner = _mapping(optimization.receipt.get("result"), "optimization result")
+            candidate = self._optimizer_candidate(winner, optimization, refinement)
+            upstream = {
+                "optimize": optimization.canonical_sha256,
+                "refine_winner": refinement.canonical_sha256,
+            }
+        else:
+            candidate = self._explicit_candidate
+            upstream = {}
         request = self._request(
             action="evaluate_responses",
             backend="direct_hb",
             extras={
-                "parameter_overrides": self._winner_overrides(winner, self._plan),
+                "candidate": candidate,
+                "parameter_overrides": self._candidate_overrides(candidate, self._plan),
                 "response": _plain(self._response),
-                "upstream_receipts": {
-                    "optimize": optimization.canonical_sha256,
-                    "refine_winner": refinement.canonical_sha256,
-                },
+                "upstream_receipts": upstream,
             },
         )
         return self._run_julia(request, "evaluate_responses")
@@ -1081,14 +1104,18 @@ class CircuitSim:
             return self._resolve_stage("fit_c11")
         _validate_stage_action(action)
         responses = self._require_stage("evaluate_responses")
+        candidate = responses.receipt.get("candidate")
+        extras: dict[str, Any] = {
+            "upstream_receipts": {
+                "evaluate_responses": responses.canonical_sha256,
+            }
+        }
+        if candidate is not None:
+            extras["candidate"] = _validated_candidate_binding(candidate)
         request = self._request(
             action="fit_c11",
             backend="python",
-            extras={
-                "upstream_receipts": {
-                    "evaluate_responses": responses.canonical_sha256,
-                }
-            },
+            extras=extras,
         )
         return self._run_python_stage(
             request,
@@ -1102,20 +1129,50 @@ class CircuitSim:
         _validate_stage_action(action)
         if self._t1 is None:
             raise RuntimeContractError("evaluate_t1 requires set_t1 first.")
-        optimization = self._require_stage("optimize")
         c11 = self._require_stage("fit_c11")
-        winner = _mapping(optimization.receipt.get("result"), "optimization result")
+        raw_candidate = c11.receipt.get("candidate")
+        if raw_candidate is None:
+            optimization = self._require_stage("optimize")
+            winner = _mapping(optimization.receipt.get("result"), "optimization result")
+            candidate = None
+            overrides = self._winner_overrides(winner, self._plan)
+            upstream = {
+                "optimize": optimization.canonical_sha256,
+                "fit_c11": c11.canonical_sha256,
+            }
+        else:
+            candidate = _validated_candidate_binding(raw_candidate)
+            source = candidate["source"]
+            if source == "externally_selected_candidate":
+                if self._explicit_candidate != candidate:
+                    raise RuntimeContractError(
+                        "evaluate_t1 requires the same configured explicit candidate as fit_c11."
+                    )
+                upstream = {"fit_c11": c11.canonical_sha256}
+            else:
+                optimization = self._require_stage("optimize")
+                refinement = self._require_stage("refine_winner")
+                winner = _mapping(optimization.receipt.get("result"), "optimization result")
+                if candidate != self._optimizer_candidate(winner, optimization, refinement):
+                    raise RuntimeContractError(
+                        "Optimizer winner identity differs from the sealed C11 dependency."
+                    )
+                upstream = {
+                    "optimize": optimization.canonical_sha256,
+                    "fit_c11": c11.canonical_sha256,
+                }
+            overrides = self._candidate_overrides(candidate, self._plan)
+        extras: dict[str, Any] = {
+            "parameter_overrides": overrides,
+            "t1": _plain(self._t1),
+            "upstream_receipts": upstream,
+        }
+        if candidate is not None:
+            extras["candidate"] = candidate
         request = self._request(
             action="evaluate_t1",
             backend="hb",
-            extras={
-                "parameter_overrides": self._winner_overrides(winner, self._plan),
-                "t1": _plain(self._t1),
-                "upstream_receipts": {
-                    "optimize": optimization.canonical_sha256,
-                    "fit_c11": c11.canonical_sha256,
-                },
-            },
+            extras=extras,
         )
         return self._run_julia(request, "evaluate_t1")
 
@@ -1123,15 +1180,26 @@ class CircuitSim:
         if action == "resolve":
             return self._resolve_stage("build_report")
         _validate_stage_action(action)
-        upstream = {name: self._require_stage(name) for name in STAGE_ORDER[:-1]}
+        if self._explicit_candidate is None:
+            upstream_names = STAGE_ORDER[:-1]
+        else:
+            upstream_names = ("evaluate_responses", "fit_c11", "evaluate_t1")
+        upstream = {name: self._require_stage(name) for name in upstream_names}
+        candidate = upstream["evaluate_responses"].receipt.get("candidate")
+        extras: dict[str, Any] = {
+            "upstream_receipts": {name: stage.canonical_sha256 for name, stage in upstream.items()}
+        }
+        if candidate is not None:
+            candidate = _validated_candidate_binding(candidate)
+            if self._explicit_candidate is not None and candidate != self._explicit_candidate:
+                raise RuntimeContractError(
+                    "build_report requires the configured explicit candidate dependency."
+                )
+            extras["candidate"] = candidate
         request = self._request(
             action="build_report",
             backend="python",
-            extras={
-                "upstream_receipts": {
-                    name: stage.canonical_sha256 for name, stage in upstream.items()
-                }
-            },
+            extras=extras,
         )
         return self._run_python_stage(
             request,
@@ -1149,26 +1217,81 @@ class CircuitSim:
         winner = _mapping(
             result.get("winner_physical_parameters"), "optimization winner parameters"
         )
+        return self._physical_parameter_overrides(winner, plan, "Optimization winner")
+
+    def _optimizer_candidate(
+        self,
+        result: Mapping[str, Any],
+        optimization: ResolvedCircuitStage,
+        refinement: ResolvedCircuitStage,
+    ) -> dict[str, Any]:
+        winner = _mapping(
+            result.get("winner_physical_parameters"), "optimization winner parameters"
+        )
+        return _candidate_binding(
+            "optimizer_winner",
+            winner,
+            {
+                "optimization_receipt_sha256": optimization.canonical_sha256,
+                "refinement_receipt_sha256": refinement.canonical_sha256,
+            },
+        )
+
+    def _candidate_overrides(
+        self,
+        candidate: Mapping[str, Any],
+        plan: CircuitPlan | None,
+    ) -> dict[str, float]:
+        binding = _validated_candidate_binding(candidate)
+        return self._physical_parameter_overrides(
+            _mapping(binding["physical_parameters"], "candidate physical parameters"),
+            plan,
+            "Explicit candidate"
+            if binding["source"] == "externally_selected_candidate"
+            else "Optimization winner",
+        )
+
+    def _physical_parameter_overrides(
+        self,
+        physical_parameters: Mapping[str, Any],
+        plan: CircuitPlan | None,
+        label: str,
+    ) -> dict[str, float]:
+        if plan is None:
+            raise RuntimeContractError(f"{label} parameter resolution requires a sealed Plan.")
+        variables = _resolved_variables(self._variables, plan.seal(self._libraries))
         bindings = {
             f"{item['requested_ref']['component_id']}.{item['requested_ref']['parameter_name']}": f"{item['ref']['component_id']}.{item['ref']['parameter_name']}"
-            for item in _resolved_variables(self._variables, plan.seal(self._libraries))
+            for item in variables
         }
-        if set(winner) != set(bindings):
+        if set(physical_parameters) != set(bindings):
             raise RuntimeContractError(
-                "Optimization winner parameters do not match the selected sealed Plan."
+                f"{label} parameters do not match the selected sealed Plan variables."
             )
         overrides: dict[str, float] = {}
-        for requested, resolved in bindings.items():
-            value = winner[requested]
+        for variable in variables:
+            requested = (
+                f"{variable['requested_ref']['component_id']}."
+                f"{variable['requested_ref']['parameter_name']}"
+            )
+            resolved = bindings[requested]
+            value = physical_parameters[requested]
             if (
                 isinstance(value, bool)
                 or not isinstance(value, (int, float))
                 or not math.isfinite(float(value))
             ):
                 raise RuntimeContractError(
-                    f"Optimization winner parameter '{requested}' must be finite numeric."
+                    f"{label} parameter '{requested}' must be finite numeric."
                 )
-            overrides[resolved] = float(value)
+            numeric = float(value)
+            if variable["transform"] == "log" and numeric <= 0.0:
+                raise RuntimeContractError(f"{label} log parameter '{requested}' must be positive.")
+            if variable["lower"] is not None and numeric < variable["lower"]:
+                raise RuntimeContractError(f"{label} parameter '{requested}' is below its bound.")
+            if variable["upper"] is not None and numeric > variable["upper"]:
+                raise RuntimeContractError(f"{label} parameter '{requested}' is above its bound.")
+            overrides[resolved] = numeric
         return overrides
 
     def _request(
@@ -1482,6 +1605,67 @@ def _mapping(value: Any, label: str) -> Mapping[str, Any]:
     return value
 
 
+def _candidate_binding(
+    source: str,
+    physical_parameters: Mapping[str, Any],
+    provenance: Mapping[str, Any],
+) -> dict[str, Any]:
+    if source not in _CANDIDATE_SOURCES:
+        raise RuntimeContractError("Candidate source is unsupported.")
+    if not isinstance(physical_parameters, Mapping) or not physical_parameters:
+        raise RuntimeContractError("Candidate physical_parameters must be a nonempty mapping.")
+    if not isinstance(provenance, Mapping) or not provenance:
+        raise RuntimeContractError("Candidate provenance must be a nonempty mapping.")
+    binding: dict[str, Any] = {
+        "source": source,
+        "physical_parameters": dict(physical_parameters),
+        "provenance": dict(provenance),
+    }
+    try:
+        binding["canonical_sha256"] = _fingerprint(binding)
+    except (TypeError, ValueError) as error:
+        raise RuntimeContractError(
+            "Candidate binding must be canonical-JSON serializable."
+        ) from error
+    return _validated_candidate_binding(binding)
+
+
+def _validated_candidate_binding(value: Any) -> dict[str, Any]:
+    candidate = dict(_mapping(value, "candidate binding"))
+    if set(candidate) != {
+        "source",
+        "physical_parameters",
+        "provenance",
+        "canonical_sha256",
+    }:
+        raise RuntimeContractError("Candidate binding fields are malformed.")
+    if candidate["source"] not in _CANDIDATE_SOURCES:
+        raise RuntimeContractError("Candidate source is unsupported.")
+    if not _mapping(candidate["physical_parameters"], "candidate physical_parameters"):
+        raise RuntimeContractError("Candidate physical_parameters must be nonempty.")
+    if not _mapping(candidate["provenance"], "candidate provenance"):
+        raise RuntimeContractError("Candidate provenance must be nonempty.")
+    body = dict(candidate)
+    identity = body.pop("canonical_sha256")
+    if not isinstance(identity, str) or identity != _fingerprint(body):
+        raise RuntimeContractError("Candidate canonical identity mismatches its declaration.")
+    return candidate
+
+
+def _stage_dependencies(stage: str, candidate: Any) -> tuple[str, ...]:
+    if stage not in STAGE_DEPENDENCIES:
+        raise RuntimeContractError(f"Unknown Circuit Workbench stage '{stage}'.")
+    source = None if candidate is None else _validated_candidate_binding(candidate)["source"]
+    if source == "externally_selected_candidate":
+        return {
+            "evaluate_responses": (),
+            "fit_c11": ("evaluate_responses",),
+            "evaluate_t1": ("fit_c11",),
+            "build_report": ("evaluate_responses", "fit_c11", "evaluate_t1"),
+        }.get(stage, STAGE_DEPENDENCIES[stage])
+    return STAGE_DEPENDENCIES[stage]
+
+
 @dataclass(frozen=True)
 class _HtmlView:
     html_text: str
@@ -1548,9 +1732,22 @@ class ResolvedCircuitResult:
     def status(self) -> str:
         return (
             "PASS"
-            if all(self.stages[name].status == "PASS" for name in STAGE_ORDER)
+            if all(self.stages[name].status == "PASS" for name in self._active_stage_order())
             else "NOT_EVALUABLE"
         )
+
+    def _candidate(self) -> Mapping[str, Any] | None:
+        for name in ("build_report", "evaluate_t1", "fit_c11", "evaluate_responses"):
+            candidate = self.stages[name].receipt.get("candidate")
+            if candidate is not None:
+                return _validated_candidate_binding(candidate)
+        return None
+
+    def _active_stage_order(self) -> tuple[str, ...]:
+        candidate = self._candidate()
+        if candidate is not None and candidate["source"] == "externally_selected_candidate":
+            return ("evaluate_responses", "fit_c11", "evaluate_t1", "build_report")
+        return STAGE_ORDER
 
     def stage(self, name: str) -> ResolvedCircuitStage:
         if name not in STAGE_ORDER:
@@ -1565,7 +1762,7 @@ class ResolvedCircuitResult:
                 self.stages[name].canonical_sha256 or "—",
                 self.stages[name].failure or "—",
             )
-            for name in STAGE_ORDER
+            for name in self._active_stage_order()
         ]
         return _HtmlView(
             f"<h3>{html.escape(self.run_id)} · {self.status}</h3>"
@@ -1573,6 +1770,23 @@ class ResolvedCircuitResult:
         )
 
     def show_optimization(self) -> _HtmlView:
+        candidate = self._candidate()
+        if candidate is not None and candidate["source"] == "externally_selected_candidate":
+            return _HtmlView(
+                "<h3>Explicit candidate</h3>"
+                + _html_table(
+                    ("Field", "Value"),
+                    (
+                        ("Source", candidate["source"]),
+                        ("Candidate SHA-256", candidate["canonical_sha256"]),
+                        (
+                            "Physical parameters",
+                            json.dumps(candidate["physical_parameters"], sort_keys=True),
+                        ),
+                        ("Provenance", json.dumps(candidate["provenance"], sort_keys=True)),
+                    ),
+                )
+            )
         stage = self.stage("optimize")
         if stage.status != "PASS" or stage.result is None:
             return stage.show()
@@ -1613,6 +1827,12 @@ class ResolvedCircuitResult:
         return _HtmlView("<h3>Optimization</h3>" + chart + _html_table(("Field", "Value"), rows))
 
     def show_winner_refinement(self) -> _HtmlView:
+        candidate = self._candidate()
+        if candidate is not None and candidate["source"] == "externally_selected_candidate":
+            return _HtmlView(
+                "<h3>Optimization and N→2N refinement</h3>"
+                "<p>Not run or claimed for this explicit candidate under this sealed plan.</p>"
+            )
         stage = self.stage("refine_winner")
         if stage.status != "PASS" or stage.result is None:
             return stage.show()
@@ -1713,7 +1933,7 @@ class ResolvedCircuitResult:
 
     def show_simulation_benchmark(self) -> _HtmlView:
         rows = []
-        for name in STAGE_ORDER:
+        for name in self._active_stage_order():
             result = self.stages[name].result
             rows.append((name, result.get("wall_seconds", "—") if result else "—"))
         return _HtmlView("<h3>Stage timing</h3>" + _html_table(("Stage", "Wall seconds"), rows))
@@ -1836,8 +2056,13 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
             raise RuntimeContractError("receipt artifact bindings mismatch the request")
         if receipt.get("port_roles") != _sealed_port_roles(plan):
             raise RuntimeContractError("receipt port roles mismatch the sealed plan")
+        candidate = request.get("candidate")
+        if candidate is not None:
+            candidate = _validated_candidate_binding(candidate)
+        if receipt.get("candidate") != candidate:
+            raise RuntimeContractError("receipt candidate binding mismatches the request")
         upstream_receipts = _mapping(request.get("upstream_receipts", {}), "upstream receipts")
-        if set(upstream_receipts) != set(STAGE_DEPENDENCIES[stage]):
+        if set(upstream_receipts) != set(_stage_dependencies(stage, candidate)):
             raise RuntimeContractError("stage has invalid upstream dependencies")
         for upstream_name, expected in upstream_receipts.items():
             upstream = _resolve_stage_directory(run_dir, upstream_name)
@@ -1849,6 +2074,28 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                 raise RuntimeContractError(
                     f"upstream receipt '{upstream_name}' identity mismatches"
                 )
+            upstream_candidate = upstream.receipt.get("candidate")
+            if (
+                candidate is not None
+                and candidate["source"] == "externally_selected_candidate"
+                and upstream_candidate is None
+            ):
+                raise RuntimeContractError(
+                    f"upstream receipt '{upstream_name}' lacks the explicit candidate binding"
+                )
+            if candidate is not None and upstream_candidate is not None:
+                if upstream_candidate != candidate:
+                    raise RuntimeContractError(
+                        f"upstream receipt '{upstream_name}' candidate identity mismatches"
+                    )
+                if upstream.receipt.get("plan_sha256") != plan_hash:
+                    raise RuntimeContractError(
+                        f"upstream receipt '{upstream_name}' plan identity mismatches"
+                    )
+                if upstream.receipt.get("artifact_bindings") != request.get("artifacts", {}):
+                    raise RuntimeContractError(
+                        f"upstream receipt '{upstream_name}' artifact bindings mismatch"
+                    )
         result = receipt.get("result")
         if result is not None and receipt.get("output_sha256") != _fingerprint(result):
             raise RuntimeContractError("receipt result hash mismatches")
@@ -1930,6 +2177,12 @@ def _python_stage_receipt(
         "result": result,
         "failure": failure,
     }
+    if request.get("candidate") is not None:
+        receipt["candidate"] = _validated_candidate_binding(request["candidate"])
+        if receipt["candidate"]["source"] == "externally_selected_candidate":
+            receipt["nonclaims"].append(
+                "candidate was not optimized or refined under this sealed plan"
+            )
     receipt["canonical_sha256"] = _fingerprint(receipt)
     return receipt
 
@@ -2937,6 +3190,13 @@ def _build_report_stage(
         "report": {"path": report_path.name, "sha256": _sha256(report_path.read_bytes())},
         "nonclaims": ["no scientific acceptance claim", "no publication claim"],
     }
+    if request.get("candidate") is not None:
+        candidate = _validated_candidate_binding(request["candidate"])
+        manifest["candidate"] = candidate
+        if candidate["source"] == "externally_selected_candidate":
+            manifest["nonclaims"].append(
+                "candidate was not optimized or refined under this sealed plan"
+            )
     _atomic_write(manifest_path, _canonical_bytes(manifest))
     artifacts = {
         "report": {"path": report_path.name, "sha256": _sha256(report_path.read_bytes())},
@@ -2993,8 +3253,20 @@ def _show_report_inputs(request: Mapping[str, Any]) -> _HtmlView:
                         binding.get("source_sha256", "—"),
                     )
                 )
+    candidate = request.get("candidate")
+    candidate_rows = []
+    if candidate is not None:
+        candidate = _validated_candidate_binding(candidate)
+        candidate_rows = [
+            ("source", candidate["source"]),
+            ("canonical_sha256", candidate["canonical_sha256"]),
+            ("physical_parameters", json.dumps(candidate["physical_parameters"], sort_keys=True)),
+            ("provenance", json.dumps(candidate["provenance"], sort_keys=True)),
+        ]
     return _HtmlView(
-        "<h3>Objective targets</h3>"
+        "<h3>Candidate selection</h3>"
+        + _html_table(("Field", "Value"), candidate_rows)
+        + "<h3>Objective targets</h3>"
         + _html_table(("Output", "Target value"), target_rows)
         + "<h3>Sealed objective declaration</h3>"
         + _html_table(

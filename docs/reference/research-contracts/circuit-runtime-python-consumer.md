@@ -12,7 +12,7 @@ owner: docs-team
 audience: team
 scope: Stabilized staged-action contract plus the accepted live optimization-progress extension for the public Circuit Workbench runtime and Python-consumer boundary.
 version: v1.2.0
-last_updated: 2026-08-24
+last_updated: 2026-08-25
 updated_by: codex
 title: Circuit Runtime / Python Consumer
 description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution, with an accepted live optimization-progress extension.
@@ -205,6 +205,39 @@ Direct-versus-HB comparison.
 plot Direct and HB against their own frequency arrays and fail closed when the
 sealed HB and C11-fit frequency identities do not match.
 
+### CONVERGING Explicit-Candidate Evaluation
+
+`CircuitSim.set_explicit_candidate(physical_parameters, provenance=...)` declares a
+candidate for evaluation; it is not a stage, execution action, receipt,
+optimizer, or internal solver-access path. The mapping uses the same requested
+parameter-reference keys and physical values as
+`winner_physical_parameters`. Its key set must match the current sealed Plan's
+`VariableSpec` bindings exactly, with no missing, extra, foreign, or duplicate
+reference. Values must be finite, dimensionally bound to those declared Plan
+parameters, compatible with their transforms, and inside their declared
+bounds. The runtime derives the canonical candidate identity; callers cannot
+supply it.
+
+The two sealed candidate sources are distinct:
+
+```text
+optimizer_winner
+  -> optimize -> refine_winner -> evaluate_responses -> fit_c11 -> evaluate_t1 -> build_report
+
+externally_selected_candidate
+  -> declaration -> evaluate_responses -> fit_c11 -> evaluate_t1 -> build_report
+```
+
+The external path does not execute or claim `optimize` or `refine_winner` under
+the current sealed Plan. Every downstream request and receipt binds the source
+discriminator, physical mapping, declared provenance, derived candidate
+identity, exact Plan and artifact bindings, and upstream receipt identities.
+Candidate, Plan, artifact, or dependency mismatches fail closed. There is no
+latest-result selection, fallback, compatibility path, parallel fitter, or
+internal solver access. Reports display the explicit candidate and state that
+optimization and N-to-2N refinement were not performed under the sealed Plan.
+Existing stage and schema names remain unchanged.
+
 ## Identity, Receipts, And Failure
 
 Python seals one request for each stage. The runtime automatically derives and
@@ -340,6 +373,20 @@ Explicit port-role extension:
   sealed plan/request/receipt role binding; and fail-closed role validation.
 - Implicit/default port role: none.
 - Unresolved semantic decisions: none.
+
+Explicit-candidate evaluation extension:
+
+- State: `CONVERGING`.
+- Delivery status: `INTEGRATION_PR / NOT_INTEGRATED`.
+- Test policy: `no_test_writes`.
+- Human acceptance: not requested.
+- Candidate scope: generic declaration of the existing physical variable
+  mapping for response, C11, T1, and report execution using an explicit
+  candidate bound to the current sealed Plan;
+  exact candidate/Plan/artifact/dependency identity binding; and an explicit
+  no-optimization/no-refinement-under-this-Plan nonclaim.
+- Retained compatibility or fallback: none.
+- Unresolved semantic decisions: none within the supplied candidate contract.
 
 `CircuitPlan` diagram surface:
 
