@@ -116,6 +116,36 @@ end
     @test !isdefined(SuperconductingCircuitsRunner, :analyze)
 end
 
+@testset "Circuit Workbench candidate binds exact resolved overrides" begin
+    candidate = Dict{String,Any}(
+        "source" => "externally_selected_candidate",
+        "physical_parameters" => Dict("composite.capacitance_f" => 1.0e-12),
+        "provenance" => Dict("source" => "public fixture"),
+    )
+    candidate["canonical_sha256"] = SuperconductingCircuitsRunner._cw_fingerprint(candidate)
+    request = Dict{String,Any}(
+        "candidate" => candidate,
+        "variables" => Any[
+            Dict(
+                "requested_ref" => Dict(
+                    "component_id" => "composite",
+                    "parameter_name" => "capacitance_f",
+                ),
+                "ref" => Dict(
+                    "component_id" => "leaf",
+                    "parameter_name" => "capacitance_f",
+                ),
+            ),
+        ],
+        "parameter_overrides" => Dict("leaf.capacitance_f" => 1.0e-12),
+    )
+    @test SuperconductingCircuitsRunner._cw_candidate(request) == candidate
+
+    request["parameter_overrides"]["leaf.capacitance_f"] = 2.0e-12
+    message = thrown_error_message(() -> SuperconductingCircuitsRunner._cw_candidate(request))
+    @test occursin("do not match parameter_overrides", message)
+end
+
 @testset "Circuit Workbench separates terminated and nonloading ports" begin
     compiled = SuperconductingCircuitsCore.JosephsonCompiledCircuit(
         netlist=Any[

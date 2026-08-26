@@ -1410,6 +1410,26 @@ function _cw_candidate(request)
     body = Dict{String,Any}(candidate)
     identity = _cw_string(pop!(body, "canonical_sha256"), "candidate.canonical_sha256")
     identity == _cw_fingerprint(body) || error("Candidate canonical identity mismatches its declaration.")
+    physical = _cw_dict(candidate["physical_parameters"], "candidate.physical_parameters")
+    expected = Dict{String,Float64}()
+    requested = Set{String}()
+    for raw in _cw_array(get(request, "variables", nothing), "request.variables")
+        variable = _cw_dict(raw, "request variable")
+        requested_ref = _cw_dict(get(variable, "requested_ref", nothing), "variable.requested_ref")
+        resolved_ref = _cw_dict(get(variable, "ref", nothing), "variable.ref")
+        requested_key = _cw_string(get(requested_ref, "component_id", nothing), "variable.requested_ref.component_id") * "." *
+            _cw_string(get(requested_ref, "parameter_name", nothing), "variable.requested_ref.parameter_name")
+        resolved_key = _cw_string(get(resolved_ref, "component_id", nothing), "variable.ref.component_id") * "." *
+            _cw_string(get(resolved_ref, "parameter_name", nothing), "variable.ref.parameter_name")
+        requested_key in requested && error("Candidate variable requested refs must be unique.")
+        haskey(expected, resolved_key) && error("Candidate variable resolved refs must be unique.")
+        push!(requested, requested_key)
+        expected[resolved_key] = _cw_number(get(physical, requested_key, nothing), "candidate physical parameter $(requested_key)")
+    end
+    Set(keys(physical)) == requested || error("Candidate physical_parameters do not match request variables.")
+    overrides = _cw_parameter_overrides(request)
+    Set(keys(overrides)) == Set(keys(expected)) && all(overrides[key] == value for (key, value) in expected) ||
+        error("Candidate physical_parameters do not match parameter_overrides through request variables.")
     return candidate
 end
 
