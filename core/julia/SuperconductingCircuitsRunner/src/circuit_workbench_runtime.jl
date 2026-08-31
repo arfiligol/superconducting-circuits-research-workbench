@@ -924,7 +924,12 @@ function _cw_targeted_simple_root!(context, root, row, column, label; require_no
             abs(denominator) > 4096 * context.dimension * eps(Float64) * scale^2 ||
             throw(_CWTargetedSchurNumericalError("$(label) coincides with an unresolved response pole."))
     end
-    return nothing
+    return (
+        residual_abs=Float64(abs(value)),
+        derivative_abs=Float64(abs(derivative)),
+        matrix_scale=Float64(scale),
+        scaled_residual=Float64(abs(value) / scale),
+    )
 end
 
 function _cw_targeted_schur_outputs(context, anchors)
@@ -1018,6 +1023,131 @@ function _cw_direct_cared_outputs(compiled, objective, reduction; plan, targeted
         result[name] = modes.frequencies_hz[index]
     end
     return result
+end
+
+function _cw_direct_solve(request)
+    _cw_validate_artifacts(request)
+    plan = _cw_dict(get(request, "plan", nothing), "request.plan")
+    reduction = _cw_dict(get(request, "reduction", nothing), "request.reduction")
+    spec = _cw_dict(get(request, "direct_solve", nothing), "request.direct_solve")
+    Set(keys(spec)) == Set(["retained_labels", "root_label", "root_anchor_hz"]) ||
+        error("request.direct_solve fields are malformed.")
+    labels = [
+        _cw_string(raw, "direct_solve.retained_labels")
+        for raw in _cw_array(get(spec, "retained_labels", nothing), "direct_solve.retained_labels")
+    ]
+    length(unique(labels)) == length(labels) && !isempty(labels) ||
+        error("direct_solve retained_labels must be nonempty and unique.")
+    root_label = _cw_string(get(spec, "root_label", nothing), "direct_solve.root_label")
+    root_matches = findall(==(root_label), labels)
+    length(root_matches) == 1 || error("direct_solve root_label must select exactly one retained label.")
+    root_anchor_hz = _cw_number(get(spec, "root_anchor_hz", nothing), "direct_solve.root_anchor_hz")
+    root_anchor_hz > 0 || error("direct_solve root_anchor_hz must be positive.")
+    overrides = _cw_parameter_overrides(request)
+    candidate = _cw_candidate(request)
+    isnothing(candidate) && error("direct_solve requires a sealed candidate binding.")
+    physical = _cw_dict(candidate["physical_parameters"], "candidate.physical_parameters")
+    for raw in _cw_array(get(request, "variables", nothing), "request.variables")
+        variable = _cw_dict(raw, "request variable")
+        requested = _cw_dict(get(variable, "requested_ref", nothing), "variable.requested_ref")
+        key = _cw_string(get(requested, "component_id", nothing), "variable.requested_ref.component_id") * "." *
+            _cw_string(get(requested, "parameter_name", nothing), "variable.requested_ref.parameter_name")
+        value = _cw_number(get(physical, key, nothing), "candidate physical parameter $(key)")
+        transform = _cw_string(get(variable, "transform", nothing), "variable.transform")
+        transform in ("identity", "log", "unit_interval") || error("Variable transform is unsupported.")
+        lower = get(variable, "lower", nothing)
+        upper = get(variable, "upper", nothing)
+        lo = isnothing(lower) ? -Inf : _cw_number(lower, "variable.lower")
+        hi = isnothing(upper) ? Inf : _cw_number(upper, "variable.upper")
+        lo <= value <= hi || error("Candidate physical parameter $(key) lies outside its bounds.")
+        transform == "log" && value <= 0 && error("Candidate log parameter $(key) must be positive.")
+        transform == "unit_interval" && (!isfinite(lo) || !isfinite(hi)) &&
+            error("Candidate unit_interval parameter $(key) requires finite bounds.")
+    end
+    compiled = _cw_build_plan(plan; overrides=overrides)
+    model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
+        _cw_targeted_portless_compiled(compiled, plan),
+    )
+    capacitance, stiffness, conductance, retained = _cw_reduction_model(
+        compiled,
+        model,
+        reduction,
+    )
+    length(retained) == length(labels) ||
+        error("direct_solve retained_labels must match the resolved ReductionSpec order.")
+    dimension = length(model.node_names)
+    context = (
+        capacitance=capacitance,
+        stiffness=stiffness,
+        conductance=conductance,
+        retained_indices=retained,
+        eliminated_indices=setdiff(collect(1:dimension), retained),
+        dimension=dimension,
+    )
+    selected = only(root_matches)
+    solved, evidence = try
+        root = _cw_targeted_schur_newton(
+            2pi * root_anchor_hz,
+            "direct_solve anchored diagonal root",
+        ) do omega
+            operator = _cw_targeted_schur_operator(context, omega)
+            operator.dynamic[selected, selected], operator.derivative[selected, selected]
+        end
+        validation = _cw_targeted_simple_root!(
+            context,
+            root.root,
+            selected,
+            selected,
+            "direct_solve anchored diagonal root",
+        )
+        imag(root.root) <= 0 || throw(
+            _CWTargetedSchurNumericalError(
+                "direct_solve anchored diagonal root lies in the non-passive half-plane.",
+            ),
+        )
+        root, validation
+    catch exception
+        exception isa _CWTargetedSchurNumericalError || rethrow()
+        return Dict{String,Any}(
+            "status" => "NOT_EVALUABLE",
+            "retained_labels" => labels,
+            "reduction" => reduction,
+            "selected_label" => root_label,
+            "selected_index" => selected - 1,
+            "root_anchor_hz" => root_anchor_hz,
+            "reason" => Dict(
+                "type" => string(typeof(exception)),
+                "message" => sprint(showerror, exception),
+            ),
+            "applied_parameter_bindings" => overrides,
+            "produced_artifacts" => Dict{String,Any}(),
+        )
+    end
+    return Dict{String,Any}(
+        "status" => "PASS",
+        "retained_labels" => labels,
+        "reduction" => reduction,
+        "selected_label" => root_label,
+        "selected_index" => selected - 1,
+        "root_anchor_hz" => root_anchor_hz,
+        "root_angular_frequency_rad_s" => Dict(
+            "real" => Float64(real(solved.root)),
+            "imag" => Float64(imag(solved.root)),
+        ),
+        "frequency_hz" => Float64(real(solved.root) / (2pi)),
+        "linewidth_hz" => Float64(-2 * imag(solved.root) / (2pi)),
+        "validation" => Dict(
+            "newton_iterations" => solved.iterations,
+            "diagonal_residual_abs" => evidence.residual_abs,
+            "diagonal_derivative_abs" => evidence.derivative_abs,
+            "matrix_scale" => evidence.matrix_scale,
+            "scaled_residual" => evidence.scaled_residual,
+            "simple_root" => true,
+            "passive_half_plane" => true,
+        ),
+        "applied_parameter_bindings" => overrides,
+        "produced_artifacts" => Dict{String,Any}(),
+    )
 end
 
 function _cw_expression(value, outputs)::Float64
@@ -1444,6 +1574,7 @@ function _cw_validate_upstream_receipts(request, request_path)
     source = isnothing(candidate) ? nothing : candidate["source"]
     required = if source == "externally_selected_candidate"
         Dict(
+            "direct_solve" => Set{String}(),
             "evaluate_responses" => Set{String}(),
             "evaluate_t1" => Set(["fit_c11"]),
         )[action]
@@ -1451,16 +1582,19 @@ function _cw_validate_upstream_receipts(request, request_path)
         Dict(
             "optimize" => Set{String}(),
             "refine_winner" => Set(["optimize"]),
+            "direct_solve" => Set(["optimize", "refine_winner"]),
             "evaluate_responses" => Set(["optimize", "refine_winner"]),
             "evaluate_t1" => Set(["optimize", "fit_c11"]),
         )[action]
     end
     Set(keys(upstream)) == required || error("Stage $(action) has invalid upstream dependencies.")
+    receipts = Dict{String,Any}()
     for (stage, raw_expected) in upstream
         expected = _cw_string(raw_expected, "upstream receipt identity")
         path = joinpath(stages_root, stage, "circuit-workbench-run-receipt.v1.json")
         isfile(path) || error("Upstream receipt $(stage) is absent.")
         receipt = _cw_dict(JSON3.read(read(path, String)), "upstream receipt $(stage)")
+        receipts[stage] = receipt
         actual = _cw_string(get(receipt, "canonical_sha256", nothing), "upstream canonical_sha256")
         actual == expected || error("Upstream receipt $(stage) identity mismatches.")
         body = Dict{String,Any}(receipt)
@@ -1481,6 +1615,26 @@ function _cw_validate_upstream_receipts(request, request_path)
                 _cw_fingerprint(get(request, "artifacts", Dict{String,Any}())) ||
                 error("Upstream stage $(stage) artifact bindings mismatch.")
         end
+    end
+    if action == "direct_solve" && source == "optimizer_winner"
+        optimization = _cw_dict(
+            get(receipts["optimize"], "result", nothing),
+            "optimization result",
+        )
+        expected_candidate = Dict{String,Any}(
+            "source" => "optimizer_winner",
+            "physical_parameters" => _cw_dict(
+                get(optimization, "winner_physical_parameters", nothing),
+                "optimization winner parameters",
+            ),
+            "provenance" => Dict{String,Any}(
+                "optimization_receipt_sha256" => upstream["optimize"],
+                "refinement_receipt_sha256" => upstream["refine_winner"],
+            ),
+        )
+        expected_candidate["canonical_sha256"] = _cw_fingerprint(expected_candidate)
+        candidate["canonical_sha256"] == expected_candidate["canonical_sha256"] ||
+            error("direct_solve optimizer winner mismatches its upstream receipts.")
     end
     return nothing
 end
@@ -1966,7 +2120,7 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
     try
         get(request, "schema", nothing) == _CW_REQUEST_SCHEMA || error("Request schema is not $(_CW_REQUEST_SCHEMA).")
         action = _cw_string(get(request, "action", nothing), "request.action")
-        action in ("optimize", "refine_winner", "evaluate_responses", "evaluate_t1") ||
+        action in ("optimize", "refine_winner", "direct_solve", "evaluate_responses", "evaluate_t1") ||
             error("Unsupported Circuit Workbench action $(action).")
         lifecycle_state = _cw_string(get(request, "lifecycle_state", nothing), "request.lifecycle_state")
         lifecycle_state in ("CONVERGING", "ACCEPTED", "STABILIZED") || error(
@@ -1999,6 +2153,8 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
             )
         elseif action == "refine_winner"
             _cw_refine_winner(request)
+        elseif action == "direct_solve"
+            _cw_direct_solve(request)
         elseif action == "evaluate_responses"
             _cw_evaluate_responses(request, dirname(receipt_path))
         else

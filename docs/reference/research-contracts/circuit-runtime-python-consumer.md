@@ -12,7 +12,7 @@ owner: docs-team
 audience: team
 scope: Stabilized staged-action contract plus the accepted live optimization-progress extension for the public Circuit Workbench runtime and Python-consumer boundary.
 version: v1.2.0
-last_updated: 2026-08-25
+last_updated: 2026-09-01
 updated_by: codex
 title: Circuit Runtime / Python Consumer
 description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution, with an accepted live optimization-progress extension.
@@ -55,6 +55,7 @@ from superconducting_circuits_runtime import (
     CircuitObjective,
     CircuitPlan,
     CircuitSim,
+    DirectSolveSpec,
     GateSpec,
     OptimizationProgress,
     OptimizerSpec,
@@ -141,6 +142,37 @@ Every method accepts exactly one semantic action mode:
 There is no generic `run()` dispatcher and no compatibility path through the
 superseded `evaluate` / `optimize` / `analyze` workflow. Stage dependencies
 must resolve to complete `PASS` receipts before downstream execution.
+
+### STABILIZED Anchored Direct Solve
+
+`DirectSolveSpec` declares an independent `ReductionSpec`, ordered
+`retained_labels`, one `root_label` that resolves to its zero-based index in
+that sequence, and a positive finite `root_anchor_hz`.
+`CircuitSim.direct_solve(spec, action="execute" | "resolve")` is an optional
+operation, not part of the required six-stage report chain. It requires sealed
+Plan and artifact identities plus either the configured externally selected
+candidate or the sealed optimizer-winner/refinement identity. It creates no
+Objective, Response, HB, C11, T1, optimization, refinement, or report
+requirement.
+
+The solve reuses JosephsonCircuits-assembled closed C/K/G, the current portless
+compiled representation, complete-complement Schur reduction, and complex-root
+validation. Terminated-port loading contributes to G; nonloading probes and
+port P rows are absent. The anchor defines the initial condition for one
+deterministic complex-Newton trajectory; the terminal root must satisfy the
+full residual, machine-resolved simple-root, and passive-half-plane checks.
+It is not a nearest-frequency or frequency-sorted selection rule.
+
+`execute` computes and seals the operation once. `resolve` is pure read-only:
+no Julia process and no recomputation. The receipt/result binds retained-label
+order, resolved reduction and transform, selected label/index and anchor,
+complex angular-root real and imaginary parts in rad/s, `frequency_hz`,
+`linewidth_hz`, and numerical residual/simple-root evidence. Expected Schur or
+root numerical non-evaluability seals `NOT_EVALUABLE` with its reason; malformed
+labels/specification, invalid anchors, transform/reduction defects,
+candidate/source or sealed-identity mismatches fail closed. There is no
+scalar-LC shortcut, frequency-sort selection, stale-result reuse, compatibility
+path, or fallback.
 
 ### ACCEPTED Optimization Progress Observer
 
@@ -421,6 +453,28 @@ Explicit-candidate evaluation extension:
 - Supersedes: the runtime-private minimal preview and its Schemdraw dependency.
 - Retained compatibility, fallback, or placeholder renderer: none.
 - Test policy: `stabilization_tests_authorized`.
+- Unresolved semantic decisions: none.
+
+Anchored Direct Solve extension:
+
+- State: `STABILIZED`.
+- Delivery status: Workbench PR #47, `NOT_INTEGRATED`.
+- Test policy: `stabilization_tests_authorized`.
+- Human acceptance: on 2026-09-01 the Human explicitly accepted candidate
+  `516b6c6d52f0b9604e9376c4266d9c1c455ed450`, tree
+  `33c0465a8b3cf343cc406936d5b3f8ad95cfd89c`, and full-index diff SHA-256
+  `e816d28e6e9296e72697f8790db2d8b13a3a85ed06b3e6e2edd3fa8463c04b1a`
+  after the D3 consumer preview.
+- Accepted scope: optional independently sealed `DirectSolveSpec` operation
+  for one anchored diagonal root of an explicit complete-complement reduction.
+- Existing fixed staged pipeline: unchanged.
+- Scientific-result acceptance: none.
+- Private or design-specific values: none.
+- Stabilization evidence: Workbench `31df7ee034e8713dfd302443469ed8a1db752813`
+  freezes optimizer-winner and explicit-candidate execution, exact read-only
+  Plan/spec/candidate binding, stale-selection rejection, result evidence,
+  numerical `NOT_EVALUABLE`, and exclusion from the fixed report pipeline.
+  Python Runtime, Julia Runner, and Julia Core suites passed.
 - Unresolved semantic decisions: none.
 
 ## Related

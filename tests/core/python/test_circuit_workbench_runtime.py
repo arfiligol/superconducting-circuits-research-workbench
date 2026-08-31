@@ -15,6 +15,7 @@ from superconducting_circuits_runtime import (
     CircuitObjective,
     CircuitPlan,
     CircuitSim,
+    DirectSolveSpec,
     GateSpec,
     OptimizationProgress,
     OptimizerSpec,
@@ -81,7 +82,9 @@ def _plan(*, sections: int) -> tuple[CircuitPlan, list[object]]:
     return plan, resonators
 
 
-def _configured_sim(tmp_path: Path, *, maximum_generations: int = 1) -> tuple[CircuitSim, Path]:
+def _configured_sim(
+    tmp_path: Path, *, maximum_generations: int = 1
+) -> tuple[CircuitSim, Path, DirectSolveSpec]:
     plan, resonators = _plan(sections=1)
     refinement, _ = _plan(sections=2)
     source = tmp_path / "bound-input.json"
@@ -149,7 +152,16 @@ def _configured_sim(tmp_path: Path, *, maximum_generations: int = 1) -> tuple[Ci
             5.0e9,
         )
     )
-    return sim, source
+    return (
+        sim,
+        source,
+        DirectSolveSpec(
+            ReductionSpec((resonators[0].coord("signal"),)),
+            ("root",),
+            "root",
+            5.0e9,
+        ),
+    )
 
 
 def test_c11_fit_uses_off_anchor_hb_extrema_for_its_coupled_start(tmp_path: Path) -> None:
@@ -194,7 +206,7 @@ def test_c11_fit_uses_off_anchor_hb_extrema_for_its_coupled_start(tmp_path: Path
 def test_staged_actions_seal_then_resolve_and_fail_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    sim, source = _configured_sim(tmp_path)
+    sim, source, direct_spec = _configured_sim(tmp_path)
     subprocess_run = runtime.subprocess.run
     calls: list[object] = []
 
@@ -307,6 +319,17 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert "Direct response" in response_html
     assert "Pump-off HB and C11 fit" in response_html
     assert response_html.count("<svg") == 2
+    direct = sim.direct_solve(direct_spec, action="execute")
+    assert direct.status == "PASS"
+    assert direct.receipt["candidate"]["source"] == "optimizer_winner"
+    direct_request = json.loads(
+        direct.path.with_name("circuit-workbench-run-request.v1.json").read_text(encoding="utf-8")
+    )
+    assert direct_request["objective"] is None
+    assert direct_request["gates"] == []
+    assert set(direct_request["upstream_receipts"]) == {"optimize", "refine_winner"}
+    assert len(calls) == 5
+    assert "direct_solve" not in resolve_circuit_result(tmp_path / "staged").stages
 
     def no_subprocess(*args: object, **kwargs: object) -> object:
         raise AssertionError("resolve must not start Julia")
@@ -316,6 +339,9 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert {name: stage.canonical_sha256 for name, stage in resolved.items()} == {
         name: stage.canonical_sha256 for name, stage in sealed.items()
     }
+    assert sim.direct_solve(direct_spec, action="resolve").canonical_sha256 == (
+        direct.canonical_sha256
+    )
     assert sim.build_report(action="resolve").status == "PASS"
     run_dir = tmp_path / "staged"
     assert resolve_circuit_result(run_dir).status == "PASS"
@@ -370,7 +396,7 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
 def test_explicit_candidate_runs_downstream_stages_without_optimization(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    sim, source = _configured_sim(tmp_path)
+    sim, source, _ = _configured_sim(tmp_path)
     candidate = {"resonator_0.capacitance_f": 1.0e-12}
     with pytest.raises(RuntimeContractError, match="do not match"):
         sim.set_explicit_candidate({"foreign.parameter": 1.0}, provenance={"source": "user"})
@@ -457,10 +483,123 @@ def test_explicit_candidate_runs_downstream_stages_without_optimization(
     assert resolve_circuit_result(run_dir).status == "NOT_EVALUABLE"
 
 
+def test_direct_solve_binds_explicit_candidate_plan_and_spec(tmp_path: Path) -> None:
+    plan, resonators = _plan(sections=1)
+    variable = VariableSpec(
+        resonators[0].parameter("capacitance_f"),
+        transform="log",
+        lower=0.9e-12,
+        upper=1.1e-12,
+    )
+    spec = DirectSolveSpec(
+        ReductionSpec((resonators[0].coord("signal"),)),
+        ("root",),
+        "root",
+        5.0e9,
+    )
+    sim = CircuitSim(tmp_path, "direct-explicit", data_classification="public")
+    sim.set_plan(plan)
+    sim.set_variables([variable])
+    sim.set_explicit_candidate(
+        {"resonator_0.capacitance_f": 1.0e-12},
+        provenance={"source": "public test fixture"},
+    )
+
+    sealed = sim.direct_solve(spec, action="execute")
+    assert sealed.status == "PASS"
+    assert sim.direct_solve(spec, action="resolve").canonical_sha256 == sealed.canonical_sha256
+    result = sealed.result or {}
+    assert result["retained_labels"] == ["root"]
+    assert result["selected_label"] == "root"
+    assert result["selected_index"] == 0
+    assert result["root_anchor_hz"] == 5.0e9
+    assert set(result["root_angular_frequency_rad_s"]) == {"real", "imag"}
+    assert result["frequency_hz"] > 0
+    assert result["linewidth_hz"] >= 0
+    assert result["validation"]["scaled_residual"] >= 0
+    request = json.loads(
+        sealed.path.with_name("circuit-workbench-run-request.v1.json").read_text(encoding="utf-8")
+    )
+    assert request["objective"] is None
+    assert request["gates"] == []
+    assert request["upstream_receipts"] == {}
+    assert request["candidate"]["source"] == "externally_selected_candidate"
+    assert result["reduction"] == request["reduction"]
+    assert not (tmp_path / "direct-explicit" / "stages" / "optimize").exists()
+
+    with pytest.raises(RuntimeContractError, match="spec mismatches"):
+        sim.direct_solve(
+            DirectSolveSpec(spec.reduction, spec.retained_labels, spec.root_label, 5.1e9),
+            action="resolve",
+        )
+    sim.set_explicit_candidate(
+        {"resonator_0.capacitance_f": 1.01e-12},
+        provenance={"source": "public test fixture"},
+    )
+    with pytest.raises(RuntimeContractError, match="candidate mismatches"):
+        sim.direct_solve(spec, action="resolve")
+
+    missing = CircuitSim(tmp_path, "direct-explicit", data_classification="public")
+    missing.set_plan(plan)
+    missing.set_variables([variable])
+    with pytest.raises(RuntimeContractError, match="candidate mismatches"):
+        missing.direct_solve(spec, action="resolve")
+
+
+def test_direct_solve_seals_expected_numerical_failure_as_not_evaluable(
+    tmp_path: Path,
+) -> None:
+    capacitance_f = 1.0e-12
+    inductance_h = 1.0e-9
+    plan = CircuitPlan("direct-critical-root")
+    resonator = plan.add(
+        parallel_lc_resonator(
+            id="resonator",
+            capacitance_f=capacitance_f,
+            inductance_h=inductance_h,
+        )
+    )
+    plan.add_port(
+        "terminated",
+        resonator.pin("signal"),
+        role="terminated",
+        resistance_ohm=0.5 * (inductance_h / capacitance_f) ** 0.5,
+    )
+    sim = CircuitSim(tmp_path, "direct-critical-root", data_classification="public")
+    sim.set_plan(plan)
+    sim.set_variables(
+        [
+            VariableSpec(
+                resonator.parameter("capacitance_f"),
+                transform="log",
+                lower=0.9e-12,
+                upper=1.1e-12,
+            )
+        ]
+    )
+    sim.set_explicit_candidate(
+        {"resonator.capacitance_f": capacitance_f},
+        provenance={"source": "public critically damped fixture"},
+    )
+    spec = DirectSolveSpec(
+        ReductionSpec((resonator.coord("signal"),)),
+        ("root",),
+        "root",
+        5.0e9,
+    )
+
+    sealed = sim.direct_solve(spec, action="execute")
+    assert sealed.status == "NOT_EVALUABLE"
+    assert sealed.failure is None
+    assert (sealed.result or {})["status"] == "NOT_EVALUABLE"
+    assert (sealed.result or {})["reason"]["message"]
+    assert sim.direct_solve(spec, action="resolve").canonical_sha256 == sealed.canonical_sha256
+
+
 def test_optimization_progress_is_transient_after_ledger_write(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    sim, _ = _configured_sim(tmp_path, maximum_generations=2)
+    sim, _, _ = _configured_sim(tmp_path, maximum_generations=2)
     ledger_path = (
         tmp_path
         / "staged"
