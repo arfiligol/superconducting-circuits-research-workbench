@@ -193,17 +193,26 @@ scientific meaning remain outside Workbench ownership.
 
 ### Split Direct And HB Response Grids
 
-`ResponseSpec` requires both `direct_frequency_hz` and `hb_frequency_hz`. The
-superseded shared `frequency_hz` field has no compatibility alias, migration
-path, or fallback. `evaluate_responses(action="execute")` computes Direct and
-pump-off HB responses on their independently declared grids and seals
-`direct_response.csv` and `hb_response.csv` in one stage receipt. The contract
-does not interpolate, downsample, align rows, or define pointwise
-Direct-versus-HB comparison.
+`ResponseSpec.hb_frequency_hz` remains required and fail-closed. The
+`CONVERGING` extension permits `direct_frequency_hz` to be an explicit Direct
+S21 grid or explicit `None`. Existing callers that supply both grids retain
+their current behavior.
 
-`fit_c11` consumes only the sealed HB response and seals `c11_fit.csv`. Reports
-plot Direct and HB against their own frequency arrays and fail closed when the
-sealed HB and C11-fit frequency identities do not match.
+`evaluate_responses(action="execute")` always performs the existing Direct
+physical cared-output evaluation for the selected candidate. That evaluation
+is distinct from the optional Direct S21 sweep. With a Direct grid, the stage
+computes and seals `direct_response.csv`. With `direct_frequency_hz=None`, it
+does not compute or seal that artifact. Pump-off HB remains required, runs on
+`hb_frequency_hz`, and seals `hb_response.csv`. `fit_c11` remains HB-only and
+seals `c11_fit.csv`; disabling Direct S21 does not change its input or failure
+contract.
+
+The sealed result and receipt bind the candidate source, Plan and artifact
+identities, Direct physical `cared_outputs`, Direct S21 enabled-or-skipped
+state, optional Direct grid and artifact, and required HB grid and artifact.
+This applies equally to `optimizer_winner` and
+`externally_selected_candidate`. It changes no optimizer, refinement,
+candidate-selection, interpolation, or Direct-versus-HB comparison semantics.
 
 ### CONVERGING Explicit-Candidate Evaluation
 
@@ -361,6 +370,18 @@ Split Direct/HB response-grid extension:
   fitting, independent report frequency arrays, and fail-closed HB/C11 identity
   validation.
 - Unresolved semantic decisions: none.
+
+Optional Direct S21 extension:
+
+- State: `CONVERGING`.
+- Delivery status: `NOT_INTEGRATED`.
+- Test policy: `no_test_writes`.
+- Candidate scope: optional Direct S21 with always-on Direct physical
+  cared-output evaluation, required HB response, HB-only C11 fitting, and
+  explicit receipt binding of enabled or skipped Direct S21 state.
+- Existing two-grid callers and optimizer semantics: unchanged.
+- Human acceptance: not requested.
+- Private or design-specific values: none.
 
 Explicit port-role extension:
 

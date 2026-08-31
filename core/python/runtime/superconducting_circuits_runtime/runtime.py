@@ -550,15 +550,23 @@ class CircuitObjective:
 
 @dataclass(frozen=True)
 class ResponseSpec:
-    direct_frequency_hz: tuple[float, ...]
+    direct_frequency_hz: tuple[float, ...] | None
     hb_frequency_hz: tuple[float, ...]
     input_port: str
     output_port: str
     pump_frequency_hz: float
 
     def __post_init__(self) -> None:
-        for field_name in ("direct_frequency_hz", "hb_frequency_hz"):
-            values = tuple(float(value) for value in getattr(self, field_name))
+        for field_name, required in (
+            ("direct_frequency_hz", False),
+            ("hb_frequency_hz", True),
+        ):
+            raw = getattr(self, field_name)
+            if raw is None:
+                if not required:
+                    continue
+                raise RuntimeContractError(f"ResponseSpec {field_name} is required.")
+            values = tuple(float(value) for value in raw)
             if (
                 len(values) < 3
                 or any(not math.isfinite(value) or value <= 0.0 for value in values)
@@ -1849,22 +1857,13 @@ class ResolvedCircuitResult:
 
     def show_responses(self) -> _HtmlView:
         stage = self.stage("evaluate_responses")
-        if stage.status != "PASS":
+        if stage.status != "PASS" or stage.result is None:
             return stage.show()
         direct_path = _stage_artifact_path(stage, "direct_response")
         hb_path = _stage_artifact_path(stage, "hb_response")
-        if direct_path is None or hb_path is None:
+        if hb_path is None:
             return stage.show()
-        direct_columns = _read_numeric_csv(direct_path)
         hb_columns = _read_numeric_csv(hb_path)
-        direct = [
-            math.hypot(real, imag)
-            for real, imag in zip(
-                direct_columns["direct_s21_real"],
-                direct_columns["direct_s21_imag"],
-                strict=True,
-            )
-        ]
         hb = [
             math.hypot(real, imag)
             for real, imag in zip(hb_columns["hb_s21_real"], hb_columns["hb_s21_imag"], strict=True)
@@ -1880,10 +1879,29 @@ class ResolvedCircuitResult:
                 math.hypot(real, imag)
                 for real, imag in zip(fitted["c11_s21_real"], fitted["c11_s21_imag"], strict=True)
             ]
+        physical = stage.result.get("direct_physical_evaluation")
+        cared_outputs = physical.get("cared_outputs") if isinstance(physical, Mapping) else None
+        physical_rows = sorted(cared_outputs.items()) if isinstance(cared_outputs, Mapping) else []
+        if direct_path is None:
+            direct_section = "<p>Direct S21 sweep disabled by ResponseSpec.</p>"
+        else:
+            direct_columns = _read_numeric_csv(direct_path)
+            direct = [
+                math.hypot(real, imag)
+                for real, imag in zip(
+                    direct_columns["direct_s21_real"],
+                    direct_columns["direct_s21_imag"],
+                    strict=True,
+                )
+            ]
+            direct_section = _svg_line_chart(
+                direct_columns["frequency_hz"], direct, "Frequency (Hz)", "|S21|"
+            )
         return _HtmlView(
-            "<h3>Direct, pump-off HB, and C11 response</h3>"
-            + "<h4>Direct response</h4>"
-            + _svg_line_chart(direct_columns["frequency_hz"], direct, "Frequency (Hz)", "|S21|")
+            "<h3>Direct physical quantities, pump-off HB, and C11 response</h3>"
+            + _html_table(("Direct cared output", "Value"), physical_rows)
+            + "<h4>Direct response (S21 sweep)</h4>"
+            + direct_section
             + "<h4>Pump-off HB and C11 fit</h4>"
             + _svg_multi_line_chart(
                 hb_columns["frequency_hz"], hb_series, "Frequency (Hz)", "|S21|"

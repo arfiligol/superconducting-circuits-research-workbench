@@ -1586,13 +1586,12 @@ end
 
 function _cw_evaluate_responses(request, stage_dir)
     spec = _cw_dict(get(request, "response", nothing), "request.response")
-    direct_frequencies = Float64[
+    direct_grid = get(spec, "direct_frequency_hz", nothing)
+    direct_enabled = !isnothing(direct_grid)
+    direct_frequencies = direct_enabled ? Float64[
         _cw_number(value, "Direct response frequency")
-        for value in _cw_array(
-            get(spec, "direct_frequency_hz", nothing),
-            "response.direct_frequency_hz",
-        )
-    ]
+        for value in _cw_array(direct_grid, "response.direct_frequency_hz")
+    ] : Float64[]
     hb_frequencies = Float64[
         _cw_number(value, "HB response frequency")
         for value in _cw_array(
@@ -1600,11 +1599,20 @@ function _cw_evaluate_responses(request, stage_dir)
             "response.hb_frequency_hz",
         )
     ]
-    for (label, frequencies) in (("Direct", direct_frequencies), ("HB", hb_frequencies))
+    for (label, frequencies) in (("HB", hb_frequencies),)
         length(frequencies) >= 3 && all(>(0), frequencies) && all(diff(frequencies) .> 0) ||
             error(
                 "$(label) response grid must be strictly increasing, positive, and contain at least three points.",
             )
+    end
+    if direct_enabled && !(
+        length(direct_frequencies) >= 3 &&
+        all(>(0), direct_frequencies) &&
+        all(diff(direct_frequencies) .> 0)
+    )
+        error(
+            "Direct response grid must be strictly increasing, positive, and contain at least three points.",
+        )
     end
     plan = _cw_dict(get(request, "plan", nothing), "request.plan")
     input_id = _cw_string(get(spec, "input_port", nothing), "response.input_port")
@@ -1620,34 +1628,51 @@ function _cw_evaluate_responses(request, stage_dir)
     )
     overrides = _cw_parameter_overrides(request)
     compiled = _cw_build_plan(plan; overrides=overrides)
-
-    closed = _cw_direct_closed_compiled(compiled)
-    model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(closed)
+    objective = _cw_dict(get(request, "objective", nothing), "request.objective")
+    targeted = _cw_uses_targeted_schur(objective)
+    direct_physical_outputs = _cw_direct_cared_outputs(
+        targeted ? nothing : compiled,
+        objective,
+        get(request, "reduction", nothing);
+        plan=plan,
+        targeted_context=targeted ? _cw_targeted_schur_context(
+            request,
+            _cw_array(get(request, "variables", Any[]), "request.variables"),
+        ) : nothing,
+        overrides=overrides,
+    )
     ports = [
         (index=index, data=_cw_dict(raw, "plan port"))
         for (index, raw) in enumerate(_cw_array(get(plan, "ports", Any[]), "plan.ports"))
         if _cw_port_role(_cw_dict(raw, "plan port")) == "terminated"
     ]
-    selector = zeros(Float64, length(model.node_names), length(ports))
-    impedances = Float64[]
-    positions = Dict(port.index => position for (position, port) in enumerate(ports))
-    for (position, port) in enumerate(ports)
-        selector[_cw_port_node_index(compiled, model, port.data), position] = 1.0
-        push!(impedances, _cw_number(get(port.data, "resistance_ohm", nothing), "port resistance"))
+    direct = if !direct_enabled
+        ComplexF64[]
+    else
+        model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
+            _cw_direct_closed_compiled(compiled),
+        )
+        selector = zeros(Float64, length(model.node_names), length(ports))
+        impedances = Float64[]
+        positions = Dict(port.index => position for (position, port) in enumerate(ports))
+        for (position, port) in enumerate(ports)
+            selector[_cw_port_node_index(compiled, model, port.data), position] = 1.0
+            push!(impedances, _cw_number(get(port.data, "resistance_ohm", nothing), "port resistance"))
+        end
+        input_position = positions[input.index]
+        output_position = positions[output.index]
+        ComplexF64[
+            SuperconductingCircuitsCore.matched_port_response(
+                model.capacitance,
+                model.inverse_inductance,
+                2pi * frequency,
+                selector,
+                impedances;
+                internal_conductance=model.conductance,
+            ).scattering[output_position, input_position]
+            for frequency in direct_frequencies
+        ]
     end
-    input_position = positions[input.index]
-    output_position = positions[output.index]
-    direct = ComplexF64[
-        SuperconductingCircuitsCore.matched_port_response(
-            model.capacitance,
-            model.inverse_inductance,
-            2pi * frequency,
-            selector,
-            impedances;
-            internal_conductance=model.conductance,
-        ).scattering[output_position, input_position]
-        for frequency in direct_frequencies
-    ]
 
     port_indices = [port.index for port in ports]
     pump_frequency = _cw_number(
@@ -1672,39 +1697,47 @@ function _cw_evaluate_responses(request, stage_dir)
         "S$(output.index)$(input.index)",
         length(hb_frequencies),
     ))
-    direct_path = joinpath(stage_dir, "direct_response.csv")
     hb_path = joinpath(stage_dir, "hb_response.csv")
-    _cw_write_response_csv(direct_path, direct_frequencies, direct, "direct")
     _cw_write_response_csv(hb_path, hb_frequencies, hb, "hb")
+    grids = Dict{String,Any}(
+        "hb" => Dict(
+            "start_hz" => first(hb_frequencies),
+            "stop_hz" => last(hb_frequencies),
+            "points" => length(hb_frequencies),
+        ),
+    )
+    produced_artifacts = Dict{String,Any}(
+        "hb_response" => Dict(
+            "path" => "hb_response.csv",
+            "sha256" => _cw_sha256(hb_path),
+        ),
+    )
+    if direct_enabled
+        direct_path = joinpath(stage_dir, "direct_response.csv")
+        _cw_write_response_csv(direct_path, direct_frequencies, direct, "direct")
+        grids["direct"] = Dict(
+            "start_hz" => first(direct_frequencies),
+            "stop_hz" => last(direct_frequencies),
+            "points" => length(direct_frequencies),
+        )
+        produced_artifacts["direct_response"] = Dict(
+            "path" => "direct_response.csv",
+            "sha256" => _cw_sha256(direct_path),
+        )
+    end
     return Dict{String,Any}(
         "status" => "PASS",
-        "grids" => Dict(
-            "direct" => Dict(
-                "start_hz" => first(direct_frequencies),
-                "stop_hz" => last(direct_frequencies),
-                "points" => length(direct_frequencies),
-            ),
-            "hb" => Dict(
-                "start_hz" => first(hb_frequencies),
-                "stop_hz" => last(hb_frequencies),
-                "points" => length(hb_frequencies),
-            ),
+        "direct_physical_evaluation" => Dict(
+            "cared_outputs" => direct_physical_outputs,
         ),
+        "direct_s21" => Dict("executed" => direct_enabled),
+        "grids" => grids,
         "ports" => Dict("input" => input_id, "output" => output_id),
         "active_terminated_ports" => [
             _cw_string(get(port.data, "id", nothing), "port.id") for port in ports
         ],
         "phasor_translation" => "project_exp_minus_iwt=conj(solver_output)",
-        "produced_artifacts" => Dict(
-            "direct_response" => Dict(
-                "path" => "direct_response.csv",
-                "sha256" => _cw_sha256(direct_path),
-            ),
-            "hb_response" => Dict(
-                "path" => "hb_response.csv",
-                "sha256" => _cw_sha256(hb_path),
-            ),
-        ),
+        "produced_artifacts" => produced_artifacts,
     )
 end
 
