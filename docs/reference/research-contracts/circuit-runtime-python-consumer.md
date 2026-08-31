@@ -55,6 +55,7 @@ from superconducting_circuits_runtime import (
     CircuitObjective,
     CircuitPlan,
     CircuitSim,
+    DirectSolveSpec,
     GateSpec,
     OptimizationProgress,
     OptimizerSpec,
@@ -141,6 +142,37 @@ Every method accepts exactly one semantic action mode:
 There is no generic `run()` dispatcher and no compatibility path through the
 superseded `evaluate` / `optimize` / `analyze` workflow. Stage dependencies
 must resolve to complete `PASS` receipts before downstream execution.
+
+### CONVERGING Anchored Direct Solve
+
+`DirectSolveSpec` declares an independent `ReductionSpec`, ordered
+`retained_labels`, one `root_label` that resolves to its zero-based index in
+that sequence, and a positive finite `root_anchor_hz`.
+`CircuitSim.direct_solve(spec, action="execute" | "resolve")` is an optional
+operation, not part of the required six-stage report chain. It requires sealed
+Plan and artifact identities plus either the configured externally selected
+candidate or the sealed optimizer-winner/refinement identity. It creates no
+Objective, Response, HB, C11, T1, optimization, refinement, or report
+requirement.
+
+The solve reuses JosephsonCircuits-assembled closed C/K/G, the current portless
+compiled representation, complete-complement Schur reduction, and complex-root
+validation. Terminated-port loading contributes to G; nonloading probes and
+port P rows are absent. The anchor defines the initial condition for one
+deterministic complex-Newton trajectory; the terminal root must satisfy the
+full residual, machine-resolved simple-root, and passive-half-plane checks.
+It is not a nearest-frequency or frequency-sorted selection rule.
+
+`execute` computes and seals the operation once. `resolve` is pure read-only:
+no Julia process and no recomputation. The receipt/result binds retained-label
+order, resolved reduction and transform, selected label/index and anchor,
+complex angular-root real and imaginary parts in rad/s, `frequency_hz`,
+`linewidth_hz`, and numerical residual/simple-root evidence. Expected Schur or
+root numerical non-evaluability seals `NOT_EVALUABLE` with its reason; malformed
+labels/specification, invalid anchors, transform/reduction defects,
+candidate/source or sealed-identity mismatches fail closed. There is no
+scalar-LC shortcut, frequency-sort selection, stale-result reuse, compatibility
+path, or fallback.
 
 ### ACCEPTED Optimization Progress Observer
 
@@ -422,6 +454,16 @@ Explicit-candidate evaluation extension:
 - Retained compatibility, fallback, or placeholder renderer: none.
 - Test policy: `stabilization_tests_authorized`.
 - Unresolved semantic decisions: none.
+
+Anchored Direct Solve extension:
+
+- State: `CONVERGING`.
+- Delivery status: Draft integration PR, `NOT_INTEGRATED`.
+- Test policy: `no_test_writes`.
+- Human acceptance: not requested.
+- Candidate scope: optional independently sealed `DirectSolveSpec` operation
+  for one anchored diagonal root of an explicit complete-complement reduction.
+- Private or design-specific values: none.
 
 ## Related
 

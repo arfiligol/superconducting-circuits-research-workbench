@@ -39,6 +39,8 @@ STAGE_ORDER = (
     "evaluate_t1",
     "build_report",
 )
+_OPTIONAL_STAGES = ("direct_solve",)
+_KNOWN_STAGES = (*STAGE_ORDER, *_OPTIONAL_STAGES)
 STAGE_DEPENDENCIES = {
     "optimize": (),
     "refine_winner": ("optimize",),
@@ -46,6 +48,7 @@ STAGE_DEPENDENCIES = {
     "fit_c11": ("evaluate_responses",),
     "evaluate_t1": ("optimize", "fit_c11"),
     "build_report": STAGE_ORDER[:-1],
+    "direct_solve": ("optimize", "refine_winner"),
 }
 _STAGE_ACTIONS = {"execute", "resolve"}
 _LIFECYCLE_STATES = {"CONVERGING", "ACCEPTED", "STABILIZED"}
@@ -459,6 +462,41 @@ class ReductionSpec:
     retained: tuple[CoordinateRef, ...]
     transforms: tuple[Mapping[str, Any], ...] = ()
     eliminated: Literal["complete_complement"] = "complete_complement"
+
+
+@dataclass(frozen=True)
+class DirectSolveSpec:
+    reduction: ReductionSpec
+    retained_labels: tuple[str, ...]
+    root_label: str
+    root_anchor_hz: float
+
+    def __post_init__(self) -> None:
+        labels = tuple(self.retained_labels)
+        if not isinstance(self.reduction, ReductionSpec):
+            raise RuntimeContractError("DirectSolveSpec reduction must be ReductionSpec.")
+        if (
+            not labels
+            or len(labels) != len(self.reduction.retained)
+            or any(not _nonempty_string(label) for label in labels)
+            or len(set(labels)) != len(labels)
+        ):
+            raise RuntimeContractError(
+                "DirectSolveSpec requires one unique nonempty label per ordered retained coordinate."
+            )
+        if self.root_label not in labels:
+            raise RuntimeContractError("DirectSolveSpec root_label must name one retained label.")
+        if (
+            isinstance(self.root_anchor_hz, bool)
+            or not isinstance(self.root_anchor_hz, (int, float))
+            or not math.isfinite(float(self.root_anchor_hz))
+            or float(self.root_anchor_hz) <= 0.0
+        ):
+            raise RuntimeContractError(
+                "DirectSolveSpec root_anchor_hz must be finite and positive."
+            )
+        object.__setattr__(self, "retained_labels", labels)
+        object.__setattr__(self, "root_anchor_hz", float(self.root_anchor_hz))
 
 
 @dataclass(frozen=True)
@@ -1107,6 +1145,46 @@ class CircuitSim:
         )
         return self._run_julia(request, "evaluate_responses")
 
+    def direct_solve(
+        self,
+        spec: DirectSolveSpec,
+        *,
+        action: Literal["execute", "resolve"],
+    ) -> ResolvedCircuitStage:
+        if not isinstance(spec, DirectSolveSpec):
+            raise RuntimeContractError("direct_solve requires DirectSolveSpec.")
+        if action == "resolve":
+            return self._resolve_stage("direct_solve")
+        _validate_stage_action(action)
+        if self._explicit_candidate is None:
+            optimization = self._require_stage("optimize")
+            refinement = self._require_stage("refine_winner")
+            winner = _mapping(optimization.receipt.get("result"), "optimization result")
+            candidate = self._optimizer_candidate(winner, optimization, refinement)
+            upstream = {
+                "optimize": optimization.canonical_sha256,
+                "refine_winner": refinement.canonical_sha256,
+            }
+        else:
+            candidate = self._explicit_candidate
+            upstream = {}
+        request = self._request(
+            action="direct_solve",
+            backend="direct",
+            reduction=spec.reduction,
+            extras={
+                "candidate": candidate,
+                "parameter_overrides": self._candidate_overrides(candidate, self._plan),
+                "direct_solve": {
+                    "retained_labels": list(spec.retained_labels),
+                    "root_label": spec.root_label,
+                    "root_anchor_hz": spec.root_anchor_hz,
+                },
+                "upstream_receipts": upstream,
+            },
+        )
+        return self._run_julia(request, "direct_solve")
+
     def fit_c11(self, *, action: Literal["execute", "resolve"]) -> ResolvedCircuitStage:
         if action == "resolve":
             return self._resolve_stage("fit_c11")
@@ -1308,48 +1386,62 @@ class CircuitSim:
         action: str,
         backend: str,
         plan: CircuitPlan | None = None,
+        reduction: ReductionSpec | None = None,
         extras: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         selected_plan = plan or self._plan
         if selected_plan is None:
             raise RuntimeContractError(f"{action} requires set_plan first.")
-        if self._objective is None:
+        if action != "direct_solve" and self._objective is None:
             raise RuntimeContractError(f"{action} requires set_objective first.")
         sealed_plan = selected_plan.seal(self._libraries)
-        if self._reduction is not None:
+        selected_reduction = reduction if action == "direct_solve" else self._reduction
+        if selected_reduction is not None:
             exposed = set(sealed_plan["coordinate_bindings"])
-            if self._reduction.eliminated != "complete_complement" or not self._reduction.retained:
+            if (
+                selected_reduction.eliminated != "complete_complement"
+                or not selected_reduction.retained
+            ):
                 raise RuntimeContractError(
                     "ReductionSpec requires ordered retained coordinates and complete_complement."
                 )
-            for ref in self._reduction.retained:
+            for ref in selected_reduction.retained:
                 if f"{ref.component_id}.{ref.coordinate_name}" not in exposed:
                     raise RuntimeContractError(
                         "ReductionSpec references a coordinate not exposed by the sealed Plan."
                     )
-            reduction = _resolved_reduction(self._reduction, sealed_plan)
+            resolved_reduction = _resolved_reduction(selected_reduction, sealed_plan)
         else:
-            reduction = None
-        cared_kinds = {item["kind"] for item in self._objective.cared_outputs.values()}
+            resolved_reduction = None
+        cared_kinds = (
+            {item["kind"] for item in self._objective.cared_outputs.values()}
+            if self._objective is not None
+            else set()
+        )
         if action in {"optimize", "refine_winner"} and backend == "direct":
             if cared_kinds <= {"closed_mode_frequency_hz"}:
-                if reduction is not None:
+                if resolved_reduction is not None:
                     raise RuntimeContractError(
                         "Closed-mode direct requests cannot carry an ignored ReductionSpec."
                     )
             elif cared_kinds <= {"schur_dynamic_stiffness_abs"}:
-                if reduction is None:
+                if resolved_reduction is None:
                     raise RuntimeContractError(
                         "Direct Schur cared outputs require an explicit ReductionSpec."
                     )
             elif cared_kinds == {"targeted_schur"}:
-                if reduction is None:
+                if resolved_reduction is None:
                     raise RuntimeContractError(
                         "Targeted Schur cared outputs require an explicit ReductionSpec."
                     )
             else:
                 raise RuntimeContractError(
                     "Direct backend supports one cared-output family, not a mixture."
+                )
+        elif action == "direct_solve" and backend == "direct":
+            if resolved_reduction is None:
+                raise RuntimeContractError(
+                    "direct_solve requires its DirectSolveSpec ReductionSpec."
                 )
         elif action in {"evaluate_responses", "evaluate_t1", "fit_c11", "build_report"}:
             pass
@@ -1367,11 +1459,15 @@ class CircuitSim:
             "data_classification": self.data_classification,
             "plan": sealed_plan,
             "artifacts": self._artifacts,
-            "reduction": reduction,
-            "objective": _plain(self._objective),
-            "gates": [_plain(item) for item in self._gates],
+            "reduction": resolved_reduction,
+            "objective": None if action == "direct_solve" else _plain(self._objective),
+            "gates": [] if action == "direct_solve" else [_plain(item) for item in self._gates],
             "variables": _resolved_variables(self._variables, sealed_plan),
-            "optimizer": _plain(self._optimizer) if self._optimizer else None,
+            "optimizer": None
+            if action == "direct_solve"
+            else _plain(self._optimizer)
+            if self._optimizer
+            else None,
             "runtime": {
                 "python": sys.version.split()[0],
                 "python_package_source_sha256": _tree_sha256(
@@ -1579,7 +1675,9 @@ class CircuitSim:
         return self._resolve_stage(stage)
 
     def _resolve_stage(self, stage: str) -> ResolvedCircuitStage:
-        return resolve_circuit_result(self._run_dir()).stage(stage)
+        if stage not in _KNOWN_STAGES:
+            raise RuntimeContractError(f"Unknown Circuit Workbench stage '{stage}'.")
+        return _resolve_stage_directory(self._run_dir(), stage)
 
     def _require_stage(self, stage: str) -> ResolvedCircuitStage:
         resolved = self._resolve_stage(stage)
@@ -1597,7 +1695,7 @@ class CircuitSim:
         return target
 
     def _stage_dir(self, stage: str) -> Path:
-        if stage not in STAGE_ORDER:
+        if stage not in _KNOWN_STAGES:
             raise RuntimeContractError(f"Unknown Circuit Workbench stage '{stage}'.")
         return self._run_dir() / "stages" / stage
 
@@ -1666,6 +1764,7 @@ def _stage_dependencies(stage: str, candidate: Any) -> tuple[str, ...]:
     source = None if candidate is None else _validated_candidate_binding(candidate)["source"]
     if source == "externally_selected_candidate":
         return {
+            "direct_solve": (),
             "evaluate_responses": (),
             "fit_c11": ("evaluate_responses",),
             "evaluate_t1": ("fit_c11",),
