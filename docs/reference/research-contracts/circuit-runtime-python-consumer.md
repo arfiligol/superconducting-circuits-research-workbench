@@ -12,7 +12,7 @@ owner: docs-team
 audience: team
 scope: Stabilized staged-action contract plus the accepted live optimization-progress extension for the public Circuit Workbench runtime and Python-consumer boundary.
 version: v1.2.0
-last_updated: 2026-08-25
+last_updated: 2026-09-01
 updated_by: codex
 title: Circuit Runtime / Python Consumer
 description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution, with an accepted live optimization-progress extension.
@@ -143,7 +143,7 @@ There is no generic `run()` dispatcher and no compatibility path through the
 superseded `evaluate` / `optimize` / `analyze` workflow. Stage dependencies
 must resolve to complete `PASS` receipts before downstream execution.
 
-### CONVERGING Anchored Direct Solve
+### ACCEPTED Anchored Direct Solve
 
 `DirectSolveSpec` declares an independent `ReductionSpec`, ordered
 `retained_labels`, one `root_label` that resolves to its zero-based index in
@@ -457,13 +457,20 @@ Explicit-candidate evaluation extension:
 
 Anchored Direct Solve extension:
 
-- State: `CONVERGING`.
-- Delivery status: Draft integration PR, `NOT_INTEGRATED`.
-- Test policy: `no_test_writes`.
-- Human acceptance: not requested.
-- Candidate scope: optional independently sealed `DirectSolveSpec` operation
+- State: `ACCEPTED`.
+- Delivery status: Workbench PR #47, `NOT_INTEGRATED`.
+- Test policy: `stabilization_tests_authorized`.
+- Human acceptance: on 2026-09-01 the Human explicitly accepted candidate
+  `516b6c6d52f0b9604e9376c4266d9c1c455ed450`, tree
+  `33c0465a8b3cf343cc406936d5b3f8ad95cfd89c`, and full-index diff SHA-256
+  `e816d28e6e9296e72697f8790db2d8b13a3a85ed06b3e6e2edd3fa8463c04b1a`
+  after the D3 consumer preview.
+- Accepted scope: optional independently sealed `DirectSolveSpec` operation
   for one anchored diagonal root of an explicit complete-complement reduction.
+- Existing fixed staged pipeline: unchanged.
+- Scientific-result acceptance: none.
 - Private or design-specific values: none.
+- Unresolved semantic decisions: none.
 
 ## Related
 
