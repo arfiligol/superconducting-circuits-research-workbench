@@ -1168,6 +1168,16 @@ class CircuitSim:
                 ),
                 "direct_solve request",
             )
+            request_candidate = _validated_candidate_binding(request.get("candidate"))
+            if self._explicit_candidate is None:
+                if request_candidate["source"] != "optimizer_winner":
+                    raise RuntimeContractError(
+                        "direct_solve resolve candidate mismatches the current selection."
+                    )
+            elif request_candidate != self._explicit_candidate:
+                raise RuntimeContractError(
+                    "direct_solve resolve candidate mismatches the current selection."
+                )
             if _mapping(request.get("plan"), "direct_solve request plan").get(
                 "canonical_sha256"
             ) != sealed_plan.get("canonical_sha256"):
