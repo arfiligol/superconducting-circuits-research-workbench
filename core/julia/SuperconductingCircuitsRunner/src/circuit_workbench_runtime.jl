@@ -749,8 +749,8 @@ function _cw_targeted_portless_compiled(compiled, plan)
     return _cw_with_netlist(compiled, netlist; port_map=Dict{Symbol,Any}())
 end
 
-function _cw_targeted_schur_context(request, variables)
-    objective = _cw_dict(get(request, "objective", nothing), "request.objective")
+function _cw_targeted_schur_context(request, variables; objective=get(request, "objective", nothing))
+    objective = _cw_dict(objective, "Direct physical evaluation")
     _cw_targeted_schur_specs(objective)
     baseline_latent = isempty(variables) ? Float64[] : _cw_variable_baseline(get(request, "plan", nothing), variables)
     baseline_overrides = isempty(variables) ? Dict{String,Float64}() : _cw_candidate_overrides(variables, baseline_latent)
@@ -1231,6 +1231,42 @@ function _cw_uses_targeted_schur(objective)
     )
 end
 
+function _cw_direct_evaluation_objective(request, action)
+    objective = get(request, "objective", nothing)
+    declaration = get(request, "direct_physical_evaluation", nothing)
+    if !isnothing(objective)
+        isnothing(declaration) || error("Objective-backed requests cannot carry targetless Direct evaluation.")
+        isnothing(get(request, "objective_status", nothing)) || error("Objective-backed requests cannot carry objective_status.")
+        isnothing(get(request, "optimization_status", nothing)) || error("Objective-backed requests cannot carry optimization_status.")
+        return _cw_dict(objective, "request.objective")
+    end
+    action == "direct_solve" && return nothing
+    action in ("evaluate_responses", "evaluate_t1") || error("$(action) requires request.objective.")
+    get(request, "objective_status", nothing) == "NOT_REQUESTED" || error("Targetless Direct evaluation must mark objective NOT_REQUESTED.")
+    get(request, "optimization_status", nothing) == "NOT_REQUESTED" || error("Targetless Direct evaluation must mark optimization NOT_REQUESTED.")
+    isnothing(get(request, "optimizer", nothing)) || error("Targetless Direct evaluation cannot carry an optimizer.")
+    isempty(_cw_array(get(request, "gates", Any[]), "request.gates")) || error("Targetless Direct evaluation cannot carry Gates.")
+    candidate = _cw_candidate(request)
+    !isnothing(candidate) && candidate["source"] == "externally_selected_candidate" || error(
+        "Targetless Direct evaluation requires an externally selected candidate.",
+    )
+    declaration = _cw_dict(declaration, "request.direct_physical_evaluation")
+    Set(keys(declaration)) == Set(["kind", "cared_outputs"]) || error(
+        "Targetless Direct evaluation declaration is malformed.",
+    )
+    get(declaration, "kind", nothing) == "targeted_schur" || error(
+        "Targetless Direct evaluation supports only targeted_schur.",
+    )
+    evaluation = Dict{String,Any}(
+        "cared_outputs" => _cw_dict(
+            get(declaration, "cared_outputs", nothing),
+            "direct physical cared outputs",
+        ),
+    )
+    _cw_targeted_schur_specs(evaluation)
+    return evaluation
+end
+
 function _cw_evaluate(request; overrides=Dict{String,Float64}(), candidate_parameters=Dict{String,Float64}(), targeted_context=nothing)
     artifacts = _cw_validate_artifacts(request)
     objective = _cw_dict(get(request, "objective", nothing), "request.objective")
@@ -1615,6 +1651,15 @@ function _cw_validate_upstream_receipts(request, request_path)
                 _cw_fingerprint(get(request, "artifacts", Dict{String,Any}())) ||
                 error("Upstream stage $(stage) artifact bindings mismatch.")
         end
+        for field in (
+            "direct_physical_evaluation",
+            "objective_status",
+            "optimization_status",
+        )
+            get(receipt, field, nothing) == get(request, field, nothing) || error(
+                "Upstream stage $(stage) $(field) mismatches.",
+            )
+        end
     end
     if action == "direct_solve" && source == "optimizer_winner"
         optimization = _cw_dict(
@@ -1782,7 +1827,7 @@ function _cw_evaluate_responses(request, stage_dir)
     )
     overrides = _cw_parameter_overrides(request)
     compiled = _cw_build_plan(plan; overrides=overrides)
-    objective = _cw_dict(get(request, "objective", nothing), "request.objective")
+    objective = _cw_direct_evaluation_objective(request, "evaluate_responses")
     targeted = _cw_uses_targeted_schur(objective)
     direct_physical_outputs = _cw_direct_cared_outputs(
         targeted ? nothing : compiled,
@@ -1792,6 +1837,7 @@ function _cw_evaluate_responses(request, stage_dir)
         targeted_context=targeted ? _cw_targeted_schur_context(
             request,
             _cw_array(get(request, "variables", Any[]), "request.variables"),
+            objective=objective,
         ) : nothing,
         overrides=overrides,
     )
@@ -1879,9 +1925,9 @@ function _cw_evaluate_responses(request, stage_dir)
             "sha256" => _cw_sha256(direct_path),
         )
     end
-    return Dict{String,Any}(
+    result = Dict{String,Any}(
         "status" => "PASS",
-        "direct_physical_evaluation" => Dict(
+        "direct_physical_evaluation" => Dict{String,Any}(
             "cared_outputs" => direct_physical_outputs,
         ),
         "direct_s21" => Dict("executed" => direct_enabled),
@@ -1893,6 +1939,14 @@ function _cw_evaluate_responses(request, stage_dir)
         "phasor_translation" => "project_exp_minus_iwt=conj(solver_output)",
         "produced_artifacts" => produced_artifacts,
     )
+    if isnothing(get(request, "objective", nothing))
+        result["direct_physical_evaluation"]["declaration"] = get(
+            request,
+            "direct_physical_evaluation",
+            nothing,
+        )
+    end
+    return result
 end
 
 function _cw_hb_z_stack(result, ports, count)
@@ -2103,6 +2157,13 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
             )
         end
     end
+    if !isnothing(get(request, "direct_physical_evaluation", nothing))
+        receipt["direct_physical_evaluation"] = request["direct_physical_evaluation"]
+        receipt["objective_status"] = get(request, "objective_status", nothing)
+        receipt["optimization_status"] = get(request, "optimization_status", nothing)
+        push!(receipt["nonclaims"], "objective was not requested")
+        push!(receipt["nonclaims"], "optimization was not requested")
+    end
     receipt["canonical_sha256"] = _cw_fingerprint(receipt)
     return receipt
 end
@@ -2122,6 +2183,8 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
         action = _cw_string(get(request, "action", nothing), "request.action")
         action in ("optimize", "refine_winner", "direct_solve", "evaluate_responses", "evaluate_t1") ||
             error("Unsupported Circuit Workbench action $(action).")
+        action in ("evaluate_responses", "evaluate_t1") &&
+            _cw_direct_evaluation_objective(request, action)
         lifecycle_state = _cw_string(get(request, "lifecycle_state", nothing), "request.lifecycle_state")
         lifecycle_state in ("CONVERGING", "ACCEPTED", "STABILIZED") || error(
             "Request lifecycle_state must be CONVERGING, ACCEPTED, or STABILIZED.",

@@ -55,6 +55,7 @@ from superconducting_circuits_runtime import (
     CircuitObjective,
     CircuitPlan,
     CircuitSim,
+    DirectEvaluationSpec,
     DirectSolveSpec,
     GateSpec,
     OptimizationProgress,
@@ -245,6 +246,47 @@ state, optional Direct grid and artifact, and required HB grid and artifact.
 This applies equally to `optimizer_winner` and
 `externally_selected_candidate`. It changes no optimizer, refinement,
 candidate-selection, interpolation, or Direct-versus-HB comparison semantics.
+
+### CONVERGING Targetless Direct Evaluation
+
+An explicit candidate may request the five existing targeted-Schur Direct
+physical quantities without declaring a `CircuitObjective`:
+
+```python
+responses = sim.evaluate_responses(
+    action="execute",
+    direct_evaluation=DirectEvaluationSpec(
+        readout_root_anchor_hz=READOUT_ROOT_ANCHOR_HZ,
+        filter_root_anchor_hz=FILTER_ROOT_ANCHOR_HZ,
+        transfer_zero_anchor_hz=TRANSFER_ZERO_ANCHOR_HZ,
+    ),
+)
+```
+
+`DirectEvaluationSpec` carries only the three positive finite numerical branch
+anchors. The sealed request expands it to exactly
+`readout_diagonal_root_hz`, `filter_diagonal_root_hz`,
+`transfer_cofactor_zero_hz`,
+`residue_normalized_midpoint_exchange_abs_real_hz`, and
+`diagonal_root_linewidth_sum_hz`, using the configured `ReductionSpec`. The
+anchors select numerical branches; they are not targets, residuals, weights,
+costs, Gates, or scientific claims.
+
+This targetless path requires an exact externally selected candidate and does
+not accept optimizer, refinement, or Gate declarations. It may execute the
+existing Direct physical evaluation, optional Direct S21, required HB S21,
+then the unchanged C11, T1, and report stages. Every request and receipt in the
+chain, and the report manifest, binds the Direct declaration, candidate,
+reduction, Plan, artifacts, and upstream receipts and records Objective and
+Optimization as `NOT_REQUESTED`. The Response result carries the five Direct
+outputs and its declaration. This path never fabricates an Objective or claims
+optimization.
+
+Existing objective-backed optimizer-winner and explicit-candidate calls remain
+unchanged and do not accept a second Direct declaration. Targetless resolve is
+read-only and requires the same method-local `DirectEvaluationSpec`, current
+Plan, ReductionSpec, ResponseSpec, variables, artifacts, and explicit candidate;
+absent, malformed, or stale bindings fail closed.
 
 ### CONVERGING Explicit-Candidate Evaluation
 
@@ -458,7 +500,8 @@ Explicit-candidate evaluation extension:
 Anchored Direct Solve extension:
 
 - State: `STABILIZED`.
-- Delivery status: Workbench PR #47, `NOT_INTEGRATED`.
+- Delivery status: `INTEGRATED` as Workbench
+  `d7da506a8cb729aea1096c662cd65800fd9087d4`.
 - Test policy: `stabilization_tests_authorized`.
 - Human acceptance: on 2026-09-01 the Human explicitly accepted candidate
   `516b6c6d52f0b9604e9376c4266d9c1c455ed450`, tree
@@ -475,6 +518,20 @@ Anchored Direct Solve extension:
   Plan/spec/candidate binding, stale-selection rejection, result evidence,
   numerical `NOT_EVALUABLE`, and exclusion from the fixed report pipeline.
   Python Runtime, Julia Runner, and Julia Core suites passed.
+- Unresolved semantic decisions: none.
+
+Targetless Direct evaluation extension:
+
+- State: `CONVERGING`.
+- Delivery status: `NOT_INTEGRATED`.
+- Test policy: `no_test_writes`.
+- Candidate scope: an externally selected candidate may execute the existing
+  targeted-Schur Direct physical evaluation and Response → C11 → T1 → Report
+  chain without `CircuitObjective`; Objective and Optimization are sealed as
+  `NOT_REQUESTED`.
+- Existing objective-backed behavior: unchanged.
+- Human acceptance: not requested.
+- Private or design-specific values: none.
 - Unresolved semantic decisions: none.
 
 ## Related
