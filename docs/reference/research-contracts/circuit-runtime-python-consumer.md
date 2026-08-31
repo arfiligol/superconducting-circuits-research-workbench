@@ -457,7 +457,7 @@ Explicit-candidate evaluation extension:
 
 Anchored Direct Solve extension:
 
-- State: `ACCEPTED`.
+- State: `STABILIZED`.
 - Delivery status: Workbench PR #47, `NOT_INTEGRATED`.
 - Test policy: `stabilization_tests_authorized`.
 - Human acceptance: on 2026-09-01 the Human explicitly accepted candidate
