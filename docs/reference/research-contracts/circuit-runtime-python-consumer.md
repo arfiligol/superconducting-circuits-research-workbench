@@ -143,7 +143,7 @@ There is no generic `run()` dispatcher and no compatibility path through the
 superseded `evaluate` / `optimize` / `analyze` workflow. Stage dependencies
 must resolve to complete `PASS` receipts before downstream execution.
 
-### ACCEPTED Anchored Direct Solve
+### STABILIZED Anchored Direct Solve
 
 `DirectSolveSpec` declares an independent `ReductionSpec`, ordered
 `retained_labels`, one `root_label` that resolves to its zero-based index in
@@ -373,7 +373,7 @@ or design-specific workflow.
 
 Optimization Progress Observer extension:
 
-- State: `ACCEPTED`.
+- State: `STABILIZED`.
 - Delivery status: `NOT_INTEGRATED`.
 - Test policy: `stabilization_tests_authorized`.
 - Human acceptance: explicitly accepted the exact candidate based on
@@ -470,6 +470,11 @@ Anchored Direct Solve extension:
 - Existing fixed staged pipeline: unchanged.
 - Scientific-result acceptance: none.
 - Private or design-specific values: none.
+- Stabilization evidence: Workbench `31df7ee034e8713dfd302443469ed8a1db752813`
+  freezes optimizer-winner and explicit-candidate execution, exact read-only
+  Plan/spec/candidate binding, stale-selection rejection, result evidence,
+  numerical `NOT_EVALUABLE`, and exclusion from the fixed report pipeline.
+  Python Runtime, Julia Runner, and Julia Core suites passed.
 - Unresolved semantic decisions: none.
 
 ## Related
