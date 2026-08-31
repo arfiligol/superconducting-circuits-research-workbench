@@ -15,6 +15,7 @@ from superconducting_circuits_runtime import (
     CircuitObjective,
     CircuitPlan,
     CircuitSim,
+    DirectEvaluationSpec,
     DirectSolveSpec,
     GateSpec,
     OptimizationProgress,
@@ -28,7 +29,12 @@ from superconducting_circuits_runtime import (
     resolve_circuit_result,
     runtime,
 )
-from superconducting_circuits_runtime.catalog import parallel_lc_resonator, transmission_line
+from superconducting_circuits_runtime.catalog import (
+    intrinsic_interferometric_purcell_filter,
+    linearized_floating_qubit,
+    parallel_lc_resonator,
+    transmission_line,
+)
 from superconducting_circuits_runtime.runtime import RuntimeContractError
 
 
@@ -405,6 +411,11 @@ def test_explicit_candidate_runs_downstream_stages_without_optimization(
             {"resonator_0.capacitance_f": 2.0e-12}, provenance={"source": "user"}
         )
     sim.set_explicit_candidate(candidate, provenance={"source": "public fixture"})
+    with pytest.raises(RuntimeContractError, match="derives Direct outputs"):
+        sim.evaluate_responses(
+            action="execute",
+            direct_evaluation=DirectEvaluationSpec(5.0e9, 5.0e9, 5.0e9),
+        )
 
     subprocess_run = runtime.subprocess.run
     calls: list[object] = []
@@ -481,6 +492,224 @@ def test_explicit_candidate_runs_downstream_stages_without_optimization(
     tampered["canonical_sha256"] = runtime._fingerprint(tampered)
     response_receipt.write_text(json.dumps(tampered), encoding="utf-8")
     assert resolve_circuit_result(run_dir).status == "NOT_EVALUABLE"
+
+
+def test_targetless_direct_evaluation_binds_full_explicit_candidate_chain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan = CircuitPlan("targetless")
+    ipf = plan.add(
+        intrinsic_interferometric_purcell_filter(
+            id="ipf",
+            readout_open_length_m=5.0e-3,
+            shared_short_length_m=5.0e-3,
+            coupled_length_m=5.0e-3,
+            filter_open_length_m=5.0e-3,
+            readout_short_sections=1,
+            readout_open_sections=1,
+            coupled_sections=1,
+            filter_short_sections=1,
+            filter_open_sections=1,
+            readout_l_per_m_h=4.0e-7,
+            readout_c_per_m_f=1.6e-10,
+            filter_l_per_m_h=4.0e-7,
+            filter_c_per_m_f=1.6e-10,
+            mtl_l11_per_m_h=4.0e-7,
+            mtl_l12_per_m_h=5.0e-8,
+            mtl_l21_per_m_h=5.0e-8,
+            mtl_l22_per_m_h=4.0e-7,
+            mtl_c11_per_m_f=1.6e-10,
+            mtl_c12_per_m_f=-2.0e-11,
+            mtl_c21_per_m_f=-2.0e-11,
+            mtl_c22_per_m_f=1.6e-10,
+            idc_finger_length_um=100.0,
+            idc_source_min_um=50.0,
+            idc_source_max_um=150.0,
+            idc_filter_ground_slope_f_per_um=2.0e-16,
+            idc_filter_ground_intercept_f=2.0e-14,
+            idc_feedline_ground_slope_f_per_um=2.0e-16,
+            idc_feedline_ground_intercept_f=2.0e-14,
+            idc_mutual_slope_f_per_um=2.0e-16,
+            idc_mutual_intercept_f=2.0e-14,
+            c0r_f=1.0e-14,
+        )
+    )
+    feedlines = [
+        plan.add(
+            transmission_line(
+                id=f"feedline_{index}",
+                length_m=1.0e-3,
+                n_sections=1,
+                l_per_m_h=4.0e-7,
+                c_per_m_f=1.6e-10,
+            )
+        )
+        for index in range(2)
+    ]
+    qubit = plan.add(
+        linearized_floating_qubit(
+            id="qubit",
+            c01_f=5.0e-14,
+            c02_f=5.0e-14,
+            c12_f=5.0e-14,
+            cr1_f=5.0e-15,
+            cr2_f=5.0e-15,
+            l_j_per_junction_h=1.0e-8,
+        )
+    )
+    for feedline in feedlines:
+        plan.connect(feedline.pin("tail"), ipf.pin("feedline_attachment"))
+    plan.connect(qubit.pin("readout_attachment"), ipf.pin("readout_attachment"))
+    plan.add_port("port_0", feedlines[0].pin("head"), role="terminated")
+    plan.add_port("port_1", feedlines[1].pin("head"), role="terminated")
+    plan.add_port("port_2", qubit.pin("island_1"), role="nonloading_probe")
+    plan.add_port("port_3", qubit.pin("island_2"), role="nonloading_probe")
+    source = tmp_path / "targetless-input.json"
+    source.write_text('{"fixture":"public"}', encoding="utf-8")
+    sim = CircuitSim(
+        tmp_path,
+        "targetless",
+        lifecycle_state="ACCEPTED",
+        data_classification="public",
+    )
+    sim.set_plan(plan)
+    sim.bind_artifact(
+        "fixture_input",
+        source,
+        schema="test-public-input.v1",
+        units="dimensionless",
+        provenance={"authority": "public test fixture"},
+    )
+    sim.set_reduction(
+        ReductionSpec((ipf.coord("readout_attachment"), ipf.coord("filter_open_tail")))
+    )
+    sim.set_variables(
+        [
+            VariableSpec(
+                ipf.parameter("readout_open_length_m"),
+                transform="log",
+                lower=4.5e-3,
+                upper=5.5e-3,
+            )
+        ]
+    )
+    candidate = {"ipf.readout_open_length_m": 5.0e-3}
+    sim.set_explicit_candidate(candidate, provenance={"source": "public test fixture"})
+    sim.set_responses(
+        ResponseSpec(
+            direct_frequency_hz=None,
+            hb_frequency_hz=(2.5e9, 2.75e9, 3.0e9, 3.25e9, 3.5e9),
+            input_port="port_0",
+            output_port="port_1",
+            pump_frequency_hz=3.0e9,
+        )
+    )
+    sim.set_t1(
+        T1Spec(
+            (2.5e9, 3.0e9, 3.5e9),
+            ("port_0", "port_1"),
+            ("port_2", "port_3"),
+            (0.5, 0.5),
+            3.0e9,
+        )
+    )
+    spec = DirectEvaluationSpec(3.0e9, 3.0e9, 3.0e9)
+
+    for values in ((0.0, 3.0e9, 3.0e9), (float("nan"), 3.0e9, 3.0e9)):
+        with pytest.raises(RuntimeContractError, match="finite and positive"):
+            DirectEvaluationSpec(*values)
+    with pytest.raises(RuntimeContractError, match="requires DirectEvaluationSpec"):
+        sim.evaluate_responses(action="execute")
+
+    stages = {
+        "evaluate_responses": sim.evaluate_responses(action="execute", direct_evaluation=spec),
+        "fit_c11": sim.fit_c11(action="execute"),
+        "evaluate_t1": sim.evaluate_t1(action="execute"),
+        "build_report": sim.build_report(action="execute"),
+    }
+    assert [stage.status for stage in stages.values()] == ["PASS"] * 4
+    assert not (tmp_path / "targetless" / "stages" / "optimize").exists()
+    assert not (tmp_path / "targetless" / "stages" / "refine_winner").exists()
+    assert not (stages["evaluate_responses"].path.parent / "direct_response.csv").exists()
+
+    response_result = stages["evaluate_responses"].result or {}
+    declaration = response_result["direct_physical_evaluation"]["declaration"]
+    assert set(response_result["direct_physical_evaluation"]["cared_outputs"]) == {
+        "readout_diagonal_root_hz",
+        "filter_diagonal_root_hz",
+        "transfer_cofactor_zero_hz",
+        "residue_normalized_midpoint_exchange_abs_real_hz",
+        "diagonal_root_linewidth_sum_hz",
+    }
+    assert response_result["direct_s21"] == {"executed": False}
+    assert all(
+        stage.receipt["direct_physical_evaluation"] == declaration for stage in stages.values()
+    )
+    assert all(stage.receipt["objective_status"] == "NOT_REQUESTED" for stage in stages.values())
+    assert all(stage.receipt["optimization_status"] == "NOT_REQUESTED" for stage in stages.values())
+    assert all(
+        stage.receipt["candidate"]["physical_parameters"] == candidate for stage in stages.values()
+    )
+
+    response_request = json.loads(
+        stages["evaluate_responses"]
+        .path.with_name("circuit-workbench-run-request.v1.json")
+        .read_text(encoding="utf-8")
+    )
+    assert response_request["objective"] is None
+    assert response_request["optimizer"] is None
+    assert response_request["gates"] == []
+    assert response_request["direct_physical_evaluation"] == declaration
+    manifest = json.loads(
+        (stages["build_report"].path.parent / "report.json").read_text(encoding="utf-8")
+    )
+    assert manifest["direct_physical_evaluation"] == declaration
+    assert manifest["objective_status"] == "NOT_REQUESTED"
+    assert manifest["optimization_status"] == "NOT_REQUESTED"
+
+    def no_subprocess(*args: object, **kwargs: object) -> object:
+        raise AssertionError("resolve must not start Julia")
+
+    monkeypatch.setattr(runtime.subprocess, "run", no_subprocess)
+    assert (
+        sim.evaluate_responses(action="resolve", direct_evaluation=spec).canonical_sha256
+        == stages["evaluate_responses"].canonical_sha256
+    )
+    assert sim.fit_c11(action="resolve").canonical_sha256 == stages["fit_c11"].canonical_sha256
+    assert (
+        sim.evaluate_t1(action="resolve").canonical_sha256 == stages["evaluate_t1"].canonical_sha256
+    )
+    assert (
+        sim.build_report(action="resolve").canonical_sha256
+        == stages["build_report"].canonical_sha256
+    )
+    with pytest.raises(RuntimeContractError, match="requires DirectEvaluationSpec"):
+        sim.evaluate_responses(action="resolve")
+    with pytest.raises(RuntimeContractError, match="stale or mismatched"):
+        sim.evaluate_responses(
+            action="resolve",
+            direct_evaluation=DirectEvaluationSpec(3.1e9, 3.0e9, 3.0e9),
+        )
+
+    receipt_path = stages["evaluate_responses"].path
+    original_receipt = receipt_path.read_text(encoding="utf-8")
+    tampered = json.loads(original_receipt)
+    tampered["direct_physical_evaluation"]["cared_outputs"].pop("readout_diagonal_root_hz")
+    tampered.pop("canonical_sha256")
+    tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+    receipt_path.write_text(json.dumps(tampered), encoding="utf-8")
+    assert (
+        resolve_circuit_result(tmp_path / "targetless").stage("evaluate_responses").status
+        == "NOT_EVALUABLE"
+    )
+    receipt_path.write_text(original_receipt, encoding="utf-8")
+
+    sim.set_explicit_candidate(
+        {"ipf.readout_open_length_m": 5.1e-3},
+        provenance={"source": "public test fixture"},
+    )
+    with pytest.raises(RuntimeContractError, match="stale or mismatched"):
+        sim.evaluate_responses(action="resolve", direct_evaluation=spec)
 
 
 def test_direct_solve_binds_explicit_candidate_plan_and_spec(tmp_path: Path) -> None:

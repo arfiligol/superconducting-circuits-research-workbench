@@ -522,16 +522,26 @@ Anchored Direct Solve extension:
 
 Targetless Direct evaluation extension:
 
-- State: `CONVERGING`.
-- Delivery status: `NOT_INTEGRATED`.
-- Test policy: `no_test_writes`.
-- Candidate scope: an externally selected candidate may execute the existing
+- State: `STABILIZED`.
+- Delivery status: Workbench PR #48, `NOT_INTEGRATED`.
+- Test policy: `stabilization_tests_authorized`.
+- Accepted scope: an externally selected candidate may execute the existing
   targeted-Schur Direct physical evaluation and Response → C11 → T1 → Report
   chain without `CircuitObjective`; Objective and Optimization are sealed as
   `NOT_REQUESTED`.
 - Existing objective-backed behavior: unchanged.
-- Human acceptance: not requested.
+- Human acceptance: on 2026-09-01 the Human explicitly accepted candidate
+  `436bc36e631907956d409a8f90cfcc032f255de0`, tree
+  `5829295e311b6b5f498baed9419e9937bda3360c`, and full-index diff SHA-256
+  `4ca9459285e4d35992ea888d4b73c92fb6144e8fcf1bbcec8a4ae7353a1c10f3`
+  after the real D3 consumer preview.
+- Scientific-result acceptance: none.
 - Private or design-specific values: none.
+- Stabilization evidence: the public-safe Runtime regression freezes the exact
+  explicit candidate and Direct declaration, absent or stale binding
+  rejection, disabled Direct S21, required HB, the C11 → T1 → Report chain,
+  `NOT_REQUESTED` evidence, receipt tamper rejection, and pure read-only
+  resolution. The complete Python Runtime suite passed with 12 tests.
 - Unresolved semantic decisions: none.
 
 ## Related
