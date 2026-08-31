@@ -1154,7 +1154,37 @@ class CircuitSim:
         if not isinstance(spec, DirectSolveSpec):
             raise RuntimeContractError("direct_solve requires DirectSolveSpec.")
         if action == "resolve":
-            return self._resolve_stage("direct_solve")
+            resolved = self._resolve_stage("direct_solve")
+            if not resolved.receipt:
+                return resolved
+            if self._plan is None:
+                raise RuntimeContractError("direct_solve resolve requires set_plan first.")
+            sealed_plan = self._plan.seal(self._libraries)
+            request = _mapping(
+                json.loads(
+                    resolved.path.with_name("circuit-workbench-run-request.v1.json").read_text(
+                        encoding="utf-8"
+                    )
+                ),
+                "direct_solve request",
+            )
+            if _mapping(request.get("plan"), "direct_solve request plan").get(
+                "canonical_sha256"
+            ) != sealed_plan.get("canonical_sha256"):
+                raise RuntimeContractError(
+                    "direct_solve resolve Plan mismatches the sealed request."
+                )
+            if request.get("reduction") != _resolved_reduction(
+                spec.reduction, sealed_plan
+            ) or request.get("direct_solve") != {
+                "retained_labels": list(spec.retained_labels),
+                "root_label": spec.root_label,
+                "root_anchor_hz": spec.root_anchor_hz,
+            }:
+                raise RuntimeContractError(
+                    "direct_solve resolve spec mismatches the sealed request."
+                )
+            return resolved
         _validate_stage_action(action)
         if self._explicit_candidate is None:
             optimization = self._require_stage("optimize")
@@ -2181,8 +2211,10 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
         upstream_receipts = _mapping(request.get("upstream_receipts", {}), "upstream receipts")
         if set(upstream_receipts) != set(_stage_dependencies(stage, candidate)):
             raise RuntimeContractError("stage has invalid upstream dependencies")
+        resolved_upstream: dict[str, ResolvedCircuitStage] = {}
         for upstream_name, expected in upstream_receipts.items():
             upstream = _resolve_stage_directory(run_dir, upstream_name)
+            resolved_upstream[upstream_name] = upstream
             if upstream.status != "PASS":
                 raise RuntimeContractError(
                     f"upstream receipt '{upstream_name}' is not trustworthy: {upstream.failure}"
@@ -2213,6 +2245,31 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                     raise RuntimeContractError(
                         f"upstream receipt '{upstream_name}' artifact bindings mismatch"
                     )
+        if (
+            stage == "direct_solve"
+            and candidate is not None
+            and candidate["source"] == "optimizer_winner"
+        ):
+            optimization = resolved_upstream["optimize"]
+            refinement = resolved_upstream["refine_winner"]
+            optimization_result = _mapping(
+                optimization.receipt.get("result"), "optimization result"
+            )
+            expected_candidate = _candidate_binding(
+                "optimizer_winner",
+                _mapping(
+                    optimization_result.get("winner_physical_parameters"),
+                    "optimization winner parameters",
+                ),
+                {
+                    "optimization_receipt_sha256": optimization.canonical_sha256,
+                    "refinement_receipt_sha256": refinement.canonical_sha256,
+                },
+            )
+            if candidate != expected_candidate:
+                raise RuntimeContractError(
+                    "direct_solve optimizer winner mismatches its upstream receipts"
+                )
         result = receipt.get("result")
         if result is not None and receipt.get("output_sha256") != _fingerprint(result):
             raise RuntimeContractError("receipt result hash mismatches")

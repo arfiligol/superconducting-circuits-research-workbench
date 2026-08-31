@@ -1588,11 +1588,13 @@ function _cw_validate_upstream_receipts(request, request_path)
         )[action]
     end
     Set(keys(upstream)) == required || error("Stage $(action) has invalid upstream dependencies.")
+    receipts = Dict{String,Any}()
     for (stage, raw_expected) in upstream
         expected = _cw_string(raw_expected, "upstream receipt identity")
         path = joinpath(stages_root, stage, "circuit-workbench-run-receipt.v1.json")
         isfile(path) || error("Upstream receipt $(stage) is absent.")
         receipt = _cw_dict(JSON3.read(read(path, String)), "upstream receipt $(stage)")
+        receipts[stage] = receipt
         actual = _cw_string(get(receipt, "canonical_sha256", nothing), "upstream canonical_sha256")
         actual == expected || error("Upstream receipt $(stage) identity mismatches.")
         body = Dict{String,Any}(receipt)
@@ -1613,6 +1615,26 @@ function _cw_validate_upstream_receipts(request, request_path)
                 _cw_fingerprint(get(request, "artifacts", Dict{String,Any}())) ||
                 error("Upstream stage $(stage) artifact bindings mismatch.")
         end
+    end
+    if action == "direct_solve" && source == "optimizer_winner"
+        optimization = _cw_dict(
+            get(receipts["optimize"], "result", nothing),
+            "optimization result",
+        )
+        expected_candidate = Dict{String,Any}(
+            "source" => "optimizer_winner",
+            "physical_parameters" => _cw_dict(
+                get(optimization, "winner_physical_parameters", nothing),
+                "optimization winner parameters",
+            ),
+            "provenance" => Dict{String,Any}(
+                "optimization_receipt_sha256" => upstream["optimize"],
+                "refinement_receipt_sha256" => upstream["refine_winner"],
+            ),
+        )
+        expected_candidate["canonical_sha256"] = _cw_fingerprint(expected_candidate)
+        candidate["canonical_sha256"] == expected_candidate["canonical_sha256"] ||
+            error("direct_solve optimizer winner mismatches its upstream receipts.")
     end
     return nothing
 end
