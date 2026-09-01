@@ -55,6 +55,13 @@ _LIFECYCLE_STATES = {"CONVERGING", "ACCEPTED", "STABILIZED"}
 _DATA_CLASSIFICATIONS = {"public", "project-internal", "NCUAS-private", "report-safe-derived"}
 _PORT_ROLES = {"terminated", "nonloading_probe"}
 _CANDIDATE_SOURCES = {"optimizer_winner", "externally_selected_candidate"}
+_TARGETED_SCHUR_QUANTITIES = (
+    "readout_diagonal_root_hz",
+    "filter_diagonal_root_hz",
+    "transfer_cofactor_zero_hz",
+    "residue_normalized_midpoint_exchange_abs_real_hz",
+    "diagonal_root_linewidth_sum_hz",
+)
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 _SOURCE_CORE_ROOT = _PACKAGE_ROOT.parents[2]
 _JULIA_ROOT = (
@@ -497,6 +504,31 @@ class DirectSolveSpec:
             )
         object.__setattr__(self, "retained_labels", labels)
         object.__setattr__(self, "root_anchor_hz", float(self.root_anchor_hz))
+
+
+@dataclass(frozen=True)
+class DirectEvaluationSpec:
+    readout_root_anchor_hz: float
+    filter_root_anchor_hz: float
+    transfer_zero_anchor_hz: float
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "readout_root_anchor_hz",
+            "filter_root_anchor_hz",
+            "transfer_zero_anchor_hz",
+        ):
+            value = getattr(self, field_name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                or float(value) <= 0.0
+            ):
+                raise RuntimeContractError(
+                    f"DirectEvaluationSpec {field_name} must be finite and positive."
+                )
+            object.__setattr__(self, field_name, float(value))
 
 
 @dataclass(frozen=True)
@@ -1115,12 +1147,81 @@ class CircuitSim:
         )
         return self._run_julia(request, "refine_winner")
 
-    def evaluate_responses(self, *, action: Literal["execute", "resolve"]) -> ResolvedCircuitStage:
+    def evaluate_responses(
+        self,
+        *,
+        action: Literal["execute", "resolve"],
+        direct_evaluation: DirectEvaluationSpec | None = None,
+    ) -> ResolvedCircuitStage:
         if action == "resolve":
-            return self._resolve_stage("evaluate_responses")
+            resolved = self._resolve_stage("evaluate_responses")
+            if not resolved.receipt:
+                return resolved
+            request = _mapping(
+                json.loads(
+                    resolved.path.with_name("circuit-workbench-run-request.v1.json").read_text(
+                        encoding="utf-8"
+                    )
+                ),
+                "evaluate_responses request",
+            )
+            sealed_declaration = request.get("direct_physical_evaluation")
+            if sealed_declaration is None:
+                if direct_evaluation is not None:
+                    raise RuntimeContractError(
+                        "evaluate_responses resolve declaration mismatches the objective-backed request."
+                    )
+                return resolved
+            if direct_evaluation is None:
+                raise RuntimeContractError(
+                    "Targetless evaluate_responses resolve requires DirectEvaluationSpec."
+                )
+            if self._plan is None or self._response is None or self._reduction is None:
+                raise RuntimeContractError(
+                    "Targetless evaluate_responses resolve requires current Plan, ReductionSpec, and ResponseSpec."
+                )
+            sealed_plan = self._plan.seal(self._libraries)
+            if (
+                request.get("objective") is not None
+                or request.get("objective_status") != "NOT_REQUESTED"
+                or request.get("optimization_status") != "NOT_REQUESTED"
+                or sealed_declaration != _direct_evaluation_declaration(direct_evaluation)
+                or request.get("plan") != sealed_plan
+                or request.get("reduction") != _resolved_reduction(self._reduction, sealed_plan)
+                or request.get("response") != _plain(self._response)
+                or request.get("artifacts") != self._artifacts
+                or request.get("variables") != _resolved_variables(self._variables, sealed_plan)
+                or request.get("candidate") != self._explicit_candidate
+            ):
+                raise RuntimeContractError(
+                    "Targetless evaluate_responses resolve declaration is stale or mismatched."
+                )
+            return resolved
         _validate_stage_action(action)
         if self._response is None:
             raise RuntimeContractError("evaluate_responses requires set_responses first.")
+        targetless = self._objective is None
+        if targetless:
+            if direct_evaluation is None:
+                raise RuntimeContractError(
+                    "Targetless evaluate_responses requires DirectEvaluationSpec."
+                )
+            if self._explicit_candidate is None:
+                raise RuntimeContractError(
+                    "Targetless evaluate_responses requires an explicit candidate."
+                )
+            if self._reduction is None:
+                raise RuntimeContractError(
+                    "Targetless evaluate_responses requires set_reduction first."
+                )
+            if self._optimizer is not None or self._gates or self._refinement_plan is not None:
+                raise RuntimeContractError(
+                    "Targetless evaluate_responses cannot carry optimizer, Gate, or refinement declarations."
+                )
+        elif direct_evaluation is not None:
+            raise RuntimeContractError(
+                "Objective-backed evaluate_responses derives Direct outputs from CircuitObjective."
+            )
         if self._explicit_candidate is None:
             optimization = self._require_stage("optimize")
             refinement = self._require_stage("refine_winner")
@@ -1133,15 +1234,26 @@ class CircuitSim:
         else:
             candidate = self._explicit_candidate
             upstream = {}
+        extras: dict[str, Any] = {
+            "candidate": candidate,
+            "parameter_overrides": self._candidate_overrides(candidate, self._plan),
+            "response": _plain(self._response),
+            "upstream_receipts": upstream,
+        }
+        if targetless:
+            extras.update(
+                {
+                    "direct_physical_evaluation": _direct_evaluation_declaration(
+                        cast(DirectEvaluationSpec, direct_evaluation)
+                    ),
+                    "objective_status": "NOT_REQUESTED",
+                    "optimization_status": "NOT_REQUESTED",
+                }
+            )
         request = self._request(
             action="evaluate_responses",
             backend="direct_hb",
-            extras={
-                "candidate": candidate,
-                "parameter_overrides": self._candidate_overrides(candidate, self._plan),
-                "response": _plain(self._response),
-                "upstream_receipts": upstream,
-            },
+            extras=extras,
         )
         return self._run_julia(request, "evaluate_responses")
 
@@ -1236,6 +1348,7 @@ class CircuitSim:
                 "evaluate_responses": responses.canonical_sha256,
             }
         }
+        extras.update(self._targetless_metadata(responses))
         if candidate is not None:
             extras["candidate"] = _validated_candidate_binding(candidate)
         request = self._request(
@@ -1293,6 +1406,7 @@ class CircuitSim:
             "t1": _plain(self._t1),
             "upstream_receipts": upstream,
         }
+        extras.update(self._targetless_metadata(c11))
         if candidate is not None:
             extras["candidate"] = candidate
         request = self._request(
@@ -1315,6 +1429,7 @@ class CircuitSim:
         extras: dict[str, Any] = {
             "upstream_receipts": {name: stage.canonical_sha256 for name, stage in upstream.items()}
         }
+        extras.update(self._targetless_metadata(upstream["evaluate_responses"]))
         if candidate is not None:
             candidate = _validated_candidate_binding(candidate)
             if self._explicit_candidate is not None and candidate != self._explicit_candidate:
@@ -1332,6 +1447,33 @@ class CircuitSim:
             "build_report",
             lambda directory: _build_report_stage(directory, self.run_id, upstream, request),
         )
+
+    def _targetless_metadata(self, stage: ResolvedCircuitStage) -> dict[str, Any]:
+        declaration = stage.receipt.get("direct_physical_evaluation")
+        if declaration is None:
+            if self._objective is None:
+                raise RuntimeContractError(
+                    f"Stage '{stage.name}' lacks the targetless Direct evaluation binding."
+                )
+            return {}
+        if self._objective is not None:
+            raise RuntimeContractError(
+                f"Stage '{stage.name}' targetless binding conflicts with CircuitObjective."
+            )
+        if (
+            self._explicit_candidate is None
+            or stage.receipt.get("candidate") != self._explicit_candidate
+            or stage.receipt.get("objective_status") != "NOT_REQUESTED"
+            or stage.receipt.get("optimization_status") != "NOT_REQUESTED"
+        ):
+            raise RuntimeContractError(
+                f"Stage '{stage.name}' targetless binding is stale or mismatched."
+            )
+        return {
+            "direct_physical_evaluation": _validated_direct_evaluation_declaration(declaration),
+            "objective_status": "NOT_REQUESTED",
+            "optimization_status": "NOT_REQUESTED",
+        }
 
     def _winner_overrides(
         self,
@@ -1432,8 +1574,35 @@ class CircuitSim:
         selected_plan = plan or self._plan
         if selected_plan is None:
             raise RuntimeContractError(f"{action} requires set_plan first.")
-        if action != "direct_solve" and self._objective is None:
-            raise RuntimeContractError(f"{action} requires set_objective first.")
+        targetless = action != "direct_solve" and self._objective is None
+        if targetless:
+            if (
+                action not in {"evaluate_responses", "fit_c11", "evaluate_t1", "build_report"}
+                or self._explicit_candidate is None
+                or self._optimizer is not None
+                or bool(self._gates)
+                or self._refinement_plan is not None
+                or extras is None
+                or extras.get("objective_status") != "NOT_REQUESTED"
+                or extras.get("optimization_status") != "NOT_REQUESTED"
+            ):
+                raise RuntimeContractError(f"{action} requires set_objective first.")
+            _validated_direct_evaluation_declaration(extras.get("direct_physical_evaluation"))
+        elif (
+            self._objective is not None
+            and extras is not None
+            and any(
+                name in extras
+                for name in (
+                    "direct_physical_evaluation",
+                    "objective_status",
+                    "optimization_status",
+                )
+            )
+        ):
+            raise RuntimeContractError(
+                "Objective-backed requests cannot carry targetless Direct evaluation fields."
+            )
         sealed_plan = selected_plan.seal(self._libraries)
         selected_reduction = reduction if action == "direct_solve" else self._reduction
         if selected_reduction is not None:
@@ -2218,6 +2387,32 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
             candidate = _validated_candidate_binding(candidate)
         if receipt.get("candidate") != candidate:
             raise RuntimeContractError("receipt candidate binding mismatches the request")
+        direct_evaluation = request.get("direct_physical_evaluation")
+        for name in (
+            "direct_physical_evaluation",
+            "objective_status",
+            "optimization_status",
+        ):
+            if receipt.get(name) != request.get(name):
+                raise RuntimeContractError(f"receipt {name} mismatches the request")
+        if direct_evaluation is not None:
+            _validated_direct_evaluation_declaration(direct_evaluation)
+            if (
+                stage not in {"evaluate_responses", "fit_c11", "evaluate_t1", "build_report"}
+                or request.get("objective") is not None
+                or request.get("objective_status") != "NOT_REQUESTED"
+                or request.get("optimization_status") != "NOT_REQUESTED"
+                or request.get("optimizer") is not None
+                or request.get("gates") != []
+                or candidate is None
+                or candidate["source"] != "externally_selected_candidate"
+            ):
+                raise RuntimeContractError("targetless Direct evaluation request is malformed")
+        elif (
+            request.get("objective_status") is not None
+            or request.get("optimization_status") is not None
+        ):
+            raise RuntimeContractError("targetless status is present without its declaration")
         upstream_receipts = _mapping(request.get("upstream_receipts", {}), "upstream receipts")
         if set(upstream_receipts) != set(_stage_dependencies(stage, candidate)):
             raise RuntimeContractError("stage has invalid upstream dependencies")
@@ -2254,6 +2449,15 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                 if upstream.receipt.get("artifact_bindings") != request.get("artifacts", {}):
                     raise RuntimeContractError(
                         f"upstream receipt '{upstream_name}' artifact bindings mismatch"
+                    )
+            for field_name in (
+                "direct_physical_evaluation",
+                "objective_status",
+                "optimization_status",
+            ):
+                if upstream.receipt.get(field_name) != request.get(field_name):
+                    raise RuntimeContractError(
+                        f"upstream receipt '{upstream_name}' {field_name} mismatches"
                     )
         if (
             stage == "direct_solve"
@@ -2367,6 +2571,15 @@ def _python_stage_receipt(
             receipt["nonclaims"].append(
                 "candidate was not optimized or refined under this sealed plan"
             )
+    if request.get("direct_physical_evaluation") is not None:
+        receipt["direct_physical_evaluation"] = _validated_direct_evaluation_declaration(
+            request["direct_physical_evaluation"]
+        )
+        receipt["objective_status"] = request.get("objective_status")
+        receipt["optimization_status"] = request.get("optimization_status")
+        receipt["nonclaims"].extend(
+            ["objective was not requested", "optimization was not requested"]
+        )
     receipt["canonical_sha256"] = _fingerprint(receipt)
     return receipt
 
@@ -2739,6 +2952,59 @@ def _plain(value: Any) -> Any:
     if isinstance(value, tuple | list):
         return [_plain(item) for item in value]
     return value
+
+
+def _direct_evaluation_declaration(spec: DirectEvaluationSpec) -> dict[str, Any]:
+    if not isinstance(spec, DirectEvaluationSpec):
+        raise RuntimeContractError("Direct physical evaluation requires DirectEvaluationSpec.")
+    anchors = {
+        "readout_root_anchor_hz": spec.readout_root_anchor_hz,
+        "filter_root_anchor_hz": spec.filter_root_anchor_hz,
+        "transfer_zero_anchor_hz": spec.transfer_zero_anchor_hz,
+    }
+    return {
+        "kind": "targeted_schur",
+        "cared_outputs": {
+            quantity: {
+                "kind": "targeted_schur",
+                "quantity": quantity,
+                **anchors,
+            }
+            for quantity in _TARGETED_SCHUR_QUANTITIES
+        },
+    }
+
+
+def _validated_direct_evaluation_declaration(value: Any) -> dict[str, Any]:
+    declaration = dict(_mapping(value, "direct physical evaluation declaration"))
+    if set(declaration) != {"kind", "cared_outputs"} or declaration["kind"] != "targeted_schur":
+        raise RuntimeContractError(
+            "Direct physical evaluation must declare only the targeted_schur family."
+        )
+    outputs = _mapping(declaration["cared_outputs"], "direct physical cared outputs")
+    if set(outputs) != set(_TARGETED_SCHUR_QUANTITIES):
+        raise RuntimeContractError(
+            "Direct physical evaluation requires exactly the five targeted-Schur quantities."
+        )
+    first = _mapping(
+        outputs[_TARGETED_SCHUR_QUANTITIES[0]],
+        "direct physical output",
+    )
+    try:
+        expected = _direct_evaluation_declaration(
+            DirectEvaluationSpec(
+                first["readout_root_anchor_hz"],
+                first["filter_root_anchor_hz"],
+                first["transfer_zero_anchor_hz"],
+            )
+        )
+    except (KeyError, TypeError) as error:
+        raise RuntimeContractError("Direct physical output is malformed.") from error
+    if declaration != expected:
+        raise RuntimeContractError(
+            "Direct physical outputs must be canonical and share identical branch anchors."
+        )
+    return expected
 
 
 def _validate_expression(value: Any, allowed_outputs: set[str] | None) -> None:
@@ -3381,6 +3647,15 @@ def _build_report_stage(
             manifest["nonclaims"].append(
                 "candidate was not optimized or refined under this sealed plan"
             )
+    if request.get("direct_physical_evaluation") is not None:
+        manifest["direct_physical_evaluation"] = _validated_direct_evaluation_declaration(
+            request["direct_physical_evaluation"]
+        )
+        manifest["objective_status"] = request.get("objective_status")
+        manifest["optimization_status"] = request.get("optimization_status")
+        manifest["nonclaims"].extend(
+            ["objective was not requested", "optimization was not requested"]
+        )
     _atomic_write(manifest_path, _canonical_bytes(manifest))
     artifacts = {
         "report": {"path": report_path.name, "sha256": _sha256(report_path.read_bytes())},
@@ -3447,15 +3722,38 @@ def _show_report_inputs(request: Mapping[str, Any]) -> _HtmlView:
             ("physical_parameters", json.dumps(candidate["physical_parameters"], sort_keys=True)),
             ("provenance", json.dumps(candidate["provenance"], sort_keys=True)),
         ]
+    targetless = request.get("direct_physical_evaluation")
+    targetless_html = ""
+    if targetless is not None:
+        declaration = _validated_direct_evaluation_declaration(targetless)
+        targetless_html = (
+            "<h3>Requested analysis</h3>"
+            + _html_table(
+                ("Field", "Status"),
+                (
+                    ("Objective", request.get("objective_status")),
+                    ("Optimization", request.get("optimization_status")),
+                ),
+            )
+            + "<h3>Direct physical evaluation declaration</h3>"
+            + _html_table(
+                ("Field", "Value"),
+                (("declaration", json.dumps(declaration, sort_keys=True)),),
+            )
+        )
+    objective_display = (
+        "NOT_REQUESTED" if targetless is not None else json.dumps(objective, sort_keys=True)
+    )
     return _HtmlView(
         "<h3>Candidate selection</h3>"
         + _html_table(("Field", "Value"), candidate_rows)
+        + targetless_html
         + "<h3>Objective targets</h3>"
         + _html_table(("Output", "Target value"), target_rows)
         + "<h3>Sealed objective declaration</h3>"
         + _html_table(
             ("Field", "Value"),
-            (("objective", json.dumps(objective, sort_keys=True)),),
+            (("objective", objective_display),),
         )
         + "<h3>Bound consumer artifacts</h3>"
         + _html_table(("Artifact", "Schema", "Units", "Provenance", "SHA-256"), artifact_rows)
