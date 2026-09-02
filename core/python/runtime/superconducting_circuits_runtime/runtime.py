@@ -2597,6 +2597,9 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
         result = receipt.get("result")
         if result is not None and receipt.get("output_sha256") != _fingerprint(result):
             raise RuntimeContractError("receipt result hash mismatches")
+        status = str(receipt.get("status", "NOT_EVALUABLE"))
+        if standalone_direct is not None:
+            _validate_standalone_direct_result(result, request, status)
         produced = receipt.get("produced_artifacts", {})
         for name, artifact in _mapping(produced, "produced artifacts").items():
             declaration = _mapping(artifact, f"produced artifact {name}")
@@ -2609,7 +2612,6 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                 or _sha256(path.read_bytes()) != declaration.get("sha256")
             ):
                 raise RuntimeContractError(f"produced artifact '{name}' is missing or changed")
-        status = str(receipt.get("status", "NOT_EVALUABLE"))
         if status != "PASS":
             failure = receipt.get("failure")
             return ResolvedCircuitStage(
@@ -3167,6 +3169,106 @@ def _validated_standalone_direct_evaluation_declaration(value: Any) -> dict[str,
             "Standalone Direct outputs must be canonical and share identical branch anchors."
         )
     return expected
+
+
+def _validate_standalone_direct_result(
+    value: Any,
+    request: Mapping[str, Any],
+    receipt_status: str,
+) -> None:
+    result = _mapping(value, "standalone Direct result")
+    common = {
+        "status",
+        "standalone_direct_evaluation",
+        "reduction",
+        "applied_parameter_bindings",
+        "produced_artifacts",
+        "wall_seconds",
+    }
+    expected = common | (
+        {"cared_outputs", "validation"}
+        if receipt_status == "PASS"
+        else {"reason"}
+        if receipt_status == "NOT_EVALUABLE"
+        else set()
+    )
+    if receipt_status not in {"PASS", "NOT_EVALUABLE"} or set(result) != expected:
+        raise RuntimeContractError("standalone Direct result fields are malformed")
+    wall_seconds = result["wall_seconds"]
+    if (
+        result["status"] != receipt_status
+        or result["standalone_direct_evaluation"] != request["standalone_direct_evaluation"]
+        or result["reduction"] != request["reduction"]
+        or result["applied_parameter_bindings"] != request["parameter_overrides"]
+        or result["produced_artifacts"] != {}
+        or isinstance(wall_seconds, bool)
+        or not isinstance(wall_seconds, (int, float))
+        or not math.isfinite(float(wall_seconds))
+        or float(wall_seconds) < 0.0
+    ):
+        raise RuntimeContractError("standalone Direct result binding is stale or malformed")
+    if receipt_status == "NOT_EVALUABLE":
+        reason = _mapping(result["reason"], "standalone Direct reason")
+        if set(reason) != {"type", "message"} or not all(
+            _nonempty_string(reason.get(name)) for name in ("type", "message")
+        ):
+            raise RuntimeContractError("standalone Direct non-evaluability reason is malformed")
+        return
+    outputs = _mapping(result["cared_outputs"], "standalone Direct cared outputs")
+    if set(outputs) != set(_STANDALONE_DIRECT_QUANTITIES) or any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) < 0.0
+        for value in outputs.values()
+    ):
+        raise RuntimeContractError("standalone Direct cared outputs are malformed")
+    validation = _mapping(result["validation"], "standalone Direct validation")
+    if set(validation) != {"readout_root", "filter_root", "residue_normalization_abs"}:
+        raise RuntimeContractError("standalone Direct validation fields are malformed")
+    normalization = validation["residue_normalization_abs"]
+    if (
+        isinstance(normalization, bool)
+        or not isinstance(normalization, (int, float))
+        or not math.isfinite(float(normalization))
+        or float(normalization) <= 0.0
+    ):
+        raise RuntimeContractError("standalone Direct residue validation is malformed")
+    root_fields = {
+        "newton_iterations",
+        "diagonal_residual_abs",
+        "diagonal_derivative_abs",
+        "matrix_scale",
+        "scaled_residual",
+        "simple_root",
+        "passive_half_plane",
+    }
+    for name in ("readout_root", "filter_root"):
+        evidence = _mapping(validation[name], f"standalone Direct {name} evidence")
+        numeric = (
+            evidence.get("diagonal_residual_abs"),
+            evidence.get("diagonal_derivative_abs"),
+            evidence.get("matrix_scale"),
+            evidence.get("scaled_residual"),
+        )
+        if (
+            set(evidence) != root_fields
+            or isinstance(evidence.get("newton_iterations"), bool)
+            or not isinstance(evidence.get("newton_iterations"), int)
+            or evidence["newton_iterations"] < 1
+            or evidence.get("simple_root") is not True
+            or evidence.get("passive_half_plane") is not True
+            or any(
+                isinstance(item, bool)
+                or not isinstance(item, (int, float))
+                or not math.isfinite(float(item))
+                or float(item) < 0.0
+                for item in numeric
+            )
+            or float(evidence["diagonal_derivative_abs"]) <= 0.0
+            or float(evidence["matrix_scale"]) <= 0.0
+        ):
+            raise RuntimeContractError(f"standalone Direct {name} evidence is malformed")
 
 
 def _validate_expression(value: Any, allowed_outputs: set[str] | None) -> None:

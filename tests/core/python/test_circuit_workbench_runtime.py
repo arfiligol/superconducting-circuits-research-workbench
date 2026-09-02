@@ -848,6 +848,15 @@ def test_standalone_direct_evaluation_binds_only_four_quantities(
     monkeypatch.setattr(runtime.subprocess, "run", no_subprocess)
     monkeypatch.setattr(runtime.subprocess, "Popen", no_subprocess)
     assert sim.evaluate_direct(spec, action="resolve").canonical_sha256 == sealed.canonical_sha256
+    original_receipt = sealed.path.read_text(encoding="utf-8")
+    tampered = json.loads(original_receipt)
+    tampered["result"]["cared_outputs"]["transfer_cofactor_zero_hz"] = 3.0e9
+    tampered["output_sha256"] = runtime._fingerprint(tampered["result"])
+    tampered.pop("canonical_sha256")
+    tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+    sealed.path.write_text(json.dumps(tampered), encoding="utf-8")
+    assert sim.evaluate_direct(spec, action="resolve").status == "NOT_EVALUABLE"
+    sealed.path.write_text(original_receipt, encoding="utf-8")
     with pytest.raises(RuntimeContractError, match="stale or mismatched"):
         sim.evaluate_direct(StandaloneDirectEvaluationSpec(3.1e9, 3.0e9), action="resolve")
     sim.set_explicit_candidate(
