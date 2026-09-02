@@ -628,6 +628,7 @@ const _CW_TARGETED_SCHUR_QUANTITIES = Set([
 const _CW_STANDALONE_DIRECT_QUANTITIES = Set([
     "readout_diagonal_root_hz",
     "filter_diagonal_root_hz",
+    "transfer_cofactor_zero_hz",
     "residue_normalized_midpoint_exchange_abs_real_hz",
     "diagonal_root_linewidth_sum_hz",
 ])
@@ -679,13 +680,14 @@ function _cw_standalone_direct_specs(declaration)
         "standalone_direct_evaluation.cared_outputs",
     )
     Set(keys(outputs)) == _CW_STANDALONE_DIRECT_QUANTITIES ||
-        error("standalone_direct_evaluation requires exactly its four R/P quantities.")
+        error("standalone_direct_evaluation requires exactly its five R/P quantities.")
     anchors = nothing
     required_keys = Set([
         "kind",
         "quantity",
         "readout_root_anchor_hz",
         "filter_root_anchor_hz",
+        "transfer_zero_anchor_hz",
     ])
     for (name, raw) in outputs
         spec = _cw_dict(raw, "standalone Direct cared output $(name)")
@@ -703,6 +705,10 @@ function _cw_standalone_direct_specs(declaration)
             filter=_cw_number(
                 get(spec, "filter_root_anchor_hz", nothing),
                 "standalone Direct filter_root_anchor_hz",
+            ),
+            transfer=_cw_number(
+                get(spec, "transfer_zero_anchor_hz", nothing),
+                "standalone Direct transfer_zero_anchor_hz",
             ),
         )
         all(>(0), values(current)) || error("standalone Direct anchors must be positive.")
@@ -1267,7 +1273,7 @@ function _cw_evaluate_direct(request)
         _cw_targeted_schur_outputs(
             candidate_context,
             anchors;
-            include_transfer=false,
+            include_transfer=true,
             include_evidence=true,
         )
     catch exception

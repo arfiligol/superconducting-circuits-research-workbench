@@ -66,6 +66,7 @@ _TARGETED_SCHUR_QUANTITIES = (
 _STANDALONE_DIRECT_QUANTITIES = (
     "readout_diagonal_root_hz",
     "filter_diagonal_root_hz",
+    "transfer_cofactor_zero_hz",
     "residue_normalized_midpoint_exchange_abs_real_hz",
     "diagonal_root_linewidth_sum_hz",
 )
@@ -542,9 +543,14 @@ class DirectEvaluationSpec:
 class StandaloneDirectEvaluationSpec:
     readout_root_anchor_hz: float
     filter_root_anchor_hz: float
+    transfer_zero_anchor_hz: float
 
     def __post_init__(self) -> None:
-        for field_name in ("readout_root_anchor_hz", "filter_root_anchor_hz"):
+        for field_name in (
+            "readout_root_anchor_hz",
+            "filter_root_anchor_hz",
+            "transfer_zero_anchor_hz",
+        ):
             value = getattr(self, field_name)
             if (
                 isinstance(value, bool)
@@ -3134,6 +3140,7 @@ def _standalone_direct_evaluation_declaration(
     anchors = {
         "readout_root_anchor_hz": spec.readout_root_anchor_hz,
         "filter_root_anchor_hz": spec.filter_root_anchor_hz,
+        "transfer_zero_anchor_hz": spec.transfer_zero_anchor_hz,
     }
     return {
         "kind": "targeted_schur",
@@ -3157,7 +3164,7 @@ def _validated_standalone_direct_evaluation_declaration(value: Any) -> dict[str,
     outputs = _mapping(declaration["cared_outputs"], "standalone Direct cared outputs")
     if set(outputs) != set(_STANDALONE_DIRECT_QUANTITIES):
         raise RuntimeContractError(
-            "Standalone Direct evaluation requires exactly its four R/P quantities."
+            "Standalone Direct evaluation requires exactly its five R/P quantities."
         )
     first = _mapping(outputs[_STANDALONE_DIRECT_QUANTITIES[0]], "standalone Direct output")
     try:
@@ -3165,6 +3172,7 @@ def _validated_standalone_direct_evaluation_declaration(value: Any) -> dict[str,
             StandaloneDirectEvaluationSpec(
                 first["readout_root_anchor_hz"],
                 first["filter_root_anchor_hz"],
+                first["transfer_zero_anchor_hz"],
             )
         )
     except (KeyError, TypeError) as error:
@@ -3248,7 +3256,12 @@ def _validate_standalone_direct_result(
     ):
         raise RuntimeContractError("standalone Direct cared outputs are malformed")
     validation = _mapping(result["validation"], "standalone Direct validation")
-    if set(validation) != {"readout_root", "filter_root", "residue_normalization_abs"}:
+    if set(validation) != {
+        "readout_root",
+        "filter_root",
+        "transfer_zero",
+        "residue_normalization_abs",
+    }:
         raise RuntimeContractError("standalone Direct validation fields are malformed")
     normalization = validation["residue_normalization_abs"]
     if (
@@ -3267,7 +3280,7 @@ def _validate_standalone_direct_result(
         "simple_root",
         "passive_half_plane",
     }
-    for name in ("readout_root", "filter_root"):
+    for name in ("readout_root", "filter_root", "transfer_zero"):
         evidence = _mapping(validation[name], f"standalone Direct {name} evidence")
         numeric = (
             evidence.get("diagonal_residual_abs"),
