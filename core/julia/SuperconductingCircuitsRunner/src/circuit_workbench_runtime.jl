@@ -625,6 +625,12 @@ const _CW_TARGETED_SCHUR_QUANTITIES = Set([
     "residue_normalized_midpoint_exchange_abs_real_hz",
     "diagonal_root_linewidth_sum_hz",
 ])
+const _CW_STANDALONE_DIRECT_QUANTITIES = Set([
+    "readout_diagonal_root_hz",
+    "filter_diagonal_root_hz",
+    "residue_normalized_midpoint_exchange_abs_real_hz",
+    "diagonal_root_linewidth_sum_hz",
+])
 
 function _cw_targeted_schur_specs(objective)
     outputs = _cw_dict(get(objective, "cared_outputs", nothing), "objective.cared_outputs")
@@ -660,6 +666,50 @@ function _cw_targeted_schur_specs(objective)
     Set(keys(quantities)) == _CW_TARGETED_SCHUR_QUANTITIES ||
         error("targeted_schur must declare each required quantity exactly once.")
     return quantities, anchors
+end
+
+function _cw_standalone_direct_specs(declaration)
+    declaration = _cw_dict(declaration, "standalone_direct_evaluation")
+    Set(keys(declaration)) == Set(["kind", "cared_outputs"]) ||
+        error("standalone_direct_evaluation fields are malformed.")
+    get(declaration, "kind", nothing) == "targeted_schur" ||
+        error("standalone_direct_evaluation supports only targeted_schur.")
+    outputs = _cw_dict(
+        get(declaration, "cared_outputs", nothing),
+        "standalone_direct_evaluation.cared_outputs",
+    )
+    Set(keys(outputs)) == _CW_STANDALONE_DIRECT_QUANTITIES ||
+        error("standalone_direct_evaluation requires exactly its four R/P quantities.")
+    anchors = nothing
+    required_keys = Set([
+        "kind",
+        "quantity",
+        "readout_root_anchor_hz",
+        "filter_root_anchor_hz",
+    ])
+    for (name, raw) in outputs
+        spec = _cw_dict(raw, "standalone Direct cared output $(name)")
+        Set(keys(spec)) == required_keys ||
+            error("standalone Direct cared output $(name) has an invalid key set.")
+        get(spec, "kind", nothing) == "targeted_schur" ||
+            error("standalone Direct cared outputs must use targeted_schur.")
+        get(spec, "quantity", nothing) == name ||
+            error("standalone Direct cared-output identity mismatches its quantity.")
+        current = (
+            readout=_cw_number(
+                get(spec, "readout_root_anchor_hz", nothing),
+                "standalone Direct readout_root_anchor_hz",
+            ),
+            filter=_cw_number(
+                get(spec, "filter_root_anchor_hz", nothing),
+                "standalone Direct filter_root_anchor_hz",
+            ),
+        )
+        all(>(0), values(current)) || error("standalone Direct anchors must be positive.")
+        isnothing(anchors) && (anchors = current)
+        current == anchors || error("standalone Direct cared outputs must share anchors.")
+    end
+    return anchors
 end
 
 function _cw_targeted_variable_key(variable)
@@ -749,9 +799,7 @@ function _cw_targeted_portless_compiled(compiled, plan)
     return _cw_with_netlist(compiled, netlist; port_map=Dict{Symbol,Any}())
 end
 
-function _cw_targeted_schur_context(request, variables; objective=get(request, "objective", nothing))
-    objective = _cw_dict(objective, "Direct physical evaluation")
-    _cw_targeted_schur_specs(objective)
+function _cw_targeted_schur_context_unchecked(request, variables)
     baseline_latent = isempty(variables) ? Float64[] : _cw_variable_baseline(get(request, "plan", nothing), variables)
     baseline_overrides = isempty(variables) ? Dict{String,Float64}() : _cw_candidate_overrides(variables, baseline_latent)
     reference_compiled = _cw_build_plan(get(request, "plan", nothing); overrides=baseline_overrides)
@@ -825,6 +873,12 @@ function _cw_targeted_schur_context(request, variables; objective=get(request, "
         dimension=size(c_ref, 1),
         compiled_netlist_rows=length(reference_compiled.netlist),
     )
+end
+
+function _cw_targeted_schur_context(request, variables; objective=get(request, "objective", nothing))
+    objective = _cw_dict(objective, "Direct physical evaluation")
+    _cw_targeted_schur_specs(objective)
+    return _cw_targeted_schur_context_unchecked(request, variables)
 end
 
 function _cw_targeted_candidate_context(context, overrides)
@@ -932,7 +986,7 @@ function _cw_targeted_simple_root!(context, root, row, column, label; require_no
     )
 end
 
-function _cw_targeted_schur_outputs(context, anchors)
+function _cw_targeted_schur_outputs(context, anchors; include_transfer=true, include_evidence=false)
     readout = _cw_targeted_schur_newton(2pi * anchors.readout, "targeted_schur readout diagonal root") do omega
         operator = _cw_targeted_schur_operator(context, omega)
         operator.dynamic[1, 1], operator.derivative[1, 1]
@@ -941,13 +995,32 @@ function _cw_targeted_schur_outputs(context, anchors)
         operator = _cw_targeted_schur_operator(context, omega)
         operator.dynamic[2, 2], operator.derivative[2, 2]
     end
-    zero = _cw_targeted_schur_newton(2pi * anchors.transfer, "targeted_schur transfer cofactor zero"; tolerance=sqrt(eps(Float64))) do omega
-        operator = _cw_targeted_schur_operator(context, omega)
-        operator.dynamic[2, 1], operator.derivative[2, 1]
+    zero = if include_transfer
+        _cw_targeted_schur_newton(
+            2pi * anchors.transfer,
+            "targeted_schur transfer cofactor zero";
+            tolerance=sqrt(eps(Float64)),
+        ) do omega
+            operator = _cw_targeted_schur_operator(context, omega)
+            operator.dynamic[2, 1], operator.derivative[2, 1]
+        end
+    else
+        nothing
     end
-    _cw_targeted_simple_root!(context, readout.root, 1, 1, "targeted_schur readout diagonal root")
-    _cw_targeted_simple_root!(context, filter.root, 2, 2, "targeted_schur filter diagonal root")
-    _cw_targeted_simple_root!(context, zero.root, 2, 1, "targeted_schur transfer cofactor zero"; require_nonpole=true)
+    readout_evidence = _cw_targeted_simple_root!(
+        context, readout.root, 1, 1, "targeted_schur readout diagonal root",
+    )
+    filter_evidence = _cw_targeted_simple_root!(
+        context, filter.root, 2, 2, "targeted_schur filter diagonal root",
+    )
+    zero_evidence = include_transfer ? _cw_targeted_simple_root!(
+        context,
+        zero.root,
+        2,
+        1,
+        "targeted_schur transfer cofactor zero";
+        require_nonpole=true,
+    ) : nothing
     slopes = (-readout.derivative, -filter.derivative)
     normalization = sqrt(slopes[1] * slopes[2])
     isfinite(real(normalization)) && isfinite(imag(normalization)) && !iszero(normalization) ||
@@ -958,13 +1031,30 @@ function _cw_targeted_schur_outputs(context, anchors)
     linewidths = (-2 * imag(roots_hz[1]), -2 * imag(roots_hz[2]))
     all(value -> isfinite(value) && value >= 0, linewidths) ||
         throw(_CWTargetedSchurNumericalError("targeted_schur diagonal-root linewidths are invalid."))
-    return Dict(
+    outputs = Dict(
         "readout_diagonal_root_hz" => Float64(real(roots_hz[1])),
         "filter_diagonal_root_hz" => Float64(real(roots_hz[2])),
-        "transfer_cofactor_zero_hz" => Float64(real(zero.root / (2pi))),
         "residue_normalized_midpoint_exchange_abs_real_hz" => Float64(abs(real(exchange)) / (2pi)),
         "diagonal_root_linewidth_sum_hz" => Float64(sum(linewidths)),
     )
+    include_transfer && (outputs["transfer_cofactor_zero_hz"] = Float64(real(zero.root / (2pi))))
+    include_evidence || return outputs
+    root_evidence(root, evidence) = Dict(
+        "newton_iterations" => root.iterations,
+        "diagonal_residual_abs" => evidence.residual_abs,
+        "diagonal_derivative_abs" => evidence.derivative_abs,
+        "matrix_scale" => evidence.matrix_scale,
+        "scaled_residual" => evidence.scaled_residual,
+        "simple_root" => true,
+        "passive_half_plane" => imag(root.root) <= 0,
+    )
+    validation = Dict{String,Any}(
+        "readout_root" => root_evidence(readout, readout_evidence),
+        "filter_root" => root_evidence(filter, filter_evidence),
+        "residue_normalization_abs" => Float64(abs(normalization)),
+    )
+    include_transfer && (validation["transfer_zero"] = root_evidence(zero, zero_evidence))
+    return (outputs=outputs, validation=validation)
 end
 
 function _cw_direct_cared_outputs(compiled, objective, reduction; plan, targeted_context=nothing, overrides=Dict{String,Float64}())
@@ -1025,6 +1115,28 @@ function _cw_direct_cared_outputs(compiled, objective, reduction; plan, targeted
     return result
 end
 
+function _cw_validate_candidate_variables(request, candidate)
+    physical = _cw_dict(candidate["physical_parameters"], "candidate.physical_parameters")
+    for raw in _cw_array(get(request, "variables", nothing), "request.variables")
+        variable = _cw_dict(raw, "request variable")
+        requested = _cw_dict(get(variable, "requested_ref", nothing), "variable.requested_ref")
+        key = _cw_string(get(requested, "component_id", nothing), "variable.requested_ref.component_id") * "." *
+            _cw_string(get(requested, "parameter_name", nothing), "variable.requested_ref.parameter_name")
+        value = _cw_number(get(physical, key, nothing), "candidate physical parameter $(key)")
+        transform = _cw_string(get(variable, "transform", nothing), "variable.transform")
+        transform in ("identity", "log", "unit_interval") || error("Variable transform is unsupported.")
+        lower = get(variable, "lower", nothing)
+        upper = get(variable, "upper", nothing)
+        lo = isnothing(lower) ? -Inf : _cw_number(lower, "variable.lower")
+        hi = isnothing(upper) ? Inf : _cw_number(upper, "variable.upper")
+        lo <= value <= hi || error("Candidate physical parameter $(key) lies outside its bounds.")
+        transform == "log" && value <= 0 && error("Candidate log parameter $(key) must be positive.")
+        transform == "unit_interval" && (!isfinite(lo) || !isfinite(hi)) &&
+            error("Candidate unit_interval parameter $(key) requires finite bounds.")
+    end
+    return nothing
+end
+
 function _cw_direct_solve(request)
     _cw_validate_artifacts(request)
     plan = _cw_dict(get(request, "plan", nothing), "request.plan")
@@ -1046,24 +1158,7 @@ function _cw_direct_solve(request)
     overrides = _cw_parameter_overrides(request)
     candidate = _cw_candidate(request)
     isnothing(candidate) && error("direct_solve requires a sealed candidate binding.")
-    physical = _cw_dict(candidate["physical_parameters"], "candidate.physical_parameters")
-    for raw in _cw_array(get(request, "variables", nothing), "request.variables")
-        variable = _cw_dict(raw, "request variable")
-        requested = _cw_dict(get(variable, "requested_ref", nothing), "variable.requested_ref")
-        key = _cw_string(get(requested, "component_id", nothing), "variable.requested_ref.component_id") * "." *
-            _cw_string(get(requested, "parameter_name", nothing), "variable.requested_ref.parameter_name")
-        value = _cw_number(get(physical, key, nothing), "candidate physical parameter $(key)")
-        transform = _cw_string(get(variable, "transform", nothing), "variable.transform")
-        transform in ("identity", "log", "unit_interval") || error("Variable transform is unsupported.")
-        lower = get(variable, "lower", nothing)
-        upper = get(variable, "upper", nothing)
-        lo = isnothing(lower) ? -Inf : _cw_number(lower, "variable.lower")
-        hi = isnothing(upper) ? Inf : _cw_number(upper, "variable.upper")
-        lo <= value <= hi || error("Candidate physical parameter $(key) lies outside its bounds.")
-        transform == "log" && value <= 0 && error("Candidate log parameter $(key) must be positive.")
-        transform == "unit_interval" && (!isfinite(lo) || !isfinite(hi)) &&
-            error("Candidate unit_interval parameter $(key) requires finite bounds.")
-    end
+    _cw_validate_candidate_variables(request, candidate)
     compiled = _cw_build_plan(plan; overrides=overrides)
     model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
         _cw_targeted_portless_compiled(compiled, plan),
@@ -1145,6 +1240,56 @@ function _cw_direct_solve(request)
             "simple_root" => true,
             "passive_half_plane" => true,
         ),
+        "applied_parameter_bindings" => overrides,
+        "produced_artifacts" => Dict{String,Any}(),
+    )
+end
+
+function _cw_evaluate_direct(request)
+    _cw_validate_artifacts(request)
+    plan = _cw_dict(get(request, "plan", nothing), "request.plan")
+    reduction = _cw_dict(get(request, "reduction", nothing), "request.reduction")
+    declaration = _cw_dict(
+        get(request, "standalone_direct_evaluation", nothing),
+        "request.standalone_direct_evaluation",
+    )
+    anchors = _cw_standalone_direct_specs(declaration)
+    overrides = _cw_parameter_overrides(request)
+    candidate = _cw_candidate(request)
+    isnothing(candidate) && error("evaluate_direct requires a sealed candidate binding.")
+    _cw_validate_candidate_variables(request, candidate)
+    context = _cw_targeted_schur_context_unchecked(
+        request,
+        _cw_array(get(request, "variables", nothing), "request.variables"),
+    )
+    candidate_context = _cw_targeted_candidate_context(context, overrides)
+    evaluated = try
+        _cw_targeted_schur_outputs(
+            candidate_context,
+            anchors;
+            include_transfer=false,
+            include_evidence=true,
+        )
+    catch exception
+        exception isa _CWTargetedSchurNumericalError || rethrow()
+        return Dict{String,Any}(
+            "status" => "NOT_EVALUABLE",
+            "standalone_direct_evaluation" => declaration,
+            "reduction" => reduction,
+            "reason" => Dict(
+                "type" => string(typeof(exception)),
+                "message" => sprint(showerror, exception),
+            ),
+            "applied_parameter_bindings" => overrides,
+            "produced_artifacts" => Dict{String,Any}(),
+        )
+    end
+    return Dict{String,Any}(
+        "status" => "PASS",
+        "standalone_direct_evaluation" => declaration,
+        "reduction" => reduction,
+        "cared_outputs" => evaluated.outputs,
+        "validation" => evaluated.validation,
         "applied_parameter_bindings" => overrides,
         "produced_artifacts" => Dict{String,Any}(),
     )
@@ -1611,6 +1756,7 @@ function _cw_validate_upstream_receipts(request, request_path)
     required = if source == "externally_selected_candidate"
         Dict(
             "direct_solve" => Set{String}(),
+            "evaluate_direct" => Set{String}(),
             "evaluate_responses" => Set{String}(),
             "evaluate_t1" => Set(["fit_c11"]),
         )[action]
@@ -1619,6 +1765,7 @@ function _cw_validate_upstream_receipts(request, request_path)
             "optimize" => Set{String}(),
             "refine_winner" => Set(["optimize"]),
             "direct_solve" => Set(["optimize", "refine_winner"]),
+            "evaluate_direct" => Set(["optimize", "refine_winner"]),
             "evaluate_responses" => Set(["optimize", "refine_winner"]),
             "evaluate_t1" => Set(["optimize", "fit_c11"]),
         )[action]
@@ -1661,7 +1808,7 @@ function _cw_validate_upstream_receipts(request, request_path)
             )
         end
     end
-    if action == "direct_solve" && source == "optimizer_winner"
+    if action in ("direct_solve", "evaluate_direct") && source == "optimizer_winner"
         optimization = _cw_dict(
             get(receipts["optimize"], "result", nothing),
             "optimization result",
@@ -1679,7 +1826,7 @@ function _cw_validate_upstream_receipts(request, request_path)
         )
         expected_candidate["canonical_sha256"] = _cw_fingerprint(expected_candidate)
         candidate["canonical_sha256"] == expected_candidate["canonical_sha256"] ||
-            error("direct_solve optimizer winner mismatches its upstream receipts.")
+            error("$(action) optimizer winner mismatches its upstream receipts.")
     end
     return nothing
 end
@@ -2164,6 +2311,10 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
         push!(receipt["nonclaims"], "objective was not requested")
         push!(receipt["nonclaims"], "optimization was not requested")
     end
+    if !isnothing(get(request, "standalone_direct_evaluation", nothing))
+        receipt["standalone_direct_evaluation"] = request["standalone_direct_evaluation"]
+        push!(receipt["nonclaims"], "transfer cofactor zero was not requested or computed")
+    end
     receipt["canonical_sha256"] = _cw_fingerprint(receipt)
     return receipt
 end
@@ -2181,7 +2332,7 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
     try
         get(request, "schema", nothing) == _CW_REQUEST_SCHEMA || error("Request schema is not $(_CW_REQUEST_SCHEMA).")
         action = _cw_string(get(request, "action", nothing), "request.action")
-        action in ("optimize", "refine_winner", "direct_solve", "evaluate_responses", "evaluate_t1") ||
+        action in ("optimize", "refine_winner", "direct_solve", "evaluate_direct", "evaluate_responses", "evaluate_t1") ||
             error("Unsupported Circuit Workbench action $(action).")
         action in ("evaluate_responses", "evaluate_t1") &&
             _cw_direct_evaluation_objective(request, action)
@@ -2218,6 +2369,8 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
             _cw_refine_winner(request)
         elseif action == "direct_solve"
             _cw_direct_solve(request)
+        elseif action == "evaluate_direct"
+            _cw_evaluate_direct(request)
         elseif action == "evaluate_responses"
             _cw_evaluate_responses(request, dirname(receipt_path))
         else

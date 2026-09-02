@@ -62,6 +62,7 @@ from superconducting_circuits_runtime import (
     OptimizerSpec,
     ReductionSpec,
     ResponseSpec,
+    StandaloneDirectEvaluationSpec,
     T1Spec,
     VariableSpec,
     circuit_component,
@@ -175,6 +176,43 @@ candidate/source or sealed-identity mismatches fail closed. There is no
 scalar-LC shortcut, frequency-sort selection, stale-result reuse, compatibility
 path, or fallback.
 
+### STABILIZED Standalone Direct Evaluation
+
+`StandaloneDirectEvaluationSpec` declares positive finite readout and filter
+root anchors for an independent four-quantity Direct C/K/G evaluation.
+`CircuitSim.evaluate_direct(spec, action="execute" | "resolve")` requires the
+sealed Plan, artifacts, configured `ReductionSpec`, variables, and either the
+current externally selected candidate or exact sealed optimizer-winner and
+refinement receipts. It does not require a `CircuitObjective`, optimizer,
+`ResponseSpec`, HB, S21, C11, T1, or report stage and is not inserted into the
+fixed report chain.
+
+The stage reuses the same JosephsonCircuits-assembled C/K/G,
+complete-complement Schur implementation, port-loading rules, complex-root
+solver, and validators as existing targeted-Schur evaluation. It computes and
+seals exactly:
+
+- `readout_diagonal_root_hz`;
+- `filter_diagonal_root_hz`;
+- `residue_normalized_midpoint_exchange_abs_real_hz`; and
+- `diagonal_root_linewidth_sum_hz`.
+
+It neither requests nor computes `transfer_cofactor_zero_hz`. The existing
+five-output Objective and targetless Response contracts remain unchanged.
+
+The durable request, receipt, and result bind the exact Plan, artifacts,
+candidate source and identity, variables, resolved reduction and transform,
+two branch anchors, four-output declaration, applied parameter bindings, and
+root/residue validation evidence. An optimizer-winner request additionally
+binds the exact optimize and refinement receipts; an external candidate makes
+no optimization or refinement claim under the sealed Plan. `resolve` is pure
+read-only and accepts only the same current declaration and identities.
+Expected Schur/root numerical non-evaluability seals `NOT_EVALUABLE` with its
+reason. Malformed declarations, missing or stale selections, out-of-bounds
+parameters, corrupt receipts, or Plan/reduction/artifact/variable/spec identity
+mismatches fail closed. No alternate solver, fallback, intrinsic-notch claim,
+or scientific-result acceptance is introduced.
+
 ### ACCEPTED Optimization Progress Observer
 
 An `execute` optimization may attach one process-local observer without
@@ -247,7 +285,7 @@ This applies equally to `optimizer_winner` and
 `externally_selected_candidate`. It changes no optimizer, refinement,
 candidate-selection, interpolation, or Direct-versus-HB comparison semantics.
 
-### CONVERGING Targetless Direct Evaluation
+### STABILIZED Targetless Direct Evaluation
 
 An explicit candidate may request the five existing targeted-Schur Direct
 physical quantities without declaring a `CircuitObjective`:
@@ -523,7 +561,8 @@ Anchored Direct Solve extension:
 Targetless Direct evaluation extension:
 
 - State: `STABILIZED`.
-- Delivery status: Workbench PR #48, `NOT_INTEGRATED`.
+- Delivery status: `INTEGRATED` as Workbench
+  `0bc1c19c9d3505a5eaff6e4ec899bbc3bbb23726`.
 - Test policy: `stabilization_tests_authorized`.
 - Accepted scope: an externally selected candidate may execute the existing
   targeted-Schur Direct physical evaluation and Response → C11 → T1 → Report
@@ -542,6 +581,30 @@ Targetless Direct evaluation extension:
   rejection, disabled Direct S21, required HB, the C11 → T1 → Report chain,
   `NOT_REQUESTED` evidence, receipt tamper rejection, and pure read-only
   resolution. The complete Python Runtime suite passed with 12 tests.
+- Unresolved semantic decisions: none.
+
+Standalone Direct evaluation extension:
+
+- State: `STABILIZED`.
+- Delivery status: `INTEGRATION_PR / NOT_INTEGRATED`.
+- Test policy: `stabilization_tests_authorized`.
+- Human acceptance: on 2026-09-02 the Human accepted the generic standalone
+  four-quantity Direct capability under task
+  `d3-ipf-issue7-calculate-bare-20260902` and request
+  `workbench-standalone-direct-bare-evaluation-01`.
+- Accepted scope: optional independent `StandaloneDirectEvaluationSpec` and
+  `CircuitSim.evaluate_direct(...)` execution/resolution for the two local
+  diagonal roots, coherent exchange, and anchored-bare linewidth sum, with no
+  transfer-cofactor zero request or computation.
+- Existing five-output Objective and targetless Response behavior: unchanged.
+- Scientific-result acceptance, private values, fallback, or SCNSim change:
+  none.
+- Stabilization evidence: public-safe explicit-candidate and optimizer-winner
+  execute/read-only-resolve regressions freeze exact declaration, candidate,
+  reduction, Plan, artifact, variable, and upstream-receipt binding; stale or
+  mismatched identities reject; expected root numerics seal
+  `NOT_EVALUABLE`. The complete Python Runtime, Julia Runner, and Julia Core
+  suites passed.
 - Unresolved semantic decisions: none.
 
 ## Related

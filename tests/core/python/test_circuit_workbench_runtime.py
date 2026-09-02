@@ -7,6 +7,7 @@ import subprocess
 import sys
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+from typing import Any
 
 import pytest
 import superconducting_circuits_runtime as runtime_api
@@ -22,6 +23,7 @@ from superconducting_circuits_runtime import (
     OptimizerSpec,
     ReductionSpec,
     ResponseSpec,
+    StandaloneDirectEvaluationSpec,
     T1Spec,
     VariableSpec,
     circuit_component,
@@ -86,6 +88,77 @@ def _plan(*, sections: int) -> tuple[CircuitPlan, list[object]]:
             role="terminated" if index < 2 else "nonloading_probe",
         )
     return plan, resonators
+
+
+def _targeted_plan(*, sections: int = 1) -> tuple[CircuitPlan, Any]:
+    plan = CircuitPlan("targeted")
+    ipf = plan.add(
+        intrinsic_interferometric_purcell_filter(
+            id="ipf",
+            readout_open_length_m=5.0e-3,
+            shared_short_length_m=5.0e-3,
+            coupled_length_m=5.0e-3,
+            filter_open_length_m=5.0e-3,
+            readout_short_sections=sections,
+            readout_open_sections=sections,
+            coupled_sections=sections,
+            filter_short_sections=sections,
+            filter_open_sections=sections,
+            readout_l_per_m_h=4.0e-7,
+            readout_c_per_m_f=1.6e-10,
+            filter_l_per_m_h=4.0e-7,
+            filter_c_per_m_f=1.6e-10,
+            mtl_l11_per_m_h=4.0e-7,
+            mtl_l12_per_m_h=5.0e-8,
+            mtl_l21_per_m_h=5.0e-8,
+            mtl_l22_per_m_h=4.0e-7,
+            mtl_c11_per_m_f=1.6e-10,
+            mtl_c12_per_m_f=-2.0e-11,
+            mtl_c21_per_m_f=-2.0e-11,
+            mtl_c22_per_m_f=1.6e-10,
+            idc_finger_length_um=100.0,
+            idc_source_min_um=50.0,
+            idc_source_max_um=150.0,
+            idc_filter_ground_slope_f_per_um=2.0e-16,
+            idc_filter_ground_intercept_f=2.0e-14,
+            idc_feedline_ground_slope_f_per_um=2.0e-16,
+            idc_feedline_ground_intercept_f=2.0e-14,
+            idc_mutual_slope_f_per_um=2.0e-16,
+            idc_mutual_intercept_f=2.0e-14,
+            c0r_f=1.0e-14,
+        )
+    )
+    feedlines = [
+        plan.add(
+            transmission_line(
+                id=f"feedline_{index}",
+                length_m=1.0e-3,
+                n_sections=sections,
+                l_per_m_h=4.0e-7,
+                c_per_m_f=1.6e-10,
+            )
+        )
+        for index in range(2)
+    ]
+    qubit = plan.add(
+        linearized_floating_qubit(
+            id="qubit",
+            c01_f=5.0e-14,
+            c02_f=5.0e-14,
+            c12_f=5.0e-14,
+            cr1_f=5.0e-15,
+            cr2_f=5.0e-15,
+            l_j_per_junction_h=1.0e-8,
+        )
+    )
+    for feedline in feedlines:
+        plan.connect(feedline.pin("tail"), ipf.pin("feedline_attachment"))
+    plan.connect(qubit.pin("readout_attachment"), ipf.pin("readout_attachment"))
+    plan.add_port("port_0", feedlines[0].pin("head"), role="terminated")
+    plan.add_port("port_1", feedlines[1].pin("head"), role="terminated")
+    plan.add_port("port_2", qubit.pin("island_1"), role="nonloading_probe")
+    plan.add_port("port_3", qubit.pin("island_2"), role="nonloading_probe")
+    return plan, ipf
 
 
 def _configured_sim(
@@ -497,73 +570,7 @@ def test_explicit_candidate_runs_downstream_stages_without_optimization(
 def test_targetless_direct_evaluation_binds_full_explicit_candidate_chain(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    plan = CircuitPlan("targetless")
-    ipf = plan.add(
-        intrinsic_interferometric_purcell_filter(
-            id="ipf",
-            readout_open_length_m=5.0e-3,
-            shared_short_length_m=5.0e-3,
-            coupled_length_m=5.0e-3,
-            filter_open_length_m=5.0e-3,
-            readout_short_sections=1,
-            readout_open_sections=1,
-            coupled_sections=1,
-            filter_short_sections=1,
-            filter_open_sections=1,
-            readout_l_per_m_h=4.0e-7,
-            readout_c_per_m_f=1.6e-10,
-            filter_l_per_m_h=4.0e-7,
-            filter_c_per_m_f=1.6e-10,
-            mtl_l11_per_m_h=4.0e-7,
-            mtl_l12_per_m_h=5.0e-8,
-            mtl_l21_per_m_h=5.0e-8,
-            mtl_l22_per_m_h=4.0e-7,
-            mtl_c11_per_m_f=1.6e-10,
-            mtl_c12_per_m_f=-2.0e-11,
-            mtl_c21_per_m_f=-2.0e-11,
-            mtl_c22_per_m_f=1.6e-10,
-            idc_finger_length_um=100.0,
-            idc_source_min_um=50.0,
-            idc_source_max_um=150.0,
-            idc_filter_ground_slope_f_per_um=2.0e-16,
-            idc_filter_ground_intercept_f=2.0e-14,
-            idc_feedline_ground_slope_f_per_um=2.0e-16,
-            idc_feedline_ground_intercept_f=2.0e-14,
-            idc_mutual_slope_f_per_um=2.0e-16,
-            idc_mutual_intercept_f=2.0e-14,
-            c0r_f=1.0e-14,
-        )
-    )
-    feedlines = [
-        plan.add(
-            transmission_line(
-                id=f"feedline_{index}",
-                length_m=1.0e-3,
-                n_sections=1,
-                l_per_m_h=4.0e-7,
-                c_per_m_f=1.6e-10,
-            )
-        )
-        for index in range(2)
-    ]
-    qubit = plan.add(
-        linearized_floating_qubit(
-            id="qubit",
-            c01_f=5.0e-14,
-            c02_f=5.0e-14,
-            c12_f=5.0e-14,
-            cr1_f=5.0e-15,
-            cr2_f=5.0e-15,
-            l_j_per_junction_h=1.0e-8,
-        )
-    )
-    for feedline in feedlines:
-        plan.connect(feedline.pin("tail"), ipf.pin("feedline_attachment"))
-    plan.connect(qubit.pin("readout_attachment"), ipf.pin("readout_attachment"))
-    plan.add_port("port_0", feedlines[0].pin("head"), role="terminated")
-    plan.add_port("port_1", feedlines[1].pin("head"), role="terminated")
-    plan.add_port("port_2", qubit.pin("island_1"), role="nonloading_probe")
-    plan.add_port("port_3", qubit.pin("island_2"), role="nonloading_probe")
+    plan, ipf = _targeted_plan()
     source = tmp_path / "targetless-input.json"
     source.write_text('{"fixture":"public"}', encoding="utf-8")
     sim = CircuitSim(
@@ -773,6 +780,215 @@ def test_direct_solve_binds_explicit_candidate_plan_and_spec(tmp_path: Path) -> 
     missing.set_variables([variable])
     with pytest.raises(RuntimeContractError, match="candidate mismatches"):
         missing.direct_solve(spec, action="resolve")
+
+
+def test_standalone_direct_evaluation_binds_only_four_quantities(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, ipf = _targeted_plan()
+    source = tmp_path / "standalone-input.json"
+    source.write_text('{"fixture":"public"}', encoding="utf-8")
+    sim = CircuitSim(tmp_path, "standalone-direct", data_classification="public")
+    sim.set_plan(plan)
+    sim.bind_artifact(
+        "fixture_input",
+        source,
+        schema="test-public-input.v1",
+        units="dimensionless",
+        provenance={"authority": "public test fixture"},
+    )
+    sim.set_reduction(
+        ReductionSpec((ipf.coord("readout_attachment"), ipf.coord("filter_open_tail")))
+    )
+    sim.set_variables(
+        [
+            VariableSpec(
+                ipf.parameter("readout_open_length_m"),
+                transform="log",
+                lower=4.5e-3,
+                upper=5.5e-3,
+            )
+        ]
+    )
+    candidate = {"ipf.readout_open_length_m": 5.0e-3}
+    sim.set_explicit_candidate(candidate, provenance={"source": "public test fixture"})
+    spec = StandaloneDirectEvaluationSpec(3.0e9, 3.0e9)
+
+    sealed = sim.evaluate_direct(spec, action="execute")
+    assert sealed.status == "PASS"
+    result = sealed.result or {}
+    expected = {
+        "readout_diagonal_root_hz",
+        "filter_diagonal_root_hz",
+        "residue_normalized_midpoint_exchange_abs_real_hz",
+        "diagonal_root_linewidth_sum_hz",
+    }
+    assert set(result["cared_outputs"]) == expected
+    assert set(result["validation"]) == {
+        "readout_root",
+        "filter_root",
+        "residue_normalization_abs",
+    }
+    assert result["applied_parameter_bindings"] == candidate
+    request_path = sealed.path.with_name("circuit-workbench-run-request.v1.json")
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    assert request["objective"] is None
+    assert request["optimizer"] is None
+    assert request["gates"] == []
+    assert request["upstream_receipts"] == {}
+    assert request["standalone_direct_evaluation"] == result["standalone_direct_evaluation"]
+    assert sealed.receipt["standalone_direct_evaluation"] == result["standalone_direct_evaluation"]
+    assert "transfer_cofactor_zero_hz" not in request_path.read_text(encoding="utf-8")
+    assert "transfer_cofactor_zero_hz" not in sealed.path.read_text(encoding="utf-8")
+    assert not (tmp_path / "standalone-direct" / "stages" / "evaluate_responses").exists()
+
+    def no_subprocess(*args: object, **kwargs: object) -> object:
+        raise AssertionError("resolve must not start Julia")
+
+    monkeypatch.setattr(runtime.subprocess, "run", no_subprocess)
+    monkeypatch.setattr(runtime.subprocess, "Popen", no_subprocess)
+    assert sim.evaluate_direct(spec, action="resolve").canonical_sha256 == sealed.canonical_sha256
+    original_receipt = sealed.path.read_text(encoding="utf-8")
+    tampered = json.loads(original_receipt)
+    tampered["result"]["cared_outputs"]["transfer_cofactor_zero_hz"] = 3.0e9
+    tampered["output_sha256"] = runtime._fingerprint(tampered["result"])
+    tampered.pop("canonical_sha256")
+    tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+    sealed.path.write_text(json.dumps(tampered), encoding="utf-8")
+    assert sim.evaluate_direct(spec, action="resolve").status == "NOT_EVALUABLE"
+    sealed.path.write_text(original_receipt, encoding="utf-8")
+    with pytest.raises(RuntimeContractError, match="stale or mismatched"):
+        sim.evaluate_direct(StandaloneDirectEvaluationSpec(3.1e9, 3.0e9), action="resolve")
+    sim.set_explicit_candidate(
+        {"ipf.readout_open_length_m": 5.1e-3},
+        provenance={"source": "public test fixture"},
+    )
+    with pytest.raises(RuntimeContractError, match="candidate mismatches"):
+        sim.evaluate_direct(spec, action="resolve")
+
+    sim.set_explicit_candidate(candidate, provenance={"source": "public test fixture"})
+    source.write_text('{"fixture":"changed"}', encoding="utf-8")
+    assert sim.evaluate_direct(spec, action="resolve").status == "NOT_EVALUABLE"
+
+
+def test_standalone_direct_evaluation_seals_root_failure_as_not_evaluable(
+    tmp_path: Path,
+) -> None:
+    plan, ipf = _targeted_plan()
+    sim = CircuitSim(tmp_path, "standalone-direct-root-failure", data_classification="public")
+    sim.set_plan(plan)
+    sim.set_reduction(
+        ReductionSpec((ipf.coord("readout_attachment"), ipf.coord("filter_open_tail")))
+    )
+    sim.set_variables(
+        [
+            VariableSpec(
+                ipf.parameter("readout_open_length_m"),
+                transform="log",
+                lower=4.5e-3,
+                upper=5.5e-3,
+            )
+        ]
+    )
+    sim.set_explicit_candidate(
+        {"ipf.readout_open_length_m": 5.0e-3},
+        provenance={"source": "public test fixture"},
+    )
+    spec = StandaloneDirectEvaluationSpec(1.0e308, 3.0e9)
+
+    sealed = sim.evaluate_direct(spec, action="execute")
+    assert sealed.status == "NOT_EVALUABLE"
+    assert sealed.failure is None
+    assert (sealed.result or {})["reason"]["message"]
+    assert sim.evaluate_direct(spec, action="resolve").canonical_sha256 == sealed.canonical_sha256
+
+
+def test_standalone_direct_evaluation_binds_optimizer_winner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, ipf = _targeted_plan()
+    refinement, _ = _targeted_plan(sections=2)
+    sim = CircuitSim(tmp_path, "standalone-direct-winner", data_classification="public")
+    sim.set_plan(plan)
+    sim.set_reduction(
+        ReductionSpec((ipf.coord("readout_attachment"), ipf.coord("filter_open_tail")))
+    )
+    sim.set_variables(
+        [
+            VariableSpec(
+                ipf.parameter("readout_open_length_m"),
+                transform="log",
+                lower=4.5e-3,
+                upper=5.5e-3,
+            )
+        ]
+    )
+    cared_outputs = runtime._direct_evaluation_declaration(
+        DirectEvaluationSpec(3.0e9, 3.0e9, 3.0e9)
+    )["cared_outputs"]
+    sim.set_objective(
+        CircuitObjective.from_targets(
+            {
+                "outputs": cared_outputs,
+                "values": {
+                    "readout_diagonal_root_hz": 3.0e9,
+                    "filter_diagonal_root_hz": 3.0e9,
+                    "transfer_cofactor_zero_hz": 3.0e9,
+                    "residue_normalized_midpoint_exchange_abs_real_hz": 1.0e6,
+                    "diagonal_root_linewidth_sum_hz": 1.0e6,
+                },
+                "weights": {name: 1.0 for name in cared_outputs},
+            }
+        )
+    )
+    sim.set_optimizer(
+        OptimizerSpec(
+            "cma_es",
+            seed=0,
+            human_authority="human://accepted-runtime-test-fixture",
+            controls={
+                "initial_sigma": 0.01,
+                "maxiter": 1,
+                "maxfevals": 3,
+                "popsize": 3,
+            },
+        )
+    )
+    sim.set_refinement(plan=refinement, relative_tolerance=1.0e9)
+
+    optimization = sim.optimize(action="execute")
+    refinement_stage = sim.refine_winner(action="execute")
+    assert optimization.status == refinement_stage.status == "PASS"
+    spec = StandaloneDirectEvaluationSpec(3.0e9, 3.0e9)
+    sealed = sim.evaluate_direct(spec, action="execute")
+    assert sealed.status == "PASS"
+    assert sealed.receipt["candidate"]["source"] == "optimizer_winner"
+    request = json.loads(
+        sealed.path.with_name("circuit-workbench-run-request.v1.json").read_text(encoding="utf-8")
+    )
+    assert request["objective"] is None
+    assert request["optimizer"] is None
+    assert request["gates"] == []
+    assert request["upstream_receipts"] == {
+        "optimize": optimization.canonical_sha256,
+        "refine_winner": refinement_stage.canonical_sha256,
+    }
+
+    def no_subprocess(*args: object, **kwargs: object) -> object:
+        raise AssertionError("resolve must not start Julia")
+
+    monkeypatch.setattr(runtime.subprocess, "run", no_subprocess)
+    monkeypatch.setattr(runtime.subprocess, "Popen", no_subprocess)
+    assert sim.evaluate_direct(spec, action="resolve").canonical_sha256 == sealed.canonical_sha256
+
+    original = refinement_stage.path.read_text(encoding="utf-8")
+    tampered = json.loads(original)
+    tampered["status"] = "NOT_EVALUABLE"
+    tampered.pop("canonical_sha256")
+    tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+    refinement_stage.path.write_text(json.dumps(tampered), encoding="utf-8")
+    assert sim.evaluate_direct(spec, action="resolve").status == "NOT_EVALUABLE"
+    refinement_stage.path.write_text(original, encoding="utf-8")
 
 
 def test_direct_solve_seals_expected_numerical_failure_as_not_evaluable(
