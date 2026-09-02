@@ -2599,7 +2599,12 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
             raise RuntimeContractError("receipt result hash mismatches")
         status = str(receipt.get("status", "NOT_EVALUABLE"))
         if standalone_direct is not None:
-            _validate_standalone_direct_result(result, request, status)
+            _validate_standalone_direct_result(
+                result,
+                request,
+                status,
+                receipt.get("failure"),
+            )
         produced = receipt.get("produced_artifacts", {})
         for name, artifact in _mapping(produced, "produced artifacts").items():
             declaration = _mapping(artifact, f"produced artifact {name}")
@@ -3175,7 +3180,26 @@ def _validate_standalone_direct_result(
     value: Any,
     request: Mapping[str, Any],
     receipt_status: str,
+    receipt_failure: Any,
 ) -> None:
+    if receipt_status == "FAILED":
+        failure = _mapping(receipt_failure, "standalone Direct failure")
+        if value is not None or set(failure) != {
+            "error_code",
+            "category",
+            "retryable",
+            "type",
+            "message",
+        }:
+            raise RuntimeContractError("standalone Direct failure receipt is malformed")
+        if not all(
+            _nonempty_string(failure.get(name))
+            for name in ("error_code", "category", "type", "message")
+        ) or not isinstance(failure.get("retryable"), bool):
+            raise RuntimeContractError("standalone Direct failure metadata is malformed")
+        return
+    if receipt_failure is not None:
+        raise RuntimeContractError("standalone Direct non-failure receipt has failure metadata")
     result = _mapping(value, "standalone Direct result")
     common = {
         "status",

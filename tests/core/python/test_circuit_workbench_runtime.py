@@ -903,6 +903,86 @@ def test_standalone_direct_evaluation_seals_root_failure_as_not_evaluable(
     assert sim.evaluate_direct(spec, action="resolve").canonical_sha256 == sealed.canonical_sha256
 
 
+def test_standalone_direct_evaluation_preserves_failed_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, ipf = _targeted_plan()
+    sim = CircuitSim(tmp_path, "standalone-direct-failed", data_classification="public")
+    sim.set_plan(plan)
+    sim.set_reduction(
+        ReductionSpec((ipf.coord("readout_attachment"), ipf.coord("filter_open_tail")))
+    )
+    sim.set_variables(
+        [
+            VariableSpec(
+                ipf.parameter("readout_open_length_m"),
+                transform="log",
+                lower=4.5e-3,
+                upper=5.5e-3,
+            )
+        ]
+    )
+    sim.set_explicit_candidate(
+        {"ipf.readout_open_length_m": 5.0e-3},
+        provenance={"source": "public test fixture"},
+    )
+    spec = StandaloneDirectEvaluationSpec(3.0e9, 3.0e9)
+    failure = {
+        "error_code": "public_synthetic_runner_failure",
+        "category": "task_execution_failed",
+        "retryable": False,
+        "type": "PublicSyntheticRunnerError",
+        "message": "public synthetic standalone Direct failure",
+    }
+
+    def seal_failed_receipt(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        request_path = Path(command[-2])
+        receipt_path = Path(command[-1])
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        receipt = runtime._python_stage_receipt(
+            request,
+            request_path,
+            None,
+            durable_request_path=request_path,
+            durable_stage_dir=receipt_path.parent,
+            failure=failure,
+        )
+        receipt["standalone_direct_evaluation"] = request["standalone_direct_evaluation"]
+        receipt.pop("canonical_sha256")
+        receipt["canonical_sha256"] = runtime._fingerprint(receipt)
+        receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 1)
+
+    monkeypatch.setattr(runtime.subprocess, "run", seal_failed_receipt)
+    with pytest.raises(RuntimeContractError) as error:
+        sim.evaluate_direct(spec, action="execute")
+    assert error.value.error_code == failure["error_code"]
+    assert error.value.category == failure["category"]
+    assert failure["message"] in str(error.value)
+
+    resolved = sim.evaluate_direct(spec, action="resolve")
+    assert resolved.status == "FAILED"
+    assert resolved.result is None
+    assert resolved.receipt["failure"] == failure
+    assert failure["message"] in (resolved.failure or "")
+    original_receipt = resolved.path.read_text(encoding="utf-8")
+
+    tampered = json.loads(original_receipt)
+    tampered["failure"]["retryable"] = "false"
+    tampered.pop("canonical_sha256")
+    tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+    resolved.path.write_text(json.dumps(tampered), encoding="utf-8")
+    assert sim.evaluate_direct(spec, action="resolve").status == "NOT_EVALUABLE"
+
+    tampered = json.loads(original_receipt)
+    tampered["result"] = {}
+    tampered["output_sha256"] = runtime._fingerprint(tampered["result"])
+    tampered.pop("canonical_sha256")
+    tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+    resolved.path.write_text(json.dumps(tampered), encoding="utf-8")
+    assert sim.evaluate_direct(spec, action="resolve").status == "NOT_EVALUABLE"
+
+
 def test_standalone_direct_evaluation_binds_optimizer_winner(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
