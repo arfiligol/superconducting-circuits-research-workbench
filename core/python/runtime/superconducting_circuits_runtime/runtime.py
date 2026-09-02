@@ -39,7 +39,7 @@ STAGE_ORDER = (
     "evaluate_t1",
     "build_report",
 )
-_OPTIONAL_STAGES = ("direct_solve",)
+_OPTIONAL_STAGES = ("direct_solve", "evaluate_direct")
 _KNOWN_STAGES = (*STAGE_ORDER, *_OPTIONAL_STAGES)
 STAGE_DEPENDENCIES = {
     "optimize": (),
@@ -49,6 +49,7 @@ STAGE_DEPENDENCIES = {
     "evaluate_t1": ("optimize", "fit_c11"),
     "build_report": STAGE_ORDER[:-1],
     "direct_solve": ("optimize", "refine_winner"),
+    "evaluate_direct": ("optimize", "refine_winner"),
 }
 _STAGE_ACTIONS = {"execute", "resolve"}
 _LIFECYCLE_STATES = {"CONVERGING", "ACCEPTED", "STABILIZED"}
@@ -59,6 +60,12 @@ _TARGETED_SCHUR_QUANTITIES = (
     "readout_diagonal_root_hz",
     "filter_diagonal_root_hz",
     "transfer_cofactor_zero_hz",
+    "residue_normalized_midpoint_exchange_abs_real_hz",
+    "diagonal_root_linewidth_sum_hz",
+)
+_STANDALONE_DIRECT_QUANTITIES = (
+    "readout_diagonal_root_hz",
+    "filter_diagonal_root_hz",
     "residue_normalized_midpoint_exchange_abs_real_hz",
     "diagonal_root_linewidth_sum_hz",
 )
@@ -527,6 +534,26 @@ class DirectEvaluationSpec:
             ):
                 raise RuntimeContractError(
                     f"DirectEvaluationSpec {field_name} must be finite and positive."
+                )
+            object.__setattr__(self, field_name, float(value))
+
+
+@dataclass(frozen=True)
+class StandaloneDirectEvaluationSpec:
+    readout_root_anchor_hz: float
+    filter_root_anchor_hz: float
+
+    def __post_init__(self) -> None:
+        for field_name in ("readout_root_anchor_hz", "filter_root_anchor_hz"):
+            value = getattr(self, field_name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                or float(value) <= 0.0
+            ):
+                raise RuntimeContractError(
+                    f"StandaloneDirectEvaluationSpec {field_name} must be finite and positive."
                 )
             object.__setattr__(self, field_name, float(value))
 
@@ -1308,18 +1335,7 @@ class CircuitSim:
                 )
             return resolved
         _validate_stage_action(action)
-        if self._explicit_candidate is None:
-            optimization = self._require_stage("optimize")
-            refinement = self._require_stage("refine_winner")
-            winner = _mapping(optimization.receipt.get("result"), "optimization result")
-            candidate = self._optimizer_candidate(winner, optimization, refinement)
-            upstream = {
-                "optimize": optimization.canonical_sha256,
-                "refine_winner": refinement.canonical_sha256,
-            }
-        else:
-            candidate = self._explicit_candidate
-            upstream = {}
+        candidate, upstream = self._independent_direct_candidate()
         request = self._request(
             action="direct_solve",
             backend="direct",
@@ -1336,6 +1352,71 @@ class CircuitSim:
             },
         )
         return self._run_julia(request, "direct_solve")
+
+    def evaluate_direct(
+        self,
+        spec: StandaloneDirectEvaluationSpec,
+        *,
+        action: Literal["execute", "resolve"],
+    ) -> ResolvedCircuitStage:
+        if not isinstance(spec, StandaloneDirectEvaluationSpec):
+            raise RuntimeContractError("evaluate_direct requires StandaloneDirectEvaluationSpec.")
+        if self._reduction is None:
+            raise RuntimeContractError("evaluate_direct requires set_reduction first.")
+        declaration = _standalone_direct_evaluation_declaration(spec)
+        if action == "resolve":
+            resolved = self._resolve_stage("evaluate_direct")
+            if not resolved.receipt:
+                return resolved
+            if self._plan is None:
+                raise RuntimeContractError("evaluate_direct resolve requires set_plan first.")
+            sealed_plan = self._plan.seal(self._libraries)
+            request = _mapping(
+                json.loads(
+                    resolved.path.with_name("circuit-workbench-run-request.v1.json").read_text(
+                        encoding="utf-8"
+                    )
+                ),
+                "evaluate_direct request",
+            )
+            request_candidate = _validated_candidate_binding(request.get("candidate"))
+            if self._explicit_candidate is None:
+                if request_candidate["source"] != "optimizer_winner":
+                    raise RuntimeContractError(
+                        "evaluate_direct resolve candidate mismatches the current selection."
+                    )
+            elif request_candidate != self._explicit_candidate:
+                raise RuntimeContractError(
+                    "evaluate_direct resolve candidate mismatches the current selection."
+                )
+            if (
+                _mapping(request.get("plan"), "evaluate_direct request plan").get(
+                    "canonical_sha256"
+                )
+                != sealed_plan.get("canonical_sha256")
+                or request.get("reduction") != _resolved_reduction(self._reduction, sealed_plan)
+                or request.get("variables") != _resolved_variables(self._variables, sealed_plan)
+                or request.get("artifacts") != self._artifacts
+                or request.get("standalone_direct_evaluation") != declaration
+            ):
+                raise RuntimeContractError(
+                    "evaluate_direct resolve declaration is stale or mismatched."
+                )
+            return resolved
+        _validate_stage_action(action)
+        candidate, upstream = self._independent_direct_candidate()
+        request = self._request(
+            action="evaluate_direct",
+            backend="direct",
+            reduction=self._reduction,
+            extras={
+                "candidate": candidate,
+                "parameter_overrides": self._candidate_overrides(candidate, self._plan),
+                "standalone_direct_evaluation": declaration,
+                "upstream_receipts": upstream,
+            },
+        )
+        return self._run_julia(request, "evaluate_direct")
 
     def fit_c11(self, *, action: Literal["execute", "resolve"]) -> ResolvedCircuitStage:
         if action == "resolve":
@@ -1487,6 +1568,17 @@ class CircuitSim:
         )
         return self._physical_parameter_overrides(winner, plan, "Optimization winner")
 
+    def _independent_direct_candidate(self) -> tuple[dict[str, Any], dict[str, str]]:
+        if self._explicit_candidate is not None:
+            return dict(self._explicit_candidate), {}
+        optimization = self._require_stage("optimize")
+        refinement = self._require_stage("refine_winner")
+        winner = _mapping(optimization.receipt.get("result"), "optimization result")
+        return self._optimizer_candidate(winner, optimization, refinement), {
+            "optimize": optimization.canonical_sha256,
+            "refine_winner": refinement.canonical_sha256,
+        }
+
     def _optimizer_candidate(
         self,
         result: Mapping[str, Any],
@@ -1574,7 +1666,8 @@ class CircuitSim:
         selected_plan = plan or self._plan
         if selected_plan is None:
             raise RuntimeContractError(f"{action} requires set_plan first.")
-        targetless = action != "direct_solve" and self._objective is None
+        independent_direct = action in {"direct_solve", "evaluate_direct"}
+        targetless = not independent_direct and self._objective is None
         if targetless:
             if (
                 action not in {"evaluate_responses", "fit_c11", "evaluate_t1", "build_report"}
@@ -1604,7 +1697,7 @@ class CircuitSim:
                 "Objective-backed requests cannot carry targetless Direct evaluation fields."
             )
         sealed_plan = selected_plan.seal(self._libraries)
-        selected_reduction = reduction if action == "direct_solve" else self._reduction
+        selected_reduction = reduction if independent_direct else self._reduction
         if selected_reduction is not None:
             exposed = set(sealed_plan["coordinate_bindings"])
             if (
@@ -1647,11 +1740,9 @@ class CircuitSim:
                 raise RuntimeContractError(
                     "Direct backend supports one cared-output family, not a mixture."
                 )
-        elif action == "direct_solve" and backend == "direct":
+        elif independent_direct and backend == "direct":
             if resolved_reduction is None:
-                raise RuntimeContractError(
-                    "direct_solve requires its DirectSolveSpec ReductionSpec."
-                )
+                raise RuntimeContractError(f"{action} requires an explicit ReductionSpec.")
         elif action in {"evaluate_responses", "evaluate_t1", "fit_c11", "build_report"}:
             pass
         else:
@@ -1669,11 +1760,11 @@ class CircuitSim:
             "plan": sealed_plan,
             "artifacts": self._artifacts,
             "reduction": resolved_reduction,
-            "objective": None if action == "direct_solve" else _plain(self._objective),
-            "gates": [] if action == "direct_solve" else [_plain(item) for item in self._gates],
+            "objective": None if independent_direct else _plain(self._objective),
+            "gates": [] if independent_direct else [_plain(item) for item in self._gates],
             "variables": _resolved_variables(self._variables, sealed_plan),
             "optimizer": None
-            if action == "direct_solve"
+            if independent_direct
             else _plain(self._optimizer)
             if self._optimizer
             else None,
@@ -1974,6 +2065,7 @@ def _stage_dependencies(stage: str, candidate: Any) -> tuple[str, ...]:
     if source == "externally_selected_candidate":
         return {
             "direct_solve": (),
+            "evaluate_direct": (),
             "evaluate_responses": (),
             "fit_c11": ("evaluate_responses",),
             "evaluate_t1": ("fit_c11",),
@@ -2387,6 +2479,24 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
             candidate = _validated_candidate_binding(candidate)
         if receipt.get("candidate") != candidate:
             raise RuntimeContractError("receipt candidate binding mismatches the request")
+        standalone_direct = request.get("standalone_direct_evaluation")
+        if receipt.get("standalone_direct_evaluation") != standalone_direct:
+            raise RuntimeContractError(
+                "receipt standalone_direct_evaluation mismatches the request"
+            )
+        if standalone_direct is not None:
+            _validated_standalone_direct_evaluation_declaration(standalone_direct)
+            if (
+                stage != "evaluate_direct"
+                or request.get("objective") is not None
+                or request.get("optimizer") is not None
+                or request.get("gates") != []
+                or request.get("reduction") is None
+                or candidate is None
+            ):
+                raise RuntimeContractError("standalone Direct evaluation request is malformed")
+        elif stage == "evaluate_direct":
+            raise RuntimeContractError("evaluate_direct declaration is absent")
         direct_evaluation = request.get("direct_physical_evaluation")
         for name in (
             "direct_physical_evaluation",
@@ -2460,7 +2570,7 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                         f"upstream receipt '{upstream_name}' {field_name} mismatches"
                     )
         if (
-            stage == "direct_solve"
+            stage in {"direct_solve", "evaluate_direct"}
             and candidate is not None
             and candidate["source"] == "optimizer_winner"
         ):
@@ -2482,7 +2592,7 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
             )
             if candidate != expected_candidate:
                 raise RuntimeContractError(
-                    "direct_solve optimizer winner mismatches its upstream receipts"
+                    f"{stage} optimizer winner mismatches its upstream receipts"
                 )
         result = receipt.get("result")
         if result is not None and receipt.get("output_sha256") != _fingerprint(result):
@@ -3003,6 +3113,58 @@ def _validated_direct_evaluation_declaration(value: Any) -> dict[str, Any]:
     if declaration != expected:
         raise RuntimeContractError(
             "Direct physical outputs must be canonical and share identical branch anchors."
+        )
+    return expected
+
+
+def _standalone_direct_evaluation_declaration(
+    spec: StandaloneDirectEvaluationSpec,
+) -> dict[str, Any]:
+    if not isinstance(spec, StandaloneDirectEvaluationSpec):
+        raise RuntimeContractError(
+            "Standalone Direct evaluation requires StandaloneDirectEvaluationSpec."
+        )
+    anchors = {
+        "readout_root_anchor_hz": spec.readout_root_anchor_hz,
+        "filter_root_anchor_hz": spec.filter_root_anchor_hz,
+    }
+    return {
+        "kind": "targeted_schur",
+        "cared_outputs": {
+            quantity: {
+                "kind": "targeted_schur",
+                "quantity": quantity,
+                **anchors,
+            }
+            for quantity in _STANDALONE_DIRECT_QUANTITIES
+        },
+    }
+
+
+def _validated_standalone_direct_evaluation_declaration(value: Any) -> dict[str, Any]:
+    declaration = dict(_mapping(value, "standalone Direct evaluation declaration"))
+    if set(declaration) != {"kind", "cared_outputs"} or declaration["kind"] != "targeted_schur":
+        raise RuntimeContractError(
+            "Standalone Direct evaluation must declare only the targeted_schur family."
+        )
+    outputs = _mapping(declaration["cared_outputs"], "standalone Direct cared outputs")
+    if set(outputs) != set(_STANDALONE_DIRECT_QUANTITIES):
+        raise RuntimeContractError(
+            "Standalone Direct evaluation requires exactly its four R/P quantities."
+        )
+    first = _mapping(outputs[_STANDALONE_DIRECT_QUANTITIES[0]], "standalone Direct output")
+    try:
+        expected = _standalone_direct_evaluation_declaration(
+            StandaloneDirectEvaluationSpec(
+                first["readout_root_anchor_hz"],
+                first["filter_root_anchor_hz"],
+            )
+        )
+    except (KeyError, TypeError) as error:
+        raise RuntimeContractError("Standalone Direct output is malformed.") from error
+    if declaration != expected:
+        raise RuntimeContractError(
+            "Standalone Direct outputs must be canonical and share identical branch anchors."
         )
     return expected
 
