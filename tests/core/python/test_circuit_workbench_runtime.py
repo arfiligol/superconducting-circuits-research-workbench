@@ -782,7 +782,7 @@ def test_direct_solve_binds_explicit_candidate_plan_and_spec(tmp_path: Path) -> 
         missing.direct_solve(spec, action="resolve")
 
 
-def test_standalone_direct_evaluation_binds_only_four_quantities(
+def test_standalone_direct_evaluation_binds_exactly_five_quantities(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     plan, ipf = _targeted_plan()
@@ -812,7 +812,7 @@ def test_standalone_direct_evaluation_binds_only_four_quantities(
     )
     candidate = {"ipf.readout_open_length_m": 5.0e-3}
     sim.set_explicit_candidate(candidate, provenance={"source": "public test fixture"})
-    spec = StandaloneDirectEvaluationSpec(3.0e9, 3.0e9)
+    spec = StandaloneDirectEvaluationSpec(3.0e9, 3.0e9, 3.0e9)
 
     sealed = sim.evaluate_direct(spec, action="execute")
     assert sealed.status == "PASS"
@@ -820,6 +820,7 @@ def test_standalone_direct_evaluation_binds_only_four_quantities(
     expected = {
         "readout_diagonal_root_hz",
         "filter_diagonal_root_hz",
+        "transfer_cofactor_zero_hz",
         "residue_normalized_midpoint_exchange_abs_real_hz",
         "diagonal_root_linewidth_sum_hz",
     }
@@ -827,6 +828,7 @@ def test_standalone_direct_evaluation_binds_only_four_quantities(
     assert set(result["validation"]) == {
         "readout_root",
         "filter_root",
+        "transfer_zero",
         "residue_normalization_abs",
     }
     assert result["applied_parameter_bindings"] == candidate
@@ -838,8 +840,9 @@ def test_standalone_direct_evaluation_binds_only_four_quantities(
     assert request["upstream_receipts"] == {}
     assert request["standalone_direct_evaluation"] == result["standalone_direct_evaluation"]
     assert sealed.receipt["standalone_direct_evaluation"] == result["standalone_direct_evaluation"]
-    assert "transfer_cofactor_zero_hz" not in request_path.read_text(encoding="utf-8")
-    assert "transfer_cofactor_zero_hz" not in sealed.path.read_text(encoding="utf-8")
+    assert result["cared_outputs"]["transfer_cofactor_zero_hz"] >= 0.0
+    assert result["validation"]["transfer_zero"]["simple_root"] is True
+    assert result["validation"]["transfer_zero"]["passive_half_plane"] is True
     assert not (tmp_path / "standalone-direct" / "stages" / "evaluate_responses").exists()
 
     def no_subprocess(*args: object, **kwargs: object) -> object:
@@ -850,7 +853,7 @@ def test_standalone_direct_evaluation_binds_only_four_quantities(
     assert sim.evaluate_direct(spec, action="resolve").canonical_sha256 == sealed.canonical_sha256
     original_receipt = sealed.path.read_text(encoding="utf-8")
     tampered = json.loads(original_receipt)
-    tampered["result"]["cared_outputs"]["transfer_cofactor_zero_hz"] = 3.0e9
+    tampered["result"]["cared_outputs"].pop("transfer_cofactor_zero_hz")
     tampered["output_sha256"] = runtime._fingerprint(tampered["result"])
     tampered.pop("canonical_sha256")
     tampered["canonical_sha256"] = runtime._fingerprint(tampered)
@@ -858,7 +861,14 @@ def test_standalone_direct_evaluation_binds_only_four_quantities(
     assert sim.evaluate_direct(spec, action="resolve").status == "NOT_EVALUABLE"
     sealed.path.write_text(original_receipt, encoding="utf-8")
     with pytest.raises(RuntimeContractError, match="stale or mismatched"):
-        sim.evaluate_direct(StandaloneDirectEvaluationSpec(3.1e9, 3.0e9), action="resolve")
+        sim.evaluate_direct(
+            StandaloneDirectEvaluationSpec(3.0e9, 3.0e9, 3.1e9),
+            action="resolve",
+        )
+    with pytest.raises(RuntimeContractError, match="transfer_zero_anchor_hz"):
+        StandaloneDirectEvaluationSpec(3.0e9, 3.0e9, 0.0)
+    with pytest.raises(RuntimeContractError, match="transfer_zero_anchor_hz"):
+        StandaloneDirectEvaluationSpec(3.0e9, 3.0e9, float("nan"))
     sim.set_explicit_candidate(
         {"ipf.readout_open_length_m": 5.1e-3},
         provenance={"source": "public test fixture"},
@@ -894,7 +904,7 @@ def test_standalone_direct_evaluation_seals_root_failure_as_not_evaluable(
         {"ipf.readout_open_length_m": 5.0e-3},
         provenance={"source": "public test fixture"},
     )
-    spec = StandaloneDirectEvaluationSpec(1.0e308, 3.0e9)
+    spec = StandaloneDirectEvaluationSpec(1.0e308, 3.0e9, 3.0e9)
 
     sealed = sim.evaluate_direct(spec, action="execute")
     assert sealed.status == "NOT_EVALUABLE"
@@ -926,7 +936,7 @@ def test_standalone_direct_evaluation_preserves_failed_receipt(
         {"ipf.readout_open_length_m": 5.0e-3},
         provenance={"source": "public test fixture"},
     )
-    spec = StandaloneDirectEvaluationSpec(3.0e9, 3.0e9)
+    spec = StandaloneDirectEvaluationSpec(3.0e9, 3.0e9, 3.0e9)
     failure = {
         "error_code": "public_synthetic_runner_failure",
         "category": "task_execution_failed",
@@ -1039,9 +1049,18 @@ def test_standalone_direct_evaluation_binds_optimizer_winner(
     optimization = sim.optimize(action="execute")
     refinement_stage = sim.refine_winner(action="execute")
     assert optimization.status == refinement_stage.status == "PASS"
-    spec = StandaloneDirectEvaluationSpec(3.0e9, 3.0e9)
+    spec = StandaloneDirectEvaluationSpec(3.0e9, 3.0e9, 3.0e9)
     sealed = sim.evaluate_direct(spec, action="execute")
     assert sealed.status == "PASS"
+    result = sealed.result or {}
+    assert set(result["cared_outputs"]) == {
+        "readout_diagonal_root_hz",
+        "filter_diagonal_root_hz",
+        "transfer_cofactor_zero_hz",
+        "residue_normalized_midpoint_exchange_abs_real_hz",
+        "diagonal_root_linewidth_sum_hz",
+    }
+    assert "transfer_zero" in result["validation"]
     assert sealed.receipt["candidate"]["source"] == "optimizer_winner"
     request = json.loads(
         sealed.path.with_name("circuit-workbench-run-request.v1.json").read_text(encoding="utf-8")
