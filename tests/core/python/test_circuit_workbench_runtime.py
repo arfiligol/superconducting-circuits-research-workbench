@@ -1310,6 +1310,12 @@ def test_standalone_series_capacitor_scattering_matches_exp_minus_iwt(
         plan = CircuitPlan(run_id)
         capacitor = plan.add(series_capacitor(id="coupling", capacitance_f=capacitance_f))
         plan.add_port(
+            "probe",
+            capacitor.pin("a"),
+            role="nonloading_probe",
+            resistance_ohm=reference_impedance_ohm,
+        )
+        plan.add_port(
             "input",
             capacitor.pin("a"),
             role="terminated",
@@ -1362,6 +1368,7 @@ def test_standalone_series_capacitor_scattering_matches_exp_minus_iwt(
         "reference_frequency_hz": 2.0e8,
     }
     assert [entry["id"] for entry in result["port_order"]] == ["input", "output"]
+    assert [entry["plan_index"] for entry in result["port_order"]] == [2, 3]
     assert all(
         entry["reference_impedance_ohm"] == reference_impedance_ohm
         for entry in result["port_order"]
@@ -1407,6 +1414,24 @@ def test_standalone_series_capacitor_scattering_matches_exp_minus_iwt(
     monkeypatch.setattr(runtime.subprocess, "run", no_subprocess)
     monkeypatch.setattr(runtime.subprocess, "Popen", no_subprocess)
     assert sim.evaluate_scattering(action="resolve").canonical_sha256 == sealed.canonical_sha256
+
+    receipt_path = sealed.path
+    original_receipt = receipt_path.read_bytes()
+    for field, replacement in (
+        ("id", "rehashed-tamper"),
+        ("plan_index", 4),
+        ("reference_impedance_ohm", 75.0),
+    ):
+        tampered = json.loads(original_receipt)
+        tampered["result"]["port_order"][0][field] = replacement
+        tampered["output_sha256"] = runtime._fingerprint(tampered["result"])
+        tampered.pop("canonical_sha256")
+        tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+        receipt_path.write_text(json.dumps(tampered), encoding="utf-8")
+        rejected = sim.evaluate_scattering(action="resolve")
+        assert rejected.status == "NOT_EVALUABLE"
+        assert "port-order evidence mismatches" in (rejected.failure or "")
+    receipt_path.write_bytes(original_receipt)
 
     direct_path = sealed.path.parent / "direct_response.csv"
     original_direct = direct_path.read_bytes()
