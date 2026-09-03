@@ -172,6 +172,21 @@ end
     @test abs2(matched.scattering[1, 1]) < 1
 end
 
+@testset "matched response preserves an exact direct connection" begin
+    response = matched_port_response(
+        zeros(1, 1),
+        zeros(1, 1),
+        2π * 5.0e9,
+        [1.0 1.0],
+        [50.0, 50.0];
+        allow_semidefinite_capacitance=true,
+        allow_dependent_ports=true,
+        include_impedance=false,
+    )
+    @test response.scattering ≈ ComplexF64[0 1; 1 0] atol=1.0e-14
+    @test isnothing(response.impedance)
+end
+
 @testset "matched single-LC open pole follows the state eigenvalue" begin
     capacitance = 100.0e-15
     inductance = 10.0e-9

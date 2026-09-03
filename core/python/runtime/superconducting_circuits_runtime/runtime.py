@@ -39,7 +39,7 @@ STAGE_ORDER = (
     "evaluate_t1",
     "build_report",
 )
-_OPTIONAL_STAGES = ("direct_solve", "evaluate_direct")
+_OPTIONAL_STAGES = ("direct_solve", "evaluate_direct", "evaluate_scattering")
 _KNOWN_STAGES = (*STAGE_ORDER, *_OPTIONAL_STAGES)
 STAGE_DEPENDENCIES = {
     "optimize": (),
@@ -50,6 +50,7 @@ STAGE_DEPENDENCIES = {
     "build_report": STAGE_ORDER[:-1],
     "direct_solve": ("optimize", "refine_winner"),
     "evaluate_direct": ("optimize", "refine_winner"),
+    "evaluate_scattering": ("optimize", "refine_winner"),
 }
 _STAGE_ACTIONS = {"execute", "resolve"}
 _LIFECYCLE_STATES = {"CONVERGING", "ACCEPTED", "STABILIZED"}
@@ -364,6 +365,16 @@ _BUILTIN_PARALLEL_LC = ComponentType(
     (CoordinateDeclaration("signal", "node_flux", "signal"),),
     lowerer="parallel_lc_resonator",
 )
+_BUILTIN_SERIES_CAPACITOR = ComponentType(
+    "workbench.series_capacitor.v1",
+    ("a", "b"),
+    (ParameterDeclaration("capacitance_f", "F", "capacitance"),),
+    (
+        CoordinateDeclaration("a", "node_flux", "signal"),
+        CoordinateDeclaration("b", "node_flux", "signal"),
+    ),
+    lowerer="series_capacitor",
+)
 _BUILTIN_TRANSMISSION_LINE = ComponentType(
     "workbench.transmission_line.v1",
     ("head", "tail"),
@@ -456,6 +467,7 @@ _BUILTIN_INTRINSIC_INTERFEROMETRIC_PURCELL_FILTER = ComponentType(
 )
 _BUILTIN_TYPES = (
     _BUILTIN_PARALLEL_LC,
+    _BUILTIN_SERIES_CAPACITOR,
     _BUILTIN_TRANSMISSION_LINE,
     _BUILTIN_LINEARIZED_FLOATING_QUBIT,
     _BUILTIN_INTRINSIC_INTERFEROMETRIC_PURCELL_FILTER,
@@ -1290,6 +1302,68 @@ class CircuitSim:
         )
         return self._run_julia(request, "evaluate_responses")
 
+    def evaluate_scattering(
+        self,
+        *,
+        action: Literal["execute", "resolve"],
+    ) -> ResolvedCircuitStage:
+        if self._response is None:
+            raise RuntimeContractError("evaluate_scattering requires set_responses first.")
+        if self._response.direct_frequency_hz is None:
+            raise RuntimeContractError("evaluate_scattering requires a Direct response grid.")
+        if action == "resolve":
+            resolved = self._resolve_stage("evaluate_scattering")
+            if not resolved.receipt:
+                return resolved
+            if self._plan is None:
+                raise RuntimeContractError("evaluate_scattering resolve requires set_plan first.")
+            sealed_plan = self._plan.seal(self._libraries)
+            request = _mapping(
+                json.loads(
+                    resolved.path.with_name("circuit-workbench-run-request.v1.json").read_text(
+                        encoding="utf-8"
+                    )
+                ),
+                "evaluate_scattering request",
+            )
+            request_candidate = _validated_candidate_binding(request.get("candidate"))
+            if self._explicit_candidate is None:
+                if request_candidate["source"] != "optimizer_winner":
+                    raise RuntimeContractError(
+                        "evaluate_scattering resolve candidate mismatches the current selection."
+                    )
+            elif request_candidate != self._explicit_candidate:
+                raise RuntimeContractError(
+                    "evaluate_scattering resolve candidate mismatches the current selection."
+                )
+            if (
+                request.get("plan") != sealed_plan
+                or request.get("response") != _plain(self._response)
+                or request.get("reduction") is not None
+                or request.get("objective") is not None
+                or request.get("optimizer") is not None
+                or request.get("gates") != []
+                or request.get("variables") != _resolved_variables(self._variables, sealed_plan)
+                or request.get("artifacts") != self._artifacts
+            ):
+                raise RuntimeContractError(
+                    "evaluate_scattering resolve declaration is stale or mismatched."
+                )
+            return resolved
+        _validate_stage_action(action)
+        candidate, upstream = self._independent_direct_candidate()
+        request = self._request(
+            action="evaluate_scattering",
+            backend="direct_hb",
+            extras={
+                "candidate": candidate,
+                "parameter_overrides": self._candidate_overrides(candidate, self._plan),
+                "response": _plain(self._response),
+                "upstream_receipts": upstream,
+            },
+        )
+        return self._run_julia(request, "evaluate_scattering")
+
     def direct_solve(
         self,
         spec: DirectSolveSpec,
@@ -1672,8 +1746,13 @@ class CircuitSim:
         selected_plan = plan or self._plan
         if selected_plan is None:
             raise RuntimeContractError(f"{action} requires set_plan first.")
+        independent_operation = action in {
+            "direct_solve",
+            "evaluate_direct",
+            "evaluate_scattering",
+        }
         independent_direct = action in {"direct_solve", "evaluate_direct"}
-        targetless = not independent_direct and self._objective is None
+        targetless = not independent_operation and self._objective is None
         if targetless:
             if (
                 action not in {"evaluate_responses", "fit_c11", "evaluate_t1", "build_report"}
@@ -1703,7 +1782,7 @@ class CircuitSim:
                 "Objective-backed requests cannot carry targetless Direct evaluation fields."
             )
         sealed_plan = selected_plan.seal(self._libraries)
-        selected_reduction = reduction if independent_direct else self._reduction
+        selected_reduction = reduction if independent_operation else self._reduction
         if selected_reduction is not None:
             exposed = set(sealed_plan["coordinate_bindings"])
             if (
@@ -1749,6 +1828,9 @@ class CircuitSim:
         elif independent_direct and backend == "direct":
             if resolved_reduction is None:
                 raise RuntimeContractError(f"{action} requires an explicit ReductionSpec.")
+        elif action == "evaluate_scattering" and backend == "direct_hb":
+            if resolved_reduction is not None:
+                raise RuntimeContractError("evaluate_scattering cannot carry a ReductionSpec.")
         elif action in {"evaluate_responses", "evaluate_t1", "fit_c11", "build_report"}:
             pass
         else:
@@ -1766,11 +1848,11 @@ class CircuitSim:
             "plan": sealed_plan,
             "artifacts": self._artifacts,
             "reduction": resolved_reduction,
-            "objective": None if independent_direct else _plain(self._objective),
-            "gates": [] if independent_direct else [_plain(item) for item in self._gates],
+            "objective": None if independent_operation else _plain(self._objective),
+            "gates": [] if independent_operation else [_plain(item) for item in self._gates],
             "variables": _resolved_variables(self._variables, sealed_plan),
             "optimizer": None
-            if independent_direct
+            if independent_operation
             else _plain(self._optimizer)
             if self._optimizer
             else None,
@@ -2072,6 +2154,7 @@ def _stage_dependencies(stage: str, candidate: Any) -> tuple[str, ...]:
         return {
             "direct_solve": (),
             "evaluate_direct": (),
+            "evaluate_scattering": (),
             "evaluate_responses": (),
             "fit_c11": ("evaluate_responses",),
             "evaluate_t1": ("fit_c11",),
@@ -2421,6 +2504,158 @@ def resolve_circuit_campaign(run_dirs: Sequence[Path | str]) -> ResolvedCircuitC
     return ResolvedCircuitCampaign(tuple(resolve_circuit_result(path) for path in paths))
 
 
+def _validated_response_declaration(value: Any) -> dict[str, Any]:
+    declaration = dict(_mapping(value, "response declaration"))
+    if set(declaration) != {
+        "direct_frequency_hz",
+        "hb_frequency_hz",
+        "input_port",
+        "output_port",
+        "pump_frequency_hz",
+    }:
+        raise RuntimeContractError("Response declaration fields are malformed.")
+    return cast(dict[str, Any], _plain(ResponseSpec(**declaration)))
+
+
+def _validate_scattering_result(
+    value: Any,
+    request: Mapping[str, Any],
+    status: str,
+    receipt_failure: Any,
+) -> None:
+    if status == "FAILED":
+        if value is not None:
+            raise RuntimeContractError("FAILED scattering receipt must have a null result.")
+        failure = _mapping(receipt_failure, "scattering failure")
+        if set(failure) != {"error_code", "category", "retryable", "type", "message"}:
+            raise RuntimeContractError("scattering failure receipt is malformed")
+        if (
+            not _nonempty_string(failure["error_code"])
+            or not _nonempty_string(failure["category"])
+            or not isinstance(failure["retryable"], bool)
+            or not _nonempty_string(failure["type"])
+            or not _nonempty_string(failure["message"])
+        ):
+            raise RuntimeContractError("scattering failure metadata is malformed")
+        return
+    if receipt_failure is not None:
+        raise RuntimeContractError("scattering non-failure receipt has failure metadata")
+    if status not in {"PASS", "NOT_EVALUABLE"}:
+        raise RuntimeContractError("scattering result status is unsupported")
+    result = _mapping(value, "scattering result")
+    if result.get("status") != status:
+        raise RuntimeContractError("scattering result status mismatches its receipt")
+    if status == "NOT_EVALUABLE":
+        reason = _mapping(result.get("reason"), "scattering non-evaluability reason")
+        if (
+            set(reason) != {"type", "message"}
+            or not _nonempty_string(reason["type"])
+            or not _nonempty_string(reason["message"])
+            or result.get("produced_artifacts") != {}
+        ):
+            raise RuntimeContractError("scattering non-evaluability evidence is malformed")
+        return
+    expected_fields = {
+        "status",
+        "grids",
+        "ports",
+        "port_order",
+        "pump_off",
+        "phasor_translation",
+        "produced_artifacts",
+        "wall_seconds",
+    }
+    if set(result) != expected_fields:
+        raise RuntimeContractError("scattering result fields are malformed")
+    response = _validated_response_declaration(request.get("response"))
+    if response["direct_frequency_hz"] is None:
+        raise RuntimeContractError("standalone scattering requires a Direct grid")
+    grids = _mapping(result["grids"], "scattering grids")
+    artifacts = _mapping(result["produced_artifacts"], "scattering produced artifacts")
+    if set(grids) != {"direct", "hb"} or set(artifacts) != {
+        "direct_response",
+        "hb_response",
+    }:
+        raise RuntimeContractError("scattering result must bind Direct and HB outputs")
+    expected_grids = {
+        name: {
+            "start_hz": frequencies[0],
+            "stop_hz": frequencies[-1],
+            "points": len(frequencies),
+        }
+        for name, frequencies in (
+            ("direct", response["direct_frequency_hz"]),
+            ("hb", response["hb_frequency_hz"]),
+        )
+    }
+    if grids != expected_grids:
+        raise RuntimeContractError("scattering grid evidence mismatches the request")
+    expected_artifact_paths = {
+        "direct_response": "direct_response.csv",
+        "hb_response": "hb_response.csv",
+    }
+    for name, expected_path in expected_artifact_paths.items():
+        artifact = _mapping(artifacts[name], f"scattering artifact {name}")
+        if (
+            set(artifact) != {"path", "sha256"}
+            or artifact["path"] != expected_path
+            or not isinstance(artifact["sha256"], str)
+            or len(artifact["sha256"]) != 64
+            or any(character not in "0123456789abcdef" for character in artifact["sha256"])
+        ):
+            raise RuntimeContractError("scattering artifact evidence is malformed")
+    ports = _mapping(result["ports"], "scattering selected ports")
+    if ports != {"input": response["input_port"], "output": response["output_port"]}:
+        raise RuntimeContractError("scattering selected ports mismatch the request")
+    pump = _mapping(result["pump_off"], "scattering pump-off evidence")
+    if pump != {
+        "state": "off",
+        "reference_frequency_hz": response["pump_frequency_hz"],
+    }:
+        raise RuntimeContractError("scattering pump-off evidence mismatches the request")
+    if result["phasor_translation"] != {
+        "convention": "exp(-i*omega*t)",
+        "direct": "conj(core_native_response)",
+        "hb": "solver_output",
+    }:
+        raise RuntimeContractError("scattering phasor-translation evidence is malformed")
+    plan = _mapping(request.get("plan"), "scattering Plan")
+    expected_port_order = [
+        {
+            "id": port["id"],
+            "plan_index": index,
+            "reference_impedance_ohm": port["resistance_ohm"],
+        }
+        for index, raw_port in enumerate(plan.get("ports", []), start=1)
+        if (port := _mapping(raw_port, "scattering Plan port")).get("role") == "terminated"
+    ]
+    if result["port_order"] != expected_port_order or not expected_port_order:
+        raise RuntimeContractError("scattering port-order evidence mismatches the Plan")
+
+
+def _validate_scattering_csvs(stage_dir: Path, request: Mapping[str, Any]) -> None:
+    response = _validated_response_declaration(request.get("response"))
+    for prefix in ("direct", "hb"):
+        path = stage_dir / f"{prefix}_response.csv"
+        columns = _read_numeric_csv(path)
+        expected_fields = {
+            "frequency_hz",
+            f"{prefix}_s11_real",
+            f"{prefix}_s11_imag",
+            f"{prefix}_s21_real",
+            f"{prefix}_s21_imag",
+        }
+        if set(columns) != expected_fields:
+            raise RuntimeContractError(f"{prefix} scattering artifact fields are malformed")
+        expected_frequency = response[f"{prefix}_frequency_hz"]
+        if columns["frequency_hz"] != expected_frequency or any(
+            not math.isfinite(value) for values in columns.values() for value in values
+        ):
+            raise RuntimeContractError(
+                f"{prefix} scattering artifact grid or complex values are malformed"
+            )
+
+
 def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
     stage_dir = run_dir / "stages" / stage
     receipt_path = stage_dir / "circuit-workbench-run-receipt.v1.json"
@@ -2503,6 +2738,19 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                 raise RuntimeContractError("standalone Direct evaluation request is malformed")
         elif stage == "evaluate_direct":
             raise RuntimeContractError("evaluate_direct declaration is absent")
+        if stage == "evaluate_scattering":
+            response = _validated_response_declaration(request.get("response"))
+            if (
+                receipt.get("response") != response
+                or request.get("objective") is not None
+                or request.get("optimizer") is not None
+                or request.get("gates") != []
+                or request.get("reduction") is not None
+                or candidate is None
+                or request.get("direct_physical_evaluation") is not None
+                or request.get("standalone_direct_evaluation") is not None
+            ):
+                raise RuntimeContractError("standalone scattering request is malformed")
         direct_evaluation = request.get("direct_physical_evaluation")
         for name in (
             "direct_physical_evaluation",
@@ -2576,7 +2824,7 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                         f"upstream receipt '{upstream_name}' {field_name} mismatches"
                     )
         if (
-            stage in {"direct_solve", "evaluate_direct"}
+            stage in {"direct_solve", "evaluate_direct", "evaluate_scattering"}
             and candidate is not None
             and candidate["source"] == "optimizer_winner"
         ):
@@ -2611,6 +2859,14 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                 status,
                 receipt.get("failure"),
             )
+        if stage == "evaluate_scattering":
+            _validate_scattering_result(result, request, status, receipt.get("failure"))
+            if result is not None and result.get("produced_artifacts") != receipt.get(
+                "produced_artifacts"
+            ):
+                raise RuntimeContractError(
+                    "scattering result artifacts mismatch the sealed receipt"
+                )
         produced = receipt.get("produced_artifacts", {})
         for name, artifact in _mapping(produced, "produced artifacts").items():
             declaration = _mapping(artifact, f"produced artifact {name}")
@@ -2623,6 +2879,8 @@ def _resolve_stage_directory(run_dir: Path, stage: str) -> ResolvedCircuitStage:
                 or _sha256(path.read_bytes()) != declaration.get("sha256")
             ):
                 raise RuntimeContractError(f"produced artifact '{name}' is missing or changed")
+        if stage == "evaluate_scattering" and status == "PASS":
+            _validate_scattering_csvs(stage_dir, request)
         if status != "PASS":
             failure = receipt.get("failure")
             return ResolvedCircuitStage(
@@ -2758,7 +3016,9 @@ def _validate_component(component: ComponentInstance, declared: ComponentType) -
                 raise RuntimeContractError(
                     f"Component '{component.id}' conductance_s must be nonnegative."
                 )
-    if declared.lowerer == "transmission_line":
+    if declared.lowerer == "series_capacitor":
+        _validate_positive_parameters(component, {"capacitance_f"})
+    elif declared.lowerer == "transmission_line":
         _validate_positive_parameters(
             component,
             {"length_m", "l_per_m_h", "c_per_m_f"},

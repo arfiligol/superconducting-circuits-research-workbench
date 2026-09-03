@@ -10,12 +10,12 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Stabilized staged-action contract plus the accepted live optimization-progress extension for the public Circuit Workbench runtime and Python-consumer boundary.
+scope: Stabilized staged-action contract plus accepted independent Direct and scattering operations for the public Circuit Workbench runtime and Python-consumer boundary.
 version: v1.2.0
-last_updated: 2026-09-03
+last_updated: 2026-09-04
 updated_by: codex
 title: Circuit Runtime / Python Consumer
-description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution, with an accepted live optimization-progress extension.
+description: Stabilized contract for visible Python circuit plans, staged Julia actions, independent Direct and scattering operations, immutable receipts, and read-only result resolution.
 sidebar:
  label: Circuit Runtime / Python Consumer
  order: 45
@@ -30,6 +30,9 @@ the current base `d2f5c1936a3e0cee13fc9ec72d4f4b3b3037605d` contains that
 identity. The live optimization-progress callback below is a scoped
 `ACCEPTED / NOT_INTEGRATED` extension. It does not change the stabilized
 plan, compiler, optimizer, staged-result, or receipt contracts.
+The generic series capacitor and independent Direct/HB scattering operation
+are a separately Human-accepted extension being stabilized in the current
+Integration PR.
 
 ## Ownership Boundary
 
@@ -68,6 +71,7 @@ from superconducting_circuits_runtime import (
     circuit_component,
     resolve_circuit_campaign,
     resolve_circuit_result,
+    series_capacitor,
 )
 ```
 
@@ -96,6 +100,18 @@ identity-bind the applicable role map. Missing or invalid roles, identity
 mismatches, and use of a port in a stage that does not permit its role fail
 closed. Port roles select runtime loading behavior; they create no scientific
 Gate or project-specific meaning.
+
+### Generic Series Capacitor
+
+`series_capacitor(id=..., capacitance_f=...)` declares one visible,
+two-terminal lumped capacitor with pins `a` and `b`. Its capacitance is in
+farads and must be finite and strictly positive. The Julia compiler lowers the
+component through the existing Core capacitive-coupling primitive, so it
+contributes to the JosephsonCircuits-assembled C matrix. Zero, negative, or
+non-finite capacitance fails closed.
+
+An electrical short remains an exact `CircuitPlan.connect(...)` relationship;
+consumers must not approximate a short with a large capacitance.
 
 ## Objective And Artifact Declarations
 
@@ -213,6 +229,37 @@ declarations, stale Plan, reduction, artifact, candidate, or upstream-receipt
 identities, mismatched current candidate selection, and tampered receipts fail
 closed. A sealed `FAILED` receipt preserves its original failure metadata and
 error. There is no fallback or compatibility path.
+
+### ACCEPTED Standalone Direct/HB Scattering
+
+`CircuitSim.evaluate_scattering(action="execute" | "resolve")` owns an
+independently sealed `evaluate_scattering` stage. It uses only the current
+sealed Plan, variable and artifact bindings, a `ResponseSpec`, and either the
+exact configured external candidate or sealed optimizer-winner/refinement
+identity. The operation accepts no Objective, Optimizer, ReductionSpec, Gate,
+C11, T1, or report declaration and is outside `STAGE_ORDER`. It performs or
+claims no optimization.
+
+Both independent `ResponseSpec` grids are required. The stage reuses the
+existing Direct C/K/G matched-response engine on `direct_frequency_hz` and the
+existing pump-off HB engine on `hb_frequency_hz`. It performs no interpolation
+or pointwise Direct/HB comparison, so a consumer may deliberately choose a
+small Direct grid that is an exact subset of a denser HB grid. The two sealed
+CSV artifacts preserve frequency plus full-complex selected-input `S11` and
+selected-output `S21` values.
+
+The request, result, and receipt bind the Plan, selected candidate, variable
+and artifact identities, Runtime sources, selected ports, complete terminated-
+port order, reference impedances, independent grids, pump-off state, phasor
+translation, and both produced artifact hashes. `execute` computes and seals
+the operation once. `resolve` is pure read-only: it starts no Julia process and
+performs no recomputation or mutation. Expected Direct or HB numerical
+inability seals `NOT_EVALUABLE` without partial output artifacts. Malformed,
+stale, mismatched, failed, or tampered trust boundaries fail closed and retain
+their sealed failure evidence. There is no fallback or compatibility path.
+
+This independent operation does not change `evaluate_responses` or any
+Objective-backed, targetless, C11, T1, or report pipeline.
 
 ### ACCEPTED Optimization Progress Observer
 
@@ -615,6 +662,27 @@ Standalone Direct evaluation extension:
   complete Python Runtime suite passed with 16 tests; Julia Runner and Julia
   Core suites passed. Source-route, language, App-quarantine, full docs build,
   built-route, lint, type, compile, diff, and public-privacy checks passed.
+- Unresolved semantic decisions: none.
+
+Generic series-capacitor and standalone-scattering extension:
+
+- State: `ACCEPTED`.
+- Delivery status: current Integration PR, `NOT_INTEGRATED`.
+- Test policy: `stabilization_tests_authorized`.
+- Human acceptance: on 2026-09-04 the Human fixed and accepted the named
+  Series Capacitor and Standalone Direct/HB Scattering V1 scope.
+- Accepted scope: one positive-finite two-terminal series capacitor plus
+  independently sealed `evaluate_scattering` execution and pure read-only
+  resolution over exact selected-candidate, Plan, artifact, port, impedance,
+  Direct-grid, pump-off-HB-grid, Runtime, and full-complex S11/S21 identities.
+- Existing `evaluate_responses` and fixed stage pipeline: unchanged.
+- Scientific-result acceptance: none.
+- Private or design-specific values: none.
+- SCNSim scope: none.
+- Retained compatibility, fallback, Objective, Reduction, C11, T1, or report
+  behavior: none.
+- Stabilization evidence: pending the first exact coherent Integration-PR
+  candidate identity and complete public regression validation.
 - Unresolved semantic decisions: none.
 
 ## Related
