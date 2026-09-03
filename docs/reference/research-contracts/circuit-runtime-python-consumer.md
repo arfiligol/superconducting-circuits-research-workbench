@@ -176,7 +176,7 @@ candidate/source or sealed-identity mismatches fail closed. There is no
 scalar-LC shortcut, frequency-sort selection, stale-result reuse, compatibility
 path, or fallback.
 
-### ACCEPTED Standalone Direct Evaluation
+### STABILIZED Standalone Direct Evaluation
 
 `StandaloneDirectEvaluationSpec(readout_root_anchor_hz,
 filter_root_anchor_hz, transfer_zero_anchor_hz)` declares three positive finite
@@ -454,7 +454,7 @@ or design-specific workflow.
 
 Optimization Progress Observer extension:
 
-- State: `ACCEPTED`.
+- State: `STABILIZED`.
 - Delivery status: `NOT_INTEGRATED`.
 - Test policy: `stabilization_tests_authorized`.
 - Human acceptance: explicitly accepted the exact candidate based on
@@ -606,8 +606,15 @@ Standalone Direct evaluation extension:
 - Scientific-result acceptance: none.
 - Private or design-specific values: none.
 - Retained compatibility or fallback: none.
-- Stabilization evidence: pending completion of exact contract alignment and
-  relevant validation in Workbench PR #50.
+- Stabilization evidence: Workbench PR #50 candidate
+  `d4082d1bf5220c612cf9b2181f1fbfb14b47f882`, tree
+  `cbb6bcba59c2a8c699d014834108f09be089d110`, and canonical base-to-head
+  full-index diff SHA-256
+  `89385566a30476cc05d82948665bff45ec9a90b439ffc6c569f7973de27eda5a`
+  align the accepted contract, implementation, and durable regressions. The
+  complete Python Runtime suite passed with 16 tests; Julia Runner and Julia
+  Core suites passed. Source-route, language, App-quarantine, full docs build,
+  built-route, lint, type, compile, diff, and public-privacy checks passed.
 - Unresolved semantic decisions: none.
 
 ## Related
