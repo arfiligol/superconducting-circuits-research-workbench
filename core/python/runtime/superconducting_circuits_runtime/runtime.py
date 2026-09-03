@@ -2615,8 +2615,8 @@ def _validate_scattering_result(
         raise RuntimeContractError("scattering pump-off evidence mismatches the request")
     if result["phasor_translation"] != {
         "convention": "exp(-i*omega*t)",
-        "direct": "conj(core_native_response)",
-        "hb": "solver_output",
+        "direct": "core_native_response",
+        "hb": "conj(solver_native_response)",
     }:
         raise RuntimeContractError("scattering phasor-translation evidence is malformed")
     plan = _mapping(request.get("plan"), "scattering Plan")

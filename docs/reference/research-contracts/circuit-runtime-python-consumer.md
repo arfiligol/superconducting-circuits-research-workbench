@@ -260,6 +260,14 @@ their sealed failure evidence. There is no fallback or compatibility path.
 This independent operation does not change `evaluate_responses` or any
 Objective-backed, targetless, C11, T1, or report pipeline.
 
+Both standalone artifacts use the declared `exp(-i*omega*t)` convention.
+Direct values preserve the Core-native response, while pump-off HB values are
+the complex conjugate of the solver-native response. For one ideal series
+capacitor between two equal reference impedances, the analytic check is
+`Gamma = 1 / (1 - 2*i*omega*Z0*C)`, `S11 = Gamma`, and
+`S21 = 1 - Gamma`. Magnitudes alone are not sufficient evidence for this
+contract.
+
 ### ACCEPTED Optimization Progress Observer
 
 An `execute` optimization may attach one process-local observer without

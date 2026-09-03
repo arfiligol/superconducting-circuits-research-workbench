@@ -2100,7 +2100,7 @@ function _cw_evaluate_responses(request, stage_dir; standalone=false)
                     allow_dependent_ports=standalone,
                     include_impedance=!standalone,
                 ).scattering
-                projected = standalone ? conj.(scattering) : scattering
+                projected = scattering
                 push!(direct, projected[output_position, input_position])
                 standalone && push!(direct_reflection, projected[input_position, input_position])
             end
@@ -2138,14 +2138,14 @@ function _cw_evaluate_responses(request, stage_dir; standalone=false)
             "S$(output.index)$(input.index)",
             length(hb_frequencies),
         )
-        hb = standalone ? raw_hb : conj.(raw_hb)
+        hb = conj.(raw_hb)
         if standalone
-            hb_reflection = _cw_trace(
+            hb_reflection = conj.(_cw_trace(
                 hb_result,
                 :zero_mode_s,
                 "S$(input.index)$(input.index)",
                 length(hb_frequencies),
-            )
+            ))
         end
     catch exception
         standalone || rethrow()
@@ -2223,8 +2223,8 @@ function _cw_evaluate_responses(request, stage_dir; standalone=false)
             ),
             "phasor_translation" => Dict(
                 "convention" => "exp(-i*omega*t)",
-                "direct" => "conj(core_native_response)",
-                "hb" => "solver_output",
+                "direct" => "core_native_response",
+                "hb" => "conj(solver_native_response)",
             ),
             "produced_artifacts" => produced_artifacts,
         )

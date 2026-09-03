@@ -1386,7 +1386,7 @@ def test_standalone_series_capacitor_scattering_matches_exp_minus_iwt(
 
     def expected(frequency_hz: float) -> tuple[complex, complex]:
         omega = 2.0 * 3.141592653589793 * frequency_hz
-        gamma = 1.0 / (1.0 + 2.0j * omega * reference_impedance_ohm * capacitance_f)
+        gamma = 1.0 / (1.0 - 2.0j * omega * reference_impedance_ohm * capacitance_f)
         return gamma, 1.0 - gamma
 
     for prefix, frequencies in (
