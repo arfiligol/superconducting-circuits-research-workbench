@@ -1435,9 +1435,50 @@ def test_standalone_series_capacitor_scattering_matches_exp_minus_iwt(
 
     direct_path = sealed.path.parent / "direct_response.csv"
     original_direct = direct_path.read_bytes()
-    direct_path.write_bytes(original_direct + b"\ncorrupt")
-    assert sim.evaluate_scattering(action="resolve").status == "NOT_EVALUABLE"
+    original_rows = list(csv.reader(original_direct.decode("utf-8").splitlines()))
+
+    def serialized(rows: list[list[str]]) -> bytes:
+        return ("\n".join(",".join(row) for row in rows) + "\n").encode()
+
+    malformed_artifacts: list[bytes] = []
+    changed_header = [row.copy() for row in original_rows]
+    changed_header[0][1] = "direct_s11_value"
+    malformed_artifacts.append(serialized(changed_header))
+    changed_grid = [row.copy() for row in original_rows]
+    changed_grid[1][0] = str(float(changed_grid[1][0]) + 1.0)
+    malformed_artifacts.append(serialized(changed_grid))
+    nonfinite_trace = [row.copy() for row in original_rows]
+    nonfinite_trace[1][1] = "nan"
+    malformed_artifacts.append(serialized(nonfinite_trace))
+    malformed_artifacts.append(serialized(original_rows[:-1]))
+
+    for artifact_bytes in malformed_artifacts:
+        direct_path.write_bytes(artifact_bytes)
+        tampered = json.loads(original_receipt)
+        artifact_sha256 = runtime._sha256(artifact_bytes)
+        tampered["result"]["produced_artifacts"]["direct_response"]["sha256"] = artifact_sha256
+        tampered["produced_artifacts"]["direct_response"]["sha256"] = artifact_sha256
+        tampered["output_sha256"] = runtime._fingerprint(tampered["result"])
+        tampered.pop("canonical_sha256")
+        tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+        receipt_path.write_text(json.dumps(tampered), encoding="utf-8")
+        rejected = sim.evaluate_scattering(action="resolve")
+        assert rejected.status == "NOT_EVALUABLE"
+        assert "scattering artifact" in (rejected.failure or "")
+
     direct_path.write_bytes(original_direct)
+    receipt_path.write_bytes(original_receipt)
+
+    mismatched_declaration = json.loads(original_receipt)
+    mismatched_declaration["result"]["produced_artifacts"]["direct_response"]["sha256"] = "0" * 64
+    mismatched_declaration["output_sha256"] = runtime._fingerprint(mismatched_declaration["result"])
+    mismatched_declaration.pop("canonical_sha256")
+    mismatched_declaration["canonical_sha256"] = runtime._fingerprint(mismatched_declaration)
+    receipt_path.write_text(json.dumps(mismatched_declaration), encoding="utf-8")
+    rejected = sim.evaluate_scattering(action="resolve")
+    assert rejected.status == "NOT_EVALUABLE"
+    assert "result artifacts mismatch" in (rejected.failure or "")
+    receipt_path.write_bytes(original_receipt)
 
     sim.set_responses(
         ResponseSpec(
