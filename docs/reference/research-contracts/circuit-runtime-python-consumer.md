@@ -31,8 +31,7 @@ identity. The live optimization-progress callback below is a scoped
 `ACCEPTED / NOT_INTEGRATED` extension. It does not change the stabilized
 plan, compiler, optimizer, staged-result, or receipt contracts.
 The generic series capacitor and independent Direct/HB scattering operation
-are a separately Human-accepted extension being stabilized in the current
-Integration PR.
+are a separately Human-accepted and stabilized extension in Workbench PR #51.
 
 ## Ownership Boundary
 
@@ -230,7 +229,7 @@ identities, mismatched current candidate selection, and tampered receipts fail
 closed. A sealed `FAILED` receipt preserves its original failure metadata and
 error. There is no fallback or compatibility path.
 
-### ACCEPTED Standalone Direct/HB Scattering
+### STABILIZED Standalone Direct/HB Scattering
 
 `CircuitSim.evaluate_scattering(action="execute" | "resolve")` owns an
 independently sealed `evaluate_scattering` stage. It uses only the current
@@ -666,8 +665,8 @@ Standalone Direct evaluation extension:
 
 Generic series-capacitor and standalone-scattering extension:
 
-- State: `ACCEPTED`.
-- Delivery status: current Integration PR, `NOT_INTEGRATED`.
+- State: `STABILIZED`.
+- Delivery status: Workbench PR #51, `NOT_INTEGRATED`.
 - Test policy: `stabilization_tests_authorized`.
 - Human acceptance: on 2026-09-04 the Human fixed and accepted the named
   Series Capacitor and Standalone Direct/HB Scattering V1 scope.
@@ -681,8 +680,15 @@ Generic series-capacitor and standalone-scattering extension:
 - SCNSim scope: none.
 - Retained compatibility, fallback, Objective, Reduction, C11, T1, or report
   behavior: none.
-- Stabilization evidence: pending the first exact coherent Integration-PR
-  candidate identity and complete public regression validation.
+- Stabilization evidence: Workbench PR #51 implementation candidate
+  `9628ecf6f75cdc8367ae33f0b829e110fc92df6d`, tree
+  `0288c15e02975ac3830c5d25951f3876b957f397`, and canonical base-to-head
+  full-index diff SHA-256
+  `19fcf43b4c7ecc0ce7d9935a43354da13a2c746280e81e4bf36454ba567768bc`
+  align the accepted contract, implementation, and durable regressions. The
+  complete Python Runtime suite passed with 18 tests; Julia Runner and Julia
+  Core suites passed. Source-route, language, App-quarantine, Runtime lint,
+  format, type, compile, API-reference, diff, and public-privacy checks passed.
 - Unresolved semantic decisions: none.
 
 ## Related
