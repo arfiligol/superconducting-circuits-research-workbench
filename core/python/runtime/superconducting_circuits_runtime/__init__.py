@@ -7,6 +7,7 @@ from .catalog import (
     intrinsic_interferometric_purcell_filter,
     linearized_floating_qubit,
     parallel_lc_resonator,
+    series_capacitor,
     transmission_line,
 )
 from .runtime import (
@@ -56,5 +57,6 @@ __all__ = [
     "parallel_lc_resonator",
     "resolve_circuit_campaign",
     "resolve_circuit_result",
+    "series_capacitor",
     "transmission_line",
 ]

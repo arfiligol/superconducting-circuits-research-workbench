@@ -191,9 +191,14 @@ end
 
 The JosephsonCircuits parser owns netlist-to-matrix lowering. This boundary
 adds Workbench node ordering, provenance, semantic hashes, and strict rejection
-of ports, sources, nonlinear junction rows, and unresolved values.
+of ports, sources, nonlinear junction rows, and unresolved values. Floating
+passive networks may opt into a positive-semidefinite capacitance matrix; the
+default remains the positive-definite closed-model contract.
 """
-function extract_linear_nodal_ckg_model(compiled::JosephsonCompiledCircuit)
+function extract_linear_nodal_ckg_model(
+    compiled::JosephsonCompiledCircuit;
+    allow_semidefinite_capacitance::Bool=false,
+)
     isempty(compiled.port_map) || _validation_error(
         "Closed linear extraction does not accept external ports.",
     )
@@ -249,8 +254,10 @@ function extract_linear_nodal_ckg_model(compiled::JosephsonCompiledCircuit)
         "JosephsonCircuits closed linear node ordering must place ground first.",
     )
     node_names = String.(parsed.nodenames[2:end])
-    capacitance = Matrix{Float64}(matrices.Cnm)
-    inverse_inductance = Matrix{Float64}(matrices.invLnm)
+    capacitance = isempty(matrices.Cnm.nzval) ?
+        zeros(Float64, size(matrices.Cnm)) : Matrix{Float64}(matrices.Cnm)
+    inverse_inductance = isempty(matrices.invLnm.nzval) ?
+        zeros(Float64, size(matrices.invLnm)) : Matrix{Float64}(matrices.invLnm)
     conductance = zeros(Float64, size(capacitance))
     for column in axes(conductance, 2)
         for index in matrices.Gnm.colptr[column]:(matrices.Gnm.colptr[column + 1] - 1)
@@ -263,7 +270,14 @@ function extract_linear_nodal_ckg_model(compiled::JosephsonCompiledCircuit)
     all(isfinite, capacitance) && all(isfinite, inverse_inductance) && all(isfinite, conductance) || _validation_error(
         "Direct linear C/K/G matrices must contain only finite values.",
     )
-    capacitance = _require_positive_definite(capacitance, "Closed linear capacitance matrix")
+    capacitance = if allow_semidefinite_capacitance
+        first(_require_positive_semidefinite(
+            capacitance,
+            "Closed linear capacitance matrix",
+        ))
+    else
+        _require_positive_definite(capacitance, "Closed linear capacitance matrix")
+    end
     inverse_inductance, _, _ = _require_positive_semidefinite(
         inverse_inductance,
         "Closed linear inverse-inductance matrix",

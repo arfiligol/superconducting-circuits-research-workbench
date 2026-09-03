@@ -200,6 +200,31 @@ end
     @test unsorted_model.source_sha256 != wrong_row_value_binding
 end
 
+@testset "direct C/K/G extraction can retain a passive capacitance nullspace" begin
+    compiled = JosephsonCompiledCircuit(
+        netlist=Any[
+            ("C_series", "a", "b", :C_series),
+            ("R_a", "a", "0", :R_a),
+            ("R_b", "b", "0", :R_b),
+        ],
+        component_values=Dict{Symbol,Any}(
+            :C_series => 1.0e-12,
+            :R_a => 50.0,
+            :R_b => 50.0,
+        ),
+    )
+
+    @test_throws FrameworkValidationError extract_linear_nodal_ckg_model(compiled)
+    model = extract_linear_nodal_ckg_model(
+        compiled;
+        allow_semidefinite_capacitance=true,
+    )
+    @test model.node_names == ["a", "b"]
+    @test model.capacitance == [1.0e-12 -1.0e-12; -1.0e-12 1.0e-12]
+    @test model.inverse_inductance == zeros(2, 2)
+    @test model.conductance == [0.02 0.0; 0.0 0.02]
+end
+
 @testset "floating free-charge coordinate is Schur reduced in one shared frame" begin
     off = extract_linear_nodal_model(compile_to_josephson(floating_common_pair_plan(physical_on=false)))
     on = extract_linear_nodal_model(compile_to_josephson(floating_common_pair_plan(physical_on=true)))

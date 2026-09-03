@@ -18,6 +18,11 @@ struct _CWTargetedSchurNumericalError <: Exception
 end
 Base.showerror(io::IO, error::_CWTargetedSchurNumericalError) = print(io, error.message)
 
+struct _CWScatteringNumericalError <: Exception
+    message::String
+end
+Base.showerror(io::IO, error::_CWScatteringNumericalError) = print(io, error.message)
+
 function _cw_dict(value, label)::Dict{String,Any}
     value isa AbstractDict || error("$(label) must be an object.")
     return Dict{String,Any}(string(key) => item for (key, item) in pairs(value))
@@ -179,6 +184,28 @@ function _cw_parallel_lc!(plan, component, overrides)
         resistance=1 / conductance,
         role=:shunt_conductance,
     )
+end
+
+function _cw_series_capacitor!(plan, component, overrides)
+    id = _cw_string(get(component, "id", nothing), "component.id")
+    params = _cw_dict(get(component, "parameters", nothing), "component.parameters")
+    capacitance = _cw_number(
+        get(overrides, "$(id).capacitance_f", get(params, "capacitance_f", nothing)),
+        "$(id).capacitance_f",
+    )
+    capacitance > 0 || throw(
+        _CWCandidateNotEvaluable("$(id).capacitance_f must be positive."),
+    )
+    SuperconductingCircuitsCore.couple_capacitive!(
+        plan;
+        id=id,
+        from=_cw_node(id, "a"),
+        to=_cw_node(id, "b"),
+        capacitance=capacitance,
+        role=:series_capacitor,
+        schematic_kind=:capacitor,
+    )
+    return nothing
 end
 
 function _cw_parameter(params, overrides, id, name)
@@ -348,6 +375,7 @@ function _cw_build_plan(payload; overrides=Dict{String,Float64}())
         type_id = _cw_string(get(component, "type_id", nothing), "component.type_id")
         type_id in (
             "workbench.parallel_lc_resonator.v1",
+            "workbench.series_capacitor.v1",
             "workbench.transmission_line.v1",
             "workbench.intrinsic_interferometric_purcell_filter.v1",
             "workbench.linearized_floating_qubit.v1",
@@ -356,6 +384,7 @@ function _cw_build_plan(payload; overrides=Dict{String,Float64}())
             "Register a reviewed Core lowerer before using it in a sealed run.",
         )
         type_id == "workbench.parallel_lc_resonator.v1" && _cw_parallel_lc!(plan, component, overrides)
+        type_id == "workbench.series_capacitor.v1" && _cw_series_capacitor!(plan, component, overrides)
         type_id == "workbench.transmission_line.v1" && _cw_transmission_line!(plan, component, overrides)
         type_id == "workbench.intrinsic_interferometric_purcell_filter.v1" && _cw_intrinsic_interferometric_purcell_filter!(plan, component, overrides)
         type_id == "workbench.linearized_floating_qubit.v1" && _cw_linearized_floating_qubit!(plan, component, overrides)
@@ -1763,6 +1792,7 @@ function _cw_validate_upstream_receipts(request, request_path)
         Dict(
             "direct_solve" => Set{String}(),
             "evaluate_direct" => Set{String}(),
+            "evaluate_scattering" => Set{String}(),
             "evaluate_responses" => Set{String}(),
             "evaluate_t1" => Set(["fit_c11"]),
         )[action]
@@ -1772,6 +1802,7 @@ function _cw_validate_upstream_receipts(request, request_path)
             "refine_winner" => Set(["optimize"]),
             "direct_solve" => Set(["optimize", "refine_winner"]),
             "evaluate_direct" => Set(["optimize", "refine_winner"]),
+            "evaluate_scattering" => Set(["optimize", "refine_winner"]),
             "evaluate_responses" => Set(["optimize", "refine_winner"]),
             "evaluate_t1" => Set(["optimize", "fit_c11"]),
         )[action]
@@ -1814,7 +1845,7 @@ function _cw_validate_upstream_receipts(request, request_path)
             )
         end
     end
-    if action in ("direct_solve", "evaluate_direct") && source == "optimizer_winner"
+    if action in ("direct_solve", "evaluate_direct", "evaluate_scattering") && source == "optimizer_winner"
         optimization = _cw_dict(
             get(receipts["optimize"], "result", nothing),
             "optimization result",
@@ -1936,7 +1967,30 @@ function _cw_write_response_csv(path, frequencies, trace, prefix)
     )
 end
 
-function _cw_evaluate_responses(request, stage_dir)
+function _cw_write_scattering_csv(path, frequencies, reflection, transmission, prefix)
+    return _cw_atomic_csv(
+        path,
+        (
+            "frequency_hz",
+            "$(prefix)_s11_real",
+            "$(prefix)_s11_imag",
+            "$(prefix)_s21_real",
+            "$(prefix)_s21_imag",
+        ),
+        (
+            (
+                frequencies[index],
+                real(reflection[index]),
+                imag(reflection[index]),
+                real(transmission[index]),
+                imag(transmission[index]),
+            )
+            for index in eachindex(frequencies)
+        ),
+    )
+end
+
+function _cw_evaluate_responses(request, stage_dir; standalone=false)
     spec = _cw_dict(get(request, "response", nothing), "request.response")
     direct_grid = get(spec, "direct_frequency_hz", nothing)
     direct_enabled = !isnothing(direct_grid)
@@ -1966,6 +2020,9 @@ function _cw_evaluate_responses(request, stage_dir)
             "Direct response grid must be strictly increasing, positive, and contain at least three points.",
         )
     end
+    standalone && !direct_enabled && error(
+        "Standalone scattering requires a Direct response grid.",
+    )
     plan = _cw_dict(get(request, "plan", nothing), "request.plan")
     input_id = _cw_string(get(spec, "input_port", nothing), "response.input_port")
     output_id = _cw_string(get(spec, "output_port", nothing), "response.output_port")
@@ -1980,51 +2037,79 @@ function _cw_evaluate_responses(request, stage_dir)
     )
     overrides = _cw_parameter_overrides(request)
     compiled = _cw_build_plan(plan; overrides=overrides)
-    objective = _cw_direct_evaluation_objective(request, "evaluate_responses")
-    targeted = _cw_uses_targeted_schur(objective)
-    direct_physical_outputs = _cw_direct_cared_outputs(
-        targeted ? nothing : compiled,
-        objective,
-        get(request, "reduction", nothing);
-        plan=plan,
-        targeted_context=targeted ? _cw_targeted_schur_context(
-            request,
-            _cw_array(get(request, "variables", Any[]), "request.variables"),
-            objective=objective,
-        ) : nothing,
-        overrides=overrides,
-    )
+    direct_physical_outputs = nothing
+    if !standalone
+        objective = _cw_direct_evaluation_objective(request, "evaluate_responses")
+        targeted = _cw_uses_targeted_schur(objective)
+        direct_physical_outputs = _cw_direct_cared_outputs(
+            targeted ? nothing : compiled,
+            objective,
+            get(request, "reduction", nothing);
+            plan=plan,
+            targeted_context=targeted ? _cw_targeted_schur_context(
+                request,
+                _cw_array(get(request, "variables", Any[]), "request.variables"),
+                objective=objective,
+            ) : nothing,
+            overrides=overrides,
+        )
+    end
     ports = [
         (index=index, data=_cw_dict(raw, "plan port"))
         for (index, raw) in enumerate(_cw_array(get(plan, "ports", Any[]), "plan.ports"))
         if _cw_port_role(_cw_dict(raw, "plan port")) == "terminated"
     ]
-    direct = if !direct_enabled
-        ComplexF64[]
-    else
-        model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
-            _cw_direct_closed_compiled(compiled),
-        )
-        selector = zeros(Float64, length(model.node_names), length(ports))
-        impedances = Float64[]
-        positions = Dict(port.index => position for (position, port) in enumerate(ports))
-        for (position, port) in enumerate(ports)
-            selector[_cw_port_node_index(compiled, model, port.data), position] = 1.0
-            push!(impedances, _cw_number(get(port.data, "resistance_ohm", nothing), "port resistance"))
-        end
-        input_position = positions[input.index]
-        output_position = positions[output.index]
-        ComplexF64[
-            SuperconductingCircuitsCore.matched_port_response(
-                model.capacitance,
-                model.inverse_inductance,
-                2pi * frequency,
-                selector,
-                impedances;
-                internal_conductance=model.conductance,
-            ).scattering[output_position, input_position]
+    direct = ComplexF64[]
+    direct_reflection = ComplexF64[]
+    if direct_enabled
+        try
+            closed_compiled = if standalone
+                _cw_targeted_portless_compiled(compiled, plan)
+            else
+                _cw_direct_closed_compiled(compiled)
+            end
+            model = SuperconductingCircuitsCore.extract_linear_nodal_ckg_model(
+                closed_compiled,
+                allow_semidefinite_capacitance=standalone,
+            )
+            selector = zeros(Float64, length(model.node_names), length(ports))
+            impedances = Float64[]
+            positions = Dict(port.index => position for (position, port) in enumerate(ports))
+            for (position, port) in enumerate(ports)
+                selector[_cw_port_node_index(compiled, model, port.data), position] = 1.0
+                push!(impedances, _cw_number(get(port.data, "resistance_ohm", nothing), "port resistance"))
+            end
+            internal_conductance = copy(model.conductance)
+            if standalone
+                for (position, port) in enumerate(ports)
+                    node_index = _cw_port_node_index(compiled, model, port.data)
+                    internal_conductance[node_index, node_index] -= 1 / impedances[position]
+                end
+            end
+            input_position = positions[input.index]
+            output_position = positions[output.index]
             for frequency in direct_frequencies
-        ]
+                scattering = SuperconductingCircuitsCore.matched_port_response(
+                    model.capacitance,
+                    model.inverse_inductance,
+                    2pi * frequency,
+                    selector,
+                    impedances;
+                    internal_conductance=internal_conductance,
+                    allow_semidefinite_capacitance=standalone,
+                    allow_dependent_ports=standalone,
+                    include_impedance=!standalone,
+                ).scattering
+                projected = scattering
+                push!(direct, projected[output_position, input_position])
+                standalone && push!(direct_reflection, projected[input_position, input_position])
+            end
+        catch exception
+            standalone || rethrow()
+            throw(_CWScatteringNumericalError(
+                "Direct scattering was not numerically evaluable: $(sprint(showerror, exception))",
+            ))
+        end
     end
 
     port_indices = [port.index for port in ports]
@@ -2032,26 +2117,54 @@ function _cw_evaluate_responses(request, stage_dir)
         get(spec, "pump_frequency_hz", nothing),
         "response.pump_frequency_hz",
     )
-    hb_result = SuperconductingCircuitsCore.run_frequency_sweep(
-        _cw_response_compiled(compiled, plan).netlist,
-        compiled.component_values,
-        hb_frequencies;
-        pump_frequencies_hz=[pump_frequency],
-        sources=[(mode=(1,), port=input.index, current=0.0)],
-        port_indices=port_indices,
-        returnS=true,
-        returnZ=false,
-        returnQE=false,
-        returnCM=false,
-    )
-    hb = conj.(_cw_trace(
-        hb_result,
-        :zero_mode_s,
-        "S$(output.index)$(input.index)",
-        length(hb_frequencies),
-    ))
+    hb = ComplexF64[]
+    hb_reflection = ComplexF64[]
+    try
+        hb_result = SuperconductingCircuitsCore.run_frequency_sweep(
+            _cw_response_compiled(compiled, plan).netlist,
+            compiled.component_values,
+            hb_frequencies;
+            pump_frequencies_hz=[pump_frequency],
+            sources=[(mode=(1,), port=input.index, current=0.0)],
+            port_indices=port_indices,
+            returnS=true,
+            returnZ=false,
+            returnQE=false,
+            returnCM=false,
+        )
+        raw_hb = _cw_trace(
+            hb_result,
+            :zero_mode_s,
+            "S$(output.index)$(input.index)",
+            length(hb_frequencies),
+        )
+        hb = conj.(raw_hb)
+        if standalone
+            hb_reflection = conj.(_cw_trace(
+                hb_result,
+                :zero_mode_s,
+                "S$(input.index)$(input.index)",
+                length(hb_frequencies),
+            ))
+        end
+    catch exception
+        standalone || rethrow()
+        throw(_CWScatteringNumericalError(
+            "Pump-off HB scattering was not numerically evaluable: $(sprint(showerror, exception))",
+        ))
+    end
     hb_path = joinpath(stage_dir, "hb_response.csv")
-    _cw_write_response_csv(hb_path, hb_frequencies, hb, "hb")
+    if standalone
+        _cw_write_scattering_csv(
+            hb_path,
+            hb_frequencies,
+            hb_reflection,
+            hb,
+            "hb",
+        )
+    else
+        _cw_write_response_csv(hb_path, hb_frequencies, hb, "hb")
+    end
     grids = Dict{String,Any}(
         "hb" => Dict(
             "start_hz" => first(hb_frequencies),
@@ -2067,7 +2180,17 @@ function _cw_evaluate_responses(request, stage_dir)
     )
     if direct_enabled
         direct_path = joinpath(stage_dir, "direct_response.csv")
-        _cw_write_response_csv(direct_path, direct_frequencies, direct, "direct")
+        if standalone
+            _cw_write_scattering_csv(
+                direct_path,
+                direct_frequencies,
+                direct_reflection,
+                direct,
+                "direct",
+            )
+        else
+            _cw_write_response_csv(direct_path, direct_frequencies, direct, "direct")
+        end
         grids["direct"] = Dict(
             "start_hz" => first(direct_frequencies),
             "stop_hz" => last(direct_frequencies),
@@ -2076,6 +2199,34 @@ function _cw_evaluate_responses(request, stage_dir)
         produced_artifacts["direct_response"] = Dict(
             "path" => "direct_response.csv",
             "sha256" => _cw_sha256(direct_path),
+        )
+    end
+    if standalone
+        return Dict{String,Any}(
+            "status" => "PASS",
+            "grids" => grids,
+            "ports" => Dict("input" => input_id, "output" => output_id),
+            "port_order" => [
+                Dict(
+                    "id" => _cw_string(get(port.data, "id", nothing), "port.id"),
+                    "plan_index" => port.index,
+                    "reference_impedance_ohm" => _cw_number(
+                        get(port.data, "resistance_ohm", nothing),
+                        "port resistance",
+                    ),
+                )
+                for port in ports
+            ],
+            "pump_off" => Dict(
+                "state" => "off",
+                "reference_frequency_hz" => pump_frequency,
+            ),
+            "phasor_translation" => Dict(
+                "convention" => "exp(-i*omega*t)",
+                "direct" => "core_native_response",
+                "hb" => "conj(solver_native_response)",
+            ),
+            "produced_artifacts" => produced_artifacts,
         )
     end
     result = Dict{String,Any}(
@@ -2100,6 +2251,39 @@ function _cw_evaluate_responses(request, stage_dir)
         )
     end
     return result
+end
+
+function _cw_evaluate_scattering(request, stage_dir)
+    isnothing(get(request, "objective", nothing)) || error(
+        "evaluate_scattering does not accept an Objective.",
+    )
+    isnothing(get(request, "optimizer", nothing)) || error(
+        "evaluate_scattering does not accept an Optimizer declaration.",
+    )
+    isnothing(get(request, "reduction", nothing)) || error(
+        "evaluate_scattering does not accept a ReductionSpec.",
+    )
+    isempty(_cw_array(get(request, "gates", nothing), "request.gates")) || error(
+        "evaluate_scattering does not accept Gates.",
+    )
+    isnothing(_cw_candidate(request)) && error(
+        "evaluate_scattering requires a selected candidate.",
+    )
+    try
+        return _cw_evaluate_responses(request, stage_dir; standalone=true)
+    catch exception
+        if exception isa _CWCandidateNotEvaluable || exception isa _CWScatteringNumericalError
+            return Dict{String,Any}(
+                "status" => "NOT_EVALUABLE",
+                "reason" => Dict(
+                    "type" => string(typeof(exception)),
+                    "message" => sprint(showerror, exception),
+                ),
+                "produced_artifacts" => Dict{String,Any}(),
+            )
+        end
+        rethrow()
+    end
 end
 
 function _cw_hb_z_stack(result, ports, count)
@@ -2320,6 +2504,10 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
     if !isnothing(get(request, "standalone_direct_evaluation", nothing))
         receipt["standalone_direct_evaluation"] = request["standalone_direct_evaluation"]
     end
+    if get(request, "action", nothing) == "evaluate_scattering"
+        receipt["response"] = get(request, "response", nothing)
+        push!(receipt["nonclaims"], "no objective or optimization was requested")
+    end
     receipt["canonical_sha256"] = _cw_fingerprint(receipt)
     return receipt
 end
@@ -2337,7 +2525,7 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
     try
         get(request, "schema", nothing) == _CW_REQUEST_SCHEMA || error("Request schema is not $(_CW_REQUEST_SCHEMA).")
         action = _cw_string(get(request, "action", nothing), "request.action")
-        action in ("optimize", "refine_winner", "direct_solve", "evaluate_direct", "evaluate_responses", "evaluate_t1") ||
+        action in ("optimize", "refine_winner", "direct_solve", "evaluate_direct", "evaluate_scattering", "evaluate_responses", "evaluate_t1") ||
             error("Unsupported Circuit Workbench action $(action).")
         action in ("evaluate_responses", "evaluate_t1") &&
             _cw_direct_evaluation_objective(request, action)
@@ -2376,6 +2564,8 @@ function execute_circuit_workbench_action(request_path::AbstractString, receipt_
             _cw_direct_solve(request)
         elseif action == "evaluate_direct"
             _cw_evaluate_direct(request)
+        elseif action == "evaluate_scattering"
+            _cw_evaluate_scattering(request, dirname(receipt_path))
         elseif action == "evaluate_responses"
             _cw_evaluate_responses(request, dirname(receipt_path))
         else

@@ -6,6 +6,7 @@ __all__ = [
     "intrinsic_interferometric_purcell_filter",
     "linearized_floating_qubit",
     "parallel_lc_resonator",
+    "series_capacitor",
     "transmission_line",
 ]
 
@@ -23,6 +24,16 @@ def parallel_lc_resonator(
             "inductance_h": inductance_h,
             "conductance_s": conductance_s,
         },
+    )
+
+
+def series_capacitor(*, id: str, capacitance_f: float) -> ComponentInstance:
+    """Create one visible two-terminal series capacitor instance."""
+
+    return ComponentInstance(
+        id=id,
+        type_id="workbench.series_capacitor.v1",
+        parameters={"capacitance_f": capacitance_f},
     )
 
 

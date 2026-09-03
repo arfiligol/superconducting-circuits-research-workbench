@@ -14,16 +14,27 @@ function _linear_response_real_matrix(matrix, label)
     return Matrix{Float64}(matrix)
 end
 
-function _linear_response_matrices(capacitance, inverse_inductance)
+function _linear_response_matrices(
+    capacitance,
+    inverse_inductance;
+    allow_semidefinite_capacitance=false,
+)
     capacitance_matrix = _linear_response_real_matrix(capacitance, "Linear-response capacitance")
     stiffness_matrix = _linear_response_real_matrix(inverse_inductance, "Linear-response inverse inductance")
     size(capacitance_matrix) == size(stiffness_matrix) || _validation_error(
         "Linear-response capacitance and inverse-inductance matrices must have identical size.",
     )
-    capacitance_matrix = _require_positive_definite(
-        capacitance_matrix,
-        "Linear-response capacitance matrix",
-    )
+    capacitance_matrix = if allow_semidefinite_capacitance
+        first(_require_positive_semidefinite(
+            capacitance_matrix,
+            "Linear-response capacitance matrix",
+        ))
+    else
+        _require_positive_definite(
+            capacitance_matrix,
+            "Linear-response capacitance matrix",
+        )
+    end
     stiffness_matrix, _, _ = _require_positive_semidefinite(
         stiffness_matrix,
         "Linear-response inverse-inductance matrix",
@@ -215,7 +226,7 @@ function _reference_impedance_vector(reference_impedance_ohm, port_count)
     return values
 end
 
-function _linear_response_selector(selector, node_count)
+function _linear_response_selector(selector, node_count; allow_dependent_ports=false)
     selector isa AbstractMatrix || _validation_error("Matched-port selector B must be a matrix.")
     size(selector, 1) == node_count && size(selector, 2) > 0 || _validation_error(
         "Matched-port selector B must have one row per node and at least one port column.",
@@ -224,9 +235,11 @@ function _linear_response_selector(selector, node_count)
         "Matched-port selector B must contain only finite real values.",
     )
     values = Matrix{Float64}(selector)
-    rank(values) == size(values, 2) || _validation_error(
-        "Matched-port selector B must have linearly independent port columns.",
-    )
+    if !allow_dependent_ports
+        rank(values) == size(values, 2) || _validation_error(
+            "Matched-port selector B must have linearly independent port columns.",
+        )
+    end
     return values
 end
 
@@ -275,6 +288,9 @@ For selector `B` and `Y0=diag(1/z0)`, the total conductance is the model's
 internal conductance plus the port loading `B*Y0*B'`, and
 `Dopen=K-omega^2*C-i*omega*G`. The returned scattering matrix implements the
 declared `exp(-i*omega*t)` convention directly, without an HB/port simulation.
+Floating passive networks may opt into semidefinite capacitance and colocated
+ports. Callers that only need finite scattering may omit the impedance
+projection, which is singular for an ideal direct connection.
 """
 function matched_port_response(
     capacitance,
@@ -283,13 +299,21 @@ function matched_port_response(
     selector,
     reference_impedance_ohm;
     internal_conductance=nothing,
+    allow_semidefinite_capacitance=false,
+    allow_dependent_ports=false,
+    include_impedance=true,
 )
     capacitance_matrix, stiffness_matrix = _linear_response_matrices(
         capacitance,
         inverse_inductance,
+        allow_semidefinite_capacitance=allow_semidefinite_capacitance,
     )
     angular_frequency = _positive_angular_frequency(angular_frequency_rad_s)
-    selector_matrix = _linear_response_selector(selector, size(capacitance_matrix, 1))
+    selector_matrix = _linear_response_selector(
+        selector,
+        size(capacitance_matrix, 1);
+        allow_dependent_ports=allow_dependent_ports,
+    )
     port_count = size(selector_matrix, 2)
     z0 = _reference_impedance_vector(reference_impedance_ohm, port_count)
     square_root_y0 = Diagonal(1 ./ sqrt.(z0))
@@ -321,7 +345,7 @@ function matched_port_response(
     )
     return (
         scattering = Matrix{ComplexF64}(scattering),
-        impedance = scattering_to_impedance(scattering, z0),
+        impedance = include_impedance ? scattering_to_impedance(scattering, z0) : nothing,
         conductance = Matrix{Float64}(conductance),
         open_dynamic_stiffness = open_dynamic_stiffness,
         selector = selector_matrix,

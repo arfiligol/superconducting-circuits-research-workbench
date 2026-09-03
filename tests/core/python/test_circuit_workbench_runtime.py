@@ -35,6 +35,7 @@ from superconducting_circuits_runtime.catalog import (
     intrinsic_interferometric_purcell_filter,
     linearized_floating_qubit,
     parallel_lc_resonator,
+    series_capacitor,
     transmission_line,
 )
 from superconducting_circuits_runtime.runtime import RuntimeContractError
@@ -409,6 +410,21 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     assert set(direct_request["upstream_receipts"]) == {"optimize", "refine_winner"}
     assert len(calls) == 5
     assert "direct_solve" not in resolve_circuit_result(tmp_path / "staged").stages
+    scattering = sim.evaluate_scattering(action="execute")
+    assert scattering.status == "PASS"
+    assert scattering.receipt["candidate"]["source"] == "optimizer_winner"
+    scattering_request = json.loads(
+        scattering.path.with_name("circuit-workbench-run-request.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert scattering_request["objective"] is None
+    assert scattering_request["reduction"] is None
+    assert scattering_request["upstream_receipts"] == {
+        "optimize": sealed["optimize"].canonical_sha256,
+        "refine_winner": sealed["refine_winner"].canonical_sha256,
+    }
+    assert len(calls) == 6
 
     def no_subprocess(*args: object, **kwargs: object) -> object:
         raise AssertionError("resolve must not start Julia")
@@ -420,6 +436,9 @@ def test_staged_actions_seal_then_resolve_and_fail_closed(
     }
     assert sim.direct_solve(direct_spec, action="resolve").canonical_sha256 == (
         direct.canonical_sha256
+    )
+    assert sim.evaluate_scattering(action="resolve").canonical_sha256 == (
+        scattering.canonical_sha256
     )
     assert sim.build_report(action="resolve").status == "PASS"
     run_dir = tmp_path / "staged"
@@ -1237,6 +1256,19 @@ def test_plan_port_role_is_explicit_and_closed() -> None:
 
 
 def test_response_spec_requires_two_independent_grids() -> None:
+    hb_grid = tuple(4.0e9 + index * 3.0e5 for index in range(10_001))
+    direct_grid = hb_grid[::50]
+    independent = ResponseSpec(
+        direct_frequency_hz=direct_grid,
+        hb_frequency_hz=hb_grid,
+        input_port="input",
+        output_port="output",
+        pump_frequency_hz=5.0e9,
+    )
+    assert len(independent.direct_frequency_hz or ()) == 201
+    assert len(independent.hb_frequency_hz) == 10_001
+    assert set(independent.direct_frequency_hz or ()) < set(independent.hb_frequency_hz)
+
     valid = {
         "direct_frequency_hz": (1.0, 2.0, 3.0),
         "hb_frequency_hz": (1.0, 1.5, 2.0, 2.5, 3.0),
@@ -1259,6 +1291,296 @@ def test_response_spec_requires_two_independent_grids() -> None:
             output_port="output",
             pump_frequency_hz=2.0,
         )
+
+
+def test_standalone_series_capacitor_scattering_matches_exp_minus_iwt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    capacitance_f = 1.0e-12
+    reference_impedance_ohm = 50.0
+    direct_frequency_hz = (1.0e8, 2.0e8, 3.0e8)
+    hb_frequency_hz = (1.0e8, 1.5e8, 2.0e8, 2.5e8, 3.0e8)
+
+    def configured(
+        run_id: str,
+        *,
+        direct_grid: tuple[float, ...] = direct_frequency_hz,
+        hb_grid: tuple[float, ...] = hb_frequency_hz,
+    ) -> CircuitSim:
+        plan = CircuitPlan(run_id)
+        capacitor = plan.add(series_capacitor(id="coupling", capacitance_f=capacitance_f))
+        plan.add_port(
+            "probe",
+            capacitor.pin("a"),
+            role="nonloading_probe",
+            resistance_ohm=reference_impedance_ohm,
+        )
+        plan.add_port(
+            "input",
+            capacitor.pin("a"),
+            role="terminated",
+            resistance_ohm=reference_impedance_ohm,
+        )
+        plan.add_port(
+            "output",
+            capacitor.pin("b"),
+            role="terminated",
+            resistance_ohm=reference_impedance_ohm,
+        )
+        sim = CircuitSim(tmp_path, run_id, data_classification="public")
+        sim.set_plan(plan)
+        sim.set_variables(
+            [
+                VariableSpec(
+                    capacitor.parameter("capacitance_f"),
+                    transform="log",
+                    lower=0.5e-12,
+                    upper=1.5e-12,
+                )
+            ]
+        )
+        sim.set_explicit_candidate(
+            {"coupling.capacitance_f": capacitance_f},
+            provenance={"source": "public analytic series-capacitor fixture"},
+        )
+        sim.set_responses(
+            ResponseSpec(
+                direct_frequency_hz=direct_grid,
+                hb_frequency_hz=hb_grid,
+                input_port="input",
+                output_port="output",
+                pump_frequency_hz=2.0e8,
+            )
+        )
+        return sim
+
+    sim = configured("series-capacitor-scattering")
+    sealed = sim.evaluate_scattering(action="execute")
+    assert sealed.status == "PASS"
+    result = sealed.result or {}
+    assert result["grids"] == {
+        "direct": {"start_hz": 1.0e8, "stop_hz": 3.0e8, "points": 3},
+        "hb": {"start_hz": 1.0e8, "stop_hz": 3.0e8, "points": 5},
+    }
+    assert result["ports"] == {"input": "input", "output": "output"}
+    assert result["pump_off"] == {
+        "state": "off",
+        "reference_frequency_hz": 2.0e8,
+    }
+    assert [entry["id"] for entry in result["port_order"]] == ["input", "output"]
+    assert [entry["plan_index"] for entry in result["port_order"]] == [2, 3]
+    assert all(
+        entry["reference_impedance_ohm"] == reference_impedance_ohm
+        for entry in result["port_order"]
+    )
+    request = json.loads(
+        sealed.path.with_name("circuit-workbench-run-request.v1.json").read_text(encoding="utf-8")
+    )
+    assert request["objective"] is None
+    assert request["optimizer"] is None
+    assert request["reduction"] is None
+    assert request["gates"] == []
+    assert request["upstream_receipts"] == {}
+    assert request["response"]["direct_frequency_hz"] == list(direct_frequency_hz)
+    assert request["response"]["hb_frequency_hz"] == list(hb_frequency_hz)
+
+    def expected(frequency_hz: float) -> tuple[complex, complex]:
+        omega = 2.0 * 3.141592653589793 * frequency_hz
+        gamma = 1.0 / (1.0 - 2.0j * omega * reference_impedance_ohm * capacitance_f)
+        return gamma, 1.0 - gamma
+
+    for prefix, frequencies in (
+        ("direct", direct_frequency_hz),
+        ("hb", hb_frequency_hz),
+    ):
+        columns = runtime._read_numeric_csv(sealed.path.parent / f"{prefix}_response.csv")
+        assert tuple(columns["frequency_hz"]) == frequencies
+        for index, frequency_hz in enumerate(frequencies):
+            expected_s11, expected_s21 = expected(frequency_hz)
+            actual_s11 = complex(
+                columns[f"{prefix}_s11_real"][index],
+                columns[f"{prefix}_s11_imag"][index],
+            )
+            actual_s21 = complex(
+                columns[f"{prefix}_s21_real"][index],
+                columns[f"{prefix}_s21_imag"][index],
+            )
+            assert actual_s11 == pytest.approx(expected_s11, rel=1.0e-10, abs=1.0e-12)
+            assert actual_s21 == pytest.approx(expected_s21, rel=1.0e-10, abs=1.0e-12)
+
+    def no_subprocess(*args: object, **kwargs: object) -> object:
+        raise AssertionError("resolve must not start Julia")
+
+    monkeypatch.setattr(runtime.subprocess, "run", no_subprocess)
+    monkeypatch.setattr(runtime.subprocess, "Popen", no_subprocess)
+    assert sim.evaluate_scattering(action="resolve").canonical_sha256 == sealed.canonical_sha256
+
+    receipt_path = sealed.path
+    original_receipt = receipt_path.read_bytes()
+    for field, replacement in (
+        ("id", "rehashed-tamper"),
+        ("plan_index", 4),
+        ("reference_impedance_ohm", 75.0),
+    ):
+        tampered = json.loads(original_receipt)
+        tampered["result"]["port_order"][0][field] = replacement
+        tampered["output_sha256"] = runtime._fingerprint(tampered["result"])
+        tampered.pop("canonical_sha256")
+        tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+        receipt_path.write_text(json.dumps(tampered), encoding="utf-8")
+        rejected = sim.evaluate_scattering(action="resolve")
+        assert rejected.status == "NOT_EVALUABLE"
+        assert "port-order evidence mismatches" in (rejected.failure or "")
+    receipt_path.write_bytes(original_receipt)
+
+    direct_path = sealed.path.parent / "direct_response.csv"
+    original_direct = direct_path.read_bytes()
+    original_rows = list(csv.reader(original_direct.decode("utf-8").splitlines()))
+
+    def serialized(rows: list[list[str]]) -> bytes:
+        return ("\n".join(",".join(row) for row in rows) + "\n").encode()
+
+    malformed_artifacts: list[bytes] = []
+    changed_header = [row.copy() for row in original_rows]
+    changed_header[0][1] = "direct_s11_value"
+    malformed_artifacts.append(serialized(changed_header))
+    changed_grid = [row.copy() for row in original_rows]
+    changed_grid[1][0] = str(float(changed_grid[1][0]) + 1.0)
+    malformed_artifacts.append(serialized(changed_grid))
+    nonfinite_trace = [row.copy() for row in original_rows]
+    nonfinite_trace[1][1] = "nan"
+    malformed_artifacts.append(serialized(nonfinite_trace))
+    malformed_artifacts.append(serialized(original_rows[:-1]))
+
+    for artifact_bytes in malformed_artifacts:
+        direct_path.write_bytes(artifact_bytes)
+        tampered = json.loads(original_receipt)
+        artifact_sha256 = runtime._sha256(artifact_bytes)
+        tampered["result"]["produced_artifacts"]["direct_response"]["sha256"] = artifact_sha256
+        tampered["produced_artifacts"]["direct_response"]["sha256"] = artifact_sha256
+        tampered["output_sha256"] = runtime._fingerprint(tampered["result"])
+        tampered.pop("canonical_sha256")
+        tampered["canonical_sha256"] = runtime._fingerprint(tampered)
+        receipt_path.write_text(json.dumps(tampered), encoding="utf-8")
+        rejected = sim.evaluate_scattering(action="resolve")
+        assert rejected.status == "NOT_EVALUABLE"
+        assert "scattering artifact" in (rejected.failure or "")
+
+    direct_path.write_bytes(original_direct)
+    receipt_path.write_bytes(original_receipt)
+
+    mismatched_declaration = json.loads(original_receipt)
+    mismatched_declaration["result"]["produced_artifacts"]["direct_response"]["sha256"] = "0" * 64
+    mismatched_declaration["output_sha256"] = runtime._fingerprint(mismatched_declaration["result"])
+    mismatched_declaration.pop("canonical_sha256")
+    mismatched_declaration["canonical_sha256"] = runtime._fingerprint(mismatched_declaration)
+    receipt_path.write_text(json.dumps(mismatched_declaration), encoding="utf-8")
+    rejected = sim.evaluate_scattering(action="resolve")
+    assert rejected.status == "NOT_EVALUABLE"
+    assert "result artifacts mismatch" in (rejected.failure or "")
+    receipt_path.write_bytes(original_receipt)
+
+    sim.set_responses(
+        ResponseSpec(
+            direct_frequency_hz=(1.0e8, 2.1e8, 3.0e8),
+            hb_frequency_hz=hb_frequency_hz,
+            input_port="input",
+            output_port="output",
+            pump_frequency_hz=2.0e8,
+        )
+    )
+    with pytest.raises(RuntimeContractError, match="stale or mismatched"):
+        sim.evaluate_scattering(action="resolve")
+    sim.set_explicit_candidate(
+        {"coupling.capacitance_f": 1.1e-12},
+        provenance={"source": "public analytic series-capacitor fixture"},
+    )
+    with pytest.raises(RuntimeContractError, match="candidate mismatches"):
+        sim.evaluate_scattering(action="resolve")
+
+    monkeypatch.undo()
+    not_evaluable = configured(
+        "series-capacitor-numerical-failure",
+        direct_grid=(2.0e307, 5.0e307, 1.0e308),
+        hb_grid=(2.0e307, 5.0e307, 1.0e308),
+    ).evaluate_scattering(action="execute")
+    assert not_evaluable.status == "NOT_EVALUABLE"
+    assert not_evaluable.failure is None
+    assert (not_evaluable.result or {})["reason"]["message"]
+
+    for invalid in (0.0, -1.0e-12, float("nan"), float("inf")):
+        invalid_plan = CircuitPlan("invalid-series-capacitor")
+        invalid_plan.add(series_capacitor(id="invalid", capacitance_f=invalid))
+        with pytest.raises(RuntimeContractError, match=r"capacitance_f.*positive|finite"):
+            CircuitSim(tmp_path, "invalid", data_classification="public").set_plan(invalid_plan)
+
+
+def test_standalone_scattering_preserves_failed_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, resonators = _plan(sections=1)
+    sim = CircuitSim(tmp_path, "scattering-failed", data_classification="public")
+    sim.set_plan(plan)
+    sim.set_variables(
+        [
+            VariableSpec(
+                resonators[0].parameter("capacitance_f"),
+                transform="log",
+                lower=0.9e-12,
+                upper=1.1e-12,
+            )
+        ]
+    )
+    sim.set_explicit_candidate(
+        {"resonator_0.capacitance_f": 1.0e-12},
+        provenance={"source": "public failure fixture"},
+    )
+    sim.set_responses(
+        ResponseSpec(
+            direct_frequency_hz=(4.5e9, 5.0e9, 5.5e9),
+            hb_frequency_hz=(4.5e9, 5.0e9, 5.5e9),
+            input_port="port_0",
+            output_port="port_1",
+            pump_frequency_hz=5.0e9,
+        )
+    )
+    failure = {
+        "error_code": "public_synthetic_scattering_failure",
+        "category": "task_execution_failed",
+        "retryable": False,
+        "type": "PublicSyntheticScatteringError",
+        "message": "public synthetic standalone scattering failure",
+    }
+
+    def seal_failed_receipt(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        request_path = Path(command[-2])
+        receipt_path = Path(command[-1])
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        receipt = runtime._python_stage_receipt(
+            request,
+            request_path,
+            None,
+            durable_request_path=request_path,
+            durable_stage_dir=receipt_path.parent,
+            failure=failure,
+        )
+        receipt["response"] = request["response"]
+        receipt.pop("canonical_sha256")
+        receipt["canonical_sha256"] = runtime._fingerprint(receipt)
+        receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 1)
+
+    monkeypatch.setattr(runtime.subprocess, "run", seal_failed_receipt)
+    with pytest.raises(RuntimeContractError) as error:
+        sim.evaluate_scattering(action="execute")
+    assert error.value.error_code == failure["error_code"]
+    assert failure["message"] in str(error.value)
+
+    resolved = sim.evaluate_scattering(action="resolve")
+    assert resolved.status == "FAILED"
+    assert resolved.result is None
+    assert resolved.receipt["failure"] == failure
+    assert failure["message"] in (resolved.failure or "")
 
 
 def test_runtime_sdist_installs_with_bundled_julia(tmp_path: Path) -> None:
