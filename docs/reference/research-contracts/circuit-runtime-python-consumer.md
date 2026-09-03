@@ -688,11 +688,11 @@ Generic series-capacitor and standalone-scattering extension:
 - SCNSim scope: none.
 - Retained compatibility, fallback, Objective, Reduction, C11, T1, or report
   behavior: none.
-- Stabilization evidence: Workbench PR #51 implementation candidate
-  `9628ecf6f75cdc8367ae33f0b829e110fc92df6d`, tree
-  `0288c15e02975ac3830c5d25951f3876b957f397`, and canonical base-to-head
+- Stabilization evidence: Workbench PR #51 corrected candidate
+  `7d497b13b7b585acc57a56597e6bedcf6ebce90e`, tree
+  `0537e109bcc9cc93c23e0cb258759aac7bcc4843`, and canonical base-to-head
   full-index diff SHA-256
-  `19fcf43b4c7ecc0ce7d9935a43354da13a2c746280e81e4bf36454ba567768bc`
+  `22455194899825ecc319e7a48b93da44d98580db79aae312a5c191e0919f497f`
   align the accepted contract, implementation, and durable regressions. The
   complete Python Runtime suite passed with 18 tests; Julia Runner and Julia
   Core suites passed. Source-route, language, App-quarantine, Runtime lint,
