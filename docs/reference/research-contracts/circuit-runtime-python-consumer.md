@@ -607,10 +607,10 @@ Standalone Direct evaluation extension:
 - Private or design-specific values: none.
 - Retained compatibility or fallback: none.
 - Stabilization evidence: Workbench PR #50 candidate
-  `d4082d1bf5220c612cf9b2181f1fbfb14b47f882`, tree
-  `cbb6bcba59c2a8c699d014834108f09be089d110`, and canonical base-to-head
+  `7ba2ec89ef1e614716073802331bb0a735425941`, tree
+  `1791a63e5c3a2ea527ecb4682780bb2998de119f`, and canonical base-to-head
   full-index diff SHA-256
-  `89385566a30476cc05d82948665bff45ec9a90b439ffc6c569f7973de27eda5a`
+  `28f1b5285b4a67f8924d64df0f670b5d7cc83892324d04835f70d3e5fc3f80e0`
   align the accepted contract, implementation, and durable regressions. The
   complete Python Runtime suite passed with 16 tests; Julia Runner and Julia
   Core suites passed. Source-route, language, App-quarantine, full docs build,
