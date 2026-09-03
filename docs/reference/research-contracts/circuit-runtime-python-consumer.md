@@ -454,7 +454,7 @@ or design-specific workflow.
 
 Optimization Progress Observer extension:
 
-- State: `STABILIZED`.
+- State: `ACCEPTED`.
 - Delivery status: `NOT_INTEGRATED`.
 - Test policy: `stabilization_tests_authorized`.
 - Human acceptance: explicitly accepted the exact candidate based on
@@ -586,7 +586,7 @@ Targetless Direct evaluation extension:
 
 Standalone Direct evaluation extension:
 
-- State: `ACCEPTED`.
+- State: `STABILIZED`.
 - Delivery status: Workbench PR #50, `NOT_INTEGRATED`; protected `develop`
   remains Workbench `20089deb02a2b319e1e43385672d76ed9ba9630c` until
   Integration completes this accepted extension.

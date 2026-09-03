@@ -840,6 +840,7 @@ def test_standalone_direct_evaluation_binds_exactly_five_quantities(
     assert request["upstream_receipts"] == {}
     assert request["standalone_direct_evaluation"] == result["standalone_direct_evaluation"]
     assert sealed.receipt["standalone_direct_evaluation"] == result["standalone_direct_evaluation"]
+    assert all("transfer cofactor zero" not in nonclaim for nonclaim in sealed.receipt["nonclaims"])
     assert result["cared_outputs"]["transfer_cofactor_zero_hz"] >= 0.0
     assert result["validation"]["transfer_zero"]["simple_root"] is True
     assert result["validation"]["transfer_zero"]["passive_half_plane"] is True

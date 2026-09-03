@@ -2319,7 +2319,6 @@ function _cw_receipt(request, status, request_path; result=nothing, failure=noth
     end
     if !isnothing(get(request, "standalone_direct_evaluation", nothing))
         receipt["standalone_direct_evaluation"] = request["standalone_direct_evaluation"]
-        push!(receipt["nonclaims"], "transfer cofactor zero was not requested or computed")
     end
     receipt["canonical_sha256"] = _cw_fingerprint(receipt)
     return receipt
