@@ -12,7 +12,7 @@ owner: docs-team
 audience: team
 scope: Stabilized staged-action contract plus the accepted live optimization-progress extension for the public Circuit Workbench runtime and Python-consumer boundary.
 version: v1.2.0
-last_updated: 2026-09-02
+last_updated: 2026-09-03
 updated_by: codex
 title: Circuit Runtime / Python Consumer
 description: Stabilized contract for visible Python circuit plans, staged Julia actions, immutable receipts, and read-only result resolution, with an accepted live optimization-progress extension.
@@ -179,7 +179,8 @@ path, or fallback.
 ### STABILIZED Standalone Direct Evaluation
 
 `StandaloneDirectEvaluationSpec(readout_root_anchor_hz,
-filter_root_anchor_hz)` declares two positive finite numerical branch anchors.
+filter_root_anchor_hz, transfer_zero_anchor_hz)` declares three positive finite
+numerical branch anchors.
 `CircuitSim.evaluate_direct(spec, action="execute" | "resolve")` owns the
 independent `evaluate_direct` stage. It uses the current sealed Plan, configured
 `ReductionSpec`, variable and artifact bindings, and either the exact configured
@@ -189,12 +190,13 @@ The stage evaluates exactly:
 
 - `readout_diagonal_root_hz`;
 - `filter_diagonal_root_hz`;
+- `transfer_cofactor_zero_hz`;
 - `residue_normalized_midpoint_exchange_abs_real_hz`; and
 - `diagonal_root_linewidth_sum_hz`.
 
-`transfer_cofactor_zero_hz` is neither requested nor computed. The anchors
-select numerical branches; they are analysis controls, not targets, residuals,
-weights, costs, Gates, or scientific claims.
+The anchors select numerical branches, including the transfer-cofactor-zero
+root branch. They are analysis controls, not targets, residuals, weights,
+costs, Objectives, Gates, or scientific claims.
 
 This operation requires no `CircuitObjective`, Response or HB declaration,
 Direct S21 sweep, C11 fit, T1 evaluation, or report. It is not part of the
@@ -205,11 +207,12 @@ five-output evaluation paths remain unchanged.
 starts no Julia process and performs no recomputation. The request, receipt,
 and result bind the `standalone_direct_evaluation` declaration, resolved
 reduction, candidate source and identity, current Plan and artifact identities,
-the four outputs, and their numerical evidence. Expected Schur or root
+the five outputs, and their numerical evidence. Expected Schur or root
 numerical failure seals `NOT_EVALUABLE` with its reason. Missing or malformed
 declarations, stale Plan, reduction, artifact, candidate, or upstream-receipt
-identities, and mismatched current candidate selection fail closed. There is no
-fallback or compatibility path.
+identities, mismatched current candidate selection, and tampered receipts fail
+closed. A sealed `FAILED` receipt preserves its original failure metadata and
+error. There is no fallback or compatibility path.
 
 ### ACCEPTED Optimization Progress Observer
 
@@ -584,29 +587,34 @@ Targetless Direct evaluation extension:
 Standalone Direct evaluation extension:
 
 - State: `STABILIZED`.
-- Delivery status: `INTEGRATED` as Workbench
-  `72f48312957b9fc46f11b60c26911fba747882c6`.
+- Delivery status: Workbench PR #50, `NOT_INTEGRATED`; protected `develop`
+  remains Workbench `20089deb02a2b319e1e43385672d76ed9ba9630c` until
+  Integration completes this accepted extension.
 - Test policy: `stabilization_tests_authorized`.
-- Human acceptance: on 2026-09-02 the Human fixed and accepted the named
-  Standalone Direct Evaluation V1 scope. The stabilized Integration-PR
-  candidate is head `49c4b40c728c1e3ae6ad75c273a06c87e22425e1`, tree
-  `be02a6df884e90afb8ecec039757b9e0092dd630`, with canonical full-index
+- Human acceptance: on 2026-09-03 the Human explicitly accepted the
+  transfer-zero extension at source head
+  `1e3b9851ed2aa001c3fac31a65bed03a080d5918`, tree
+  `5904c82d02f0bd76ab64287d94a56b500350d7b1`, with canonical full-index
   diff SHA-256
-  `c60b7304fe8d9021140cf6f933cb4667ad633fa1c4e29fd3cf859383446d3b07`.
+  `71d9f64c242bb739c1a73640bb7d0b62f86cf7e47f84ca8b85cbf672fd69f645`.
 - Accepted scope: independent `evaluate_direct` execution and pure read-only
-  resolution for exactly four targeted-Schur R/P quantities, using either the
-  exact external candidate or sealed optimizer-winner/refinement identity.
-  Transfer-cofactor-zero evaluation and the Objective, Response/HB, S21, C11,
-  T1, and report surfaces are excluded.
+  resolution for exactly five targeted-Schur R/P quantities, including
+  `transfer_cofactor_zero_hz`, using either the exact external candidate or
+  sealed optimizer-winner/refinement identity. The Objective, Response/HB,
+  S21, C11, T1, and report surfaces are excluded.
 - Existing objective-backed and targetless five-output paths: unchanged.
 - Scientific-result acceptance: none.
 - Private or design-specific values: none.
 - Retained compatibility or fallback: none.
-- Stabilization evidence: the exact Integration-PR candidate freezes
-  external-candidate and optimizer-winner execution and resolution, the
-  four-output boundary, exclusion of transfer-cofactor-zero evaluation,
-  numerical `NOT_EVALUABLE`, and stale or mismatched identity rejection.
-  Python Runtime passed 15 tests; Julia Runner and Julia Core passed.
+- Stabilization evidence: Workbench PR #50 candidate
+  `7ba2ec89ef1e614716073802331bb0a735425941`, tree
+  `1791a63e5c3a2ea527ecb4682780bb2998de119f`, and canonical base-to-head
+  full-index diff SHA-256
+  `28f1b5285b4a67f8924d64df0f670b5d7cc83892324d04835f70d3e5fc3f80e0`
+  align the accepted contract, implementation, and durable regressions. The
+  complete Python Runtime suite passed with 16 tests; Julia Runner and Julia
+  Core suites passed. Source-route, language, App-quarantine, full docs build,
+  built-route, lint, type, compile, diff, and public-privacy checks passed.
 - Unresolved semantic decisions: none.
 
 ## Related
