@@ -2019,26 +2019,36 @@ function _cw_evaluate_responses(request, stage_dir; standalone=false)
         _cw_number(value, "Direct response frequency")
         for value in _cw_array(direct_grid, "response.direct_frequency_hz")
     ] : Float64[]
-    hb_frequencies = Float64[
+    hb_grid = get(spec, "hb_frequency_hz", nothing)
+    hb_enabled = !isnothing(hb_grid)
+    hb_frequencies = hb_enabled ? Float64[
         _cw_number(value, "HB response frequency")
-        for value in _cw_array(
-            get(spec, "hb_frequency_hz", nothing),
-            "response.hb_frequency_hz",
+        for value in _cw_array(hb_grid, "response.hb_frequency_hz")
+    ] : Float64[]
+    if standalone
+        direct_enabled || hb_enabled || error(
+            "Standalone scattering requires at least one response grid.",
         )
-    ]
-    for (label, frequencies) in (("HB", hb_frequencies),)
-        length(frequencies) >= 3 && all(>(0), frequencies) && all(diff(frequencies) .> 0) ||
-            error(
-                "$(label) response grid must be strictly increasing, positive, and contain at least three points.",
-            )
+    else
+        hb_enabled || error("evaluate_responses requires an HB response grid.")
     end
+    if hb_enabled && !(
+        length(hb_frequencies) >= 3 &&
+        all(>(0), hb_frequencies) &&
+        all(diff(hb_frequencies) .> 0)
+    )
+        error(
+            "HB response grid must be strictly increasing, positive, and contain at least three points.",
+        )
+    end
+    minimum_direct_points = standalone && !hb_enabled ? 1 : 3
     if direct_enabled && !(
-        length(direct_frequencies) >= 3 &&
+        length(direct_frequencies) >= minimum_direct_points &&
         all(>(0), direct_frequencies) &&
         all(diff(direct_frequencies) .> 0)
     )
         error(
-            "Direct response grid must be strictly increasing, positive, and contain at least three points.",
+            "Direct response grid must be strictly increasing, positive, and contain at least $(minimum_direct_points) point(s).",
         )
     end
     plan = _cw_dict(get(request, "plan", nothing), "request.plan")
@@ -2139,79 +2149,81 @@ function _cw_evaluate_responses(request, stage_dir; standalone=false)
     end
 
     port_indices = [port.index for port in ports]
-    pump_frequency = _cw_number(
+    pump_frequency = hb_enabled ? _cw_number(
         get(spec, "pump_frequency_hz", nothing),
         "response.pump_frequency_hz",
-    )
+    ) : nothing
     hb = ComplexF64[]
     hb_reflection = ComplexF64[]
-    try
-        hb_result = SuperconductingCircuitsCore.run_frequency_sweep(
-            _cw_response_compiled(compiled, plan).netlist,
-            compiled.component_values,
-            hb_frequencies;
-            pump_frequencies_hz=[pump_frequency],
-            sources=[(mode=(1,), port=input.index, current=0.0)],
-            port_indices=port_indices,
-            returnS=true,
-            returnZ=false,
-            returnQE=false,
-            returnCM=false,
-        )
-        raw_hb = _cw_trace(
-            hb_result,
-            :zero_mode_s,
-            "S$(output.index)$(input.index)",
-            length(hb_frequencies),
-        )
-        hb = conj.(raw_hb)
-        if standalone
-            hb_reflection = conj.(_cw_trace(
+    if hb_enabled
+        try
+            hb_result = SuperconductingCircuitsCore.run_frequency_sweep(
+                _cw_response_compiled(compiled, plan).netlist,
+                compiled.component_values,
+                hb_frequencies;
+                pump_frequencies_hz=[pump_frequency],
+                sources=[(mode=(1,), port=input.index, current=0.0)],
+                port_indices=port_indices,
+                returnS=true,
+                returnZ=false,
+                returnQE=false,
+                returnCM=false,
+            )
+            raw_hb = _cw_trace(
                 hb_result,
                 :zero_mode_s,
-                "S$(input.index)$(input.index)",
+                "S$(output.index)$(input.index)",
                 length(hb_frequencies),
+            )
+            hb = conj.(raw_hb)
+            if standalone
+                hb_reflection = conj.(_cw_trace(
+                    hb_result,
+                    :zero_mode_s,
+                    "S$(input.index)$(input.index)",
+                    length(hb_frequencies),
+                ))
+            end
+            (!standalone || all(
+                value -> isfinite(real(value)) && isfinite(imag(value)),
+                hb,
+            )) || error("Pump-off HB scattering response contains non-finite values.")
+            (!standalone || all(
+                value -> isfinite(real(value)) && isfinite(imag(value)),
+                hb_reflection,
+            )) || error("Pump-off HB scattering reflection contains non-finite values.")
+        catch exception
+            standalone || rethrow()
+            throw(_CWScatteringNumericalError(
+                "Pump-off HB scattering was not numerically evaluable: $(sprint(showerror, exception))",
             ))
         end
-        (!standalone || all(
-            value -> isfinite(real(value)) && isfinite(imag(value)),
-            hb,
-        )) || error("Pump-off HB scattering response contains non-finite values.")
-        (!standalone || all(
-            value -> isfinite(real(value)) && isfinite(imag(value)),
-            hb_reflection,
-        )) || error("Pump-off HB scattering reflection contains non-finite values.")
-    catch exception
-        standalone || rethrow()
-        throw(_CWScatteringNumericalError(
-            "Pump-off HB scattering was not numerically evaluable: $(sprint(showerror, exception))",
-        ))
     end
-    hb_path = joinpath(stage_dir, "hb_response.csv")
-    if standalone
-        _cw_write_scattering_csv(
-            hb_path,
-            hb_frequencies,
-            hb_reflection,
-            hb,
-            "hb",
-        )
-    else
-        _cw_write_response_csv(hb_path, hb_frequencies, hb, "hb")
-    end
-    grids = Dict{String,Any}(
-        "hb" => Dict(
+    grids = Dict{String,Any}()
+    produced_artifacts = Dict{String,Any}()
+    if hb_enabled
+        hb_path = joinpath(stage_dir, "hb_response.csv")
+        if standalone
+            _cw_write_scattering_csv(
+                hb_path,
+                hb_frequencies,
+                hb_reflection,
+                hb,
+                "hb",
+            )
+        else
+            _cw_write_response_csv(hb_path, hb_frequencies, hb, "hb")
+        end
+        grids["hb"] = Dict(
             "start_hz" => first(hb_frequencies),
             "stop_hz" => last(hb_frequencies),
             "points" => length(hb_frequencies),
-        ),
-    )
-    produced_artifacts = Dict{String,Any}(
-        "hb_response" => Dict(
+        )
+        produced_artifacts["hb_response"] = Dict(
             "path" => "hb_response.csv",
             "sha256" => _cw_sha256(hb_path),
-        ),
-    )
+        )
+    end
     if direct_enabled
         direct_path = joinpath(stage_dir, "direct_response.csv")
         if standalone
@@ -2236,7 +2248,7 @@ function _cw_evaluate_responses(request, stage_dir; standalone=false)
         )
     end
     if standalone
-        return Dict{String,Any}(
+        result = Dict{String,Any}(
             "status" => "PASS",
             "grids" => grids,
             "ports" => Dict("input" => input_id, "output" => output_id),
@@ -2251,17 +2263,20 @@ function _cw_evaluate_responses(request, stage_dir; standalone=false)
                 )
                 for port in ports
             ],
-            "pump_off" => Dict(
-                "state" => "off",
-                "reference_frequency_hz" => pump_frequency,
-            ),
-            "phasor_translation" => Dict(
-                "convention" => "exp(-i*omega*t)",
-                "direct" => "core_native_response",
-                "hb" => "conj(solver_native_response)",
-            ),
+            "phasor_translation" => Dict("convention" => "exp(-i*omega*t)"),
             "produced_artifacts" => produced_artifacts,
         )
+        if direct_enabled
+            result["phasor_translation"]["direct"] = "core_native_response"
+        end
+        if hb_enabled
+            result["pump_off"] = Dict(
+                "state" => "off",
+                "reference_frequency_hz" => pump_frequency,
+            )
+            result["phasor_translation"]["hb"] = "conj(solver_native_response)"
+        end
+        return result
     end
     result = Dict{String,Any}(
         "status" => "PASS",

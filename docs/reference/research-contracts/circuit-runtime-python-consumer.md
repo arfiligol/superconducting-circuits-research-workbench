@@ -271,18 +271,26 @@ C11, T1, or report declaration and is outside `STAGE_ORDER`. It performs or
 claims no optimization.
 
 The stabilized Direct+HB form accepts both independent `ResponseSpec` grids.
-The `CONVERGING` HB-only extension also permits
-`direct_frequency_hz=None`. The stage always runs the existing pump-off HB
-engine on `hb_frequency_hz`; it runs the Direct C/K/G matched-response engine
-only when a Direct grid is present. It performs no interpolation or pointwise
-Direct/HB comparison. Each produced CSV artifact preserves frequency plus
-full-complex selected-input `S11` and selected-output `S21` values.
+The `CONVERGING` standalone extension makes `direct_frequency_hz` and
+`hb_frequency_hz` independently optional while requiring at least one grid.
+A Direct-only grid may contain one or more strictly increasing positive finite
+frequencies, so one exact target frequency is valid. A Direct grid paired with
+HB retains its existing minimum of three points. The HB grid retains its
+existing minimum of three strictly increasing positive finite frequencies. The
+stage runs only the engines whose grids are present: the Direct C/K/G matched-
+response engine for a Direct grid and the existing pump-off HB engine for an HB
+grid. It performs no interpolation or pointwise Direct/HB comparison. Each
+produced CSV artifact preserves frequency plus full-complex selected-input
+`S11` and selected-output `S21` values.
 
 The request, result, and receipt bind the Plan, selected candidate, variable
 and artifact identities, Runtime sources, selected ports, complete terminated-
-port order, reference impedances, requested grids, pump-off state, phasor
-translation, and every produced artifact hash. HB-only execution seals only
-the HB grid and `hb_response.csv`; it creates no Direct grid or artifact.
+port order, reference impedances, requested grids, enabled-backend pump-off
+state and phasor translation, and every produced artifact hash. HB-only
+execution seals only the HB grid and `hb_response.csv`; it creates no Direct
+grid or artifact.
+Direct-only execution seals only the Direct grid and `direct_response.csv`; it
+creates no HB grid, pump-off evidence, HB phasor-translation entry, or artifact.
 `execute` computes and seals the operation once. `resolve` is pure read-only:
 it starts no Julia process and performs no recomputation or mutation. Expected
 Direct or HB numerical inability, grid mismatch, or non-finite response seals
@@ -352,10 +360,11 @@ scientific meaning remain outside Workbench ownership.
 
 ### Split Direct And HB Response Grids
 
-`ResponseSpec.hb_frequency_hz` remains required and fail-closed. The
-`CONVERGING` extension permits `direct_frequency_hz` to be an explicit Direct
-S21 grid or explicit `None`. Existing callers that supply both grids retain
-their current behavior.
+For `evaluate_responses`, `ResponseSpec.hb_frequency_hz` remains required and
+fail-closed. Its optional Direct S21 grid retains its three-point minimum.
+Standalone `evaluate_scattering` additionally permits either grid to be
+`None`, but rejects a declaration in which both are absent. Existing callers
+that supply both grids retain their current behavior.
 
 `evaluate_responses(action="execute")` always performs the existing Direct
 physical cared-output evaluation for the selected candidate. That evaluation
@@ -732,27 +741,29 @@ Generic series-capacitor and standalone-scattering extension:
   format, type, compile, API-reference, diff, and public-privacy checks passed.
 - Unresolved semantic decisions: none.
 
-HB-only standalone-scattering extension:
+Optional-backend standalone-scattering extension:
 
 - State: `CONVERGING`.
 - Delivery route: compatible direct `develop` checkpoint from Workbench
-  `eb71adf2db45c3d9b4d0319086d6fd5c8c08f88c`; exact candidate identity is
+  `45fa9087b1b1c2fc84ffbff90cef81072aa956ca`; exact candidate identity is
   recorded in the owner handoff.
 - Test policy: `no_test_writes`; existing tests and one-time generic public
   probes are diagnostic evidence only.
-- Candidate scope: `evaluate_scattering` accepts
-  `ResponseSpec.direct_frequency_hz=None`, runs required pump-off HB on the
-  declared HB grid, and seals full-complex S11/S21 in `hb_response.csv` with
-  its existing request/result/receipt bindings.
-- Existing Direct+HB standalone behavior: unchanged when a Direct grid is
-  supplied.
-- Failure behavior: HB numerical failure seals `NOT_EVALUABLE` without a
-  trusted artifact; missing or mismatched grids, non-finite complex response,
-  stale bindings, and tampered artifacts fail closed during execution or pure
-  resolution.
-- Excluded work: no Direct grid or artifact in HB-only mode; no Objective,
-  Optimizer, Reduction, Gate, C11, T1, report, interpolation, scientific Gate,
-  private data, D3 application source, or SCNSim change.
+- Candidate scope: `evaluate_scattering` accepts independently optional Direct
+  and HB grids with at least one enabled backend. Direct-only accepts one exact
+  positive finite frequency and seals full-complex S11/S21 in
+  `direct_response.csv`; HB-only retains its declared three-or-more-point grid
+  and `hb_response.csv` behavior.
+- Existing Direct+HB and HB-only standalone behavior: unchanged for their
+  previously valid declarations.
+- Failure behavior: enabled-backend numerical failure seals `NOT_EVALUABLE`
+  without a trusted partial artifact; absent, invalid, missing, or mismatched
+  grids, non-finite complex response, stale bindings, unexpected artifacts,
+  and tampered artifacts fail closed during execution or pure resolution.
+- Excluded work: no Direct grid or artifact in HB-only mode; no HB grid,
+  pump-off evidence, HB phasor entry, or artifact in Direct-only mode; no
+  Objective, Optimizer, Reduction, Gate, C11, T1, report, interpolation,
+  scientific Gate, private data, D3 application source, or SCNSim change.
 - Unresolved item: Human semantic acceptance of the exact candidate.
 
 Generic shunt-capacitor extension:
